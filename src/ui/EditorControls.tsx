@@ -42,7 +42,7 @@ export const EditorControls: React.FC = () => {
             }}
             
             // Standard constraints
-            minDistance={10}
+            minDistance={1}
             maxDistance={2000}
             enableDamping={true}
             dampingFactor={0.1}

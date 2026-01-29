@@ -74,6 +74,7 @@ export abstract class OpticalComponent implements Surface {
             const tWorld = pointWorld.distanceTo(rayWorld.origin);
 
             return {
+                ...hitLocal, // Preserve all custom properties (like hitElement for Objective)
                 t: tWorld,
                 point: pointWorld,
                 normal: normalWorld,

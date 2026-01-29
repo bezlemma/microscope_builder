@@ -37,7 +37,7 @@ export const SolverSettings: React.FC = () => {
                 <input 
                     type="range" 
                     min="4" 
-                    max="32" 
+                    max="128" 
                     step="1"
                     value={Math.max(4, rayConfig.rayCount)} 
                     onChange={handleChange}

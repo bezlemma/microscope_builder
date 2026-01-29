@@ -3,6 +3,48 @@ import { Line } from '@react-three/drei';
 import { Vector3 } from 'three';
 import { Ray } from '../physics/types';
 
+// Wavelength (in meters) to visible spectrum color
+function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
+    const wavelength = wavelengthMeters * 1e9; // Convert to nm
+    let r = 0, g = 0, b = 0;
+    
+    if (wavelength >= 380 && wavelength < 440) {
+        r = -(wavelength - 440) / (440 - 380);
+        b = 1.0;
+    } else if (wavelength >= 440 && wavelength < 490) {
+        g = (wavelength - 440) / (490 - 440);
+        b = 1.0;
+    } else if (wavelength >= 490 && wavelength < 510) {
+        g = 1.0;
+        b = -(wavelength - 510) / (510 - 490);
+    } else if (wavelength >= 510 && wavelength < 580) {
+        r = (wavelength - 510) / (580 - 510);
+        g = 1.0;
+    } else if (wavelength >= 580 && wavelength < 645) {
+        r = 1.0;
+        g = -(wavelength - 645) / (645 - 580);
+    } else if (wavelength >= 645 && wavelength <= 780) {
+        r = 1.0;
+    }
+    
+    // Apply intensity correction for edge wavelengths
+    let factor = 1.0;
+    if (wavelength >= 380 && wavelength < 420) {
+        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+    } else if (wavelength >= 645 && wavelength <= 780) {
+        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 645);
+    } else if (wavelength < 380 || wavelength > 780) {
+        // UV or IR - gray color
+        return { color: '#888888', isVisible: false };
+    }
+    
+    r = Math.round(255 * Math.pow(r * factor, 0.8));
+    g = Math.round(255 * Math.pow(g * factor, 0.8));
+    b = Math.round(255 * Math.pow(b * factor, 0.8));
+    
+    return { color: `rgb(${r}, ${g}, ${b})`, isVisible: true };
+}
+
 interface RayVisualizerProps {
     paths: Ray[][];
 }
@@ -11,16 +53,6 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
     return (
         <group>
             {paths.map((path, pathIdx) => {
-                // Convert Ray[] to Point[] for Line
-                // Problem: Ray has Origin, but where does it END?
-                // The Path corresponds to segments:
-                // Segment 0: Path[0].origin -> Path[1].origin
-                // Last segment: Path[last].origin -> Path[last].origin + direction * length?
-                // Solver1 needs to be updated to populate "end points" or we deduce them.
-                // Current Solver1 implementation pushes *Child Rays* to the path.
-                // So Path[0] is source. Path[1] is result of 1st interaction (starts at hit).
-                // So segment is P[0].origin -> P[1].origin.
-                
                 const points = path.map(r => r.origin);
                 
                 // Add an "infinite" end to the last ray for visualization
@@ -31,12 +63,19 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                     points.push(endPoint);
                 }
 
+                // Get color from first ray's wavelength
+                const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
+                const { color, isVisible } = wavelengthToColor(wavelength);
+
                 return (
                     <Line
                         key={pathIdx}
                         points={points}
-                        color={pathIdx === 0 ? "white" : "green"} // Color code?
-                        lineWidth={1}
+                        color={color}
+                        lineWidth={2}
+                        dashed={!isVisible}
+                        dashSize={isVisible ? undefined : 3}
+                        gapSize={isVisible ? undefined : 2}
                     />
                 );
             })}

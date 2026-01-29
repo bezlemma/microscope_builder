@@ -48,7 +48,7 @@ export const selectionAtom = atom<string | null>(null);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
-    rayCount: 4, 
+    rayCount: 32, 
     showFootprint: false
 });
 

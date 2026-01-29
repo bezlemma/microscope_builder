@@ -89,21 +89,44 @@ export class SphericalLens extends OpticalComponent {
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
             // Aperture Check (XY distance from optical axis)
-            if (transverseRadius(hitPoint) <= this.apertureRadius) {
+            const transRad = transverseRadius(hitPoint);
+            if (transRad <= this.apertureRadius) {
                 // W-Bounds Check: Ensure hit is on the PHYSICAL lens surface, not the extended sphere.
-                // Front surface is near W = -thickness/2. Back surface is near W = +thickness/2.
-                // Sag of a spherical surface can extend the W-range slightly, but it should be within thickness.
                 const hitW = getW(hitPoint);
-                const frontBound = -this.thickness / 2 - Math.abs(R1) * 0.1; // Allow some sag tolerance
-                const backBound = this.thickness / 2 + Math.abs(R1) * 0.1;
+                const apertureSquared = this.apertureRadius * this.apertureRadius;
                 
-                // Reject hits that are outside the lens body (on the invisible extended sphere)
-                if (hitW < frontBound || hitW > backBound) {
-                    return null; // Hit is on the invisible part of the sphere
+                // Front surface sag (from -thickness/2)
+                const frontR2 = absR1 * absR1;
+                const frontSag = absR1 - Math.sqrt(Math.max(0, frontR2 - apertureSquared));
+                
+                // For convex (R1 > 0): surface extends from -t/2 towards +W (sag into lens)
+                // For concave (R1 < 0): surface extends from -t/2 towards -W (sag away from lens)
+                let frontMin, frontMax;
+                if (R1 > 0) {
+                    frontMin = -this.thickness / 2 - 0.5;
+                    frontMax = -this.thickness / 2 + frontSag + 0.5;
+                } else {
+                    frontMin = -this.thickness / 2 - frontSag - 0.5;
+                    frontMax = -this.thickness / 2 + 0.5;
                 }
                 
+                // Reject hits outside the front surface W-range
+                if (hitW < frontMin || hitW > frontMax) {
+                    return null;
+                }
+                
+                // FRONT-FACING CHECK: The surface normal (from center to hit) must point
+                // AGAINST the incoming ray (negative dot product). If positive, it's back-facing
+                // and the hit is on the invisible extended sphere - REJECT IT.
                 const normal = hitPoint.clone().sub(center1).normalize();
-                if (normal.dot(rayLocal.direction) > 0) normal.multiplyScalar(-1); 
+                
+                // For front surface refraction, we want the normal to point toward the incoming ray
+                // (outward from convex surface, inward for concave)
+                // But first check: if the natural normal points WITH the ray, surface is back-facing
+                if (normal.dot(rayLocal.direction) > 0) {
+                    console.log(`[SphericalLens.intersect] ${this.name} REJECTED: back-facing surface`);
+                    return null; // Back-facing surface - reject!
+                }
                 
                 return { t, point: hitPoint, normal, localPoint: hitPoint };
             }

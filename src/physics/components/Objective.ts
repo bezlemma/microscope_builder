@@ -1,7 +1,7 @@
+import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { SphericalLens } from './SphericalLens';
 import { Ray, HitRecord, InteractionResult } from '../types';
-import { ObjectiveCasing } from './ObjectiveCasing';
 
 export class Objective extends OpticalComponent {
     elements: OpticalComponent[] = [];
@@ -134,63 +134,152 @@ export class Objective extends OpticalComponent {
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         // Retrieve the element that was hit
-        const element = (hit as any).hitElement as OpticalComponent;
+        const element = (hit as any).hitElement as SphericalLens;
         
-        if (element) {
-            // We need to pass the hit relative to the element
-            // hit.localPoint is in Objective Local Space.
-            // element.position is in Objective Local Space.
-            // So hit in Element Local Space is:
-            
-            const hitElementLocal = {
-                ...hit,
-                localPoint: hit.localPoint!.clone().sub(element.position),
-                // We keep .point as valid World Point? Or do we map it?
-                // interact usually uses localPoint for math.
-                // Keeping .point as world might be safer if downstream needs world.
-                // But for debug/consistency, let's leave .point as World (untouched) 
-                // OR map it if SphereLens expects it.
-                // SphereLens uses .localPoint for intersection.
-                // It does NOT uses .point.
-            };
-            
-            // Look out: SphericalLens interact returns rays in LOCAL space of the element?
-            // Or World?
-            // "interact" typically returns rays in WORLD space?
-            // Let's check Component.ts interaction signature.
-            // Usually interact returns rays with updated Origin/Dir.
-            // If they are World, we are good.
-            // BUT: We are in `Objective` which is a Component.
-            // `interact` is called by `ForwardTracer` which transforms ray to Local before calling?
-            // Wait, `OpticalComponent.chkIntersection` does logic.
-            // The `interact` method is called with `ray` (Global?) or Local?
-            // `OpticalComponent.ts`: `interact(ray: Ray, hit: HitRecord)`
-            // `ForwardTracer`: `const result = hitComponent.interact(ray, hit);`
-            // `ray` passed to `interact` is the WORLD ray in `ForwardTracer`.
-            // So `element.interact` will return separate rays.
-            // However, `element.interact` assumes `element` is the one being hit.
-            // If `element` thinks it's at (0,0,0) (its local), but it's part of assembly...
-            // Standard components rely on `hit.normal` and `ray.direction`.
-            // `hit.normal` from `intersect` is in Element Local Space?
-            // `Mirror`: returns normal (1,0,0).
-            // `Objective.intersect` returns `hit.normal`.
-            // If Element returned normal (1,0,0) (Local to Element), and Element is not rotated relative to Objective.
-            // Then Normal is (1,0,0) in Objective Local too.
-            // So `hit` passing is likely fine if we adjust points.
-            
-            // Crucial: Interaction returns new Rays.
-            // If `SphericalLens` calculates refraction based on dot(ray, normal), it's direction based. Direction is preserved.
-            // Return values are rays.
-            // If `SphericalLens` sets origin to `hit.point`, it uses the point we pass.
-            // Rays are usually defined in World Space for output?
-            // `Mirror.interact` returns `ray.opticalPathLength + hit.t`.
-            // Returns `ray` with new direction.
-            // `SphericalLens` likely does similar.
-            // So as long as `hit` data is correct (Normal, Point), it works.
-            
-            return element.interact(ray, hitElementLocal);
+        if (!element) {
+            console.log('[Objective.interact] No hitElement found, absorbing ray');
+            return { rays: [] };
         }
         
-        return { rays: [] };
+        console.log(`[Objective.interact] Hit element: ${element.name}`);
+        
+        // The Objective handles the World <-> Objective Local transform.
+        // Elements inside the Objective have position offsets but no independent rotation.
+        // We need to call element.interact, but the element's worldToLocal is identity.
+        // So we need to do the transform ourselves.
+        
+        // Transform ray to Objective Local Space
+        const rayLocalDir = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const rayLocalOrigin = ray.origin.clone().applyMatrix4(this.worldToLocal);
+        
+        console.log(`[Objective.interact] rayLocalDir: ${rayLocalDir.x.toFixed(3)}, ${rayLocalDir.y.toFixed(3)}, ${rayLocalDir.z.toFixed(3)}`);
+        
+        // Create a "virtual" ray in Objective Local Space
+        const rayObjLocal: Ray = {
+            ...ray,
+            origin: rayLocalOrigin,
+            direction: rayLocalDir
+        };
+        
+        // Adjust hit to Element Local Space (subtract element position)
+        const hitElementLocal = {
+            ...hit,
+            localPoint: hit.localPoint!.clone().sub(element.position),
+            // Normal was computed in element local space, should be fine
+        };
+        
+        // Call element's interact method directly, but with careful handling:
+        // The element uses its own worldToLocal (identity), so we need to pass data
+        // that's already in element local space.
+        
+        // Actually, let's manually do the refraction here since the element's
+        // worldToLocal is broken. We'll trace through the element ourselves.
+        
+        const nAir = 1.0;
+        const nGlass = element.ior;
+        
+        // Get radii
+        let R1, R2;
+        if (element.r1 !== undefined && element.r2 !== undefined) {
+            R1 = element.r1;
+            R2 = element.r2;
+        } else {
+            const R = (2 * (element.ior - 1)) / element.curvature;
+            R1 = R;
+            R2 = -R;
+        }
+        
+        // 1. Refract at Front (ray direction is in Objective Local space)
+        const dirIn = rayLocalDir;
+        // CRITICAL: hit.normal is in WORLD space (transformed by chkIntersection)
+        // We need to transform it to Objective Local space to match dirIn
+        const normal1 = hit.normal.clone().transformDirection(this.worldToLocal).normalize();
+        
+        console.log(`[Objective.interact] normal1 (local): ${normal1.x.toFixed(3)}, ${normal1.y.toFixed(3)}, ${normal1.z.toFixed(3)}`);
+        console.log(`[Objective.interact] hitPointElemLocal: will be at ${hit.localPoint!.x.toFixed(2)}, ${hit.localPoint!.y.toFixed(2)}, ${hit.localPoint!.z.toFixed(2)}`);
+        console.log(`[Objective.interact] element.position: ${element.position.x.toFixed(2)}, ${element.position.y.toFixed(2)}, ${element.position.z.toFixed(2)}`);
+        console.log(`[Objective.interact] R2=${element.r2}, thickness=${element.thickness}`);
+        
+        const refract = (incident: Vector3, normal: Vector3, n1: number, n2: number): Vector3 | null => {
+            const r = n1 / n2;
+            const cosI = -normal.dot(incident);
+            const sinT2 = r * r * (1 - cosI * cosI);
+            if (sinT2 > 1) return null;
+            const cosT = Math.sqrt(1 - sinT2);
+            return incident.clone().multiplyScalar(r).add(normal.clone().multiplyScalar(r * cosI - cosT)).normalize();
+        };
+        
+        const dirInside = refract(dirIn, normal1, nAir, nGlass);
+        if (!dirInside) {
+            console.log('[Objective.interact] FAIL: Refract at front returned null (TIR?)');
+            return { rays: [] };
+        }
+        
+        // 2. Propagate to Back Surface in Element Local Space
+        // Element position is relative to Objective center
+        // hit.localPoint is in Objective Local, subtract element position to get Element Local
+        const hitPointElemLocal = hit.localPoint!.clone().sub(element.position);
+        
+        console.log(`[Objective.interact] hitPointElemLocal: ${hitPointElemLocal.x.toFixed(2)}, ${hitPointElemLocal.y.toFixed(2)}, ${hitPointElemLocal.z.toFixed(2)}`);
+        console.log(`[Objective.interact] dirInside: ${dirInside.x.toFixed(3)}, ${dirInside.y.toFixed(3)}, ${dirInside.z.toFixed(3)}`);
+        console.log(`[Objective.interact] R2=${R2}, thickness=${element.thickness}`);
+        
+        const center2ElemLocal = new Vector3(0, 0, element.thickness/2 + R2);
+        const absR2 = Math.abs(R2);
+        
+        console.log(`[Objective.interact] center2ElemLocal: ${center2ElemLocal.x.toFixed(2)}, ${center2ElemLocal.y.toFixed(2)}, ${center2ElemLocal.z.toFixed(2)}, absR2=${absR2}`);
+        
+        // Intersect back sphere
+        const oc = hitPointElemLocal.clone().sub(center2ElemLocal);
+        const b = oc.dot(dirInside);
+        const c = oc.dot(oc) - absR2 * absR2;
+        const h = b * b - c;
+        
+        console.log(`[Objective.interact] oc=${oc.x.toFixed(2)},${oc.y.toFixed(2)},${oc.z.toFixed(2)}, b=${b.toFixed(2)}, c=${c.toFixed(2)}, h=${h.toFixed(2)}`);
+        
+        if (h < 0) {
+            console.log('[Objective.interact] FAIL: No back surface intersection (h < 0)');
+            return { rays: [] };
+        }
+        
+        const sqrtH = Math.sqrt(h);
+        let t2 = -b - sqrtH;
+        if (t2 < 0.001) t2 = -b + sqrtH;
+        if (t2 < 0.001) {
+            console.log(`[Objective.interact] FAIL: t2=${t2.toFixed(4)} < 0.001`);
+            return { rays: [] };
+        }
+        
+        console.log(`[Objective.interact] t2=${t2.toFixed(4)} (distance to back surface)`);
+        
+        const hit2ElemLocal = hitPointElemLocal.clone().add(dirInside.clone().multiplyScalar(t2));
+        console.log(`[Objective.interact] hit2ElemLocal: ${hit2ElemLocal.x.toFixed(2)}, ${hit2ElemLocal.y.toFixed(2)}, ${hit2ElemLocal.z.toFixed(2)}`);
+        
+        const normal2 = hit2ElemLocal.clone().sub(center2ElemLocal).normalize();
+        if (normal2.dot(dirInside) > 0) normal2.multiplyScalar(-1);
+        
+        // 3. Refract at Back
+        const dirOutLocal = refract(dirInside, normal2, nGlass, nAir);
+        if (!dirOutLocal) {
+            console.log('[Objective.interact] FAIL: Refract at back returned null (TIR?)');
+            return { rays: [] };
+        }
+        
+        console.log('[Objective.interact] SUCCESS: ray passed through element');
+        
+        // Transform back to world space
+        // hit2 in Element Local -> add element.position -> Objective Local -> transform to World
+        const hit2ObjLocal = hit2ElemLocal.clone().add(element.position);
+        const hit2World = hit2ObjLocal.clone().applyMatrix4(this.localToWorld);
+        const dirOutWorld = dirOutLocal.clone().transformDirection(this.localToWorld).normalize();
+        
+        return {
+            rays: [{
+                ...ray,
+                origin: hit2World,
+                direction: dirOutWorld,
+                opticalPathLength: ray.opticalPathLength + (t2 * nGlass)
+            }]
+        };
     }
 }

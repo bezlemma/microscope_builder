@@ -3,6 +3,9 @@ import { Ray, HitRecord, InteractionResult } from '../types';
 import { Vector3 } from 'three';
 
 export class Laser extends OpticalComponent {
+    wavelength: number = 532; // nm (default green)
+    beamRadius: number = 2;   // mm (half-width of beam)
+    
     constructor(name: string = "Laser Source") {
         super(name);
     }
@@ -49,11 +52,12 @@ export class Laser extends OpticalComponent {
         return {
             t: t,
             point: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t)),
-            normal: new Vector3(1,0,0) // TODO: Real normal
+            normal: new Vector3(1,0,0), // TODO: Real normal
+            localPoint: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t))
         };
     }
 
-    interact(ray: Ray, hit: HitRecord): InteractionResult {
+    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
         // Absorb external rays hitting the housing
         return { rays: [] }; 
     }

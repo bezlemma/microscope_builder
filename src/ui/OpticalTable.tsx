@@ -137,7 +137,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 
 // Dynamic Lens Visualizer - Generating Truth from Physics
 // Renders the exact profile defined by SphericalLens properties (R1, R2, Thickness, Aperture)
-const DynamicLens = ({ component }: { component: SphericalLens }) => {
+const DynamicLens = ({ component, noRotation = false }: { component: SphericalLens, noRotation?: boolean }) => {
     // Generate profile points for LatheGeometry
     const points = useMemo(() => {
         const pts: Vector2[] = [];
@@ -175,7 +175,7 @@ const DynamicLens = ({ component }: { component: SphericalLens }) => {
                     z = C1 - sign * Math.sqrt(val);
                 }
             }
-            pts.push(new Vector2(y, -z)); // Note: Lathe rotates around Y. We map Z->Y? No. 
+            pts.push(new Vector2(y, z)); // radial -> x, axial -> y for lathe
             // LatheGeometry: points are (x, y). Rotates around Y axis.
             // We want Optical Axis (Z) is traverse.
             // Lathe creates cylinder along Y.
@@ -200,7 +200,7 @@ const DynamicLens = ({ component }: { component: SphericalLens }) => {
                      z = C2 - sign * Math.sqrt(val);
                  }
             }
-            pts.push(new Vector2(y, -z));
+            pts.push(new Vector2(y, z));
         }
         
         // Close shape? Lathe expects open path that connects axis?
@@ -214,9 +214,10 @@ const DynamicLens = ({ component }: { component: SphericalLens }) => {
     // Color based on material (Crown vs Flint ior?)
     const color = component.ior > 1.6 ? "#aaaaff" : "#ccffff"; // Simple heuristic for visual distinction
 
+    // When used standalone, rotate Lathe (Y-axis symmetry) to Optical Axis (Z).
+    // When inside Objective/compound component, noRotation=true since parent handles rotation.
     return (
-        <mesh rotation={[Math.PI/2, 0, 0]}> 
-            {/* Rotate Lathe (Y-axis symmetry) to Optical Axis (Z) */}
+        <mesh rotation={noRotation ? [0, 0, 0] : [Math.PI/2, 0, 0]}>
             <latheGeometry args={[points, 32]} />
             <meshPhysicalMaterial 
                 color={color} 
@@ -304,7 +305,7 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
-            <mesh rotation={[0, 0, -Math.PI/4]}>
+            <mesh rotation={[0, 0, Math.PI/2]}>
                 <cylinderGeometry args={[radius, radius, 2, 32]} />
                 {/* Shiny Metric Material */}
                 <meshPhysicalMaterial 
@@ -505,15 +506,17 @@ export const OpticalTable: React.FC = () => {
         }
 
         // Always Central Ray
+        const laserWavelength = (sourceComp instanceof Laser) ? sourceComp.wavelength * 1e-9 : 532e-9; // nm to meters
+        const beamRadius = (sourceComp instanceof Laser) ? sourceComp.beamRadius : 5.0;
+        
         sourceRays.push({
             origin: origin.clone(),
             direction: direction.clone(),
-            wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+            wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
         });
         
         // Generate Collimated Beam (Parallel Rays) - Grid pattern covering Y and Z
         const steps = Math.max(1, rayConfig.rayCount);
-        const beamRadius = 5.0; // 5mm beam half-width
         
         // Basis Vectors for the aperture plane
         const up = new Vector3(0, 1, 0); 
@@ -536,7 +539,7 @@ export const OpticalTable: React.FC = () => {
              sourceRays.push({
                 origin: origin.clone().add(offset),
                 direction: direction.clone(), // Parallel!
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             });
         }
 
