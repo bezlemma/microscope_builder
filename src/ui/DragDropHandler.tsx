@@ -7,6 +7,9 @@ import { Mirror } from '../physics/components/Mirror';
 import { Laser } from '../physics/components/Laser';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
+import { Sample } from '../physics/components/Sample';
+import { Objective } from '../physics/components/Objective';
+import { Camera } from '../physics/components/Camera';
 import { Vector3, Raycaster, Plane } from 'three';
 
 export const DragDropHandler: React.FC = () => {
@@ -32,8 +35,8 @@ export const DragDropHandler: React.FC = () => {
             const raycaster = new Raycaster();
             raycaster.setFromCamera({ x, y }, camera);
 
-            // Intersect with Optical Table Plane (Y=0)
-            const plane = new Plane(new Vector3(0, 1, 0), 0);
+            // Intersect with Optical Table Plane (Z=0 per PhysicsPlan.md Z-up)
+            const plane = new Plane(new Vector3(0, 0, 1), 0);
             const target = new Vector3();
             raycaster.ray.intersectPlane(plane, target);
             
@@ -59,18 +62,42 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new Blocker(20, 20, 5, "Beam Blocker");
             } else if (type === 'card') {
                 newComp = new Card(40, 40, "Viewing Card");
+            } else if (type === 'sample') {
+                newComp = new Sample("New Sample");
+            } else if (type === 'objective') {
+                newComp = new Objective(9, "New Objective"); // 20x approx
+            } else if (type === 'camera') {
+                newComp = new Camera(50, 25, "New Camera");
             }
 
             if (newComp) {
-                // Set Position
-                newComp.setPosition(target.x, 0, target.z);
+                // Z-up world: set position on XY plane at Z=0
+                newComp.setPosition(target.x, target.y, 0);
                 
-                // Rotation defaults based on component?
-                // Align to Optical Axis (X) by default (Normal along X)
-                if (type === 'lens' || type === 'mirror' || type === 'card' || type === 'blocker') {
-                     newComp.setRotation(0, Math.PI / 2, 0);
+                // Align Optical Axis (Local Z) with World X
+                // Rotate 90 degrees around Y axis: Local Z -> World X
+                if (type === 'mirror') {
+                   // Mirror Normal is Local X.
+                   // To reflect X -> Y, we need Normal at 135 deg in XY plane.
+                   // Just rotate around Z axis.
+                   newComp.setRotation(0, 0, 3 * Math.PI / 4); 
+                } else if (type === 'blocker') {
+                    // Blocker Normal is Local X. Points along X.
+                    // If we want it to block X-beam, it should face X.
+                    // Default Logic (0,0,0) points X.
+                    newComp.setRotation(0, 0, 0);
+                } else {
+                   newComp.setRotation(0, Math.PI / 2, 0);
                 }
-
+                
+                // Laser is a bit special, usually points along X by default without rotation if its geometry is defined that way.
+                // But if Laser follows Component logic (Local Z is output), then it also needs rotation if we want it to emit along X?
+                // Visualizer draws box along Local -X?
+                // Let's check Laser code or just assume standard behavior for now.
+                if (type === 'laser') {
+                    newComp.setRotation(0, 0, 0); // Laser visualizer assumes default
+                }
+                
                 setComponents(prev => [...prev, newComp]);
             }
         };

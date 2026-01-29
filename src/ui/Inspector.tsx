@@ -31,9 +31,9 @@ export const Inspector: React.FC = () => {
         if (selectedComponent) {
             setLocalX(String(Math.round(selectedComponent.position.x * 100) / 100));
             setLocalZ(String(Math.round(selectedComponent.position.z * 100) / 100));
-            // Rotation around Y
-            const yDeg = Math.round(new Euler().setFromQuaternion(selectedComponent.rotation).y * 180 / Math.PI);
-            setLocalRot(String(yDeg));
+            // Rotation around Z (World Up)
+            const zDeg = Math.round(new Euler().setFromQuaternion(selectedComponent.rotation).z * 180 / Math.PI);
+            setLocalRot(String(zDeg));
 
             // Type specific params
             if (selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card) {
@@ -76,7 +76,7 @@ export const Inspector: React.FC = () => {
 
         const newComponents = components.map(c => {
             if (c.id === selection) {
-                c.setRotation(0, val * Math.PI / 180, 0); 
+                c.setRotation(0, 0, val * Math.PI / 180); // Z-axis rotation (World Up)
                 return c;
             }
             return c;

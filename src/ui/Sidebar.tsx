@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { componentsAtom, createBeamExpanderScene } from '../state/store';
+import { loadPresetAtom, activePresetAtom, PresetName } from '../state/store';
 
 // Helper for draggable items
 const DraggableItem = ({ type, label, icon: Icon }: { type: string, label: string, icon: any }) => {
@@ -44,13 +44,8 @@ const DraggableItem = ({ type, label, icon: Icon }: { type: string, label: strin
 };
 
 export const Sidebar: React.FC = () => {
-    const [, setComponents] = useAtom(componentsAtom);
-
-    const loadPreset = (preset: 'expander') => {
-        if (preset === 'expander') {
-            setComponents(createBeamExpanderScene());
-        }
-    };
+    const [activePreset] = useAtom(activePresetAtom);
+    const [, loadPreset] = useAtom(loadPresetAtom);
 
     const PresetButton = ({ label, active, onClick }: { label: string, active: boolean, onClick?: () => void }) => (
         <div 
@@ -59,7 +54,7 @@ export const Sidebar: React.FC = () => {
                 padding: '8px 12px',
                 margin: '4px 0',
                 backgroundColor: active ? '#2a4a3a' : '#222',
-                cursor: active ? 'pointer' : 'not-allowed',
+                cursor: 'pointer',
                 border: `1px solid ${active ? '#64ffda' : '#333'}`,
                 borderRadius: '4px',
                 opacity: active ? 1 : 0.5,
@@ -101,6 +96,7 @@ export const Sidebar: React.FC = () => {
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Optics</h4>
                     <DraggableItem type="lens" label="Lens" icon={Circle} />
+                    <DraggableItem type="objective" label="Objective" icon={Circle} />
                     <DraggableItem type="mirror" label="Mirror" icon={Square} />
                     <DraggableItem type="blocker" label="Blocker" icon={Box} />
                 </div>
@@ -108,15 +104,28 @@ export const Sidebar: React.FC = () => {
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Detectors</h4>
                     <DraggableItem type="card" label="Viewing Card" icon={Search} />
+                    <DraggableItem type="camera" label="Camera" icon={Box} />
+                </div>
+                
+                 <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Samples</h4>
+                    <DraggableItem type="sample" label="Sample (Mickey)" icon={Box} />
                 </div>
             </div>
 
             {/* Presets Section */}
             <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
                 <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
-                <PresetButton label="Beam Expander" active={true} onClick={() => loadPreset('expander')} />
-                <PresetButton label="Transmission Microscope" active={false} />
-                <PresetButton label="Epifluorescence Microscope" active={false} />
+                <PresetButton 
+                    label="Beam Expander" 
+                    active={activePreset === PresetName.BeamExpander} 
+                    onClick={() => loadPreset(PresetName.BeamExpander)} 
+                />
+                <PresetButton 
+                    label="Infinity System" 
+                    active={activePreset === PresetName.InfinitySystem} 
+                    onClick={() => loadPreset(PresetName.InfinitySystem)}
+                />
             </div>
             
         </div>

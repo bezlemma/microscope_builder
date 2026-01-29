@@ -3,6 +3,11 @@ import { OpticalComponent } from '../physics/Component';
 import { Mirror } from '../physics/components/Mirror';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Vector3 } from 'three';
+import { Laser } from '../physics/components/Laser';
+
+// Presets
+import { createInfinitySystemScene } from '../presets/infinitySystem';
+import { createBeamExpanderScene } from '../presets/beamExpander';
 
 // --- State Types ---
 export interface RayConfig {
@@ -10,41 +15,33 @@ export interface RayConfig {
     showFootprint: boolean;
 }
 
-// --- Atoms ---
-
-import { Card } from '../physics/components/Card';
-import { Laser } from '../physics/components/Laser';
-
 // 1. Component List (The Scene Graph)
-// 1. Component List (The Scene Graph)
-export const createBeamExpanderScene = (): OpticalComponent[] => [
-    // Laser Source
-    (() => {
-        const c = new Laser("Green Laser (532nm)");
-        c.setPosition(-150, 0, 0); // Start on the left
-        c.setRotation(0, 0, 0);
-        return c;
-    })(),
-    // Beam Expander - Element 1 (f = 50mm)
-    (() => {
-        const c = new SphericalLens(1/50.0, 15, 4, "Expander Lens 1 (f=50)");
-        c.setPosition(-100, 0, 0); // 50mm from Laser
-        c.setRotation(0, Math.PI / 2, 0);
-        return c;
-    })(),
-    // Beam Expander - Element 2 (f = 100mm)
-    // Separation for afocal = f1 + f2 = 50 + 100 = 150mm.
-    // Pos = -100 + 150 = 50mm.
-    (() => {
-        const c = new SphericalLens(1/100.0, 25, 4, "Expander Lens 2 (f=100)");
-        c.setPosition(50, 0, 0);
-        c.setRotation(0, Math.PI / 2, 0);
-        return c;
-    })()
-];
 
-// Initialized with the Infinity System Demo for now, but will be dynamic.
+// Preset Management
+export enum PresetName {
+    BeamExpander = "Beam Expander",
+    InfinitySystem = "Infinity System"
+}
+
+export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
+
+// The components atom is now derived from an internal atom that can be set,
+// or we can make it an atom that defaults to the preset but is writable.
+// Simplest pattern for now: A loadable atom.
 export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene());
+
+// Action to load a preset
+export const loadPresetAtom = atom(
+    null,
+    (get, set, presetName: PresetName) => {
+        set(activePresetAtom, presetName);
+        if (presetName === PresetName.BeamExpander) {
+            set(componentsAtom, createBeamExpanderScene());
+        } else if (presetName === PresetName.InfinitySystem) {
+            set(componentsAtom, createInfinitySystemScene());
+        }
+    }
+);
 
 // 2. Selection State
 export const selectionAtom = atom<string | null>(null);

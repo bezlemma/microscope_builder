@@ -9,7 +9,7 @@ export const AxesWidget: React.FC = () => {
             onUpdate={() => {}} // Optional
         >
             <GizmoViewport
-                axisColors={['red', '#34D399', 'blue']} // RGB: X=Red, Y=Green (Up), Z=Blue
+                axisColors={['red', '#34D399', 'blue']} // X=Red, Y=Green, Z=Blue (Z=Up per PhysicsPlan)
                 labelColor="white"
                 hideNegativeAxes={false} 
             />

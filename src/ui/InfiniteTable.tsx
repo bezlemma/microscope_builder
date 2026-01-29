@@ -18,20 +18,11 @@ export const InfiniteTable: React.FC = () => {
 
   return (
     <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[0, -25, 0]} 
+        position={[0, 0, -25]} 
         receiveShadow
-        onClick={(e) => {
-            // Only clear if we clicked the table directly, not a child component (propagation stop check)
-            // However, e.stopPropagation() is usually called by child components.
-            // So if this fires, it likely bubbled up or hit direct.
-            // If dragging, we might trigger click? 
-            // Let's assume click on table = deselect.
-            // R3F event propagation: children intersect first. If they stop, this won't fire.
-            // Ensure components stop propagation? They usually do.
-            setSelection(null);
-        }}
+        onClick={() => setSelection(null)}
     >
+      {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
       <planeGeometry args={[size, size]} />
       <meshStandardMaterial 
         color="#333" 

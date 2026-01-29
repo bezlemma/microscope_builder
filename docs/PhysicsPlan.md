@@ -3,7 +3,7 @@ The "Source of Truth" - The Scene Graph is the only Truth.
 
 The UI is a viewport.
 
-Physics over Heuristics. Components do not "know" they are part of a microscope. An Objective Lens is simply a collection of glass surfaces. It does not enforce focal lengths; the curvature of the glass enforces them physically.
+Physics over Heuristics. Components do not "know" they are part of a microscope. Any lens, including a complex Objective Lens is simply a collection of glass surfaces. It does not enforce focal lengths; the curvature of the glass enforces them physically.
 
 No "Hybrid" Rays. We explicitly separate "Layout Rays" (Geometry) from "Imaging Rays" (Stochastic). They share no logic, only data.
 

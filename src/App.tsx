@@ -22,8 +22,9 @@ function App() {
       <Sidebar />
       <div style={{ flex: 1, position: 'relative', backgroundColor: '#000' }}>
           
-          {/* Top-Down Engineering View - Orthographic for true 2D */}
-          <Canvas orthographic camera={{ position: [0, 600, 0], zoom: 2, up: [0, 0, -1], near: 0.1, far: 10000 }}>
+          {/* Top-Down Engineering View - Orthographic, Z-up per PhysicsPlan.md */}
+          {/* World Space: X/Y = table surface, Z = height (up) */}
+          <Canvas orthographic camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}>
             <color attach="background" args={['#111']} />
             <ambientLight intensity={0.5} />
             <pointLight position={[100, 100, 100]} intensity={1.0} />

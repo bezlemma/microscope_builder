@@ -22,10 +22,12 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     // Grid Snapping (25mm)
     const gridSize = 25;
 
+    // Intersect ray with Z=0 plane (table surface in Z-up world)
     const getRayIntersection = (e: any) => {
         const ray = e.ray;
-        if (Math.abs(ray.direction.y) < 1e-6) return new Vector3(0,0,0);
-        const t = -ray.origin.y / ray.direction.y;
+        // Z-up: table is XY plane at Z=0
+        if (Math.abs(ray.direction.z) < 1e-6) return new Vector3(0, 0, 0);
+        const t = -ray.origin.z / ray.direction.z;
         return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
     };
 
@@ -37,11 +39,11 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         
         // Calculate offset: Component Center - Click Point
         const hitPoint = getRayIntersection(e);
-        // We only care about X and Z offset. Y is fixed at 0 for table components.
+        // Z-up world: XY is table surface, Z is fixed at 0
         dragOffset.current.set(
             component.position.x - hitPoint.x,
-            0,
-            component.position.z - hitPoint.z
+            component.position.y - hitPoint.y,
+            0
         );
 
         // Disable Orbit Controls
@@ -63,24 +65,24 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
         const hitPoint = getRayIntersection(e);
         
-        // Apply Offset
+        // Apply Offset in XY plane (Z-up world)
         const targetX = hitPoint.x + dragOffset.current.x;
-        const targetZ = hitPoint.z + dragOffset.current.z;
+        const targetY = hitPoint.y + dragOffset.current.y;
         
         let finalX = targetX;
-        let finalZ = targetZ;
+        let finalY = targetY;
 
         // Snapping (Only if ALT key is held)
         if (e.altKey) {
             // Holes are visually at 12.5, 37.5 (Offset by 12.5 from 0, 25)
             const offset = 12.5; 
             finalX = Math.round((targetX - offset) / gridSize) * gridSize + offset;
-            finalZ = Math.round((targetZ - offset) / gridSize) * gridSize + offset;
+            finalY = Math.round((targetY - offset) / gridSize) * gridSize + offset;
         }
         
         const newComponents = components.map(c => {
             if (c.id === component.id) {
-                c.setPosition(finalX, 0, finalZ); 
+                c.setPosition(finalX, finalY, 0); // Z-up: components sit on XY plane at Z=0 
                 return c;
             }
             return c;

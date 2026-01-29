@@ -1,18 +1,40 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult } from '../types';
+import { getW, uvw, transverseRadius } from '../lightSpace';
 
+/**
+ * SphericalLens - A biconvex or biconcave symmetric lens.
+ * 
+ * Light Space Coordinates (u, v, w) per PhysicsPlan.md:
+ * - W-axis: Optical axis (direction light travels through lens)
+ * - UV-plane: Transverse plane (the lens aperture cross-section)
+ * - Surface equation: w = sag(u, v) where sag = R - sqrt(R² - u² - v²)
+ * 
+ * Note: THREE.js Vector3 uses .x/.y/.z properties, which map to (u, v, w).
+ */
 export class SphericalLens extends OpticalComponent {
-    curvature: number; // For UI compatibility, maps to 1/f
-    apertureRadius: number;
-    thickness: number;
-    ior: number = 1.5; // Index of refraction (BK7 default)
+    curvature: number; // Optical power (legacy/symmetric)
+    apertureRadius: number; 
+    thickness: number; 
+    ior: number = 1.5;
+    
+    // Asymmetric Radii (Optional)
+    // Positive R = Center to Right (+Z). 
+    // Negative R = Center to Left (-Z).
+    // Front Surface: Convex (bulge Left) means Center Right (R > 0). Concave (bulge Right) means Center Left (R < 0).
+    // Back Surface: Convex (bulge Right) means Center Left (R < 0). Concave (bulge Left) means Center Right (R > 0).
+    r1?: number;
+    r2?: number;
 
-    constructor(curvature: number, aperture: number, thickness: number, name: string = "Lens") {
+    constructor(curvature: number, aperture: number, thickness: number, name: string = "Lens", r1?: number, r2?: number, ior: number = 1.5) {
         super(name);
         this.curvature = curvature;
         this.apertureRadius = aperture;
         this.thickness = thickness;
+        this.r1 = r1;
+        this.r2 = r2;
+        this.ior = ior;
     }
 
     // Helper for sphere intersection
@@ -26,116 +48,115 @@ export class SphericalLens extends OpticalComponent {
         const t1 = -b - sqrtH;
         const t2 = -b + sqrtH;
         
-        // We want the intersection point closest to the ray origin but positive
-        // For a lens, we might be inside or outside. 
+        // Return smallest positive t
         if (t1 > 0.001) return t1;
         if (t2 > 0.001) return t2;
         return null;
     }
 
-    // Refraction helper (Snell's Law in vector form)
     private refract(incident: Vector3, normal: Vector3, n1: number, n2: number): Vector3 | null {
         const r = n1 / n2;
         const cosI = -normal.dot(incident);
         const sinT2 = r * r * (1 - cosI * cosI);
-        if (sinT2 > 1) return null; // Total Internal Reflection
+        if (sinT2 > 1) return null; 
         const cosT = Math.sqrt(1 - sinT2);
         return incident.clone().multiplyScalar(r).add(normal.clone().multiplyScalar(r * cosI - cosT)).normalize();
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Thick Lens: Two spherical surfaces
-        // Assume symmetric lens for now based on focal length (curvature)
-        // Lensmaker's Eq: 1/f = (n-1)(1/R1 - 1/R2) -> for symmetric R1=-R2=R: 1/f = (n-1)(2/R)
-        // R = 2(n-1)f = 2(n-1)/curvature
-        const power = this.curvature;
-        if (Math.abs(power) < 1e-6) {
-            // Flat glass sheet intersection at z = -thickness/2
-            if (Math.abs(rayLocal.direction.z) < 1e-10) return null;
-            const t = (-this.thickness/2 - rayLocal.origin.z) / rayLocal.direction.z;
-            if (t < 0.001) return null;
-            const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-            if (Math.abs(hitPoint.x) > this.apertureRadius || Math.abs(hitPoint.y) > this.apertureRadius) return null;
-            return { t, point: hitPoint, normal: new Vector3(0,0,-1), localPoint: hitPoint };
+        // Determine Radii
+        let R1, R2;
+        if (this.r1 !== undefined && this.r2 !== undefined) {
+            R1 = this.r1;
+            R2 = this.r2;
+        } else {
+            // Legacy Symmetric Mode
+            if (Math.abs(this.curvature) < 1e-6) return this.intersectFlat(rayLocal);
+            const R = (2 * (this.ior - 1)) / this.curvature;
+            R1 = R;  // Front Convex (if pos curvature)
+            R2 = -R; // Back Convex (if pos curvature)
         }
 
-        const R = (2 * (this.ior - 1)) / power;
-        const absR = Math.abs(R);
+        // --- Front Surface Intersection ---
+        // Surface at -t/2. Center at -t/2 + R1.
+        const center1 = uvw(0, 0, -this.thickness/2 + R1);
+        const absR1 = Math.abs(R1);
         
-        // Sphere centers:
-        // Front surface center is at z = R (if R is positive, surface peaks at 0 and curves away)
-        // Actually, let's peak the lens surfaces at z = -thickness/2 and +thickness/2
-        // Front peak at -t/2, curves towards +z (converging) or -z (diverging)
-        // Center of front sphere: [0, 0, -this.thickness/2 + R]
-        const center1 = new Vector3(0, 0, -this.thickness/2 + R);
-        
-        // Calculate the sag (height of the spherical cap at the aperture edge)
-        // sag = R - sqrt(R² - aperture²) for the cap region
-        const sagSquared = absR * absR - this.apertureRadius * this.apertureRadius;
-        const sag = sagSquared > 0 ? absR - Math.sqrt(sagSquared) : absR;
-        
-        // Front surface z-range: from apex at -thickness/2 to apex + sag
-        const frontApex = -this.thickness / 2;
-        const frontMaxZ = frontApex + sag;
-        
-        const t = this.intersectSphere(rayLocal.origin, rayLocal.direction, center1, absR);
+        // Check intersection with Front Sphere
+        const t = this.intersectSphere(rayLocal.origin, rayLocal.direction, center1, absR1);
 
         if (t !== null) {
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
-            // Check aperture (transverse bounds)
-            const inAperture = hitPoint.x * hitPoint.x + hitPoint.y * hitPoint.y <= this.apertureRadius * this.apertureRadius;
-            
-            // Check z-range (only accept hits on the actual lens cap, not the rest of the sphere)
-            const inZRange = hitPoint.z >= frontApex - 0.1 && hitPoint.z <= frontMaxZ + 0.1;
-            
-            if (inAperture && inZRange) {
-                const normal = hitPoint.clone().sub(center1).normalize();
+            // Aperture Check
+            if (transverseRadius(hitPoint) <= this.apertureRadius) {
+                // Direction Check: Should hit the "lens side" of the sphere.
+                // For Convex Front (R1>0), Center is Right. Surface is Left. Valid hits are near -t/2.
+                // intersectSphere returns 2 hits. t1 is entrance.
+                // We trust geometric validity for now but can check W if needed.
+                const hitW = getW(hitPoint);
+                // Simple Bounds check: Hit is valid if it's "close" to -t/2 (within sag range).
+                // Or just: Normal opposes Ray.
                 
-                // Normal must point towards the incoming ray for Snell's Law
-                // If the dot product is positive, normal is facing same direction as ray - flip it
-                if (normal.dot(rayLocal.direction) > 0) normal.multiplyScalar(-1);
-
+                const normal = hitPoint.clone().sub(center1).normalize();
+                if (normal.dot(rayLocal.direction) > 0) normal.multiplyScalar(-1); 
+                
                 return { t, point: hitPoint, normal, localPoint: hitPoint };
             }
         }
         return null;
     }
 
+    private intersectFlat(rayLocal: Ray): HitRecord | null {
+        if (Math.abs(rayLocal.direction.z) < 1e-10) return null;
+        const t = (-this.thickness/2 - rayLocal.origin.z) / rayLocal.direction.z;
+        if (t < 0.001) return null;
+        const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
+        if (Math.abs(hitPoint.x) > this.apertureRadius || Math.abs(hitPoint.y) > this.apertureRadius) return null;
+        return { t, point: hitPoint, normal: new Vector3(0,0,-1), localPoint: hitPoint };
+    }
+
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Thick Lens Refraction Pipeline
         const nAir = 1.0;
         const nGlass = this.ior;
         
-        // 1. Refract at front surface
-        // Transform ray direction to local space
+        // Determine Radii
+        let R1, R2;
+        if (this.r1 !== undefined && this.r2 !== undefined) {
+            R1 = this.r1;
+            R2 = this.r2;
+        } else {
+            const R = (2 * (this.ior - 1)) / this.curvature;
+            R1 = R;
+            R2 = -R;
+        }
+
+        // 1. Refract at Front
         const dirIn = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
-        
-        // Transform normal from world space to local space (hit.normal is in world space from chkIntersection)
         const normal1 = hit.normal.clone().transformDirection(this.worldToLocal).normalize();
         
         const dirInside = this.refract(dirIn, normal1, nAir, nGlass);
-        if (!dirInside) return { rays: [] }; // TIR
+        if (!dirInside) return { rays: [] }; 
+
+        // 2. Propagate to Back Surface
+        // Surface at t/2. Center at t/2 + R2.
+        const center2 = uvw(0, 0, this.thickness/2 + R2);
+        const absR2 = Math.abs(R2);
+
+        // Intersect Back Sphere (Internal)
+        // Ray starts at hit.localPoint. inside lens.
+        const t2 = this.intersectSphere(hit.localPoint!, dirInside, center2, absR2);
         
-        // 2. Propagate to back surface
-        const power = this.curvature;
-        const R = (2 * (this.ior - 1)) / power;
-        const absR = Math.abs(R);
-        const center2 = new Vector3(0, 0, this.thickness/2 - R); // Back surface center
-        
-        const t2 = this.intersectSphere(hit.localPoint!, dirInside, center2, absR);
-        
-        if (t2 === null) return { rays: [] }; // Missed back surface (edge case)
-        
+        if (t2 === null) return { rays: [] }; 
+
         const hit2 = hit.localPoint!.clone().add(dirInside.clone().multiplyScalar(t2));
         const normal2 = hit2.clone().sub(center2).normalize();
-        // Normal must point towards the incoming ray (dirInside) for Snell's Law
-        if (normal2.dot(dirInside) > 0) normal2.multiplyScalar(-1);
+        if (normal2.dot(dirInside) > 0) normal2.multiplyScalar(-1); // Internal normal check
 
-        // 3. Refract at back surface
+        // 3. Refract at Back
         const dirOutLocal = this.refract(dirInside, normal2, nGlass, nAir);
-        if (!dirOutLocal) return { rays: [] }; // TIR
-        
+        if (!dirOutLocal) return { rays: [] }; 
+
         const dirOutWorld = dirOutLocal.transformDirection(this.localToWorld).normalize();
         const hitWorldBack = hit2.applyMatrix4(this.localToWorld);
 

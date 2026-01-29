@@ -14,23 +14,24 @@ export class Mirror extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Plane at w = 0 (z = 0)
-        // Normal (0,0,1)
+        // Plane at x = 0 (Normal 1,0,0)
         
-        const denom = rayLocal.direction.z;
+        const denom = rayLocal.direction.x;
         if (Math.abs(denom) < 1e-6) return null; // Parallel to plane
 
-        const t = -rayLocal.origin.z / denom;
+        const t = -rayLocal.origin.x / denom;
 
         if (t > 0.001) {
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
-            // Rectangular bounds check
-            if (Math.abs(hitPoint.x) <= this.width / 2 && Math.abs(hitPoint.y) <= this.height / 2) {
+            // Circular aperture check (in YZ plane)
+            const radius = this.width / 2;
+            // Check radius squared against y^2 + z^2
+            if (hitPoint.y * hitPoint.y + hitPoint.z * hitPoint.z <= radius * radius) {
                 return {
                     t: t,
                     point: hitPoint,
-                    normal: new Vector3(0, 0, 1),
+                    normal: new Vector3(1, 0, 0),
                     localPoint: hitPoint
                 };
             }
