@@ -281,14 +281,14 @@ export const CameraVisualizer = ({ component }: { component: Camera }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
-             {/* Camera Body (Box) */}
-             <mesh position={[0, 0, -depth/2]}> 
+             {/* Camera Body (Box) - centered */}
+             <mesh position={[0, 0, 0]}> 
                 <boxGeometry args={[width, height, depth]} />
                 <meshStandardMaterial color="#333" metalness={0.6} roughness={0.4} />
              </mesh>
              
-             {/* Sensor Face (Blue) */}
-             <mesh position={[0, 0, 0.1]}>
+             {/* Sensor Face (Blue) - at front of centered body */}
+             <mesh position={[0, 0, depth/2 + 0.1]}>
                  <planeGeometry args={[width * 0.8, height * 0.8]} />
                  <meshStandardMaterial color="#224" metalness={0.9} roughness={0.1} />
              </mesh>
@@ -456,18 +456,18 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
-             {/* Laser Box Body */}
-             <mesh position={[-25, 0, 0]}> 
+             {/* Laser Box Body - centered */}
+             <mesh position={[0, 0, 0]}> 
                 <boxGeometry args={[50, 25, 25]} />
                 <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
              </mesh>
-             {/* Aperture Ring */}
-             <mesh position={[2, 0, 0]} rotation={[0, 0, Math.PI/2]}>
+             {/* Aperture Ring - at emission end (+X) */}
+             <mesh position={[27, 0, 0]} rotation={[0, 0, Math.PI/2]}>
                  <cylinderGeometry args={[4, 4, 4, 16]} />
                  <meshStandardMaterial color="#666" />
              </mesh>
              {/* Emission Point */}
-             <mesh position={[4, 0, 0]}>
+             <mesh position={[29, 0, 0]}>
                  <sphereGeometry args={[1, 16, 16]} />
                  <meshBasicMaterial color="lime" />
              </mesh>

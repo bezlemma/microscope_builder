@@ -33,8 +33,9 @@ export const GlobalRotation: React.FC = () => {
             const newComponents = components.map(c => {
                 if (c.id === selection) {
                     // Z-up world: rotate around Z-axis (perpendicular to XY table)
+                    // Use premultiply to apply rotation in WORLD space, not local space
                     const qStep = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), delta * rotationStep);
-                    c.rotation.multiply(qStep);
+                    c.rotation.premultiply(qStep);
                     
                     const euler = new Euler().setFromQuaternion(c.rotation);
                     c.setRotation(euler.x, euler.y, euler.z);

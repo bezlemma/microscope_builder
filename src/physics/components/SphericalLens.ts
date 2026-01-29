@@ -88,15 +88,19 @@ export class SphericalLens extends OpticalComponent {
         if (t !== null) {
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
-            // Aperture Check
+            // Aperture Check (XY distance from optical axis)
             if (transverseRadius(hitPoint) <= this.apertureRadius) {
-                // Direction Check: Should hit the "lens side" of the sphere.
-                // For Convex Front (R1>0), Center is Right. Surface is Left. Valid hits are near -t/2.
-                // intersectSphere returns 2 hits. t1 is entrance.
-                // We trust geometric validity for now but can check W if needed.
+                // W-Bounds Check: Ensure hit is on the PHYSICAL lens surface, not the extended sphere.
+                // Front surface is near W = -thickness/2. Back surface is near W = +thickness/2.
+                // Sag of a spherical surface can extend the W-range slightly, but it should be within thickness.
                 const hitW = getW(hitPoint);
-                // Simple Bounds check: Hit is valid if it's "close" to -t/2 (within sag range).
-                // Or just: Normal opposes Ray.
+                const frontBound = -this.thickness / 2 - Math.abs(R1) * 0.1; // Allow some sag tolerance
+                const backBound = this.thickness / 2 + Math.abs(R1) * 0.1;
+                
+                // Reject hits that are outside the lens body (on the invisible extended sphere)
+                if (hitW < frontBound || hitW > backBound) {
+                    return null; // Hit is on the invisible part of the sphere
+                }
                 
                 const normal = hitPoint.clone().sub(center1).normalize();
                 if (normal.dot(rayLocal.direction) > 0) normal.multiplyScalar(-1); 
