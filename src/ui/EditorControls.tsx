@@ -2,17 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { OrbitControls } from '@react-three/drei';
 import { MOUSE } from 'three';
-import { useAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 import { selectionAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
     const [enableRotate, setEnableRotate] = useState(false);
-    const [selection] = useAtom(selectionAtom);
+    const setSelection = useSetAtom(selectionAtom);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.shiftKey) setEnableRotate(true);
+            if (e.key === 'Escape') setSelection(null);
         };
         const handleKeyUp = (e: KeyboardEvent) => {
             if (!e.shiftKey) setEnableRotate(false);
@@ -25,14 +26,14 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, []);
+    }, [setSelection]);
 
     return (
         <OrbitControls
             ref={controlsRef}
             makeDefault
             enableRotate={enableRotate}
-            enableZoom={!selection} // Disable zoom if an item is selected (Scroll rotates item)
+            enableZoom={true}
             
             // Mouse Mappings
             mouseButtons={{

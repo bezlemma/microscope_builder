@@ -13,9 +13,12 @@ import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
 import { Objective } from '../physics/components/Objective';
 import { ObjectiveCasing } from '../physics/components/ObjectiveCasing';
+import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
+import { PointSource } from '../physics/components/PointSource';
 import { RayVisualizer } from './RayVisualizer';
 import { Draggable } from './Draggable';
+
 
 // Visualization components
 export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) => {
@@ -234,36 +237,71 @@ const DynamicLens = ({ component, noRotation = false }: { component: SphericalLe
 export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
     const [selection, setSelection] = useAtom(selectionAtom);
     const isSelected = selection === component.id;
-    
+    const a = component.apertureRadius;
+    const wd = component.workingDistance;
+    const isConverging = component.focalLength > 0;
+    const arrowSize = Math.min(a * 0.25, 3);
+
+    const mainLine = useMemo(() =>
+        new Float32Array([0, -a, 0, 0, a, 0]), [a]);
+
+    const topArrowPts = useMemo(() => isConverging
+        ? new Float32Array([arrowSize, a - arrowSize, 0, 0, a, 0, -arrowSize, a - arrowSize, 0])
+        : new Float32Array([-arrowSize, a + arrowSize, 0, 0, a, 0, arrowSize, a + arrowSize, 0]),
+    [a, arrowSize, isConverging]);
+
+    const bottomArrowPts = useMemo(() => isConverging
+        ? new Float32Array([arrowSize, -a + arrowSize, 0, 0, -a, 0, -arrowSize, -a + arrowSize, 0])
+        : new Float32Array([-arrowSize, -a - arrowSize, 0, 0, -a, 0, arrowSize, -a - arrowSize, 0]),
+    [a, arrowSize, isConverging]);
+
     return (
         <group 
             position={[component.position.x, component.position.y, component.position.z]} 
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
-            {/* Iterate over internal elements and render them exactly */}
-            {component.elements.map((elem, index) => {
-                // Determine visualizer based on type
-                // But TypeScript doesn't know type easily. Check 'constructor.name' or property?
-                const CompType = elem.constructor.name;
-                
-                if (CompType === 'SphericalLens') {
-                    return (
-                        <group key={index} position={[elem.position.x, elem.position.y, elem.position.z]}>
-                            <DynamicLens component={elem as SphericalLens} />
-                        </group>
-                    );
-                } else if (CompType === 'ObjectiveCasing') {
-                    // Skip or render casing? We removed casing physics, so likely not here.
-                    return null;
-                }
-                return null;
-            })}
+            {/* Main thin line */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" args={[mainLine, 3]} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#b388ff" linewidth={2} />
+            </line>
 
+            {/* Top arrowhead */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" args={[topArrowPts, 3]} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#b388ff" linewidth={2} />
+            </line>
+
+            {/* Bottom arrowhead */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" args={[bottomArrowPts, 3]} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#b388ff" linewidth={2} />
+            </line>
+
+            {/* Working Distance cylinder */}
+            <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -wd / 2]}>
+                <cylinderGeometry args={[a * 0.8, a * 1.2, wd, 16, 1, true]} />
+                <meshBasicMaterial color="#b388ff" transparent opacity={isSelected ? 0.25 : 0.08} side={DoubleSide} />
+            </mesh>
+
+            {/* Invisible hitbox for selection */}
+            <mesh>
+                <planeGeometry args={[wd, a * 2]} />
+                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            </mesh>
+
+            {/* Selection highlight */}
             {isSelected && (
-                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 14]}>
-                     <cylinderGeometry args={[9, 9, 32, 32]} />
-                     <meshBasicMaterial color="#64ffda" transparent opacity={0.3} wireframe />
+                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -wd / 2]}>
+                     <cylinderGeometry args={[a * 1.3, a * 1.3, wd + 2, 16]} />
+                     <meshBasicMaterial color="#b388ff" transparent opacity={0.15} wireframe />
                 </mesh>
             )}
         </group>
@@ -357,65 +395,95 @@ export const CardVisualizer = ({ component }: { component: Card }) => {
 export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     const [selection, setSelection] = useAtom(selectionAtom);
     const isSelected = selection === component.id;
-    const aperture = component.apertureRadius;
-    const thickness = component.thickness;
     
-    // Compute R from curvature (same formula as physics)
-    // R > 0 = biconvex (converging), R < 0 = biconcave (diverging)
-    const power = component.curvature;
-    const ior = component.ior;
-    const R = Math.abs(power) > 1e-6 ? (2 * (ior - 1)) / power : 1000;
-    const absR = Math.abs(R);
-    const isConvex = R > 0;
+    // Safety check for malformed components
+    if (!component || !component.rotation || !component.position) return null;
+
+    // Safety defaults
+    const aperture = component.apertureRadius || 10; 
+    const thickness = component.thickness || 2;
     
-    // Compute sag (cap height) from R and aperture: sag = R - sqrt(R² - aperture²)
-    const sagSquared = absR * absR - aperture * aperture;
-    const sag = sagSquared > 0 ? absR - Math.sqrt(sagSquared) : aperture * 0.3;
+    // Get Radii (Asymmetric support)
+    let R1 = 1e9; // Default flat
+    let R2 = -1e9;
+    
+    try {
+        if (typeof component.getRadii === 'function') {
+            const r = component.getRadii();
+            // Validate Radii - use large number for Infinity to simplify math logic below
+            R1 = (!isNaN(r.R1) && Math.abs(r.R1) < 1e12) ? r.R1 : (r.R1 > 0 ? 1e9 : -1e9);
+            R2 = (!isNaN(r.R2) && Math.abs(r.R2) < 1e12) ? r.R2 : (r.R2 > 0 ? 1e9 : -1e9);
+        } else {
+            // Fallback
+            const power = component.curvature || 0;
+            const ior = component.ior || 1.5;
+            const R = Math.abs(power) > 1e-6 ? (2 * (ior - 1)) / power : 1e9;
+            R1 = R;
+            R2 = -R;
+        }
+    } catch (e) {
+        console.warn("LensVisualizer: Error getting radii", e);
+    }
 
     // Generate profile curve for LatheGeometry
     // Profile is in the XY plane: X = radial distance (0 to aperture), Y = thickness (along W-axis)
     const profilePoints = useMemo(() => {
-        const points: Vector2[] = [];
-        const steps = 20;
+        const frontPoints: Vector2[] = [];
+        const backPoints: Vector2[] = [];
+        const steps = 32;
+        const frontApex = -thickness / 2;
+        const backApex = thickness / 2;
         
-        for (let i = 0; i <= steps; i++) {
-            const r = (i / steps) * aperture; // Radial distance from center
+        // Single loop to detect intersection
+        for(let i=0; i<=steps; i++) {
+            const r = (i/steps) * aperture;
             
-            // Spherical cap: sag at radius r = R - sqrt(R² - r²)
-            const localSag = absR * absR - r * r > 0 
-                ? absR - Math.sqrt(absR * absR - r * r) 
-                : 0;
+            // Calculate Front W (local Z)
+            let wFront = frontApex; 
+            if (Math.abs(R1) < 1e8) {
+                const val = R1*R1 - r*r;
+                if (val >= 0) wFront = (frontApex + R1) - (R1>0?1:-1)*Math.sqrt(val);
+            }
             
-            // For biconvex (R > 0): lens bulges outward at center
-            //   Front surface at w = -thickness/2 - (sag - localSag)  [bulges towards -w]
-            //   Back surface at w = +thickness/2 + (sag - localSag)   [bulges towards +w]
-            //   Total thickness at radius r = thickness + 2*(sag - localSag)
-            // For biconcave (R < 0): lens is thinner at center
-            //   Total thickness at radius r = thickness - 2*(sag - localSag)
+            // Calculate Back W (local Z)
+            let wBack = backApex; 
+            if (Math.abs(R2) < 1e8) {
+                const val = R2*R2 - r*r;
+                if (val >= 0) wBack = (backApex + R2) - (R2>0?1:-1)*Math.sqrt(val); 
+            }
             
-            const surfaceDelta = sag - localSag; // 0 at edge, sag at center
-            const halfThickness = isConvex 
-                ? thickness / 2 + surfaceDelta  // Convex: thicker at center
-                : Math.max(thickness / 2 - surfaceDelta, 0.5); // Concave: thinner at center (min 0.5mm)
+            // Check for intersection (Lens edge thickness <= 0)
+            if (wFront >= wBack) {
+                // Surfaces crossed. Lens is physically impossible at this radius.
+                // Clamp to the crossing point
+                const midW = (wFront + wBack) / 2;
+                frontPoints.push(new Vector2(r, midW));
+                backPoints.push(new Vector2(r, midW)); 
+                break;
+            }
             
-            // Profile goes from front surface to back surface at each radius
-            // We'll define the full silhouette: start at center-front, go to edge, then back to center-back
-            points.push(new Vector2(r, halfThickness));
+            if (!isNaN(wFront)) frontPoints.push(new Vector2(r, wFront));
+            if (!isNaN(wBack)) backPoints.push(new Vector2(r, wBack));
         }
-        // Add bottom half (mirror the profile for closed shape)
-        for (let i = steps; i >= 0; i--) {
-            const r = (i / steps) * aperture;
-            const localSag = absR * absR - r * r > 0 
-                ? absR - Math.sqrt(absR * absR - r * r) 
-                : 0;
-            const surfaceDelta = sag - localSag;
-            const halfThickness = isConvex 
-                ? thickness / 2 + surfaceDelta 
-                : Math.max(thickness / 2 - surfaceDelta, 0.5);
-            points.push(new Vector2(r, -halfThickness));
+        
+        // Combine: Front (Center->Edge) + Back (Edge->Center)
+        // Back points need to be reversed to go from Edge to Center
+        const combined = [...frontPoints, ...backPoints.reverse()];
+        
+        // Safety: ensure at least 2 points to avoid Lathe crash
+        if (combined.length < 2) {
+            return [new Vector2(0, frontApex), new Vector2(aperture, frontApex), new Vector2(aperture, backApex), new Vector2(0, backApex)];
         }
-        return points;
-    }, [aperture, thickness, absR, sag, isConvex]);
+        
+        return combined;
+    }, [aperture, thickness, R1, R2]);
+
+    // Safety check for ring geometry args
+    const ringArgs: [number, number, number] = [
+        Math.max(0, aperture * 0.95), 
+        Math.max(0.1, aperture * 1.02), 
+        64
+    ];
 
     return (
         <group 
@@ -424,24 +492,25 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
             {/* Lens body - LatheGeometry for accurate spherical cap profile */}
+            {/* Rotate Lathe (Y-axis symmetry) to Optical Axis (Z-axis) */}
             <mesh rotation={[Math.PI / 2, 0, 0]}>
                 <latheGeometry args={[profilePoints, 32]} />
                 <meshPhysicalMaterial 
-                    color={isConvex ? "#88ffee" : "#aaddff"}
+                    color={component.ior > 1.55 ? "#88ffee" : "#aaddff"}
                     transmission={0.95} 
                     opacity={0.4}
                     transparent
                     roughness={0} 
                     metalness={0}
-                    ior={ior}
+                    ior={component.ior || 1.5}
                     side={DoubleSide}
                 />
             </mesh>
 
-            {/* Selection Highlight */}
-            {isSelected && (
-                <mesh>
-                    <ringGeometry args={[aperture * 0.95, aperture * 1.02, 64]} />
+            {/* Selection Highlight — subtle aperture ring */}
+            {isSelected && !isNaN(aperture) && (
+                <mesh raycast={() => {}}>
+                    <ringGeometry args={ringArgs} />
                     <meshBasicMaterial color="#64ffda" transparent opacity={0.8} side={DoubleSide} />
                 </mesh>
             )}
@@ -476,6 +545,123 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
     );
 };
 
+// Point Source Visualizer - for demonstrating infinity correction
+export const PointSourceVisualizer = ({ component }: { component: PointSource }) => {
+    const [selection, setSelection] = useAtom(selectionAtom);
+    const isSelected = selection === component.id;
+    
+    return (
+        <group 
+            position={[component.position.x, component.position.y, component.position.z]} 
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+        >
+            {/* Glowing point source - small sphere */}
+            <mesh>
+                <sphereGeometry args={[1.5, 32, 32]} />
+                <meshBasicMaterial color="#00ff88" />
+            </mesh>
+            {/* Outer glow ring */}
+            <mesh>
+                <sphereGeometry args={[2.5, 16, 16]} />
+                <meshBasicMaterial color="#00ff88" transparent opacity={0.3} />
+            </mesh>
+            {/* Selection indicator */}
+            {isSelected && (
+                <mesh>
+                    <sphereGeometry args={[4, 16, 16]} />
+                    <meshBasicMaterial color="#64ffda" wireframe transparent opacity={0.5} />
+                </mesh>
+            )}
+        </group>
+    );
+};
+
+// Ideal Lens Visualizer — textbook thin-lens diagram
+// Thin vertical line with arrowheads: inward for converging, outward for diverging
+const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
+    const a = component.apertureRadius;
+    const converging = component.focalLength > 0;
+    const arrowSize = Math.min(a * 0.2, 3); // arrow proportional to aperture
+    
+    // Build line geometry: vertical line + arrow tips
+    const points = useMemo(() => {
+        const pts: Vector3[] = [];
+        // Main vertical line (in local ZY: optical axis is Z, transverse is Y in the plane we see)
+        // But local space: Z = optical axis (W), Y = transverse (V)
+        // We draw in the UV plane — a line along V at w=0
+        pts.push(new Vector3(0, -a, 0)); // bottom
+        pts.push(new Vector3(0, a, 0));  // top
+        return pts;
+    }, [a]);
+
+    // Arrow heads at the tips
+    const topArrow = useMemo(() => {
+        const tip = new Vector3(0, a, 0);
+        const inward = converging ? -1 : 1; // inward = toward axis
+        return [
+            new Vector3(inward * arrowSize, a - arrowSize, 0),
+            tip,
+            new Vector3(-inward * arrowSize, a - arrowSize, 0),
+        ];
+    }, [a, arrowSize, converging]);
+
+    const bottomArrow = useMemo(() => {
+        const tip = new Vector3(0, -a, 0);
+        const inward = converging ? 1 : -1; // mirrored
+        return [
+            new Vector3(inward * arrowSize, -a + arrowSize, 0),
+            tip,
+            new Vector3(-inward * arrowSize, -a + arrowSize, 0),
+        ];
+    }, [a, arrowSize, converging]);
+
+    const color = converging ? '#64ffda' : '#ff6b9d';
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={[component.rotation.x, component.rotation.y, component.rotation.z, component.rotation.w]}
+        >
+            {/* Main line */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute
+                        attach="attributes-position"
+                        args={[new Float32Array(points.flatMap(p => [p.x, p.y, p.z])), 3]}
+                    />
+                </bufferGeometry>
+                <lineBasicMaterial color={color} linewidth={2} />
+            </line>
+            {/* Top arrow */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute
+                        attach="attributes-position"
+                        args={[new Float32Array(topArrow.flatMap(p => [p.x, p.y, p.z])), 3]}
+                    />
+                </bufferGeometry>
+                <lineBasicMaterial color={color} linewidth={2} />
+            </line>
+            {/* Bottom arrow */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute
+                        attach="attributes-position"
+                        args={[new Float32Array(bottomArrow.flatMap(p => [p.x, p.y, p.z])), 3]}
+                    />
+                </bufferGeometry>
+                <lineBasicMaterial color={color} linewidth={2} />
+            </line>
+            {/* Invisible hitbox for selection */}
+            <mesh>
+                <planeGeometry args={[2, a * 2]} />
+                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            </mesh>
+        </group>
+    );
+};
+
 export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [rayConfig] = useAtom(rayConfigAtom);
@@ -486,61 +672,69 @@ export const OpticalTable: React.FC = () => {
 
         const solver = new Solver1(components);
         
-        // Find Laser Component
-        const sourceComp = components.find(c => c instanceof Laser);
+        // Find ALL source components (support multiple lasers and point sources)
+        const laserComps = components.filter(c => c instanceof Laser) as Laser[];
+        const pointSourceComps = components.filter(c => c instanceof PointSource) as PointSource[];
         
         const sourceRays: Ray[] = [];
         
-        let origin = new Vector3(0,0,0);
-        let direction = new Vector3(1,0,0);
-        
-        if (sourceComp) {
-            origin = sourceComp.position.clone();
-            // Improve: sourceComp.rotation applied to (1,0,0).
-            direction = new Vector3(1,0,0).applyQuaternion(sourceComp.rotation).normalize();
+        // Generate rays from every Laser
+        for (const laserComp of laserComps) {
+            let origin = laserComp.position.clone();
+            const direction = new Vector3(1,0,0).applyQuaternion(laserComp.rotation).normalize();
             
             // Offset origin slightly so it starts "outside" the box 
-            // Box ends at 0. Start at +5.
             const offset = direction.clone().multiplyScalar(5);
             origin.add(offset);
-        }
-
-        // Always Central Ray
-        const laserWavelength = (sourceComp instanceof Laser) ? sourceComp.wavelength * 1e-9 : 532e-9; // nm to meters
-        const beamRadius = (sourceComp instanceof Laser) ? sourceComp.beamRadius : 5.0;
-        
-        sourceRays.push({
-            origin: origin.clone(),
-            direction: direction.clone(),
-            wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
-        });
-        
-        // Generate Collimated Beam (Parallel Rays) - Grid pattern covering Y and Z
-        const steps = Math.max(1, rayConfig.rayCount);
-        
-        // Basis Vectors for the aperture plane
-        const up = new Vector3(0, 1, 0); 
-        if (Math.abs(direction.dot(up)) > 0.9) {
-             up.set(0, 0, 1); 
-        }
-        const right = new Vector3().crossVectors(direction, up).normalize(); // Z direction
-        const trueUp = new Vector3().crossVectors(right, direction).normalize(); // Y direction
-        
-        // Generate rays around the beam circumference (marginal rays in 3D)
-        // This creates rays at equal angular intervals around the beam edge
-        for(let i = 0; i < steps; i++) {
-             const phi = (i / steps) * Math.PI * 2;
-             
-             // Position on circle at beam radius (marginal rays)
-             const offset = new Vector3()
-                .addScaledVector(trueUp, Math.sin(phi) * beamRadius)
-                .addScaledVector(right, Math.cos(phi) * beamRadius);
-
-             sourceRays.push({
-                origin: origin.clone().add(offset),
-                direction: direction.clone(), // Parallel!
+            
+            const laserWavelength = laserComp.wavelength * 1e-9;
+            const beamRadius = laserComp.beamRadius;
+            
+            // Central Ray
+            sourceRays.push({
+                origin: origin.clone(),
+                direction: direction.clone(),
                 wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             });
+            
+            // Generate Collimated Beam (Parallel Rays) - Grid pattern covering Y and Z
+            const steps = Math.max(1, rayConfig.rayCount);
+            
+            // Basis Vectors for the aperture plane
+            const up = new Vector3(0, 1, 0); 
+            if (Math.abs(direction.dot(up)) > 0.9) {
+                 up.set(0, 0, 1); 
+            }
+            const right = new Vector3().crossVectors(direction, up).normalize();
+            const trueUp = new Vector3().crossVectors(right, direction).normalize();
+            
+            // Generate rays around the beam circumference (marginal rays in 3D)
+            for(let i = 0; i < steps; i++) {
+                 const phi = (i / steps) * Math.PI * 2;
+                 
+                 const marginalOffset = new Vector3()
+                    .addScaledVector(trueUp, Math.sin(phi) * beamRadius)
+                    .addScaledVector(right, Math.cos(phi) * beamRadius);
+
+                 sourceRays.push({
+                    origin: origin.clone().add(marginalOffset),
+                    direction: direction.clone().normalize(), // Enforce parallel
+                    wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                });
+            }
+        }
+        
+        // Generate rays from every PointSource
+        for (const pointSourceComp of pointSourceComps) {
+            const psRays = pointSourceComp.generateRays();
+            for (const r of psRays) {
+                sourceRays.push({
+                    ...r,
+                    polarization: {x:{re:1,im:0},y:{re:0,im:0}},
+                    footprintRadius: 0,
+                    coherenceMode: Coherence.Coherent
+                });
+            }
         }
 
         const calculatedPaths = solver.trace(sourceRays);
@@ -555,18 +749,22 @@ export const OpticalTable: React.FC = () => {
                 if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
                 else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
                 else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />; 
+                else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
                 else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
                 else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
                 else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                 else if (c instanceof Card) visual = <CardVisualizer component={c} />;
                 else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                 else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
+                else if (c instanceof PointSource) visual = <PointSourceVisualizer component={c} />;
                 
                 if (visual) {
                     return (
-                        <Draggable key={c.id} component={c}>
-                            {visual}
-                        </Draggable>
+                        <group key={c.id}>
+                            <Draggable component={c}>
+                                {visual}
+                            </Draggable>
+                        </group>
                     );
                 }
                 return null;

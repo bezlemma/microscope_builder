@@ -20,8 +20,9 @@ Positive Z is "Up" off the table.
 $XY$-axis The Table Surface.
 Used for placing components (e.g., "The laser is at x=0, y=10").Origin: The center of the optical table.
 
-### B. Light Space (Component Frame
-)Used strictly for calculating intersections and surface physics. This simplifies the math by normalizing all components to a standard orientation.
+### B. Light Space (Component Frame)
+
+Used STRICTLY for calculating intersections and surface physics only after coordinate transforms. This simplifies the math by normalizing all components to a standard orientation.
 Type: Right-handed 3D Cartesian $(u, v, w)$.
 
 $W$-axis: The Optical Axis.The direction light travels through the component.
@@ -31,6 +32,8 @@ $UV$ axis: The Transverse Plane. The cross-section of the component.
 Equation for a standard lens surface: $w = \text{sag}(u, v)$.
 
 Custom Surfaces: Any surface can be defined by a custom equation $w = f(u,v)$. The Normal vector is derived from the gradient of this function, enabling reflection/refraction on arbitrary shapes.
+
+Any time this transform occurs in the code, great care should be used! This can cause a lot of errors if we use this coordinate space anywhere else by accident.
 
 ### C. Units
 Position: Millimeters (mm).

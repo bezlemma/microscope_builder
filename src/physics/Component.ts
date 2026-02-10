@@ -48,6 +48,12 @@ export abstract class OpticalComponent implements Surface {
 
     // Template method for tracing
     chkIntersection(rayWorld: Ray): HitRecord | null {
+        // Ensure matrices are fresh before checking intersection
+        // This fixes the "Blocker ignored" and "Lens Snapping" bugs caused by stale matrices
+        this.updateMatrices();
+
+
+
         // Broadphase
         // Note: For simple components, transforming AABB to world is cheaper than ray to local for bounding check
         // but typically we transform ray to local for exact check anyway.
@@ -56,6 +62,8 @@ export abstract class OpticalComponent implements Surface {
         // Transform Ray to Local
         const rayLocalOrigin = rayWorld.origin.clone().applyMatrix4(this.worldToLocal);
         const rayLocalDir = rayWorld.direction.clone().transformDirection(this.worldToLocal).normalize();
+
+
         
         const rayLocal: Ray = { 
             ...rayWorld, 

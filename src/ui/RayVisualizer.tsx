@@ -50,10 +50,36 @@ interface RayVisualizerProps {
 }
 
 export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
+    // DEBUG: Log paths to understand the y=17 issue
+    React.useEffect(() => {
+        if (paths.length > 0) {
+            // Find a path with entryPoint (lens interaction)
+            const lensPath = paths.find(p => p.some(r => r.entryPoint));
+            if (lensPath) {
+                console.log("=== DEBUG: Path with entryPoint ===");
+                lensPath.forEach((ray, i) => {
+                    console.log(`  Ray[${i}]: origin=(${ray.origin.x.toFixed(2)}, ${ray.origin.y.toFixed(2)}, ${ray.origin.z.toFixed(2)})`);
+                    if (ray.entryPoint) {
+                        console.log(`         entryPoint=(${ray.entryPoint.x.toFixed(2)}, ${ray.entryPoint.y.toFixed(2)}, ${ray.entryPoint.z.toFixed(2)})`);
+                    }
+                    console.log(`         direction=(${ray.direction.x.toFixed(3)}, ${ray.direction.y.toFixed(3)}, ${ray.direction.z.toFixed(3)})`);
+                });
+            }
+        }
+    }, [paths]);
+    
     return (
         <group>
             {paths.map((path, pathIdx) => {
-                const points = path.map(r => r.origin);
+                // Build points array, inserting entryPoint before origin when present
+                // This ensures visualization draws: prev→entryPoint→origin→next
+                const points: Vector3[] = [];
+                for (const r of path) {
+                    if (r.entryPoint) {
+                        points.push(r.entryPoint);
+                    }
+                    points.push(r.origin);
+                }
                 
                 // Add an "infinite" end to the last ray for visualization
                 if (path.length > 0) {

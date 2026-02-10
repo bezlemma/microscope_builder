@@ -1,42 +1,44 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../physics/components/Laser';
-import { Sample } from '../physics/components/Sample';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Camera } from '../physics/components/Camera';
+import { PointSource } from '../physics/components/PointSource';
+// import { Laser } from '../physics/components/Laser';
 import { Objective } from '../physics/components/Objective';
 
 export const createInfinitySystemScene = (): OpticalComponent[] => {
     const scene: OpticalComponent[] = [];
 
-    // 1. Light Source (Laser)
-    const laser = new Laser("Green Laser (532nm)");
-    laser.setPosition(-50, 0, 0); // Start at X=-50
-    scene.push(laser);
+    // 1. Point Source at Front Focal Plane
+    // Optimization Script Result: Best Source X = 0.72 (Distance 19.28mm from V1)
+    // Residual divergeance slope ~ 0.000006 (Strictly Parallel)
+    const pointSource = new PointSource("Sample Point Source");
+    pointSource.setPosition(0.72, 0, 0); 
+    pointSource.coneAngle = 5; 
+    pointSource.rayCount = 15;
+    scene.push(pointSource);
 
-    // 2. Sample (Mickey Mouse) - Placed at Focus
-    // We want the light to hit the sample.
-    // Laser emits at +X.
-    const sample = new Sample("Mickey Sample");
-    sample.setPosition(0, 0, 0);
-    // Align Sample to be "Standing Up" in XY plane (Normal along X)
-    sample.setRotation(0, Math.PI / 2, 0);
-    scene.push(sample);
-
-    // 3. Objective (Multi-element Composite)
-    // Objective f_eff ~ 10mm. Working Distance ~ 2-5mm.
-    // Placed at X=10.
-    // Built-in elements: Front (-5 => X=5), Rear (+5 => X=15).
-    const objective = new Objective(10, "20x Objective");
-    objective.setPosition(10, 0, 0);
-    objective.setRotation(0, Math.PI / 2, 0); // Face X
+    // 2. Sample (Mickey Mouse) - Removed to prevent ray occlusion
+    // The PointSource acts as the "Sample Emitter" for this demo.
+    
+    // 3. Objective (Aplanatic Phase Surface)
+    // Replaces old 4-element achromat. Parameters match:
+    // EFL ~20mm (200/10), NA=0.25, WD=11.6mm (from previous analysis)
+    const objective = new Objective({
+        magnification: 10,
+        NA: 0.25,
+        workingDistance: 11.6,
+        tubeLensFocal: 200,
+        name: '10x/0.25 Objective'
+    });
+    objective.setPosition(20, 0, 0);
+    objective.setRotation(0, Math.PI / 2, 0);
     scene.push(objective);
     
-    // Lenses combined power approx 1/10? 1/15 + 1/30 - d...
-    // Just illustrative for now.
-
     // 4. Tube Lens (Achromatic Doublet)
-    // Spaced 150mm from Objective.
-    const tubePos = 160;
+    // Spaced 200mm from Objective
+    // Objective ends approx X=50.
+    // Infinity Space: 50 to 250 (200mm gap).
+    const tubePos = 250;
     
     // Element A (Positive) f=100
     const tubeA = new SphericalLens(1/100, 25, 4, "Tube Element A");
@@ -46,15 +48,16 @@ export const createInfinitySystemScene = (): OpticalComponent[] => {
 
     // Element B (Negative/Corrector) f=-200
     const tubeB = new SphericalLens(-1/200, 25, 2, "Tube Element B");
-    tubeB.setPosition(tubePos + 5, 0, 0); // Cemented doublet? Closely spaced.
+    tubeB.setPosition(tubePos + 4, 0, 0); // Cemented
     tubeB.setRotation(0, Math.PI / 2, 0);
     scene.push(tubeB);
 
     // 5. Camera
-    // Focal length of tube doublet ~ 200mm? (1/100 + -1/200 = 1/200).
-    // Camera at TubePos + f = 160 + 200 = 360mm.
+    // Focal length of tube doublet ~ 200mm
+    // Camera at TubePos + f.
+    // Adjusted empirically if needed, but 200mm is target.
     const camera = new Camera(50, 25, "CMOS Sensor");
-    camera.setPosition(360, 0, 0);
+    camera.setPosition(tubePos + 200, 0, 0); // X=450
     camera.setRotation(0, -Math.PI / 2, 0); // Face -X
     scene.push(camera);
 

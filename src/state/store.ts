@@ -54,3 +54,6 @@ export const rayConfigAtom = atom<RayConfig>({
 
 // 4. Interaction State
 export const isDraggingAtom = atom<boolean>(false);
+
+// 5. Handle Dragging State — prevents Draggable from stealing pointer events
+export const handleDraggingAtom = atom<boolean>(false);

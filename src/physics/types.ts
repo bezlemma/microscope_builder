@@ -32,6 +32,10 @@ export interface Ray {
     
     // Quantum (Solver 5 support)
     entanglementId?: number;
+    
+    // Visualization: For thick components, the point where ray entered (front surface)
+    // This allows the visualizer to draw: prev.origin → entryPoint → origin → next
+    entryPoint?: Vector3;
 }
 
 export interface HitRecord {

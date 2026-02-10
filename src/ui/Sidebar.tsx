@@ -96,6 +96,7 @@ export const Sidebar: React.FC = () => {
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Optics</h4>
                     <DraggableItem type="lens" label="Lens" icon={Circle} />
+                    <DraggableItem type="idealLens" label="Ideal Lens" icon={Circle} />
                     <DraggableItem type="objective" label="Objective" icon={Circle} />
                     <DraggableItem type="mirror" label="Mirror" icon={Square} />
                     <DraggableItem type="blocker" label="Blocker" icon={Box} />

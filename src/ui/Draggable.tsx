@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
 import { componentsAtom, selectionAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
-import { Euler, Vector3 } from 'three';
+import { Vector3 } from 'three';
 
 interface DraggableProps {
     component: OpticalComponent;

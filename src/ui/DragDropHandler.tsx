@@ -9,6 +9,7 @@ import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
 import { Objective } from '../physics/components/Objective';
+import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
 import { Vector3, Raycaster, Plane } from 'three';
 
@@ -64,8 +65,10 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new Card(40, 40, "Viewing Card");
             } else if (type === 'sample') {
                 newComp = new Sample("New Sample");
+            } else if (type === 'idealLens') {
+                newComp = new IdealLens(50, 15, "Ideal Lens"); // f=50mm, aperture=15mm
             } else if (type === 'objective') {
-                newComp = new Objective(9, "New Objective"); // 20x approx
+                newComp = new Objective({ magnification: 10, NA: 0.25, name: "New Objective" });
             } else if (type === 'camera') {
                 newComp = new Camera(50, 25, "New Camera");
             }

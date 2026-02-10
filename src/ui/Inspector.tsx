@@ -7,6 +7,9 @@ import { Mirror } from '../physics/components/Mirror';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Laser } from '../physics/components/Laser';
+import { IdealLens } from '../physics/components/IdealLens';
+import { Objective } from '../physics/components/Objective';
+import { ScrubInput } from './ScrubInput';
 
 // Wavelength to visible spectrum color (approximation)
 function wavelengthToColor(wavelength: number): string {
@@ -69,6 +72,21 @@ export const Inspector: React.FC = () => {
     const [localHeight, setLocalHeight] = useState<string>('0');
     const [localRadius, setLocalRadius] = useState<string>('0');
     const [localFocal, setLocalFocal] = useState<string>('0');
+    const [localR1, setLocalR1] = useState<string>('0');
+    const [localR2, setLocalR2] = useState<string>('0');
+    const [localThickness, setLocalThickness] = useState<string>('0');
+    const [localIor, setLocalIor] = useState<string>('1.5');
+    const [localLensType, setLocalLensType] = useState<string>('biconvex');
+    
+    // IdealLens Params
+    const [localIdealFocal, setLocalIdealFocal] = useState<string>('50');
+    const [localIdealAperture, setLocalIdealAperture] = useState<string>('15');
+    
+    // Objective Params
+    const [localObjNA, setLocalObjNA] = useState<string>('0.25');
+    const [localObjMag, setLocalObjMag] = useState<string>('10');
+    const [localObjImmersion, setLocalObjImmersion] = useState<string>('1.0');
+    const [localObjWD, setLocalObjWD] = useState<string>('10');
     
     // Laser Params
     const [localWavelength, setLocalWavelength] = useState<number>(532);
@@ -77,33 +95,67 @@ export const Inspector: React.FC = () => {
     // Sync local state when selection or actual values change externally
     useEffect(() => {
         if (selectedComponent) {
-            setLocalX(String(Math.round(selectedComponent.position.x * 100) / 100));
-            setLocalY(String(Math.round(selectedComponent.position.y * 100) / 100));
-            
-            // Rotation around Z (World Up) - extract the world-space Z rotation
-            // For optical components, the optical axis (local +Z) is rotated to world space.
-            // The world-Z rotation is the angle of this axis projected onto the XY plane.
-            const forwardLocal = new Vector3(0, 0, 1);
-            const forwardWorld = forwardLocal.clone().applyQuaternion(selectedComponent.rotation);
-            const worldZAngle = Math.atan2(forwardWorld.y, forwardWorld.x);
-            const zDeg = Math.round(worldZAngle * 180 / Math.PI);
-            setLocalRot(String(zDeg));
+            try {
+                setLocalX(String(Math.round(selectedComponent.position.x * 100) / 100));
+                setLocalY(String(Math.round(selectedComponent.position.y * 100) / 100));
+                
+                // Rotation around Z (World Up) - extract the world-space Z rotation
+                // For optical components, the optical axis (local +Z) is rotated to world space.
+                // The world-Z rotation is the angle of this axis projected onto the XY plane.
+                if (selectedComponent.rotation) {
+                    const forwardLocal = new Vector3(0, 0, 1);
+                    const forwardWorld = forwardLocal.clone().applyQuaternion(selectedComponent.rotation);
+                    const worldZAngle = Math.atan2(forwardWorld.y, forwardWorld.x);
+                    const zDeg = Math.round(worldZAngle * 180 / Math.PI);
+                    setLocalRot(String(zDeg));
+                }
 
-            // Type specific params
-            if (selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card) {
-                // Check if properties exist (TS might complain if not cast, relying on JS flexibility or cast)
-                const c = selectedComponent as any;
-                if (c.width != null) setLocalWidth(String(c.width));
-                if (c.height != null) setLocalHeight(String(c.height));
-            }
-            if (selectedComponent instanceof SphericalLens) {
-                setLocalRadius(String(selectedComponent.apertureRadius));
-                const f = selectedComponent.curvature !== 0 ? 1 / selectedComponent.curvature : 0;
-                setLocalFocal(String(Math.round(f * 100) / 100));
-            }
-            if (selectedComponent instanceof Laser) {
-                setLocalWavelength(selectedComponent.wavelength);
-                setLocalBeamRadius(String(selectedComponent.beamRadius));
+                // Type specific params
+                if (selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card) {
+                    // Check if properties exist (TS might complain if not cast, relying on JS flexibility or cast)
+                    const c = selectedComponent as any;
+                    if (c.width != null) setLocalWidth(String(c.width));
+                    if (c.height != null) setLocalHeight(String(c.height));
+                }
+                if (selectedComponent instanceof SphericalLens) {
+                    setLocalRadius(String(selectedComponent.apertureRadius));
+                    const f = selectedComponent.curvature !== 0 ? 1 / selectedComponent.curvature : 0;
+                    setLocalFocal(String(Math.round(f * 100) / 100));
+                    setLocalThickness(String(selectedComponent.thickness));
+                    setLocalIor(String(selectedComponent.ior));
+                    
+                    // Lens type detection
+                    if (typeof selectedComponent.getLensType === 'function') {
+                        setLocalLensType(selectedComponent.getLensType());
+                    }
+                    
+                    // Radii
+                    if (typeof selectedComponent.getRadii === 'function') {
+                        const radii = selectedComponent.getRadii();
+                        setLocalR1(Math.abs(radii.R1) >= 1e6 ? "Infinity" : String(Math.round(radii.R1 * 100)/100));
+                        setLocalR2(Math.abs(radii.R2) >= 1e6 ? "Infinity" : String(Math.round(radii.R2 * 100)/100));
+                    } else {
+                        const R = f !== 0 ? (2 * (selectedComponent.ior - 1)) * f : 1e9;
+                        setLocalR1(String(Math.round(R * 100)/100));
+                        setLocalR2(String(Math.round(-R * 100)/100));
+                    }
+                }
+                if (selectedComponent instanceof IdealLens) {
+                    setLocalIdealFocal(String(Math.round(selectedComponent.focalLength * 100) / 100));
+                    setLocalIdealAperture(String(Math.round(selectedComponent.apertureRadius * 100) / 100));
+                }
+                if (selectedComponent instanceof Objective) {
+                    setLocalObjNA(String(selectedComponent.NA));
+                    setLocalObjMag(String(selectedComponent.magnification));
+                    setLocalObjImmersion(String(selectedComponent.immersionIndex));
+                    setLocalObjWD(String(Math.round(selectedComponent.workingDistance * 100) / 100));
+                }
+                if (selectedComponent instanceof Laser) {
+                    setLocalWavelength(selectedComponent.wavelength);
+                    setLocalBeamRadius(String(selectedComponent.beamRadius));
+                }
+            } catch (err) {
+                console.error("Inspector Update Error:", err);
             }
         }
     }, [selectedComponent, selection, 
@@ -175,9 +227,17 @@ export const Inspector: React.FC = () => {
         setComponents(newComponents);
     };
 
-    const commitGeometry = (param: 'width'|'height'|'radius'|'focal', valueStr: string) => {
+    const commitGeometry = (param: 'width'|'height'|'radius'|'focal'|'r1'|'r2'|'thickness'|'ior', valueStr: string) => {
         if (!selectedComponent) return;
-        const val = parseFloat(valueStr);
+        
+        // Handle "Infinity" case for radii
+        let val: number;
+        if (valueStr.toLowerCase() === 'infinity') {
+             val = 1e9;
+        } else {
+             val = parseFloat(valueStr);
+        }
+        
         if (isNaN(val)) return;
 
         const newComponents = components.map(c => {
@@ -189,23 +249,34 @@ export const Inspector: React.FC = () => {
                 if (param === 'focal' && c instanceof SphericalLens) {
                     if (Math.abs(val) > 0.001) c.curvature = 1 / val;
                     else c.curvature = 0;
+                    // Reset r1/r2 to undefined so focal length takes precedence/recalculates
+                    c.r1 = undefined;
+                    c.r2 = undefined;
+                }
+                if (param === 'thickness' && c instanceof SphericalLens) {
+                    c.thickness = Math.max(0.1, val);
+                }
+                if (param === 'ior' && c instanceof SphericalLens) {
+                    c.ior = Math.max(1.0, Math.min(3.0, val));
+                }
+                if (param === 'r1' && c instanceof SphericalLens) {
+                    c.r1 = val;
+                    if (c.r2 === undefined) {
+                         const old = c.getRadii();
+                         c.r2 = old.R2;
+                    }
+                }
+                if (param === 'r2' && c instanceof SphericalLens) {
+                    c.r2 = val;
+                    if (c.r1 === undefined) {
+                         const old = c.getRadii();
+                         c.r1 = old.R1;
+                    }
                 }
                 return c; // Mutable update inside map, but we trigger re-render via setComponents
             }
             return c;
         });
-        // Force new creation? Map creates new array. Objects mutated? 
-        // Ideally we should clone the object but physics objects are class instances.
-        // Jotai atom update will trigger React re-render if array reference changes.
-        // Visualizers read props. If object is same reference but mutated, React might not see deep change unless forceUpdate?
-        // Actually, map returns same object references.
-        // Let's rely on standard React behavior: Array changed = Re-render.
-        // But visualizer prop check? Visualizers take { component }.
-        // If Component object is mutated, Visualizer might not update if memoized.
-        // But we are passing new array.
-        // To be safe, we can clone? No, copy methods are complex.
-        // Let's assume re-render of Parent (OpticalTable) re-renders children Visualizers.
-        // OpticalTable maps over components.
         
         setComponents([...newComponents]);
     };
@@ -239,6 +310,8 @@ export const Inspector: React.FC = () => {
 
     const isRect = selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card;
     const isLens = selectedComponent instanceof SphericalLens;
+    const isIdealLens = selectedComponent instanceof IdealLens;
+    const isObjective = selectedComponent instanceof Objective;
     const isLaser = selectedComponent instanceof Laser;
     
     const commitLaserParams = () => {
@@ -345,28 +418,271 @@ export const Inspector: React.FC = () => {
                 )}
 
                 {isLens && (
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Radius (mm)</label>
-                            <input 
-                                type="text" 
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        {/* Lens Type Selector */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Lens Type</label>
+                            <select
+                                value={localLensType}
+                                onChange={(e) => {
+                                    const type = e.target.value;
+                                    setLocalLensType(type);
+                                    if (selectedComponent instanceof SphericalLens) {
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection && c instanceof SphericalLens) {
+                                                c.setFromLensType(type);
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }
+                                }}
+                                style={{ ...inputStyle, cursor: 'pointer' }}
+                            >
+                                <option value="biconvex">Biconvex</option>
+                                <option value="plano-convex">Plano-Convex</option>
+                                <option value="convex-plano">Convex-Plano</option>
+                                <option value="meniscus-pos">Meniscus (+)</option>
+                                <option value="plano-concave">Plano-Concave</option>
+                                <option value="concave-plano">Concave-Plano</option>
+                                <option value="biconcave">Biconcave</option>
+                                <option value="meniscus-neg">Meniscus (−)</option>
+                            </select>
+                        </div>
+                        
+                        {/* Primary Controls — all scrubbable */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <ScrubInput
+                                label="Focal Len"
+                                suffix="mm"
+                                value={localFocal}
+                                onChange={setLocalFocal}
+                                onCommit={(v) => commitGeometry('focal', v)}
+                                speed={1.0}
+                            />
+                            <ScrubInput
+                                label="Aperture"
+                                suffix="mm"
                                 value={localRadius}
-                                onChange={(e) => setLocalRadius(e.target.value)}
-                                onBlur={() => commitGeometry('radius', localRadius)}
-                                onKeyDown={(e) => handleKeyDown(e, () => commitGeometry('radius', localRadius))}
-                                style={inputStyle}
+                                onChange={setLocalRadius}
+                                onCommit={(v) => commitGeometry('radius', v)}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localThickness}
+                                onChange={setLocalThickness}
+                                onCommit={(v) => commitGeometry('thickness', v)}
+                                speed={0.2}
+                                min={0.1}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="IoR"
+                                suffix="n"
+                                value={localIor}
+                                onChange={setLocalIor}
+                                onCommit={(v) => commitGeometry('ior', v)}
+                                speed={0.005}
+                                min={1.0}
+                                max={3.0}
+                                step={0.001}
+                                title="Index of Refraction (1.0 = air, 1.5 = BK7, 1.7 = Lanthanum Crown)"
                             />
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Focal Len (mm)</label>
-                            <input 
-                                type="text" 
-                                value={localFocal}
-                                onChange={(e) => setLocalFocal(e.target.value)}
-                                onBlur={() => commitGeometry('focal', localFocal)}
-                                onKeyDown={(e) => handleKeyDown(e, () => commitGeometry('focal', localFocal))}
-                                style={inputStyle}
+                        
+                        {/* Surface Radii — scrubbable */}
+                        <div style={{ borderTop: '1px solid #333', paddingTop: 8 }}>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Surface Radii (drag labels ↔ to scrub)</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                <ScrubInput
+                                    label="R1 (Front)"
+                                    value={localR1}
+                                    onChange={setLocalR1}
+                                    onCommit={(v) => commitGeometry('r1', v)}
+                                    speed={2.0}
+                                    allowInfinity
+                                    title="+ = Convex, − = Concave, 'Infinity' = Flat"
+                                />
+                                <ScrubInput
+                                    label="R2 (Back)"
+                                    value={localR2}
+                                    onChange={setLocalR2}
+                                    onCommit={(v) => commitGeometry('r2', v)}
+                                    speed={2.0}
+                                    allowInfinity
+                                    title="− = Convex, + = Concave, 'Infinity' = Flat"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isIdealLens && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Phase Surface (Thin Lens)</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Focal Len"
+                                suffix="mm"
+                                value={localIdealFocal}
+                                onChange={setLocalIdealFocal}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val === 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof IdealLens) {
+                                            c.focalLength = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1.0}
+                                title="Positive = converging, Negative = diverging"
                             />
+                            <ScrubInput
+                                label="Aperture"
+                                suffix="mm"
+                                value={localIdealAperture}
+                                onChange={setLocalIdealAperture}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof IdealLens) {
+                                            c.apertureRadius = val;
+                                            c.bounds.set(
+                                                new Vector3(-val, -val, -0.01),
+                                                new Vector3(val, val, 0.01)
+                                            );
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isObjective && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Aplanatic Phase Surface</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Mag"
+                                suffix="x"
+                                value={localObjMag}
+                                onChange={setLocalObjMag}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Objective) {
+                                            c.magnification = val;
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="NA"
+                                suffix=""
+                                value={localObjNA}
+                                onChange={setLocalObjNA}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Objective) {
+                                            c.NA = val;
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.05}
+                                min={0.01}
+                                max={1.7}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <div>
+                                <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 4 }}>Immersion</label>
+                                <select
+                                    value={localObjImmersion}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setLocalObjImmersion(e.target.value);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection && c instanceof Objective) {
+                                                c.immersionIndex = val;
+                                                c.recalculate();
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        background: '#333',
+                                        color: '#ccc',
+                                        border: '1px solid #555',
+                                        borderRadius: 4,
+                                        padding: '4px 6px',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    <option value="1.0">Air (1.0)</option>
+                                    <option value="1.33">Water (1.33)</option>
+                                    <option value="1.515">Oil (1.515)</option>
+                                </select>
+                            </div>
+                            <ScrubInput
+                                label="WD"
+                                suffix="mm"
+                                value={localObjWD}
+                                onChange={setLocalObjWD}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Objective) {
+                                            c.workingDistance = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={0.1}
+                                max={50}
+                            />
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: '10px', color: '#555' }}>
+                            f = {selectedComponent instanceof Objective ? Math.round(selectedComponent.focalLength * 100) / 100 : '—'} mm
+                            {' · '}
+                            ∅ = {selectedComponent instanceof Objective ? Math.round(selectedComponent.apertureRadius * 2 * 100) / 100 : '—'} mm
                         </div>
                     </div>
                 )}
