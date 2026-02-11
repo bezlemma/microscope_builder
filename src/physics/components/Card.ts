@@ -44,7 +44,8 @@ export class Card extends OpticalComponent {
         return { 
             rays: [{ 
                 ...ray, 
-                origin: hit.point // Continue from hit point
+                origin: hit.point,
+                entryPoint: undefined  // Clear stale entryPoint
             }] 
         };
     }

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Vector2, Vector3, DoubleSide } from 'three';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
 import { componentsAtom, rayConfigAtom, selectionAtom } from '../state/store';
 import { Ray, Coherence } from '../physics/types';
@@ -16,6 +16,8 @@ import { ObjectiveCasing } from '../physics/components/ObjectiveCasing';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
 import { PointSource } from '../physics/components/PointSource';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { PrismLens } from '../physics/components/PrismLens';
 import { RayVisualizer } from './RayVisualizer';
 import { Draggable } from './Draggable';
 
@@ -141,9 +143,8 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 // Dynamic Lens Visualizer - Generating Truth from Physics
 // Renders the exact profile defined by SphericalLens properties (R1, R2, Thickness, Aperture)
 const DynamicLens = ({ component, noRotation = false }: { component: SphericalLens, noRotation?: boolean }) => {
-    // Generate profile points for LatheGeometry
+    // Generate profile points for LatheGeometry — use the same function as LensVisualizer
     const points = useMemo(() => {
-        const pts: Vector2[] = [];
         const { r1, r2, thickness, apertureRadius, curvature, ior } = component;
         
         // Determine Radii (Fallback to symmetric if R1/R2 missing)
@@ -156,62 +157,18 @@ const DynamicLens = ({ component, noRotation = false }: { component: SphericalLe
              R2 = -R;
         }
 
-        const segments = 32;
-        const frontApex = -thickness / 2;
-        const backApex = thickness / 2;
-
-        // --- Front Surface Points (Bottom to Top) ---
-        for (let i = 0; i <= segments; i++) {
-            const y = (i / segments) * apertureRadius; // 0 to Aperture
-            let z = frontApex;
-
-            if (Math.abs(R1) < Infinity) {
-                const C1 = frontApex + R1; // Center of Front Sphere
-                // Sphere Eq: (z - C)^2 + y^2 = R^2
-                // z = C +/- sqrt(R^2 - y^2)
-                // If R1 > 0 (Convex), C1 is right, surface is left: z = C1 - sqrt
-                // If R1 < 0 (Concave), C1 is left, surface is right: z = C1 + sqrt
-                // Combined: z = C1 - sign(R1) * sqrt(...)
-                const val = R1 * R1 - y * y;
-                if (val >= 0) {
-                    const sign = R1 > 0 ? 1 : -1;
-                    z = C1 - sign * Math.sqrt(val);
-                }
-            }
-            pts.push(new Vector2(y, z)); // radial -> x, axial -> y for lathe
-            // LatheGeometry: points are (x, y). Rotates around Y axis.
-            // We want Optical Axis (Z) is traverse.
-            // Lathe creates cylinder along Y.
-            // We will rotate the mesh 90 deg.
-            // Let's map Optical Z -> Lathe Y. Optical Y (Radial) -> Lathe X.
-            // So Point(y_optical, z_optical).
-        }
-
-        // --- Back Surface Points (Top to Bottom) ---
-        for (let i = segments; i >= 0; i--) {
-            const y = (i / segments) * apertureRadius;
-            let z = backApex;
-
-            if (Math.abs(R2) < Infinity) {
-                const C2 = backApex + R2; // Center of Back Sphere
-                // If R2 > 0 (Concave/Meniscus), C2 is right, surface is left: z = C2 - sqrt
-                // If R2 < 0 (Convex), C2 is left, surface is right: z = C2 + sqrt
-                // Combined: z = C2 - sign(R2) * sqrt(...)
-                 const val = R2 * R2 - y * y;
-                 if (val >= 0) {
-                     const sign = R2 > 0 ? 1 : -1;
-                     z = C2 - sign * Math.sqrt(val);
-                 }
-            }
-            pts.push(new Vector2(y, z));
-        }
+        // Single source of truth: SphericalLens.generateProfile handles
+        // surface crossover detection and avoids zero-thickness slivers
+        const profile = SphericalLens.generateProfile(
+            R1 ?? 1e9, R2 ?? -1e9, apertureRadius, thickness, 32
+        );
         
-        // Close shape? Lathe expects open path that connects axis?
-        // We went 0->Aperture->0. Loop closed.
-        // First point (0, frontZ). Last point (0, backZ).
-        // It forms a solid cross section.
-        
-        return pts;
+        return profile.length >= 2 ? profile : [
+            new Vector2(0, -thickness / 2),
+            new Vector2(apertureRadius, -thickness / 2),
+            new Vector2(apertureRadius, thickness / 2),
+            new Vector2(0, thickness / 2)
+        ];
     }, [component]);
 
     // Color based on material (Crown vs Flint ior?)
@@ -239,21 +196,9 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
     const isSelected = selection === component.id;
     const a = component.apertureRadius;
     const wd = component.workingDistance;
-    const isConverging = component.focalLength > 0;
-    const arrowSize = Math.min(a * 0.25, 3);
 
     const mainLine = useMemo(() =>
         new Float32Array([0, -a, 0, 0, a, 0]), [a]);
-
-    const topArrowPts = useMemo(() => isConverging
-        ? new Float32Array([arrowSize, a - arrowSize, 0, 0, a, 0, -arrowSize, a - arrowSize, 0])
-        : new Float32Array([-arrowSize, a + arrowSize, 0, 0, a, 0, arrowSize, a + arrowSize, 0]),
-    [a, arrowSize, isConverging]);
-
-    const bottomArrowPts = useMemo(() => isConverging
-        ? new Float32Array([arrowSize, -a + arrowSize, 0, 0, -a, 0, -arrowSize, -a + arrowSize, 0])
-        : new Float32Array([-arrowSize, -a - arrowSize, 0, 0, -a, 0, arrowSize, -a - arrowSize, 0]),
-    [a, arrowSize, isConverging]);
 
     return (
         <group 
@@ -261,26 +206,10 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
-            {/* Main thin line */}
+            {/* Vertical line at principal plane */}
             <line>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" args={[mainLine, 3]} />
-                </bufferGeometry>
-                <lineBasicMaterial color="#b388ff" linewidth={2} />
-            </line>
-
-            {/* Top arrowhead */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute attach="attributes-position" args={[topArrowPts, 3]} />
-                </bufferGeometry>
-                <lineBasicMaterial color="#b388ff" linewidth={2} />
-            </line>
-
-            {/* Bottom arrowhead */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute attach="attributes-position" args={[bottomArrowPts, 3]} />
                 </bufferGeometry>
                 <lineBasicMaterial color="#b388ff" linewidth={2} />
             </line>
@@ -425,65 +354,19 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
         console.warn("LensVisualizer: Error getting radii", e);
     }
 
-    // Generate profile curve for LatheGeometry
-    // Profile is in the XY plane: X = radial distance (0 to aperture), Y = thickness (along W-axis)
+    // Generate profile using the SAME function as the physics mesh — single source of truth
     const profilePoints = useMemo(() => {
-        const frontPoints: Vector2[] = [];
-        const backPoints: Vector2[] = [];
-        const steps = 32;
-        const frontApex = -thickness / 2;
-        const backApex = thickness / 2;
-        
-        // Single loop to detect intersection
-        for(let i=0; i<=steps; i++) {
-            const r = (i/steps) * aperture;
-            
-            // Calculate Front W (local Z)
-            let wFront = frontApex; 
-            if (Math.abs(R1) < 1e8) {
-                const val = R1*R1 - r*r;
-                if (val >= 0) wFront = (frontApex + R1) - (R1>0?1:-1)*Math.sqrt(val);
-            }
-            
-            // Calculate Back W (local Z)
-            let wBack = backApex; 
-            if (Math.abs(R2) < 1e8) {
-                const val = R2*R2 - r*r;
-                if (val >= 0) wBack = (backApex + R2) - (R2>0?1:-1)*Math.sqrt(val); 
-            }
-            
-            // Check for intersection (Lens edge thickness <= 0)
-            if (wFront >= wBack) {
-                // Surfaces crossed. Lens is physically impossible at this radius.
-                // Clamp to the crossing point
-                const midW = (wFront + wBack) / 2;
-                frontPoints.push(new Vector2(r, midW));
-                backPoints.push(new Vector2(r, midW)); 
-                break;
-            }
-            
-            if (!isNaN(wFront)) frontPoints.push(new Vector2(r, wFront));
-            if (!isNaN(wBack)) backPoints.push(new Vector2(r, wBack));
-        }
-        
-        // Combine: Front (Center->Edge) + Back (Edge->Center)
-        // Back points need to be reversed to go from Edge to Center
-        const combined = [...frontPoints, ...backPoints.reverse()];
+        const profile = SphericalLens.generateProfile(R1, R2, aperture, thickness, 32);
         
         // Safety: ensure at least 2 points to avoid Lathe crash
-        if (combined.length < 2) {
+        if (profile.length < 2) {
+            const frontApex = -thickness / 2;
+            const backApex = thickness / 2;
             return [new Vector2(0, frontApex), new Vector2(aperture, frontApex), new Vector2(aperture, backApex), new Vector2(0, backApex)];
         }
         
-        return combined;
+        return profile;
     }, [aperture, thickness, R1, R2]);
-
-    // Safety check for ring geometry args
-    const ringArgs: [number, number, number] = [
-        Math.max(0, aperture * 0.95), 
-        Math.max(0.1, aperture * 1.02), 
-        64
-    ];
 
     return (
         <group 
@@ -497,23 +380,17 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
                 <latheGeometry args={[profilePoints, 32]} />
                 <meshPhysicalMaterial 
                     color={component.ior > 1.55 ? "#88ffee" : "#aaddff"}
-                    transmission={0.95} 
-                    opacity={0.4}
+                    transmission={isSelected ? 0.85 : 0.95} 
+                    opacity={isSelected ? 0.6 : 0.4}
                     transparent
                     roughness={0} 
                     metalness={0}
                     ior={component.ior || 1.5}
                     side={DoubleSide}
+                    emissive={isSelected ? "#64ffda" : "#000000"}
+                    emissiveIntensity={isSelected ? 0.15 : 0}
                 />
             </mesh>
-
-            {/* Selection Highlight — subtle aperture ring */}
-            {isSelected && !isNaN(aperture) && (
-                <mesh raycast={() => {}}>
-                    <ringGeometry args={ringArgs} />
-                    <meshBasicMaterial color="#64ffda" transparent opacity={0.8} side={DoubleSide} />
-                </mesh>
-            )}
         </group>
     );
 };
@@ -582,74 +459,20 @@ export const PointSourceVisualizer = ({ component }: { component: PointSource })
 const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
     const a = component.apertureRadius;
     const converging = component.focalLength > 0;
-    const arrowSize = Math.min(a * 0.2, 3); // arrow proportional to aperture
-    
-    // Build line geometry: vertical line + arrow tips
-    const points = useMemo(() => {
-        const pts: Vector3[] = [];
-        // Main vertical line (in local ZY: optical axis is Z, transverse is Y in the plane we see)
-        // But local space: Z = optical axis (W), Y = transverse (V)
-        // We draw in the UV plane — a line along V at w=0
-        pts.push(new Vector3(0, -a, 0)); // bottom
-        pts.push(new Vector3(0, a, 0));  // top
-        return pts;
-    }, [a]);
-
-    // Arrow heads at the tips
-    const topArrow = useMemo(() => {
-        const tip = new Vector3(0, a, 0);
-        const inward = converging ? -1 : 1; // inward = toward axis
-        return [
-            new Vector3(inward * arrowSize, a - arrowSize, 0),
-            tip,
-            new Vector3(-inward * arrowSize, a - arrowSize, 0),
-        ];
-    }, [a, arrowSize, converging]);
-
-    const bottomArrow = useMemo(() => {
-        const tip = new Vector3(0, -a, 0);
-        const inward = converging ? 1 : -1; // mirrored
-        return [
-            new Vector3(inward * arrowSize, -a + arrowSize, 0),
-            tip,
-            new Vector3(-inward * arrowSize, -a + arrowSize, 0),
-        ];
-    }, [a, arrowSize, converging]);
-
     const color = converging ? '#64ffda' : '#ff6b9d';
+
+    const mainLine = useMemo(() =>
+        new Float32Array([0, -a, 0, 0, a, 0]), [a]);
 
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={[component.rotation.x, component.rotation.y, component.rotation.z, component.rotation.w]}
         >
-            {/* Main line */}
+            {/* Main vertical line */}
             <line>
                 <bufferGeometry>
-                    <bufferAttribute
-                        attach="attributes-position"
-                        args={[new Float32Array(points.flatMap(p => [p.x, p.y, p.z])), 3]}
-                    />
-                </bufferGeometry>
-                <lineBasicMaterial color={color} linewidth={2} />
-            </line>
-            {/* Top arrow */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute
-                        attach="attributes-position"
-                        args={[new Float32Array(topArrow.flatMap(p => [p.x, p.y, p.z])), 3]}
-                    />
-                </bufferGeometry>
-                <lineBasicMaterial color={color} linewidth={2} />
-            </line>
-            {/* Bottom arrow */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute
-                        attach="attributes-position"
-                        args={[new Float32Array(bottomArrow.flatMap(p => [p.x, p.y, p.z])), 3]}
-                    />
+                    <bufferAttribute attach="attributes-position" args={[mainLine, 3]} />
                 </bufferGeometry>
                 <lineBasicMaterial color={color} linewidth={2} />
             </line>
@@ -657,6 +480,207 @@ const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
             <mesh>
                 <planeGeometry args={[2, a * 2]} />
                 <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            </mesh>
+        </group>
+    );
+};
+
+// Cylindrical Lens Visualizer — curved in Y, flat in X, matching physics profile
+export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
+    const [selection, setSelection] = useAtom(selectionAtom);
+    const isSelected = selection === component.id;
+    if (!component || !component.rotation || !component.position) return null;
+
+    const geometry = useMemo(() => {
+        const segsY = 24;
+        const segsX = 2;
+        const halfW = component.width / 2;
+        const R1 = component.r1;
+        const R2 = component.r2;
+        const thickness = component.thickness;
+        const maxY = component.apertureRadius;
+
+        // Sag functions (same as physics)
+        const sagFront = (y: number) => {
+            const frontApex = -thickness / 2;
+            if (Math.abs(R1) > 1e8) return frontApex;
+            const val = R1 * R1 - y * y;
+            if (val < 0) return frontApex;
+            return (frontApex + R1) - (R1 > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+        const sagBack = (y: number) => {
+            const backApex = thickness / 2;
+            if (Math.abs(R2) > 1e8) return backApex;
+            const val = R2 * R2 - y * y;
+            if (val < 0) return backApex;
+            return (backApex + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+
+        const positions: number[] = [];
+        const indices: number[] = [];
+        const yCount = segsY + 1;
+
+        // Front face (curved)
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            for (let yi = 0; yi <= segsY; yi++) {
+                const y = -maxY + (2 * maxY * yi) / segsY;
+                positions.push(x, y, sagFront(Math.abs(y)));
+            }
+        }
+        // Back face (flat or curved)
+        const backOff = (segsX + 1) * yCount;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            for (let yi = 0; yi <= segsY; yi++) {
+                const y = -maxY + (2 * maxY * yi) / segsY;
+                positions.push(x, y, sagBack(Math.abs(y)));
+            }
+        }
+
+        // Front face tris
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = xi * yCount + yi;
+                const b = (xi + 1) * yCount + yi;
+                const c = (xi + 1) * yCount + (yi + 1);
+                const d = xi * yCount + (yi + 1);
+                indices.push(a, b, c, a, c, d);
+            }
+        }
+        // Back face tris (reversed winding)
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = backOff + xi * yCount + yi;
+                const b = backOff + (xi + 1) * yCount + yi;
+                const c = backOff + (xi + 1) * yCount + (yi + 1);
+                const d = backOff + xi * yCount + (yi + 1);
+                indices.push(a, c, b, a, d, c);
+            }
+        }
+
+        // Side walls: top, bottom, left, right
+        // Top wall (y = maxY)
+        const topOff = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            positions.push(x, maxY, sagFront(maxY));
+            positions.push(x, maxY, sagBack(maxY));
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = topOff + xi * 2, b = topOff + (xi + 1) * 2;
+            const c = topOff + (xi + 1) * 2 + 1, d = topOff + xi * 2 + 1;
+            indices.push(a, b, c, a, c, d);
+        }
+        // Bottom wall (y = -maxY)
+        const botOff = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            positions.push(x, -maxY, sagFront(maxY));
+            positions.push(x, -maxY, sagBack(maxY));
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = botOff + xi * 2, b = botOff + (xi + 1) * 2;
+            const c = botOff + (xi + 1) * 2 + 1, d = botOff + xi * 2 + 1;
+            indices.push(a, c, b, a, d, c);
+        }
+        // Left wall (x = -halfW)
+        const leftOff = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const y = -maxY + (2 * maxY * yi) / segsY;
+            positions.push(-halfW, y, sagFront(Math.abs(y)));
+            positions.push(-halfW, y, sagBack(Math.abs(y)));
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = leftOff + yi * 2, b = leftOff + (yi + 1) * 2;
+            const c = leftOff + (yi + 1) * 2 + 1, d = leftOff + yi * 2 + 1;
+            indices.push(a, c, b, a, d, c);
+        }
+        // Right wall (x = +halfW)
+        const rightOff = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const y = -maxY + (2 * maxY * yi) / segsY;
+            positions.push(halfW, y, sagFront(Math.abs(y)));
+            positions.push(halfW, y, sagBack(Math.abs(y)));
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = rightOff + yi * 2, b = rightOff + (yi + 1) * 2;
+            const c = rightOff + (yi + 1) * 2 + 1, d = rightOff + yi * 2 + 1;
+            indices.push(a, b, c, a, c, d);
+        }
+
+        const geo = new BufferGeometry();
+        geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+    }, [component.r1, component.r2, component.apertureRadius, component.width, component.thickness]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+        >
+            <mesh geometry={geometry}>
+                <meshPhysicalMaterial
+                    color="#ccffff"
+                    transmission={0.99}
+                    opacity={0.6}
+                    transparent
+                    roughness={0}
+                    side={2}
+                />
+            </mesh>
+        </group>
+    );
+};
+
+// Prism Visualizer — triangular cross-section extruded along X
+export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
+    const [selection, setSelection] = useAtom(selectionAtom);
+    const isSelected = selection === component.id;
+    if (!component || !component.rotation || !component.position) return null;
+
+    const halfAngle = component.apexAngle / 2;
+    const baseHalfWidth = component.height * Math.tan(halfAngle);
+    const centroidY = component.height / 3;
+    const halfW = component.width / 2;
+
+    const geometry = useMemo(() => {
+        const ay = component.height - centroidY, az = 0;
+        const bly = -centroidY, blz = -baseHalfWidth;
+        const bry = -centroidY, brz = baseHalfWidth;
+        const positions = [
+            -halfW,ay,az, -halfW,bly,blz, -halfW,bry,brz,
+            halfW,ay,az, halfW,bly,blz, halfW,bry,brz,
+            -halfW,ay,az, halfW,ay,az, -halfW,bly,blz, halfW,bly,blz,
+            -halfW,ay,az, halfW,ay,az, -halfW,bry,brz, halfW,bry,brz,
+            -halfW,bly,blz, halfW,bly,blz, -halfW,bry,brz, halfW,bry,brz,
+        ];
+        const indices = [0,2,1, 3,4,5, 6,8,7, 7,8,9, 10,11,12, 11,13,12, 14,15,16, 15,17,16];
+        const geo = new BufferGeometry();
+        geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+    }, [component.apexAngle, component.height, component.width]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+        >
+            <mesh geometry={geometry}>
+                <meshPhysicalMaterial
+                    color="#ccffff"
+                    transmission={0.99}
+                    opacity={0.6}
+                    transparent
+                    roughness={0}
+                    side={2}
+                />
             </mesh>
         </group>
     );
@@ -697,8 +721,26 @@ export const OpticalTable: React.FC = () => {
                 wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             });
             
-            // Generate Collimated Beam (Parallel Rays) - Grid pattern covering Y and Z
-            const steps = Math.max(1, rayConfig.rayCount);
+            // Hierarchical ray distribution using binary subdivision:
+            //   Ring 0: 24 rays at full beam radius (marginal rays)
+            //   Ring 1+: 12 rays each at radii that fill gaps via binary subdivision
+            //     Sequence: 1/2, 1/4, 3/4, 1/8, 3/8, 5/8, 7/8, ...
+            // Each ring is angularly offset so projected 2D lines don't overlap.
+            const totalRays = Math.max(1, rayConfig.rayCount);
+            const FIRST_RING_COUNT = Math.min(24, totalRays);
+            const INNER_RING_COUNT = 12;
+            
+            // Build radius fractions via breadth-first binary subdivision:
+            // Level 0: [1/2]  Level 1: [1/4, 3/4]  Level 2: [1/8, 3/8, 5/8, 7/8] ...
+            const radiusFractions: number[] = [1]; // ring 0 = marginal (full radius)
+            let subdivLevel = 1;
+            while (radiusFractions.length < 100) { // generate enough levels
+                const denom = 1 << subdivLevel; // 2, 4, 8, 16, ...
+                for (let k = 1; k < denom; k += 2) { // odd numerators only
+                    radiusFractions.push(k / denom);
+                }
+                subdivLevel++;
+            }
             
             // Basis Vectors for the aperture plane
             const up = new Vector3(0, 1, 0); 
@@ -708,19 +750,31 @@ export const OpticalTable: React.FC = () => {
             const right = new Vector3().crossVectors(direction, up).normalize();
             const trueUp = new Vector3().crossVectors(right, direction).normalize();
             
-            // Generate rays around the beam circumference (marginal rays in 3D)
-            for(let i = 0; i < steps; i++) {
-                 const phi = (i / steps) * Math.PI * 2;
-                 
-                 const marginalOffset = new Vector3()
-                    .addScaledVector(trueUp, Math.sin(phi) * beamRadius)
-                    .addScaledVector(right, Math.cos(phi) * beamRadius);
+            let raysPlaced = 0;
+            let ringIndex = 0;
+            while (raysPlaced < totalRays && ringIndex < radiusFractions.length) {
+                const ringRadius = beamRadius * radiusFractions[ringIndex];
+                const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
+                const raysThisRing = Math.min(raysForThisRing, totalRays - raysPlaced);
+                
+                // Angular offset per ring to avoid 2D line overlap
+                const angularOffset = ringIndex * Math.PI / 7; // golden-ish rotation
+                
+                for (let i = 0; i < raysThisRing; i++) {
+                    const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
 
-                 sourceRays.push({
-                    origin: origin.clone().add(marginalOffset),
-                    direction: direction.clone().normalize(), // Enforce parallel
-                    wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
-                });
+                    const ringOffset = new Vector3()
+                        .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
+                        .addScaledVector(right, Math.cos(phi) * ringRadius);
+
+                    sourceRays.push({
+                        origin: origin.clone().add(ringOffset),
+                        direction: direction.clone().normalize(),
+                        wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                    });
+                    raysPlaced++;
+                }
+                ringIndex++;
             }
         }
         
@@ -757,6 +811,8 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                 else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
                 else if (c instanceof PointSource) visual = <PointSourceVisualizer component={c} />;
+                else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
+                else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
                 
                 if (visual) {
                     return (

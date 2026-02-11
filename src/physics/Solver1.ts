@@ -29,7 +29,6 @@ export class Solver1 {
     private traceRecursive(currentRay: Ray, currentPath: Ray[], depth: number, allPaths: Ray[][]) {
         // 0. Safety Checks
         if (depth >= this.maxDepth) {
-            // Terminate path if max depth reached (prevents stack overflow/infinite loops)
             allPaths.push([...currentPath]);
             return;
         }
@@ -45,7 +44,6 @@ export class Solver1 {
         let nearestComponent = null;
 
         // 1. Find Nearest Intersection
-        // Iterate through all components to find the closest one in front of the ray
         for (const component of this.scene) {
             const hit = component.chkIntersection(currentRay);
             
@@ -81,8 +79,6 @@ export class Solver1 {
         // Spawn new rays for the next segments.
         for (const childRay of result.rays) {
             // CRITICAL: Reset interaction distance for the new ray.
-            // The child ray starts at the interaction point (or exit point for thick lens).
-            // It hasn't hit anything yet.
             childRay.interactionDistance = undefined; 
             
             // Branch the path history

@@ -132,20 +132,17 @@ export class Objective extends OpticalComponent {
     }
 
     /**
-     * Interact: Abbe Sine Condition (aplanatic deflection).
+     * Interact: Thin-lens deflection with NA clipping.
      *
-     * Standard thin-lens (paraxial):
-     *   θ_out ≈ h / f                      — fails at high NA
+     * Uses the standard thin-lens angular deflection formula:
+     *   v_out = v_in - (h / f) × r̂
      *
-     * Aplanatic (this):
-     *   sin(θ_out) = h / f                  — exact at any NA
-     *   θ_out = arcsin(h / f)
+     * This correctly handles BOTH directions:
+     *   - Collimated input → converging output (focusing)
+     *   - Diverging input from focal plane → collimated output (infinity space)
      *
-     * Exit direction in local space (converging toward +w focus):
-     *   v_out.w = cos(θ_out)               — axial component
-     *   v_out.uv = -sin(θ_out) × r̂        — radial inward for convergence
-     *
-     * If h/f > 1 → physically impossible, ray blocked.
+     * The aperture clip in intersect() enforces NA limits.
+     * OPL: quadratic phase shift Δ = -h² / (2f).
      */
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         const dirIn = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
@@ -161,29 +158,11 @@ export class Objective extends OpticalComponent {
             // On-axis: passes through undeflected
             dirOut = dirIn.clone();
         } else {
-            const sinTheta = h / this.focalLength;
-
-            // Check physical limit: sin(θ) cannot exceed 1
-            if (Math.abs(sinTheta) > 1.0) {
-                return { rays: [] }; // Ray blocked — outside sine limit
-            }
-
-            const cosTheta = Math.sqrt(1.0 - sinTheta * sinTheta);
-
             // Radial unit vector in UV plane (pointing outward from axis)
             const rHat = new Vector3(u / h, v / h, 0);
 
-            // Determine which way the ray is traveling along w-axis
-            const wSign = dirIn.z > 0 ? 1 : -1;
-
-            // Aplanatic exit direction:
-            // Axial component: cos(θ) along w (same direction as incoming)
-            // Radial component: -sin(θ) × r̂ (inward for converging, f > 0)
-            dirOut = new Vector3(
-                -sinTheta * rHat.x,
-                -sinTheta * rHat.y,
-                wSign * cosTheta
-            );
+            // Thin-lens deflection: v_out = v_in - (h / f) × r̂
+            dirOut = dirIn.clone().sub(rHat.multiplyScalar(h / this.focalLength));
             dirOut.normalize();
         }
 
@@ -200,7 +179,8 @@ export class Objective extends OpticalComponent {
                 ...ray,
                 origin: hitWorld,
                 direction: dirOutWorld,
-                opticalPathLength: ray.opticalPathLength + deltaOPL
+                opticalPathLength: ray.opticalPathLength + deltaOPL,
+                entryPoint: undefined  // Clear stale entryPoint from previous thick-lens interactions
             }]
         };
     }

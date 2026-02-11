@@ -1,13 +1,10 @@
 import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
-import { Mirror } from '../physics/components/Mirror';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Vector3 } from 'three';
-import { Laser } from '../physics/components/Laser';
 
 // Presets
-import { createInfinitySystemScene } from '../presets/infinitySystem';
+import { createTransmissionMicroscopeScene } from '../presets/infinitySystem';
 import { createBeamExpanderScene } from '../presets/beamExpander';
+import { createLensZooScene } from '../presets/lensZoo';
 
 // --- State Types ---
 export interface RayConfig {
@@ -20,7 +17,8 @@ export interface RayConfig {
 // Preset Management
 export enum PresetName {
     BeamExpander = "Beam Expander",
-    InfinitySystem = "Infinity System"
+    TransmissionMicroscope = "Transmission Microscope",
+    LensZoo = "Lens Zoo"
 }
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
@@ -37,8 +35,10 @@ export const loadPresetAtom = atom(
         set(activePresetAtom, presetName);
         if (presetName === PresetName.BeamExpander) {
             set(componentsAtom, createBeamExpanderScene());
-        } else if (presetName === PresetName.InfinitySystem) {
-            set(componentsAtom, createInfinitySystemScene());
+        } else if (presetName === PresetName.TransmissionMicroscope) {
+            set(componentsAtom, createTransmissionMicroscopeScene());
+        } else if (presetName === PresetName.LensZoo) {
+            set(componentsAtom, createLensZooScene());
         }
     }
 );

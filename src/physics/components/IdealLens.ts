@@ -109,7 +109,8 @@ export class IdealLens extends OpticalComponent {
                 ...ray,
                 origin: hitWorld,
                 direction: dirOutWorld,
-                opticalPathLength: ray.opticalPathLength + deltaOPL
+                opticalPathLength: ray.opticalPathLength + deltaOPL,
+                entryPoint: undefined  // Clear stale entryPoint
             }]
         };
     }

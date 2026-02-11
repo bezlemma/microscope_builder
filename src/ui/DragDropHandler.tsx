@@ -8,9 +8,12 @@ import { Laser } from '../physics/components/Laser';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
+import { PointSource } from '../physics/components/PointSource';
 import { Objective } from '../physics/components/Objective';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { PrismLens } from '../physics/components/PrismLens';
 import { Vector3, Raycaster, Plane } from 'three';
 
 export const DragDropHandler: React.FC = () => {
@@ -69,8 +72,14 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new IdealLens(50, 15, "Ideal Lens"); // f=50mm, aperture=15mm
             } else if (type === 'objective') {
                 newComp = new Objective({ magnification: 10, NA: 0.25, name: "New Objective" });
+            } else if (type === 'pointSource') {
+                newComp = new PointSource("Point Source");
             } else if (type === 'camera') {
                 newComp = new Camera(50, 25, "New Camera");
+            } else if (type === 'cylindricalLens') {
+                newComp = new CylindricalLens(40, 1e9, 12, 24, 3, "Cylindrical Lens");
+            } else if (type === 'prism') {
+                newComp = new PrismLens(Math.PI / 3, 20, 20, "Prism");
             }
 
             if (newComp) {

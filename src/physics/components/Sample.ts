@@ -62,7 +62,16 @@ export class Sample extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Opaque / Absorbing for Solver 1 (Shadow)
-        return { rays: [] };
+        // Brightfield transmission: rays pass through the sample unchanged.
+        // The sample geometry is used for visualization and future imaging solvers.
+        const hitWorld = hit.point.clone();
+        return {
+            rays: [{
+                ...ray,
+                origin: hitWorld,
+                direction: ray.direction.clone(),
+                entryPoint: undefined  // Clear stale entryPoint from previous thick-lens interactions
+            }]
+        };
     }
 }

@@ -50,7 +50,8 @@ export class Mirror extends OpticalComponent {
                 ...ray,
                 origin: hit.point,
                 direction: reflectedDir,
-                opticalPathLength: ray.opticalPathLength + hit.t // Air
+                opticalPathLength: ray.opticalPathLength + hit.t,
+                entryPoint: undefined  // Clear stale entryPoint
             }]
         };
     }

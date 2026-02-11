@@ -9,6 +9,7 @@ import { Card } from '../physics/components/Card';
 import { Laser } from '../physics/components/Laser';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
+import { PrismLens } from '../physics/components/PrismLens';
 import { ScrubInput } from './ScrubInput';
 
 // Wavelength to visible spectrum color (approximation)
@@ -92,6 +93,12 @@ export const Inspector: React.FC = () => {
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
 
+    // Prism Params
+    const [localApexAngle, setLocalApexAngle] = useState<string>('60');
+    const [localPrismHeight, setLocalPrismHeight] = useState<string>('20');
+    const [localPrismWidth, setLocalPrismWidth] = useState<string>('20');
+    const [localPrismIor, setLocalPrismIor] = useState<string>('1.5168');
+
     // Sync local state when selection or actual values change externally
     useEffect(() => {
         if (selectedComponent) {
@@ -153,6 +160,12 @@ export const Inspector: React.FC = () => {
                 if (selectedComponent instanceof Laser) {
                     setLocalWavelength(selectedComponent.wavelength);
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
+                }
+                if (selectedComponent instanceof PrismLens) {
+                    setLocalApexAngle(String(Math.round(selectedComponent.apexAngle * 180 / Math.PI * 100) / 100));
+                    setLocalPrismHeight(String(selectedComponent.height));
+                    setLocalPrismWidth(String(selectedComponent.width));
+                    setLocalPrismIor(String(selectedComponent.ior));
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -273,6 +286,10 @@ export const Inspector: React.FC = () => {
                          c.r1 = old.R1;
                     }
                 }
+                // Invalidate cached physics mesh so it rebuilds with new parameters
+                if (c instanceof SphericalLens) {
+                    c.invalidateMesh();
+                }
                 return c; // Mutable update inside map, but we trigger re-render via setComponents
             }
             return c;
@@ -313,6 +330,7 @@ export const Inspector: React.FC = () => {
     const isIdealLens = selectedComponent instanceof IdealLens;
     const isObjective = selectedComponent instanceof Objective;
     const isLaser = selectedComponent instanceof Laser;
+    const isPrism = selectedComponent instanceof PrismLens;
     
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
@@ -431,6 +449,7 @@ export const Inspector: React.FC = () => {
                                         const newComponents = components.map(c => {
                                             if (c.id === selection && c instanceof SphericalLens) {
                                                 c.setFromLensType(type);
+                                                c.invalidateMesh();
                                                 return c;
                                             }
                                             return c;
@@ -518,6 +537,139 @@ export const Inspector: React.FC = () => {
                                     title="− = Convex, + = Concave, 'Infinity' = Flat"
                                 />
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {isPrism && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Prism Geometry</label>
+                        {/* Shape Presets */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Shape</label>
+                            <select
+                                value={
+                                    Math.abs(parseFloat(localApexAngle) - 60) < 0.5 ? 'equilateral' :
+                                    Math.abs(parseFloat(localApexAngle) - 90) < 0.5 ? 'right-angle' :
+                                    Math.abs(parseFloat(localApexAngle) - 45) < 0.5 ? '45-degree' : 'custom'
+                                }
+                                onChange={(e) => {
+                                    const type = e.target.value;
+                                    let angle = 60;
+                                    if (type === 'right-angle') angle = 90;
+                                    else if (type === '45-degree') angle = 45;
+                                    setLocalApexAngle(String(angle));
+                                    if (selectedComponent instanceof PrismLens) {
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection && c instanceof PrismLens) {
+                                                c.apexAngle = angle * Math.PI / 180;
+                                                c.invalidateMesh();
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }
+                                }}
+                                style={{ ...inputStyle, cursor: 'pointer' }}
+                            >
+                                <option value="equilateral">Equilateral (60°)</option>
+                                <option value="45-degree">45° Prism</option>
+                                <option value="right-angle">Right-Angle (90°)</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <ScrubInput
+                                label="Apex Angle"
+                                suffix="°"
+                                value={localApexAngle}
+                                onChange={setLocalApexAngle}
+                                onCommit={(v: string) => {
+                                    const deg = parseFloat(v);
+                                    if (isNaN(deg) || deg <= 0 || deg >= 180) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof PrismLens) {
+                                            c.apexAngle = deg * Math.PI / 180;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1.0}
+                                min={5}
+                                max={170}
+                                title="Apex angle of the prism triangle"
+                            />
+                            <ScrubInput
+                                label="IoR"
+                                suffix="n"
+                                value={localPrismIor}
+                                onChange={setLocalPrismIor}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1.0 || val > 3.0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof PrismLens) {
+                                            c.ior = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.005}
+                                min={1.0}
+                                max={3.0}
+                                step={0.001}
+                                title="Index of Refraction"
+                            />
+                            <ScrubInput
+                                label="Height"
+                                suffix="mm"
+                                value={localPrismHeight}
+                                onChange={setLocalPrismHeight}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof PrismLens) {
+                                            c.height = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Width"
+                                suffix="mm"
+                                value={localPrismWidth}
+                                onChange={setLocalPrismWidth}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof PrismLens) {
+                                            c.width = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
                         </div>
                     </div>
                 )}

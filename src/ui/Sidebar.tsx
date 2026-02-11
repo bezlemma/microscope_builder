@@ -91,11 +91,14 @@ export const Sidebar: React.FC = () => {
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Sources</h4>
                     <DraggableItem type="laser" label="Laser Source" icon={Zap} />
+                    <DraggableItem type="pointSource" label="Point Source" icon={Circle} />
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Optics</h4>
-                    <DraggableItem type="lens" label="Lens" icon={Circle} />
+                    <DraggableItem type="lens" label="Spherical Lens" icon={Circle} />
+                    <DraggableItem type="cylindricalLens" label="Cylindrical Lens" icon={Circle} />
+                    <DraggableItem type="prism" label="Prism" icon={Box} />
                     <DraggableItem type="idealLens" label="Ideal Lens" icon={Circle} />
                     <DraggableItem type="objective" label="Objective" icon={Circle} />
                     <DraggableItem type="mirror" label="Mirror" icon={Square} />
@@ -123,9 +126,14 @@ export const Sidebar: React.FC = () => {
                     onClick={() => loadPreset(PresetName.BeamExpander)} 
                 />
                 <PresetButton 
-                    label="Infinity System" 
-                    active={activePreset === PresetName.InfinitySystem} 
-                    onClick={() => loadPreset(PresetName.InfinitySystem)}
+                    label="Transmission Microscope" 
+                    active={activePreset === PresetName.TransmissionMicroscope} 
+                    onClick={() => loadPreset(PresetName.TransmissionMicroscope)}
+                />
+                <PresetButton 
+                    label="Lens Zoo" 
+                    active={activePreset === PresetName.LensZoo} 
+                    onClick={() => loadPreset(PresetName.LensZoo)}
                 />
             </div>
             
