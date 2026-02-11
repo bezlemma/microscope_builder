@@ -60,8 +60,18 @@ export abstract class OpticalComponent implements Surface {
         // Here we just skip AABB for now to ensure correctness first, add optimization later.
         
         // Transform Ray to Local
-        const rayLocalOrigin = rayWorld.origin.clone().applyMatrix4(this.worldToLocal);
-        const rayLocalDir = rayWorld.direction.clone().transformDirection(this.worldToLocal).normalize();
+        // Clean near-zero floating-point artifacts from rotation matrices.
+        // e.g. rotateY(π/2) has cos(π/2) ≈ 6.12e-17 instead of 0, which creates
+        // phantom components that corrupt refraction and cause raycaster misses.
+        const EPS = 1e-12;
+        const clean = (v: Vector3) => {
+            if (Math.abs(v.x) < EPS) v.x = 0;
+            if (Math.abs(v.y) < EPS) v.y = 0;
+            if (Math.abs(v.z) < EPS) v.z = 0;
+            return v;
+        };
+        const rayLocalOrigin = clean(rayWorld.origin.clone().applyMatrix4(this.worldToLocal));
+        const rayLocalDir = clean(rayWorld.direction.clone().transformDirection(this.worldToLocal)).normalize();
 
 
         
@@ -86,7 +96,9 @@ export abstract class OpticalComponent implements Surface {
                 t: tWorld,
                 point: pointWorld,
                 normal: normalWorld,
-                localPoint: hitLocal.point
+                localPoint: hitLocal.point,
+                localNormal: hitLocal.normal.clone(),
+                localDirection: rayLocalDir.clone()
             };
         }
 

@@ -43,6 +43,8 @@ export interface HitRecord {
     point: Vector3;     // World Hit Point
     normal: Vector3;    // World Normal at hit point
     localPoint: Vector3; // Local Hit Point (u,v,w)
+    localNormal?: Vector3;    // Local Normal (avoids world↔local round-trip errors)
+    localDirection?: Vector3; // Local ray direction (avoids world↔local round-trip errors)
     surfaceIndex?: number; // Which surface was hit (for multi-surface components like lenses)
 }
 

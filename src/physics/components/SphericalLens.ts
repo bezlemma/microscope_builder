@@ -53,24 +53,21 @@ export class SphericalLens extends OpticalComponent {
             const geometry = new LatheGeometry(profilePoints, segments);
             geometry.rotateX(Math.PI / 2);
 
-            // Analytical normal function:
-            //   - Spherical surface vertex: normalize(V - sphereCenter)
-            //   - Rim vertex: radial outward normalize(V.x, V.y, 0)
             const frontApex = -this.thickness / 2;
             const backApex = this.thickness / 2;
             const frontCenter = new Vector3(0, 0, frontApex + R1);
             const backCenter = new Vector3(0, 0, backApex + R2);
-            const maxR = this.effectiveApertureRadius;
 
             const normalFn: NormalFn = (v: Vector3) => {
                 const r = Math.sqrt(v.x * v.x + v.y * v.y);
+                const maxR = this.effectiveApertureRadius;
 
-                // Rim vertices: radial outward
+                // Rim: radial outward
                 if (r > maxR - 0.01) {
                     return new Vector3(v.x, v.y, 0).normalize();
                 }
 
-                // Compute the sag (Z value) for each surface at this radial position
+                // Classify by proximity to actual sag values
                 const sagFrontZ = (() => {
                     if (Math.abs(R1) > 1e8) return frontApex;
                     const val = R1 * R1 - r * r;
@@ -84,7 +81,6 @@ export class SphericalLens extends OpticalComponent {
                     return (backApex + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
 
-                // Classify by proximity to actual sag values, not midZ
                 const distToFront = Math.abs(v.z - sagFrontZ);
                 const distToBack = Math.abs(v.z - sagBackZ);
 
@@ -349,8 +345,15 @@ export class SphericalLens extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        const dirIn = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
-        const normalIn = hit.normal.clone().transformDirection(this.worldToLocal).normalize();
+        // Use raw local-space values stored during chkIntersection to avoid
+        // floating-point errors from world↔local rotation matrix round-trips.
+        // The rotation matrix for e.g. rotateY(π/2) has cos(π/2) ≈ 6.12e-17
+        // instead of exactly 0, which corrupts the refracted direction enough
+        // to make the raycaster miss the exit surface.
+        const dirIn = hit.localDirection?.clone().normalize()
+            ?? ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const normalIn = hit.localNormal?.clone().normalize()
+            ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
 
         return this.mesh.interact(
             normalIn,

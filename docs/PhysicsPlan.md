@@ -43,32 +43,13 @@ Angles: Radians.
 ## 3. Architecture: Data vs. Systems
 The engine is structured like a game engine (ECS pattern). Data is passive; Systems are active.
 
-### A. The Data (Traceable Components)
-An "Objective" is not a single entity. It is an Assembly containing multiple Surfaces.
-The Ray Struct:
-To support polarization, spectral effects, and sensor-aware sampling, the fundamental Ray is defined as:struct Ray {
-    origin: Vector3,
-    direction: Vector3,
-    wavelength: f64,
-    polarization: JonesVector, // Complex {x, y}
-    intensity: f64,
-    optical_path_length: f64,  // Accumulated phase (distance * n). Critical for Solver 4.
-    
-    // Paper Insight: "Generalized Ray" parameters
-    footprint_radius: f64,     // The spatial width of the ray (sigma/beta)
-    coherence_mode: Coherence, // COHERENT (sum E-field) or INCOHERENT (sum Power)
-    
-    // Quantum Parameters (Solver 5)
-    entanglement_id: Option<u64>, // Links this ray to a "Twin" ray (Signal <-> Idler)
-}
-
-enum Coherence { Coherent, Incoherent }
+### A. The Data
 
 The Surface Trait:
 Every physical object must implement:intersect(ray_local: Ray) -> Option<HitRecord>
 Input: A ray already transformed into Local Space $(u, v, w)$.
 Output: Interaction point $t$, Normal vector $\vec{N}$.
-Note: For custom parametric surfaces, this solves $Ray(t) - Surface(u,v) = 0$ via Newton-Raphson.interact(ray: Ray, hit: HitRecord) -> Vec<RayInteraction>
+
 Output: A list of result rays.
 Refraction: Returns 1 ray (new direction).
 Splitter: Returns 2+ rays.
@@ -79,18 +60,6 @@ Dispersion/Color: $n$ is calculated using the Sellmeier Equation or a lookup tab
 Fluorescence (Stokes Shift): Material defines excitation_wavelength ($\lambda_{ex}$) and emission_wavelength ($\lambda_{em}$). Used by Solver 3 to cross-reference Excitation Beam intensity against Emission Ray wavelength.
 Includes saturation_intensity to model non-linear bleaching effects.
 Absorption: The material returns an absorption coefficient $\mu$ (units: $mm^{-1}$).
-
-The Transformation Logic:
-Each Component stores a WorldToLocal matrix (4x4).API: Users chain methods like .rotate_z(45).translate(10, 0, 0).Under the Hood: These update the matrix. They do not change the geometry equations.
-Intersection Pipeline:fn trace(ray_world) {
-    // 1. Broad Phase (Fast)
-    if !aabb_intersect(ray_world, component.bounds) { return None; }
-
-    // 2. Narrow Phase (Exact)
-    ray_local = component.world_to_local * ray_world;
-    hit_local = component.intersect(ray_local); 
-    hit_world = component.local_to_world * hit_local;
-}
 
 
 ### B. Solver 1: The Layout Engine (Interactive UI)
@@ -104,10 +73,7 @@ Physics:
 If interact() returns an empty list (e.g., hitting a wall, the back of a mirror, or a closed iris), the ray path ends immediately at that point.
 This prevents rays from passing through opaque objects like camera bodies or optical posts.
 
--Hard Reflections.
-We ignore the partial reflection that happens at glass interfaces (the Fresnel effect where ~4% of light reflects). If a surface is a Mirror, it reflects 100%. If it is a Lens, it Refracts 100%.
-The Math: The reflection vector $\vec{R}$ is the incident vector $\vec{I}$ flipped over the normal $\vec{N}$.$$\vec{R} = \vec{I} - 2(\vec{I} \cdot \vec{N})\vec{N}$$
-Why: In the Layout Engine, we want clean lines. We don't want to spawn millions of faint "ghost rays" reflecting off every lens surface, which would clutter the UI.
+-Visual-Physics Synchronization: Because rays collide exactly with the Three.js triangles the user sees, grazing edges and internal reflections are handled natively by the raycaster (using THREE.DoubleSide). There is no "ghost geometry" or light leaking through mathematical boundaries. If a ray hits the side housing of a lens, it simply hits an edge-tagged triangle and reflects or terminates accordingly.
 
 -Polarization (Jones Calculus): The Ray carries a Jones Vector. Every interaction updates it (Reflections flip phase, Waveplates retard components).
 Visualization: The UI can draw polarization arrows or color-code rays to show state changes instantly.
@@ -156,26 +122,23 @@ Result: If beams are orthogonally polarized ($\vec{E}_1 \perp \vec{E}_2$), the d
 Implementation: Uses ABCD Matrices derived from the Surface curvature to transform $q_{in} \to q_{out}$.Constraint: Only valid near the optical axis (Paraxial approximation).
 Usage: Overlays a semi-transparent "beam" mesh on the layout.
 
+Metadata Extraction for ABCD Matrices: Because Solver 1 operates on discrete triangles rather than infinite mathematical surfaces, a single triangle does not possess a macroscopic "focal length." To solve this, when Solver 1 generates the Ray Tree, it extracts optical metadata (Curvature $R$, Index $n$, Astigmatism axis) stored inside the intersected Three.js object's userData. Solver 2 then uses this exact metadata to accurately construct the ABCD matrices for Gaussian propagation as it walks the tree.
+
 ### D. Solver 3: The Incoherent Imaging Engine
 Goal: Generate the actual pixels the camera sees for standard Microscopy (Fluorescence, Brightfield, Darkfield). Fast and robust.
 Method: Reverse Stochastic Path Tracing (Monte Carlo) with Incoherent Integration.
-Direction: Camera -> Sample (Backward Tracing).
-Algorithm:
-Sensor: Select pixel $(x,y)$. Map to World Space position.
-Initial State: 
-Radiance = 0, Throughput = 1.0.
-Polarization: Jones = Camera_Analyzer_State.Footprint: Footprint = Pixel_Size. 
+
+Robust Volume Stepping: By utilizing sealed, watertight meshes for the collision boundaries, Backward Tracing is highly robust. The raycaster strictly defines the entry and exit points of a glass volume, ensuring that step marching ($dL$) for absorption ($\mu_a$) and scattering phase functions perfectly matches the physical boundaries of the component, eliminating math leaks during Monte Carlo integration.
+
 (Trick 1: Backward Gaussian).
 Aperture: Sample a random point on the Objective's Entrance Pupil.
-Trace: Shoot ray into the system.Integration (Unified Incoherent):
-Ray enters Sample Volume.
-Step Marching: $dL$.
+Trace: Shoot ray into the system.
+Integration (Unified Incoherent): Ray enters Sample Volume.
 
 #### i. Transmission (Shadows & Scattering):
 Absorption = Material_Mu_a(P) * dL.
 Throughput *= exp(-Absorption).
-Scattering (Darkfield Support):
-Check prob P_scat = Material_Mu_s(P) * dL.
+Scattering (Darkfield Support): Check prob P_scat = Material_Mu_s(P) * dL.
 If scattered: Ray.Direction = SamplePhaseFunction(). This allows the ray to turn and "find" a light source that was previously hidden (e.g., darkfield condenser).
 
 #### ii. Emission (The Glow - Stokes Shift Logic):
@@ -185,32 +148,21 @@ Look up material property: excitation_lambda ($\lambda_{ex}$).
 The Cross-Channel Query: Ask Solver 2 for intensity of $\lambda_{ex}$ at this point.
 Ex_Intensity = Solver2.Query(P, lambda_ex).
 Emission = Fluorophore_Density(P) * Ex_Intensity * dL.Radiance += Emission * Throughput.
-Termination (The Global Field Query):
-When the ray exits the Sample Volume (or hits no other geometry):
-It performs a generic query of the Global Light Field generated by Solver 2.
-
-Optimization (Acceleration Structure): For high-resolution sensors (>512px), use a Light Field BVH. For low-resolution (<256px), Brute Force checking of all beams is acceptable.
-The Query: Iterate through nearby active Solver 2 Beam Segments matching Ray.wavelength ($\lambda_{em}$).
-Spatial Check: Is point $P$ within beam width $w(z)$?
-Angular Check: Is ray direction $D$ aligned with beam direction (within divergence $\theta$)?Source_Intensity = Sum(Matching_Beams).
-Incoherent Summation: Final = Radiance + (Throughput * Source_Intensity).Polarization_Alignment = | dot(Ray.Jones, Source.Jones) |^2.Final_Pixel += Throughput * Source_Intensity * Polarization_Alignment.
+Termination (The Global Field Query): When the ray exits the Sample Volume (or hits no other geometry), it performs a generic query of the Global Light Field generated by Solver 2.
 
 ### E. Solver 4: The Coherent Imaging Engine
 Goal: Visualize complex interference phenomena (Phase Contrast, Holography, DIC). Slower, experimental "Hard Mode".
 Method: Reverse Stochastic Path Tracing with Coherent Amplitude Summation.
 Key Difference: Tracks Complex Electric Field $E$ instead of Intensity $I$. Sums amplitudes before squaring.
 Algorithm: Sensor & Trace: Same as Solver 3.
-Integration (Splitting Logic):
-When a ray hits a Phase Object (Sample with refractive index gradient $\nabla n$):Deterministic Split:
+Integration (Splitting Logic): When a ray hits a Phase Object (Sample with refractive index gradient $\nabla n$):Deterministic Split:
 Ray A (Direct/Ballistic): Continues straight. Accumulates Phase: $\phi += n(P) \cdot dL$.
 Ray B (Diffracted/Scattered): Scatters based on $\nabla n$. Accumulates Phase: $\phi += n(P) \cdot dL$.
 Both rays are traced independently back to the source.
-Termination (Coherent Handshake):
-When rays hit the Source Field (Solver 2):Amplitude = sqrt(Source_Intensity).Phase = Ray.
+Termination (Coherent Handshake): When rays hit the Source Field (Solver 2):Amplitude = sqrt(Source_Intensity).Phase = Ray.
 Accumulated_Optical_Path_Length.
 Complex_E = Amplitude * exp(i * k * Phase).
-Recombination:
-E_total = E_Direct + E_Diffracted.Final_Pixel_Intensity = |E_total|^2.
+Recombination: E_total = E_Direct + E_Diffracted.Final_Pixel_Intensity = |E_total|^2.
 Effect: If the Direct ray passes through a Phase Ring (shifting phase by $\pi/2$), the interference term $2 \text{Re}(E_1 E_2^*)$ becomes non-zero, creating the halo contrast characteristic of Phase Contrast microscopy.
 
 ### F. Solver 5: The Quantum Correlation Engine
@@ -308,28 +260,11 @@ Inside an SHG Crystal Volume: Prob_Convert = Efficiency * Intensity * PhaseMatch
 
 ## 8. Mathematical Appendix: The Generalized Solvers
 
-### 8.1 Broad Phase (AABB Collision)
-The "Eye" of the Engine. Before performing expensive matrix transforms, we check if the ray passes near the object using an Axis-Aligned Bounding Box (Slab Method).
-Resolution Note: This is an Analytic Solver, not a discrete step solver. It has infinite resolution. Even if a wall is $10^{-9}$ mm thick, the math detects the intersection accurately. It does not "skip" thin or small objects.
-Given: Ray $P(t) = O + t \vec{D}$ (where $\vec{D}$ is the normalized Direction Vector), Box $[min, max]$.
-Logic: For each axis ($x, y, z$), find the entry ($t_0$) and exit ($t_1$) distances.
-$$t_0 = \frac{Box_{min} - O}{\vec{D}}, \quad t_1 = \frac{Box_{max} - O}{\vec{D}}$$
-Intersection: The ray hits if the max of the entry points is less than the min of the exit points.
-$$t_{enter} = \max(t_{0x}, t_{0y}, t_{0z}), \quad t_{exit} = \min(t_{1x}, t_{1y}, t_{1z})$$$$\text{Hit} \iff t_{enter} \le t_{exit} \land t_{exit} > 0$$
-
-### 8.2 Narrow Phase (Local Sphere Intersection)
-Once inside the Local Frame $(u,v,w)$, intersecting a spherical lens surface is a quadratic equation.
-Sphere Equation: $u^2 + v^2 + (w - R)^2 = R^2$ (Sphere centered at $0,0,R$).
-Ray Equation: $P(t) = O + tD$.
-Substitute & Expand:$$A t^2 + B t + C = 0$$$$A = |\vec{D}|^2 = 1 \text{ (if normalized)}$$$$B = 2 (\vec{O} \cdot \vec{D} - D_w R)$$$$C = |\vec{O}|^2 - 2 O_w R$$
-Solve: $t = \frac{-B \pm \sqrt{B^2 - 4AC}}{2A}$.
-Result: Smallest positive $t$ is the intersection point on the glass.
-
-### 8.3 Refraction (Vector Snell's Law)
+### Refraction (Vector Snell's Law)
 Used to calculate the new ray direction $\vec{v}_{out}$ given incoming direction $\vec{v}_{in}$, surface normal $\vec{N}$, and index ratio $r = \frac{n_1}{n_2}$.$$\vec{v}_{out} = r \vec{v}_{in} + \left( r c - \sqrt{1 - r^2 (1 - c^2)} \right) \vec{N}$$Where: $c = -\vec{N} \cdot \vec{v}_{in}$ (Cosine of incident angle).
 Total Internal Reflection: Occurs if the term under the square root $1 - r^2(1 - c^2) < 0$. In this case, the ray reflects instead.
 
-### 8.4 Acceleration Structures (The Light Field Grid)
+### Acceleration Structures (The Light Field Grid)
 To prevent Solver 3/4 from iterating through thousands of Solver 2 beams ($O(N)$), we rasterize the Light Field.
 Structure: A sparse voxel grid (or Linear BVH) storing indices of active Beam Segments.
 Grid Resolution: Coarse (e.g., $10mm^3$ cells).
@@ -374,7 +309,7 @@ The Assumption: The paper validates that standard Ray Tracing is mathematically 
 
 ## 11. Debugging Tools To assist in understanding why an image is black or distorted, the engine provides introspection tools.
 
-### 11.1 The "Magic Card"
+### Beam Viewer Card
 Goal: Visualize the invisible beam of Solver 2.
 Action: User inserts a virtual card into the optical path.
 Result: Displays the beam cross-section, polarization ellipse, and intensity profile graph at that specific Z-plane.

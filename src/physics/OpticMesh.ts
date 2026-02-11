@@ -203,12 +203,30 @@ export class OpticMesh {
         const nAir = 1.0;
         const nGlass = ior;
 
+        // Clean near-zero floating-point artifacts from geometry normals and
+        // transformed directions. LatheGeometry vertices can have x ≈ 1e-20
+        // instead of exactly 0, which propagates through refraction and
+        // causes the exit raycaster to miss triangle edges.
+        const EPS = 1e-12;
+        const clean = (v: Vector3) => {
+            if (Math.abs(v.x) < EPS) v.x = 0;
+            if (Math.abs(v.y) < EPS) v.y = 0;
+            if (Math.abs(v.z) < EPS) v.z = 0;
+            return v;
+        };
+        clean(entryNormal);
+        clean(localDir);
+        clean(entryPoint);
+
         // Ensure entry normal faces against the incoming ray
         if (entryNormal.dot(localDir) > 0) entryNormal.negate();
 
         // 1. Refract at Entry (Air → Glass)
         const dirInside = OpticMesh.refract(localDir, entryNormal, nAir, nGlass);
-        if (!dirInside) return { rays: [] }; // TIR at entry (physically impossible for most cases)
+        if (!dirInside) {
+            return { rays: [] };
+        }
+        clean(dirInside);
 
         // 2. Trace through interior with internal reflection support
         const MAX_BOUNCES = 8;
@@ -218,7 +236,9 @@ export class OpticMesh {
 
         for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
             const hits = this.intersectRayAll(currentOrigin, currentDir);
-            if (hits.length === 0) return { rays: [] }; // Trapped — no exit
+            if (hits.length === 0) {
+                return { rays: [] };
+            }
 
             const hit = hits[0];
             totalPath += hit.t;
@@ -288,6 +308,7 @@ export class OpticMesh {
         }
 
         // Exceeded max bounces — ray is trapped
+        console.warn('[OpticMesh] BLOCKED: Max bounces exceeded (' + MAX_BOUNCES + ')');
         return { rays: [] };
     }
 }

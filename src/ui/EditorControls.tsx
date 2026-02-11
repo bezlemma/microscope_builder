@@ -14,6 +14,20 @@ export const EditorControls: React.FC = () => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.shiftKey) setEnableRotate(true);
             if (e.key === 'Escape') setSelection(null);
+            
+            // Zoom shortcuts: [ = zoom out 2x, ] = zoom in 2x
+            if (e.key === '[' || e.key === ']') {
+                const controls = controlsRef.current;
+                if (controls) {
+                    const camera = controls.object;
+                    const target = controls.target;
+                    const direction = camera.position.clone().sub(target);
+                    const factor = e.key === ']' ? 0.5 : 2.0;
+                    direction.multiplyScalar(factor);
+                    camera.position.copy(target.clone().add(direction));
+                    controls.update();
+                }
+            }
         };
         const handleKeyUp = (e: KeyboardEvent) => {
             if (!e.shiftKey) setEnableRotate(false);
