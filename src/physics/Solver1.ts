@@ -81,6 +81,13 @@ export class Solver1 {
             // CRITICAL: Reset interaction distance for the new ray.
             childRay.interactionDistance = undefined; 
             
+            // If ray was absorbed internally (e.g. TIR trapped in prism),
+            // add it to path for visualization but don't trace further
+            if (childRay.intensity <= 0) {
+                allPaths.push([...currentPath, childRay]);
+                continue;
+            }
+            
             // Branch the path history
             const nextPath = [...currentPath, childRay];
             

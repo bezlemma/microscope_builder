@@ -38,6 +38,9 @@ export interface Ray {
     entryPoint?: Vector3;
     // Internal bounce path (e.g. TIR inside prisms): world-space points between entry and exit
     internalPath?: Vector3[];
+    // Where the ray was absorbed/trapped internally (e.g. TIR at prism apex with no exit face)
+    // Visualizer draws path to this point so blocked rays show their full internal journey
+    terminationPoint?: Vector3;
 }
 
 export interface HitRecord {

@@ -71,11 +71,14 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                 }
                 
                 // Add an "infinite" end to the last ray for visualization
+                // (unless the ray was absorbed internally — terminationPoint means it died inside a component)
                 if (path.length > 0) {
                     const lastRay = path[path.length - 1];
-                    const dist = lastRay.interactionDistance ?? 1000;
-                    const endPoint = lastRay.origin.clone().add(lastRay.direction.clone().multiplyScalar(dist));
-                    points.push(endPoint);
+                    if (!lastRay.terminationPoint) {
+                        const dist = lastRay.interactionDistance ?? 1000;
+                        const endPoint = lastRay.origin.clone().add(lastRay.direction.clone().multiplyScalar(dist));
+                        points.push(endPoint);
+                    }
                 }
 
                 // Get color from first ray's wavelength

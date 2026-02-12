@@ -238,7 +238,21 @@ export class OpticMesh {
         for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
             const hits = this.intersectRayAll(currentOrigin, currentDir);
             if (hits.length === 0) {
-                return { rays: [] };
+                // Ray escaped through a vertex/edge gap (e.g. TIR at apex corner).
+                // Return an absorbed ray with the full internal path for visualization.
+                const terminationWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+                return {
+                    rays: [{
+                        ...ray,
+                        origin: terminationWorld,
+                        direction: currentDir.clone().transformDirection(localToWorld).normalize(),
+                        intensity: 0,
+                        opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                        entryPoint: worldEntryPoint,
+                        internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                        terminationPoint: terminationWorld
+                    }]
+                };
             }
 
             const hit = hits[0];
@@ -252,16 +266,6 @@ export class OpticMesh {
             const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAir);
 
             if (dirOut) {
-                // Successful exit — but check for straight-through artifacts
-                // When internal reflections produce an exit direction nearly
-                // parallel to the original entry direction, the ray effectively
-                // went straight through. Block these as non-physical artifacts.
-                if (bounce > 0) {
-                    const dotWithEntry = Math.abs(dirOut.dot(localDir));
-                    if (dotWithEntry > 0.95) {
-                        return { rays: [] };
-                    }
-                }
 
                 // Transform to world space and return
                 const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
@@ -322,8 +326,20 @@ export class OpticMesh {
             currentOrigin = hit.point.clone().add(currentDir.clone().multiplyScalar(0.01));
         }
 
-        // Exceeded max bounces — ray is trapped
+        // Exceeded max bounces — ray is trapped. Return absorbed ray with full internal path.
         console.warn('[OpticMesh] BLOCKED: Max bounces exceeded (' + MAX_BOUNCES + ')');
-        return { rays: [] };
+        const lastPtWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+        return {
+            rays: [{
+                ...ray,
+                origin: lastPtWorld,
+                direction: currentDir.clone().transformDirection(localToWorld).normalize(),
+                intensity: 0,
+                opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                entryPoint: worldEntryPoint,
+                internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                terminationPoint: lastPtWorld
+            }]
+        };
     }
 }
