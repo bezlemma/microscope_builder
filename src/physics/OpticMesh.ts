@@ -3,6 +3,8 @@ import {
     DoubleSide, BufferAttribute, Triangle
 } from 'three';
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
+import { childRay } from './types';
+import { cleanVec } from './math_solvers';
 
 // Patch Three.js Mesh prototype with BVH-accelerated raycast
 Mesh.prototype.raycast = acceleratedRaycast;
@@ -26,6 +28,7 @@ export interface MeshHit {
     t: number;
     point: Vector3;
     normal: Vector3; // Analytical, barycentrically interpolated
+    faceIndex?: number; // Triangle index from raycaster (for surface identification)
 }
 
 /**
@@ -139,7 +142,8 @@ export class OpticMesh {
         return intersections.map(hit => ({
             t: hit.distance,
             point: hit.point.clone(),
-            normal: this.computeSmoothNormal(hit.faceIndex!, hit.point)
+            normal: this.computeSmoothNormal(hit.faceIndex!, hit.point),
+            faceIndex: hit.faceIndex ?? undefined
         }));
     }
 
@@ -189,6 +193,9 @@ export class OpticMesh {
      * @param ray         - The original ray
      * @param allowInternalReflection - If true, TIR produces internal reflection bounces (prisms).
      *                                  If false, TIR uses grazing-exit clamp (lenses).
+     * @param exitSurfaceLabel - Optional callback to label exit faces for split detection.
+     *                           Maps a triangle faceIndex to a semantic string (e.g. "front", "back").
+     *                           When provided, child rays get exitSurfaceId stamped.
      */
     interact(
         entryNormal: Vector3,
@@ -198,7 +205,8 @@ export class OpticMesh {
         localToWorld: import('three').Matrix4,
         worldEntryPoint: Vector3,
         ray: import('./types').Ray,
-        allowInternalReflection: boolean = false
+        allowInternalReflection: boolean = false,
+        exitSurfaceLabel?: (faceIndex: number) => string
     ): import('./types').InteractionResult {
         const nAir = 1.0;
         const nGlass = ior;
@@ -207,16 +215,9 @@ export class OpticMesh {
         // transformed directions. LatheGeometry vertices can have x ≈ 1e-20
         // instead of exactly 0, which propagates through refraction and
         // causes the exit raycaster to miss triangle edges.
-        const EPS = 1e-12;
-        const clean = (v: Vector3) => {
-            if (Math.abs(v.x) < EPS) v.x = 0;
-            if (Math.abs(v.y) < EPS) v.y = 0;
-            if (Math.abs(v.z) < EPS) v.z = 0;
-            return v;
-        };
-        clean(entryNormal);
-        clean(localDir);
-        clean(entryPoint);
+        cleanVec(entryNormal);
+        cleanVec(localDir);
+        cleanVec(entryPoint);
 
         // Ensure entry normal faces against the incoming ray
         if (entryNormal.dot(localDir) > 0) entryNormal.negate();
@@ -231,17 +232,14 @@ export class OpticMesh {
                 .normalize();
             const dirReflWorld = reflected.transformDirection(localToWorld).normalize();
             return {
-                rays: [{
-                    ...ray,
+                rays: [childRay(ray, {
                     origin: worldEntryPoint,
                     direction: dirReflWorld,
-                    entryPoint: worldEntryPoint,
-                    internalPath: undefined,
-                    terminationPoint: undefined
-                }]
+                    entryPoint: worldEntryPoint
+                })]
             };
         }
-        clean(dirInside);
+        cleanVec(dirInside);
 
         // 2. Trace through interior with internal reflection support
         const MAX_BOUNCES = 8;
@@ -288,23 +286,64 @@ export class OpticMesh {
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
 
                     return {
-                        rays: [{
-                            ...ray,
+                        rays: [childRay(ray, {
                             origin: exitPointWorld,
                             direction: dirOutWorld,
                             opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
-                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
-                            terminationPoint: undefined
-                        }]
+                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                        })]
+                    };
+                }
+
+                // Lens on first bounce (bounce === 0): the on-axis ray can miss exit
+                // triangles at the LatheGeometry revolution axis (degenerate center).
+                // Retry with a tiny off-axis perturbation before giving up.
+                if (!allowInternalReflection && bounce === 0) {
+                    // Try small perpendicular nudge to escape axis singularity
+                    const perturbed = currentOrigin.clone();
+                    perturbed.x += 0.005;  // Nudge in local x (radial for LatheGeometry)
+                    hits = this.intersectRayAll(perturbed, currentDir);
+                    if (hits.length > 0) {
+                        // Found it — use this hit as the exit surface
+                        const hit = hits[0];
+                        totalPath += hit.t;
+                        const exitNormal = hit.normal.clone();
+                        if (exitNormal.dot(currentDir) > 0) exitNormal.negate();
+                        const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAir);
+                        if (dirOut) {
+                            const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
+                            const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
+                            return {
+                                rays: [childRay(ray, {
+                                    origin: exitPointWorld,
+                                    direction: dirOutWorld,
+                                    opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                                    entryPoint: worldEntryPoint,
+                                    internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                                })]
+                            };
+                        }
+                    }
+                    // Nudge didn't help — pass through undeviated as fallback for lenses
+                    // (on-axis ray through flat surface should continue straight)
+                    const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+                    const dirOutWorld = currentDir.clone().transformDirection(localToWorld).normalize();
+                    return {
+                        rays: [childRay(ray, {
+                            origin: exitPointWorld,
+                            direction: dirOutWorld,
+                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            entryPoint: worldEntryPoint,
+                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                        })]
                     };
                 }
 
                 // Prism / first bounce: no recovery possible — absorb
                 const terminationWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                 return {
-                    rays: [{
-                        ...ray,
+                    rays: [childRay(ray, {
                         origin: terminationWorld,
                         direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                         intensity: 0,
@@ -312,9 +351,10 @@ export class OpticMesh {
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         terminationPoint: terminationWorld
-                    }]
+                    })]
                 };
             }
+
 
             const hit = hits[0];
             totalPath += hit.t;
@@ -334,15 +374,15 @@ export class OpticMesh {
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
 
                 return {
-                    rays: [{
-                        ...ray,
+                    rays: [childRay(ray, {
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
-                        terminationPoint: undefined
-                    }]
+                        exitSurfaceId: (exitSurfaceLabel && hit.faceIndex !== undefined)
+                            ? exitSurfaceLabel(hit.faceIndex) : undefined
+                    })]
                 };
             }
 
@@ -364,15 +404,12 @@ export class OpticMesh {
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
 
                 return {
-                    rays: [{
-                        ...ray,
+                    rays: [childRay(ray, {
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
-                        entryPoint: worldEntryPoint,
-                        internalPath: undefined,
-                        terminationPoint: undefined
-                    }]
+                        entryPoint: worldEntryPoint
+                    })]
                 };
             }
             // Prism: TIR on any face → reflect internally
@@ -392,8 +429,7 @@ export class OpticMesh {
         console.warn('[OpticMesh] BLOCKED: Max bounces exceeded (' + MAX_BOUNCES + ')');
         const lastPtWorld = currentOrigin.clone().applyMatrix4(localToWorld);
         return {
-            rays: [{
-                ...ray,
+            rays: [childRay(ray, {
                 origin: lastPtWorld,
                 direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                 intensity: 0,
@@ -401,7 +437,7 @@ export class OpticMesh {
                 entryPoint: worldEntryPoint,
                 internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                 terminationPoint: lastPtWorld
-            }]
+            })]
         };
     }
 }

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { reflectVector } from '../math_solvers';
 
 export class Mirror extends OpticalComponent {
@@ -46,13 +46,11 @@ export class Mirror extends OpticalComponent {
         const reflectedDir = reflectVector(ray.direction, normal);
 
         return {
-            rays: [{
-                ...ray,
+            rays: [childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
-                opticalPathLength: ray.opticalPathLength + hit.t,
-                entryPoint: undefined  // Clear stale entryPoint
-            }]
+                opticalPathLength: ray.opticalPathLength + hit.t
+            })]
         };
     }
 }

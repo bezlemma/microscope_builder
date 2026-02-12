@@ -1,6 +1,6 @@
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
-import { Vector3, Matrix4 } from 'three';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Vector3 } from 'three';
 
 export class Card extends OpticalComponent {
     width: number;
@@ -42,11 +42,9 @@ export class Card extends OpticalComponent {
         
         // Pass the ray through unaffected (Viewing card probe)
         return { 
-            rays: [{ 
-                ...ray, 
-                origin: hit.point,
-                entryPoint: undefined  // Clear stale entryPoint
-            }] 
+            rays: [childRay(ray, { 
+                origin: hit.point
+            })] 
         };
     }
     

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 
 export class Sample extends OpticalComponent {
     constructor(name: string = "Sample (Mickey)") {
@@ -66,12 +66,10 @@ export class Sample extends OpticalComponent {
         // The sample geometry is used for visualization and future imaging solvers.
         const hitWorld = hit.point.clone();
         return {
-            rays: [{
-                ...ray,
+            rays: [childRay(ray, {
                 origin: hitWorld,
-                direction: ray.direction.clone(),
-                entryPoint: undefined  // Clear stale entryPoint from previous thick-lens interactions
-            }]
+                direction: ray.direction.clone()
+            })]
         };
     }
 }

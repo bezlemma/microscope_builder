@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { Ray, HitRecord } from './types';
+import { Ray } from './types';
 
 /**
  * ImplicitSurface.ts
@@ -24,14 +24,6 @@ export const sdSphere = (p: Vector3, center: Vector3, radius: number): number =>
 };
 
 export const sdCylinder = (p: Vector3, center: Vector3, radius: number, height: number, axis: 'x'|'y'|'z' = 'z'): number => {
-    // Infinite cylinder distance
-    let d2 = 0;
-    if (axis === 'z') d2 = p.x*p.x + p.y*p.y;
-    else if (axis === 'y') d2 = p.x*p.x + p.z*p.z;
-    else d2 = p.y*p.y + p.z*p.z;
-    
-    // Use center? Assumes p is relative to center if center is 0. 
-    // Here we support arbitrary center.
     const rel = p.clone().sub(center);
     let rDist = 0;
     if (axis === 'z') rDist = Math.sqrt(rel.x*rel.x + rel.y*rel.y);

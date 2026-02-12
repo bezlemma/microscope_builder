@@ -213,6 +213,23 @@ export class PrismLens extends OpticalComponent {
         };
     }
 
+    /**
+     * Classify a triangle face index into a semantic surface name.
+     * The geometry has 8 triangles total:
+     *   face 0:   left end cap
+     *   face 1:   right end cap
+     *   face 2-3: front face (apex → baseLeft)
+     *   face 4-5: back face (apex → baseRight)
+     *   face 6-7: base face (baseLeft → baseRight)
+     */
+    classifyFace(faceIndex: number): string {
+        const name = this.name || 'Prism';
+        if (faceIndex <= 1) return `${name}:endcap`;
+        if (faceIndex <= 3) return `${name}:front`;
+        if (faceIndex <= 5) return `${name}:back`;
+        return `${name}:base`;
+    }
+
     interact(ray: Ray, hit: HitRecord): InteractionResult {
     // Use raw local-space values stored during chkIntersection to avoid
     // floating-point errors from world↔local rotation matrix round-trips.
@@ -229,7 +246,8 @@ export class PrismLens extends OpticalComponent {
             this.localToWorld,
             hit.point,
             ray,
-            true // allowInternalReflection — prisms can TIR
+            true, // allowInternalReflection — prisms can TIR
+            (faceIndex) => this.classifyFace(faceIndex)
         );
     }
 }

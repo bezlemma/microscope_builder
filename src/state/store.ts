@@ -33,7 +33,7 @@ export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene()
 // Action to load a preset
 export const loadPresetAtom = atom(
     null,
-    (get, set, presetName: PresetName) => {
+    (_get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
         if (presetName === PresetName.BeamExpander) {
             set(componentsAtom, createBeamExpanderScene());

@@ -77,21 +77,26 @@ export class Solver1 {
 
         // 5. Handle Branching (Refraction, Reflection, Splitting)
         // Spawn new rays for the next segments.
-        for (const childRay of result.rays) {
+        for (let i = 0; i < result.rays.length; i++) {
+            const nextRay = result.rays[i];
             // CRITICAL: Reset interaction distance for the new ray.
-            childRay.interactionDistance = undefined; 
+            nextRay.interactionDistance = undefined; 
+            
+            // Propagate main ray flag: ALL children of a main ray are main rays.
+            // When a beam splits (prism, beam splitter), both branches are primary paths.
+            nextRay.isMainRay = (currentRay.isMainRay === true);
             
             // If ray was absorbed internally (e.g. TIR trapped in prism),
             // add it to path for visualization but don't trace further
-            if (childRay.intensity <= 0) {
-                allPaths.push([...currentPath, childRay]);
+            if (nextRay.intensity <= 0) {
+                allPaths.push([...currentPath, nextRay]);
                 continue;
             }
             
             // Branch the path history
-            const nextPath = [...currentPath, childRay];
+            const nextPath = [...currentPath, nextRay];
             
-            this.traceRecursive(childRay, nextPath, depth + 1, allPaths);
+            this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
         }
     }
 }

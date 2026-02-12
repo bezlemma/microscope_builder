@@ -1,5 +1,5 @@
 import React from 'react';
-import { DoubleSide, Vector2 } from 'three';
+import { DoubleSide } from 'three';
 import { useAtom } from 'jotai';
 import { selectionAtom } from '../state/store';
 
@@ -14,7 +14,6 @@ export const InfiniteTable: React.FC = () => {
   // We want holes every 25 units.
   // freq = size / 25.
   
-  const repeat = size / 25;
 
   return (
     <mesh 
@@ -49,12 +48,6 @@ export const InfiniteTable: React.FC = () => {
 
 // Shader Material component for the holes pattern
 function TableHoleMaterial({ size }: { size: number }) {
-  const uniforms = {
-    uColor: { value: new Vector2(0.2, 0.2) }, // Dark Grey
-    uHoleColor: { value: new Vector2(0.0, 0.0) }, // Black
-    uSpacing: { value: 25.0 },
-    uRadius: { value: 3.5 } // Hole radius
-  };
 
   // Vertex Shader: Pass world pos or UV
   // Fragment Shader: dist = length(fract(vUv * repeat) - 0.5)

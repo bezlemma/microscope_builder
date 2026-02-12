@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import React from 'react';
+// (React import not needed for logic-only tests)
 // import { render, fireEvent, screen } from '@testing-library/react'; // Can't easily use RTL with Bun yet without setup
 // Instead, we will test the logic by instantiating the Component and checking its methods/properties directly
 // verifying that the data structure supports the new features.
@@ -10,10 +10,10 @@ describe("Inspector Logic - Lens Radii", () => {
     test("SphericalLens supports asymmetric radii", () => {
         const lens = new SphericalLens(0.02, 10, 5, "TestLens");
         
-        // Default symmetric
+        // Default symmetric: R = 2*(ior-1)/curvature = 2*(1.5168-1)/0.02 ≈ 51.68
         const rInitial = lens.getRadii();
-        expect(rInitial.R1).toBeCloseTo(50);
-        expect(rInitial.R2).toBeCloseTo(-50);
+        expect(rInitial.R1).toBeCloseTo(51.68, 1);
+        expect(rInitial.R2).toBeCloseTo(-51.68, 1);
         
         // Modify manually (simulating Inspector)
         lens.r1 = 100;

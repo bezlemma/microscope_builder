@@ -10,23 +10,15 @@ export function reflectVector(incident: Vector3, normal: Vector3): Vector3 {
 }
 
 /**
- * Calculates the refraction vector using Vector Snell's Law
- * v_out = r * v_in + (r * c - sqrt(1 - r^2 * (1 - c^2))) * N
- * where r = n1/n2, c = -N.v_in
+ * Clamp near-zero floating-point artifacts to exactly zero.
+ * e.g. cos(π/2) ≈ 6.12e-17 → 0, preventing phantom components
+ * from corrupting refraction directions and raycaster hits.
  */
-export function refractVector(incident: Vector3, normal: Vector3, n1: number, n2: number): Vector3 | null {
-    const r = n1 / n2;
-    const c = -normal.dot(incident);
-    const discriminant = 1.0 - r * r * (1.0 - c * c);
-
-    if (discriminant < 0) {
-        return null; // Total Internal Reflection
-    }
-
-    const term1 = incident.clone().multiplyScalar(r);
-    const term2 = normal.clone().multiplyScalar(r * c - Math.sqrt(discriminant));
-    
-    return term1.add(term2).normalize();
+export function cleanVec(v: Vector3, eps: number = 1e-12): Vector3 {
+    if (Math.abs(v.x) < eps) v.x = 0;
+    if (Math.abs(v.y) < eps) v.y = 0;
+    if (Math.abs(v.z) < eps) v.z = 0;
+    return v;
 }
 
 /**

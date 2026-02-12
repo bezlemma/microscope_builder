@@ -16,14 +16,8 @@ export class Camera extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Plane intersection at z=0 (or whatever local axis we choose)
-        // Let's assume the sensor is in the UV plane (XY locally), facing +W (Z).
-        // Actually, if light travels +X in world, and we rotate camera to face -X.
-        // In local space, light comes from +W or -W?
-        // Let's stick to convention: Component Local W is Optical Axis. 
-        // Sensor is at W=0.
-        
-        if (Math.abs(rayLocal.direction.z) < 1e-6) return null; // Parallel to plane
+        // Sensor plane at w=0 (XY locally), facing +W
+        if (Math.abs(rayLocal.direction.z) < 1e-6) return null;
 
         const t = -rayLocal.origin.z / rayLocal.direction.z;
         if (t < 0.001) return null;
@@ -43,7 +37,7 @@ export class Camera extends OpticalComponent {
         };
     }
 
-    interact(ray: Ray, hit: HitRecord): InteractionResult {
+    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
         // Absorb
         return { rays: [] };
     }

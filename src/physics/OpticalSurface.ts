@@ -81,28 +81,15 @@ export class SphericalCap extends OpticalSurface {
             // Valid hit!
             bestT = t;
             bestHit = hitPoint;
-            
-            // Normal is outward from center
+            // Normal points outward from sphere center
             bestNormal = hitPoint.clone().sub(this.center).normalize();
-            // Or maybe inward? For a glass lens, normals usually point out of the glass.
-            // But here we are just geometry. Let's return the geometric normal.
-            // Caller (SphericalLens) might need to flip it if hitting from inside.
-            // But wait, OpticalSurface usually implies an interface.
-            // Let's standardise: Normal points OUT of the sphere center.
         }
 
         if (bestHit && bestNormal) {
+            // Return in local space — chkIntersection handles world transform
              return {
                 t: bestT,
-                point: bestHit, // Local point for now, caller converts to world?
-                // Wait, HitRecord expects World Point/Normal usually.
-                // But intersect() is called with rayLocal.
-                // Let's return local data, and caller transforms.
-                // But types.ts says HitRecord has point/normal/localPoint.
-                // We should return a partial or define behavior.
-                // Let's return local points in this recursive structure and let Component wrapper handle transforms.
-                // Actually, let's keep HitRecord structure but put local points in it.
-                // The caller (SphericalLens.intersect) will transform to world.
+                point: bestHit,
                 normal: bestNormal,
                 localPoint: bestHit
             } as HitRecord;

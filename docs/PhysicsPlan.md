@@ -17,7 +17,7 @@ Type: Right-handed 3D Cartesian $(x, y, z)$.
 $Z$-axis: Height (Normal to the optical table).
 Positive Z is "Up" off the table.
 
-$XY$-axis The Table Surface.
+$XY$-axis The Table Surface.
 Used for placing components (e.g., "The laser is at x=0, y=10").Origin: The center of the optical table.
 
 ### B. Light Space (Component Frame)
@@ -50,6 +50,8 @@ Every physical object must implement:intersect(ray_local: Ray) -> Option<HitReco
 Input: A ray already transformed into Local Space $(u, v, w)$.
 Output: Interaction point $t$, Normal vector $\vec{N}$.
 
+The world→local transform happens in a single **template method** (`chkIntersection`) on the base `OpticalComponent` class. This is the **only place** coordinate transforms occur. The method also cleans near-zero floating-point artifacts from the rotation matrix (e.g., `cos(π/2) ≈ 6.12e-17 → 0`) using a `1e-12` epsilon. The `HitRecord` carries both world-space and local-space hit data (`localPoint`, `localNormal`, `localDirection`) so that `interact()` can work in whichever space is most natural without round-tripping through the matrix again.
+
 Output: A list of result rays.
 Refraction: Returns 1 ray (new direction).
 Splitter: Returns 2+ rays.
@@ -64,8 +66,18 @@ Absorption: The material returns an absorption coefficient $\mu$ (units: $mm^{-1
 
 ### B. Solver 1: The Layout Engine (Interactive UI)
 Goal: Instant visual feedback. "Is my mirror aligned?" and "Is my waveplate working?"
-Method: Deterministic Vector Ray Tracing.
+Method: Deterministic Vector Ray Tracing via a recursive tree tracer.
 Ray Count: Low (e.g., 3 rays per source: Center + Marginal +/- NA).Sources: Supports Point, Parallel, Divergent, and Ray sources by varying initial vectors.
+
+Algorithm:
+1. For each source ray, find the nearest intersection across all components (`t > 0.001` to prevent self-intersection).
+2. Call `component.interact(ray, hit)` to get child rays.
+3. For each child ray, recurse. If `interact()` returns an empty list, the ray terminates. If it returns 2+ rays, the path forks into separate branches.
+4. Maximum recursion depth: 20 (prevents infinite TIR loops).
+5. NaN safety: source rays and mid-trace rays are validated; corrupted rays terminate immediately.
+6. Zero-intensity rays (e.g., TIR-trapped inside a prism) are kept for visualization but not traced further.
+
+Output: `Ray[][]` — an array of ray paths, where each path is an ordered sequence of ray segments.
 
 Physics:
 
@@ -73,7 +85,9 @@ Physics:
 If interact() returns an empty list (e.g., hitting a wall, the back of a mirror, or a closed iris), the ray path ends immediately at that point.
 This prevents rays from passing through opaque objects like camera bodies or optical posts.
 
--Visual-Physics Synchronization: Because rays collide exactly with the Three.js triangles the user sees, grazing edges and internal reflections are handled natively by the raycaster (using THREE.DoubleSide). There is no "ghost geometry" or light leaking through mathematical boundaries. If a ray hits the side housing of a lens, it simply hits an edge-tagged triangle and reflects or terminates accordingly.
+-Thick-Optic Interaction (The `OpticMesh` Engine): For thick refractive components (spherical lenses, cylindrical lenses, prisms), the physics mesh is a **separate internal mesh** from the visual renderer. Both share the same geometry generation (e.g., `generateProfile()` → `LatheGeometry`), but the physics mesh lives inside the component and is invisible to the UI. The raycaster uses `three-mesh-bvh` for acceleration and `THREE.DoubleSide` so rays can hit glass surfaces from inside during exit. Crucially, the mesh's interpolated vertex normals are replaced at query time by an **analytical `normalFn` callback** provided by each component — e.g., for a spherical lens, the normal is computed as `normalize(hitPoint - sphereCenter)`, not interpolated from neighboring triangle vertices. This eliminates refraction errors at surface discontinuities (rim ↔ optical surface) that plagued the original shared-mesh approach.
+
+The `OpticMesh.interact()` method handles the full entry→exit cycle: detect entry/exit via dot-product test, refract at entry (Air→Glass), internal raycast to find exit surface, refract at exit (Glass→Air), and TIR loop (up to 10 internal bounces). This unified method is used by `SphericalLens`, `CylindricalLens`, and `PrismLens`.
 
 -Polarization (Jones Calculus): The Ray carries a Jones Vector. Every interaction updates it (Reflections flip phase, Waveplates retard components).
 Visualization: The UI can draw polarization arrows or color-code rays to show state changes instantly.
@@ -122,7 +136,7 @@ Result: If beams are orthogonally polarized ($\vec{E}_1 \perp \vec{E}_2$), the d
 Implementation: Uses ABCD Matrices derived from the Surface curvature to transform $q_{in} \to q_{out}$.Constraint: Only valid near the optical axis (Paraxial approximation).
 Usage: Overlays a semi-transparent "beam" mesh on the layout.
 
-Metadata Extraction for ABCD Matrices: Because Solver 1 operates on discrete triangles rather than infinite mathematical surfaces, a single triangle does not possess a macroscopic "focal length." To solve this, when Solver 1 generates the Ray Tree, it extracts optical metadata (Curvature $R$, Index $n$, Astigmatism axis) stored inside the intersected Three.js object's userData. Solver 2 then uses this exact metadata to accurately construct the ABCD matrices for Gaussian propagation as it walks the tree.
+Metadata Extraction for ABCD Matrices: Ideal components (`IdealLens`, `Objective`) provide `getABCD()` methods that return the standard thin-lens matrix directly. For thick lenses (`SphericalLens`), the component already knows its `R1`, `R2`, and `ior`, so the ABCD matrix can be computed from the component's own parameters rather than from mesh metadata.
 
 ### D. Solver 3: The Incoherent Imaging Engine
 Goal: Generate the actual pixels the camera sees for standard Microscopy (Fluorescence, Brightfield, Darkfield). Fast and robust.
@@ -220,9 +234,9 @@ Geometry: Flat plane ($w=0$).
 Interaction: Instead of Snell's Law, it explicitly alters the ray's angle: $\vec{v}_{out} = \vec{v}_{in} - \frac{h}{f} \hat{r}$, where $h$ is distance from axis.
 Usage: For simplified "textbook" simulations or defining generic objectives.
 
-Thick Lenses (Defined by Focal Length)
-Definition: Real spherical lenses defined by user-friendly parameters like "Front Focal Distance" (FFD).
-Builder Logic: Component Catalog. The Physics Engine only understands Curvature ($R$) and Index ($n$). The UI provides a "Catalog" of commercial objectives (e.g., Nikon 10x, 20x). Dragging one instantiates a Compound Component containing the specific sequence lenses needed to make that objective. Users do not parametrically generate objectives; they select them.
+Thick Lenses
+Definition: Real spherical lenses parameterized by radii of curvature ($R_1$, $R_2$), center thickness, aperture diameter, and index of refraction ($n$). The `SphericalLens` component accepts these directly and provides `setFromLensType()` for common shape presets (biconvex, planoconvex, planoconcave, meniscus, etc.).
+Compound Objectives: For multi-element objectives, `ObjectiveFactory` assembles a sequence of `SphericalLens` elements from a prescription (e.g., a cemented achromatic doublet). Each element in the compound has a mandatory 0.01mm cemented gap to prevent self-intersection during raymarching. Users select compound objectives from a catalog; they do not parametrically build them.
 
 Blockers & Apertures
 Definition: Objects that stop light.
@@ -251,7 +265,6 @@ The user can provide a function (Ray, HitRecord) -> Ray that overrides standard 
 Polarization (Jones Calculus)Data: The Ray struct carries a complex Jones Vector $\vec{J} = \begin{bmatrix} E_x \\ E_y \end{bmatrix}$.
 Interaction: Every component implements get_jones_matrix(ray) -> Matrix2x2.Linear Polarizer: Projects vector onto axis.
 Waveplate: Adds phase delay to one axis ($e^{i\phi}$).
-Reflection: Applies Fresnel coefficients for $s$ (perpendicular) and $p$ (parallel) polarization states separately.
 Visualization: Users can visualize "Intensity" ($|\vec{J}|^2$) or specific components.
 
 Non-Linear Optics (Two-Photon & SHG)Two-Photon Excitation (2PE):Handled in Solver 3 (Imaging).Integration logic changes from Intensity * Density to (Intensity^2) * Density.
@@ -287,8 +300,6 @@ Spectral Dispersion (Implicit Split):Prisms: Do not split a single ray. A Ray is
 
 White Light Implementation: To simulate dispersion, a "White Light Source" is implemented as a Bundle Emitter. It creates 3+ discrete rays (Red, Green, Blue) with identical origins and directions. As they travel through the system, dispersion happens naturally because $n_{red} \neq n_{blue}$ in glass.
 
-Stray Rays (Culling):Fresnel Reflections: A standard lens surface reflects ~4% of light. In Solver 1, we cull this reflection and only trace the refracted path.
-
 Threshold: The split logic respects a "Significance Threshold" (e.g., >10% energy). If a custom coating reflects 25%, it splits. If it reflects 4%, it is culled unless "Debug Ghosts" is enabled.
 
 ## 10. Theoretical Validation: "Generalized Rays"
@@ -313,3 +324,48 @@ The Assumption: The paper validates that standard Ray Tracing is mathematically 
 Goal: Visualize the invisible beam of Solver 2.
 Action: User inserts a virtual card into the optical path.
 Result: Displays the beam cross-section, polarization ellipse, and intensity profile graph at that specific Z-plane.
+
+## 12. Known Bug Patterns
+
+### A. The `...ray` Spread Property Leakage
+
+**Root Cause:** When an `interact()` method creates a child ray using JavaScript's spread operator (`{ ...ray, origin: ..., direction: ... }`), it copies *all* properties from the incoming (parent) ray — including **visualization-only** fields like `internalPath`, `terminationPoint`, `entryPoint`, and `interactionDistance`. These fields describe the parent's rendering history, not the child's.
+
+**Symptom:** When components are chained (e.g. Prism → Lens), the prism's internal TIR bounce points (`internalPath`) leak into the lens's exit ray. The visualizer then draws prism geometry as part of the lens segment, causing phantom rays that appear to "jump back" to a previous component.
+
+**Why it's hard to catch:**
+- **Only manifests in chains.** Single-component scenes (Laser → Lens) work fine because the laser ray has no `internalPath`.
+- **Symptom appears at the wrong component.** You see phantom rays at the *prism*, but the bug is in the *lens* code.
+- **Accidental correctness.** Any return path that happens to override the field masks the bug.
+
+**Prevention:** Always use the `childRay()` helper from `types.ts` instead of raw `{ ...ray }` spreads:
+```typescript
+// ✅ CORRECT — childRay strips visualization fields automatically
+return { rays: [childRay(ray, { origin: exitPoint, direction: dirOut })] };
+
+// ❌ WRONG — leaks parent's internalPath, terminationPoint, etc.
+return { rays: [{ ...ray, origin: exitPoint, direction: dirOut }] };
+```
+
+The `childRay()` helper works by:
+1. Spreading the parent ray (to carry forward `wavelength`, `intensity`, `polarization`, etc.)
+2. Explicitly setting `entryPoint`, `internalPath`, `terminationPoint`, `interactionDistance` to `undefined`
+3. Applying the caller's overrides *last*, so components that intentionally set these fields (e.g. prisms setting `internalPath`) can still do so.
+
+**Rule:** If you add new visualization-only fields to the `Ray` interface, add them to `childRay()` in `types.ts`.
+
+### B. Ghost Intersections (The Phantom Sphere)
+
+**Root Cause:** A `SphericalLens` is defined by two spherical caps (front and back). The mathematical sphere extends infinitely beyond the lens aperture. Rays traveling near but outside the lens can intersect the phantom sphere surface, causing refraction in empty space.
+
+**Fix:** Sag-based guard — after finding a sphere intersection, validate that the intersection point's radial distance falls within the actual aperture. The intersection depth must be consistent with the surface curvature at that radius: $|z_{hit}| \le |\text{sag}(r_{hit})|$. Reject any hit that falls on the sphere extension beyond the physical lens rim.
+
+**Rule:** Any curved surface that extends mathematically beyond its physical boundary needs an explicit aperture clip after the intersection test.
+
+### C. Identity Matrix Collapse (The Stale Transform Bug)
+
+**Root Cause:** React's state lifecycle can call physics methods while position/rotation have been partially updated, producing identity or stale world↔local matrices. Rays then interact with the component as if it were at the origin.
+
+**Fix:** `chkIntersection()` calls `updateMatrices()` before every intersection check, guaranteeing the transform is always fresh. This is slightly wasteful (recomputes even when nothing moved) but eliminates the entire class of stale-matrix bugs.
+
+**Rule:** Never cache world↔local matrices across frames. Recompute on every physics query.

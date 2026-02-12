@@ -33,6 +33,10 @@ export interface Ray {
     // Quantum (Solver 5 support)
     entanglementId?: number;
     
+    // Solver 2 skeleton: marks the primary path for Gaussian beam propagation.
+    // Only the first child ray (index 0) from each interaction inherits this flag.
+    isMainRay?: boolean;
+    
     // Visualization: For thick components, the point where ray entered (front surface)
     // This allows the visualizer to draw: prev.origin → entryPoint → internalPath → origin → next
     entryPoint?: Vector3;
@@ -41,6 +45,10 @@ export interface Ray {
     // Where the ray was absorbed/trapped internally (e.g. TIR at prism apex with no exit face)
     // Visualizer draws path to this point so blocked rays show their full internal journey
     terminationPoint?: Vector3;
+    // Post-trace split detection: identifies which surface the ray exited through.
+    // Format: "ComponentName:faceName" (e.g. "Prism:front", "Prism:back").
+    // Used to group rays from the same source that exit through different faces.
+    exitSurfaceId?: string;
 }
 
 export interface HitRecord {
@@ -55,4 +63,32 @@ export interface HitRecord {
 
 export interface InteractionResult {
     rays: Ray[]; // Child rays spawned by interaction
+}
+
+/**
+ * Create a child ray from a parent, safely stripping visualization-only fields.
+ *
+ * The `...ray` spread pattern copies ALL fields from the incoming ray into
+ * the child, including visualization metadata (`internalPath`, `terminationPoint`,
+ * `entryPoint`, `interactionDistance`) that belong to the PARENT's history.
+ * When components are chained (e.g. prism → lens), this causes the parent's
+ * internal bounce points to "leak" into the child's visualization, creating
+ * phantom ray segments that appear to jump back to a previous component.
+ *
+ * This helper strips those fields before applying overrides, so only
+ * explicitly provided visualization data appears on the child ray.
+ */
+export function childRay(parent: Ray, overrides: Partial<Ray>): Ray {
+    return {
+        ...parent,
+        // Strip visualization-only fields from parent
+        entryPoint: undefined,
+        internalPath: undefined,
+        terminationPoint: undefined,
+        interactionDistance: undefined,
+        isMainRay: undefined,
+        exitSurfaceId: undefined,
+        // Apply caller's overrides last — these win
+        ...overrides
+    };
 }

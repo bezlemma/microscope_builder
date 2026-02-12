@@ -1,6 +1,6 @@
-import { Matrix4, Vector3, Quaternion, Box3 } from 'three';
+import { Matrix4, Vector3, Quaternion, Box3, Euler } from 'three';
 import { Ray, HitRecord, InteractionResult } from './types';
-import { intersectAABB } from './math_solvers';
+import { cleanVec } from './math_solvers';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Surface {
@@ -52,29 +52,10 @@ export abstract class OpticalComponent implements Surface {
         // This fixes the "Blocker ignored" and "Lens Snapping" bugs caused by stale matrices
         this.updateMatrices();
 
-
-
-        // Broadphase
-        // Note: For simple components, transforming AABB to world is cheaper than ray to local for bounding check
-        // but typically we transform ray to local for exact check anyway.
-        // Here we just skip AABB for now to ensure correctness first, add optimization later.
-        
         // Transform Ray to Local
-        // Clean near-zero floating-point artifacts from rotation matrices.
-        // e.g. rotateY(π/2) has cos(π/2) ≈ 6.12e-17 instead of 0, which creates
-        // phantom components that corrupt refraction and cause raycaster misses.
-        const EPS = 1e-12;
-        const clean = (v: Vector3) => {
-            if (Math.abs(v.x) < EPS) v.x = 0;
-            if (Math.abs(v.y) < EPS) v.y = 0;
-            if (Math.abs(v.z) < EPS) v.z = 0;
-            return v;
-        };
-        const rayLocalOrigin = clean(rayWorld.origin.clone().applyMatrix4(this.worldToLocal));
-        const rayLocalDir = clean(rayWorld.direction.clone().transformDirection(this.worldToLocal)).normalize();
+        const rayLocalOrigin = cleanVec(rayWorld.origin.clone().applyMatrix4(this.worldToLocal));
+        const rayLocalDir = cleanVec(rayWorld.direction.clone().transformDirection(this.worldToLocal)).normalize();
 
-
-        
         const rayLocal: Ray = { 
             ...rayWorld, 
             origin: rayLocalOrigin, 
@@ -105,5 +86,3 @@ export abstract class OpticalComponent implements Surface {
         return null;
     }
 }
-
-import { Euler } from 'three';

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
 import { componentsAtom, rayConfigAtom, selectionAtom } from '../state/store';
@@ -137,57 +137,6 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                 </mesh>
             </group>
         </group>
-    );
-};
-
-// Dynamic Lens Visualizer - Generating Truth from Physics
-// Renders the exact profile defined by SphericalLens properties (R1, R2, Thickness, Aperture)
-const DynamicLens = ({ component, noRotation = false }: { component: SphericalLens, noRotation?: boolean }) => {
-    // Generate profile points for LatheGeometry — use the same function as LensVisualizer
-    const points = useMemo(() => {
-        const { r1, r2, thickness, apertureRadius, curvature, ior } = component;
-        
-        // Determine Radii (Fallback to symmetric if R1/R2 missing)
-        let R1 = r1;
-        let R2 = r2;
-        
-        if (R1 === undefined || R2 === undefined) {
-             const R = (Math.abs(curvature) > 1e-6) ? (2 * (ior - 1)) / curvature : Infinity;
-             R1 = R;
-             R2 = -R;
-        }
-
-        // Single source of truth: SphericalLens.generateProfile handles
-        // surface crossover detection and avoids zero-thickness slivers
-        const profile = SphericalLens.generateProfile(
-            R1 ?? 1e9, R2 ?? -1e9, apertureRadius, thickness, 32
-        );
-        
-        return profile.length >= 2 ? profile : [
-            new Vector2(0, -thickness / 2),
-            new Vector2(apertureRadius, -thickness / 2),
-            new Vector2(apertureRadius, thickness / 2),
-            new Vector2(0, thickness / 2)
-        ];
-    }, [component]);
-
-    // Color based on material (Crown vs Flint ior?)
-    const color = component.ior > 1.6 ? "#aaaaff" : "#ccffff"; // Simple heuristic for visual distinction
-
-    // When used standalone, rotate Lathe (Y-axis symmetry) to Optical Axis (Z).
-    // When inside Objective/compound component, noRotation=true since parent handles rotation.
-    return (
-        <mesh rotation={noRotation ? [0, 0, 0] : [Math.PI/2, 0, 0]}>
-            <latheGeometry args={[points, 32]} />
-            <meshPhysicalMaterial 
-                color={color} 
-                transmission={0.99} 
-                opacity={0.6} 
-                transparent 
-                roughness={0} 
-                side={2} 
-            />
-        </mesh>
     );
 };
 
@@ -487,8 +436,7 @@ const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
 
 // Cylindrical Lens Visualizer — curved in Y, flat in X, matching physics profile
 export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
+    const [, setSelection] = useAtom(selectionAtom);
     if (!component || !component.rotation || !component.position) return null;
 
     const geometry = useMemo(() => {
@@ -638,8 +586,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
 
 // Prism Visualizer — triangular cross-section extruded along X
 export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
+    const [, setSelection] = useAtom(selectionAtom);
     if (!component || !component.rotation || !component.position) return null;
 
     const halfAngle = component.apexAngle / 2;
@@ -741,7 +688,8 @@ export const OpticalTable: React.FC = () => {
             sourceRays.push({
                 origin: origin.clone(),
                 direction: direction.clone(),
-                wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                isMainRay: true
             });
             
             // Hierarchical ray distribution using binary subdivision:
@@ -815,6 +763,186 @@ export const OpticalTable: React.FC = () => {
         }
 
         const calculatedPaths = solver.trace(sourceRays);
+
+        // Post-trace: detect beam splits via angle histogram population analysis.
+        // Exit angles from split-capable components (exitSurfaceId) are sorted,
+        // and the gaps between consecutive angles are analyzed statistically.
+        // If all gaps are similar (one population), no split is detected.
+        // Outlier gaps (IQR fence: Q3 + 1.5×IQR) indicate boundaries between
+        // distinct populations. For each population not already covered by the
+        // main ray, a synthetic center ray is spawned.
+        {
+            const surviving = calculatedPaths.filter(p => {
+                if (p.length < 2) return false;
+                const last = p[p.length - 1];
+                return last.intensity > 0 && !last.terminationPoint;
+            });
+            
+            // Collect exit rays with exitSurfaceId (split-capable components only)
+            type SplitEntry = { path: Ray[]; exitRay: Ray; angle: number };
+            const splitCandidates: SplitEntry[] = [];
+            for (const p of surviving) {
+                for (let i = p.length - 1; i >= 0; i--) {
+                    if (p[i].exitSurfaceId) {
+                        splitCandidates.push({
+                            path: p,
+                            exitRay: p[i],
+                            angle: Math.atan2(p[i].direction.y, p[i].direction.x)
+                        });
+                        break;
+                    }
+                }
+            }
+            
+            if (splitCandidates.length >= 4) {
+                // Sort by exit angle
+                splitCandidates.sort((a, b) => a.angle - b.angle);
+                
+                // Compute consecutive angle gaps
+                const gaps: number[] = [];
+                for (let i = 1; i < splitCandidates.length; i++) {
+                    gaps.push(splitCandidates[i].angle - splitCandidates[i - 1].angle);
+                }
+                
+                // IQR-based outlier detection on gaps.
+                // A gap is a split boundary if it's a statistical outlier —
+                // this naturally distinguishes "one spread-out population" from
+                // "two distinct clusters" regardless of absolute angle scale.
+                const sortedGaps = [...gaps].sort((a, b) => a - b);
+                const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
+                const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
+                const iqr = q3 - q1;
+                const fence = q3 + 1.5 * iqr;
+                
+                const splitIndices: number[] = [];
+                for (let i = 0; i < gaps.length; i++) {
+                    if (gaps[i] > fence && gaps[i] > 0.01) {
+                        splitIndices.push(i + 1);
+                    }
+                }
+                
+                if (splitIndices.length > 0) {
+                    // Build population groups from split points
+                    const boundaries = [0, ...splitIndices, splitCandidates.length];
+                    const populations: SplitEntry[][] = [];
+                    for (let i = 0; i < boundaries.length - 1; i++) {
+                        const pop = splitCandidates.slice(boundaries[i], boundaries[i + 1]);
+                        if (pop.length > 0) populations.push(pop);
+                    }
+                    
+                    // Identify the split component name from candidates' exitSurfaceId.
+                    // e.g. "Prism:front" → "Prism". Only match main-ray paths that
+                    // interact with this same component (prevents cross-laser contamination
+                    // when multiple lasers are on the table).
+                    const splitCompName = splitCandidates[0].exitRay.exitSurfaceId?.split(':')[0] ?? '';
+                    const mainPathMatchesSplitComp = (p: Ray[]) =>
+                        p.some(r => r.exitSurfaceId?.startsWith(splitCompName));
+                    
+                    // Find the main ray's exit angle (only from the matching component)
+                    let mainRayExitAngle: number | null = null;
+                    for (const p of calculatedPaths) {
+                        if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
+                            for (let i = p.length - 1; i >= 0; i--) {
+                                if (p[i].exitSurfaceId?.startsWith(splitCompName)) {
+                                    mainRayExitAngle = Math.atan2(
+                                        p[i].direction.y, p[i].direction.x
+                                    );
+                                    break;
+                                }
+                            }
+                            if (mainRayExitAngle !== null) break;
+                        }
+                    }
+                    
+                    // Find which population the main ray belongs to
+                    let mainRayPopIdx = -1;
+                    if (mainRayExitAngle !== null) {
+                        for (let pi = 0; pi < populations.length; pi++) {
+                            const pop = populations[pi];
+                            const minA = pop[0].angle;
+                            const maxA = pop[pop.length - 1].angle;
+                            const margin = (maxA - minA) * 0.5 + 0.05;
+                            if (mainRayExitAngle >= minA - margin &&
+                                mainRayExitAngle <= maxA + margin) {
+                                mainRayPopIdx = pi;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Only spawn synthetic center rays for uncovered populations
+                    const uncoveredPops = populations.filter((_, i) => i !== mainRayPopIdx);
+                    
+                    if (uncoveredPops.length > 0) {
+                        // Find the main-ray path prefix up to the split component
+                        // (scoped to the same component)
+                        let mainPathPrefix: Ray[] = [];
+                        for (const p of calculatedPaths) {
+                            if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
+                                let splitIdx = p.length;
+                                for (let i = 0; i < p.length; i++) {
+                                    if (p[i].exitSurfaceId?.startsWith(splitCompName)) {
+                                        splitIdx = i;
+                                        break;
+                                    }
+                                }
+                                mainPathPrefix = p.slice(0, splitIdx);
+                                break;
+                            }
+                        }
+                        
+                        for (const pop of uncoveredPops) {
+                            const centroidOrigin = new Vector3(0, 0, 0);
+                            const centroidDir = new Vector3(0, 0, 0);
+                            const centroidEntry = new Vector3(0, 0, 0);
+                            let entryCount = 0;
+                            
+                            for (const entry of pop) {
+                                centroidOrigin.add(entry.exitRay.origin);
+                                centroidDir.add(entry.exitRay.direction);
+                                if (entry.exitRay.entryPoint) {
+                                    centroidEntry.add(entry.exitRay.entryPoint);
+                                    entryCount++;
+                                }
+                            }
+                            centroidOrigin.divideScalar(pop.length);
+                            centroidDir.divideScalar(pop.length).normalize();
+                            if (entryCount > 0) centroidEntry.divideScalar(entryCount);
+                            
+                            const sampleRay = pop[0].exitRay;
+                            const nudgedOrigin = centroidOrigin.clone()
+                                .add(centroidDir.clone().multiplyScalar(0.1));
+                            
+                            const syntheticRay: Ray = {
+                                origin: nudgedOrigin,
+                                direction: centroidDir.clone(),
+                                wavelength: sampleRay.wavelength,
+                                intensity: sampleRay.intensity,
+                                polarization: { ...sampleRay.polarization },
+                                opticalPathLength: sampleRay.opticalPathLength,
+                                footprintRadius: 0,
+                                coherenceMode: sampleRay.coherenceMode,
+                                isMainRay: true,
+                                entryPoint: entryCount > 0 ? centroidEntry : undefined,
+                            };
+                            
+                            const syntheticPaths = solver.trace([syntheticRay]);
+                            for (const sp of syntheticPaths) {
+                                if (mainPathPrefix.length > 0) {
+                                    const prefixClone = mainPathPrefix.map(
+                                        r => ({ ...r, isMainRay: true })
+                                    );
+                                    sp.unshift(...prefixClone);
+                                }
+                                calculatedPaths.push(sp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
         setRays(calculatedPaths);
 
     }, [components, rayConfig]);

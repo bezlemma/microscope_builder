@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { transverseRadius } from '../lightSpace';
 
 /**
@@ -105,13 +105,11 @@ export class IdealLens extends OpticalComponent {
         const deltaOPL = -(h * h) / (2 * this.focalLength);
 
         return {
-            rays: [{
-                ...ray,
+            rays: [childRay(ray, {
                 origin: hitWorld,
                 direction: dirOutWorld,
-                opticalPathLength: ray.opticalPathLength + deltaOPL,
-                entryPoint: undefined  // Clear stale entryPoint
-            }]
+                opticalPathLength: ray.opticalPathLength + deltaOPL
+            })]
         };
     }
 

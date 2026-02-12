@@ -1,4 +1,4 @@
-import React, { DragEvent } from 'react'
+// React is implicitly used by JSX
 import { Canvas } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { EditorControls } from './ui/EditorControls'
@@ -11,11 +11,8 @@ import { Inspector } from './ui/Inspector'
 import { GlobalRotation } from './ui/GlobalRotation'
 import { SolverSettings } from './ui/SolverSettings'
 import { DragDropHandler } from './ui/DragDropHandler'
-import { useAtom } from 'jotai'
-import { componentsAtom } from './state/store'
 
 function App() {
-  const [components, setComponents] = useAtom(componentsAtom);
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex' }}>

@@ -7,7 +7,7 @@ export class Blocker extends OpticalComponent {
     height: number;
     depth: number;
 
-    constructor(width: number = 20, height: number = 40, depth: number=5, name: string = "Blocker") {
+    constructor(width: number = 20, height: number = 40, depth: number = 5, name: string = "Blocker") {
         super(name);
         this.width = width;
         this.height = height;
@@ -20,10 +20,8 @@ export class Blocker extends OpticalComponent {
         const radius = this.width / 2;
         const halfDepth = this.depth / 2;
 
-        const ox = rayLocal.origin.x;
         const oy = rayLocal.origin.y;
         const oz = rayLocal.origin.z;
-        const dx = rayLocal.direction.x;
         const dy = rayLocal.direction.y;
         const dz = rayLocal.direction.z;
 
@@ -88,7 +86,7 @@ export class Blocker extends OpticalComponent {
         return null;
     }
 
-    interact(ray: Ray, hit: HitRecord): InteractionResult {
+    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
         // Absorb: No output rays
         return { rays: [] };
     }

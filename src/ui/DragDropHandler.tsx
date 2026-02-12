@@ -14,11 +14,11 @@ import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
-import { Vector3, Raycaster, Plane } from 'three';
+import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 
 export const DragDropHandler: React.FC = () => {
-    const { camera, gl, scene } = useThree();
-    const [components, setComponents] = useAtom(componentsAtom);
+    const { camera, gl } = useThree();
+    const [, setComponents] = useAtom(componentsAtom);
 
     useEffect(() => {
         const handleDragOver = (e: DragEvent) => {
@@ -37,7 +37,7 @@ export const DragDropHandler: React.FC = () => {
 
             // Raycasting
             const raycaster = new Raycaster();
-            raycaster.setFromCamera({ x, y }, camera);
+            raycaster.setFromCamera(new Vector2(x, y), camera);
 
             // Intersect with Optical Table Plane (Z=0 per PhysicsPlan.md Z-up)
             const plane = new Plane(new Vector3(0, 0, 1), 0);

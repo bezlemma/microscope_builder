@@ -51,10 +51,20 @@ interface RayVisualizerProps {
 
 
 export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
-    
+    // Sort paths: non-main rays first, main ray last so it renders on top
+    const sortedPaths = React.useMemo(() => {
+        const indexed = paths.map((path, idx) => ({ path, idx }));
+        indexed.sort((a, b) => {
+            const aMain = a.path.length > 0 && a.path[0].isMainRay === true ? 1 : 0;
+            const bMain = b.path.length > 0 && b.path[0].isMainRay === true ? 1 : 0;
+            return aMain - bMain;
+        });
+        return indexed;
+    }, [paths]);
+
     return (
         <group>
-            {paths.map((path, pathIdx) => {
+            {sortedPaths.map(({ path, idx }) => {
                 // Build points array, inserting entryPoint and internalPath before origin
                 // This ensures visualization draws: prev→entryPoint→bounce1→bounce2→origin→next
                 const points: Vector3[] = [];
@@ -81,20 +91,37 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                     }
                 }
 
-                // Get color from first ray's wavelength
-                const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
-                const { color, isVisible } = wavelengthToColor(wavelength);
+                // Check if this is the main ray path (Solver 2 skeleton)
+                const isMain = path.length > 0 && path[0].isMainRay === true;
+
+                // Main ray: white. Others: wavelength color.
+                let color: string;
+                let lineWidth: number;
+                let dashed: boolean;
+
+                if (isMain) {
+                    color = '#ffffff';
+                    lineWidth = 6;
+                    dashed = false;
+                } else {
+                    const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
+                    const wc = wavelengthToColor(wavelength);
+                    color = wc.color;
+                    lineWidth = 2;
+                    dashed = !wc.isVisible;
+                }
 
                 return (
                     <Line
-                        key={pathIdx}
+                        key={idx}
                         points={points}
                         color={color}
-                        lineWidth={2}
-                        dashed={!isVisible}
-                        dashSize={isVisible ? undefined : 3}
-                        gapSize={isVisible ? undefined : 2}
-                        depthTest={true}
+                        lineWidth={lineWidth}
+                        dashed={dashed}
+                        dashSize={dashed ? 3 : undefined}
+                        gapSize={dashed ? 2 : undefined}
+                        depthTest={!isMain}
+                        renderOrder={isMain ? 1 : 0}
                     />
                 );
             })}
