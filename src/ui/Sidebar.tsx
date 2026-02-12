@@ -135,6 +135,11 @@ export const Sidebar: React.FC = () => {
                     active={activePreset === PresetName.LensZoo} 
                     onClick={() => loadPreset(PresetName.LensZoo)}
                 />
+                <PresetButton 
+                    label="Prism Debug" 
+                    active={activePreset === PresetName.PrismDebug} 
+                    onClick={() => loadPreset(PresetName.PrismDebug)}
+                />
             </div>
             
         </div>

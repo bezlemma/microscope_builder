@@ -5,6 +5,7 @@ import { OpticalComponent } from '../physics/Component';
 import { createTransmissionMicroscopeScene } from '../presets/infinitySystem';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
+import { createPrismDebugScene } from '../presets/prismDebug';
 
 // --- State Types ---
 export interface RayConfig {
@@ -18,7 +19,8 @@ export interface RayConfig {
 export enum PresetName {
     BeamExpander = "Beam Expander",
     TransmissionMicroscope = "Transmission Microscope",
-    LensZoo = "Lens Zoo"
+    LensZoo = "Lens Zoo",
+    PrismDebug = "Prism Debug"
 }
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
@@ -39,6 +41,8 @@ export const loadPresetAtom = atom(
             set(componentsAtom, createTransmissionMicroscopeScene());
         } else if (presetName === PresetName.LensZoo) {
             set(componentsAtom, createLensZooScene());
+        } else if (presetName === PresetName.PrismDebug) {
+            set(componentsAtom, createPrismDebugScene());
         }
     }
 );

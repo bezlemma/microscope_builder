@@ -224,7 +224,22 @@ export class OpticMesh {
         // 1. Refract at Entry (Air → Glass)
         const dirInside = OpticMesh.refract(localDir, entryNormal, nAir, nGlass);
         if (!dirInside) {
-            return { rays: [] };
+            // TIR at entry (extreme grazing angle) — reflect off the front surface
+            const dotDN = localDir.dot(entryNormal);
+            const reflected = localDir.clone()
+                .sub(entryNormal.clone().multiplyScalar(2 * dotDN))
+                .normalize();
+            const dirReflWorld = reflected.transformDirection(localToWorld).normalize();
+            return {
+                rays: [{
+                    ...ray,
+                    origin: worldEntryPoint,
+                    direction: dirReflWorld,
+                    entryPoint: worldEntryPoint,
+                    internalPath: undefined,
+                    terminationPoint: undefined
+                }]
+            };
         }
         clean(dirInside);
 
@@ -235,11 +250,57 @@ export class OpticMesh {
         let totalPath = 0;
         const internalBouncePoints: import('three').Vector3[] = []; // World-space TIR bounce points
 
+        let lastHitNormal: Vector3 | null = null; // Track last known surface normal for fallback
+
         for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
-            const hits = this.intersectRayAll(currentOrigin, currentDir);
+            let hits = this.intersectRayAll(currentOrigin, currentDir);
+
+            // Mesh gap recovery: if no hits, try small origin perturbation
             if (hits.length === 0) {
-                // Ray escaped through a vertex/edge gap (e.g. TIR at apex corner).
-                // Return an absorbed ray with the full internal path for visualization.
+                // Try nudging the origin backward (closer to the surface we just bounced from)
+                const retryOrigin = currentOrigin.clone().add(currentDir.clone().multiplyScalar(-0.02));
+                hits = this.intersectRayAll(retryOrigin, currentDir);
+                if (hits.length > 0) {
+                    // Only accept hits that are ahead of our original position
+                    hits = hits.filter(h => h.t > 0.03);
+                }
+            }
+
+            if (hits.length === 0) {
+                // Lens fallback: if we have a last known normal and internal reflections
+                // aren't allowed (lens mode), use grazing exit instead of absorbing.
+                // The ray slipped through a triangle edge gap after TIR — emit it
+                // from the current position along a tangent direction.
+                if (!allowInternalReflection && bounce > 0 && lastHitNormal) {
+                    const outwardNormal = lastHitNormal.clone();
+                    // outwardNormal should point outward (away from glass interior)
+                    if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
+
+                    const cosTheta = currentDir.dot(outwardNormal.clone().negate());
+                    const tangent = currentDir.clone()
+                        .sub(outwardNormal.clone().negate().multiplyScalar(cosTheta))
+                        .normalize();
+                    const dirOutLocal = tangent.clone()
+                        .add(outwardNormal.clone().multiplyScalar(0.05))
+                        .normalize();
+
+                    const dirOutWorld = dirOutLocal.clone().transformDirection(localToWorld).normalize();
+                    const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+
+                    return {
+                        rays: [{
+                            ...ray,
+                            origin: exitPointWorld,
+                            direction: dirOutWorld,
+                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            entryPoint: worldEntryPoint,
+                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                            terminationPoint: undefined
+                        }]
+                    };
+                }
+
+                // Prism / first bounce: no recovery possible — absorb
                 const terminationWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                 return {
                     rays: [{
@@ -258,6 +319,7 @@ export class OpticMesh {
             const hit = hits[0];
             totalPath += hit.t;
             const exitNormal = hit.normal.clone();
+            lastHitNormal = exitNormal.clone(); // Track for mesh gap fallback
 
             // Ensure normal faces against the ray for Snell's law
             if (exitNormal.dot(currentDir) > 0) exitNormal.negate();
@@ -278,18 +340,16 @@ export class OpticMesh {
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                         entryPoint: worldEntryPoint,
-                        internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                        internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                        terminationPoint: undefined
                     }]
                 };
             }
 
             // TIR occurred — handle based on component type
             if (!allowInternalReflection) {
-                // Lens: check if this is a rim hit (rim normals are radial, low Z)
-                const axialComponent = Math.abs(exitNormal.z);
-                if (axialComponent < 0.3) {
-                    return { rays: [] };
-                }
+                // Lens TIR: always use grazing exit fallback.
+                // Even rays that hit the rim should scatter out rather than vanish.
 
                 // Grazing exit fallback for lenses: clamp to tangent direction
                 const cosTheta = currentDir.dot(exitNormal);
@@ -309,7 +369,9 @@ export class OpticMesh {
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
-                        entryPoint: worldEntryPoint
+                        entryPoint: worldEntryPoint,
+                        internalPath: undefined,
+                        terminationPoint: undefined
                     }]
                 };
             }
