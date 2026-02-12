@@ -55,12 +55,17 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
     return (
         <group>
             {paths.map((path, pathIdx) => {
-                // Build points array, inserting entryPoint before origin when present
-                // This ensures visualization draws: prev→entryPoint→origin→next
+                // Build points array, inserting entryPoint and internalPath before origin
+                // This ensures visualization draws: prev→entryPoint→bounce1→bounce2→origin→next
                 const points: Vector3[] = [];
                 for (const r of path) {
                     if (r.entryPoint) {
                         points.push(r.entryPoint);
+                    }
+                    if (r.internalPath) {
+                        for (const p of r.internalPath) {
+                            points.push(p);
+                        }
                     }
                     points.push(r.origin);
                 }

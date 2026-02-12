@@ -1,4 +1,4 @@
-import { Vector3, Matrix4 } from 'three';
+import { Vector3 } from 'three';
 
 // --- Coordinate Systems ---
 // World Space (Optics Table): Right-handed, Z-up. Units: mm.
@@ -34,8 +34,10 @@ export interface Ray {
     entanglementId?: number;
     
     // Visualization: For thick components, the point where ray entered (front surface)
-    // This allows the visualizer to draw: prev.origin → entryPoint → origin → next
+    // This allows the visualizer to draw: prev.origin → entryPoint → internalPath → origin → next
     entryPoint?: Vector3;
+    // Internal bounce path (e.g. TIR inside prisms): world-space points between entry and exit
+    internalPath?: Vector3[];
 }
 
 export interface HitRecord {

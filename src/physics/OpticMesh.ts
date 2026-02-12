@@ -233,6 +233,7 @@ export class OpticMesh {
         let currentDir = dirInside.clone();
         let currentOrigin = entryPoint.clone().add(currentDir.clone().multiplyScalar(0.01));
         let totalPath = 0;
+        const internalBouncePoints: import('three').Vector3[] = []; // World-space TIR bounce points
 
         for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
             const hits = this.intersectRayAll(currentOrigin, currentDir);
@@ -251,7 +252,18 @@ export class OpticMesh {
             const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAir);
 
             if (dirOut) {
-                // Successful exit — transform to world space and return
+                // Successful exit — but check for straight-through artifacts
+                // When internal reflections produce an exit direction nearly
+                // parallel to the original entry direction, the ray effectively
+                // went straight through. Block these as non-physical artifacts.
+                if (bounce > 0) {
+                    const dotWithEntry = Math.abs(dirOut.dot(localDir));
+                    if (dotWithEntry > 0.95) {
+                        return { rays: [] };
+                    }
+                }
+
+                // Transform to world space and return
                 const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
 
@@ -261,7 +273,8 @@ export class OpticMesh {
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
-                        entryPoint: worldEntryPoint
+                        entryPoint: worldEntryPoint,
+                        internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
                     }]
                 };
             }
@@ -296,7 +309,9 @@ export class OpticMesh {
                     }]
                 };
             }
-            // Prism: TIR on any face → reflect internally (no rim absorption)
+            // Prism: TIR on any face → reflect internally
+            // Record the bounce point in world space for visualization
+            internalBouncePoints.push(hit.point.clone().applyMatrix4(localToWorld));
 
             // Internal reflection: reflect the ray and continue tracing
             const outwardNormal = exitNormal.clone().negate();

@@ -217,6 +217,8 @@ export const Inspector: React.FC = () => {
                 // For non-optical components, base is identity
                 const needsBaseYRotation = c.constructor.name === 'Objective' || 
                                           c.constructor.name === 'SphericalLens' ||
+                                          c.constructor.name === 'CylindricalLens' ||
+                                          c.constructor.name === 'PrismLens' ||
                                           c.constructor.name === 'Sample' ||
                                           c.constructor.name === 'Camera';
                 

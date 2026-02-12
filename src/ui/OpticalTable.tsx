@@ -651,18 +651,41 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
         const ay = component.height - centroidY, az = 0;
         const bly = -centroidY, blz = -baseHalfWidth;
         const bry = -centroidY, brz = baseHalfWidth;
+        // Vertices are duplicated per face so each face has its own normals
+        // (sharp edges, no smooth interpolation across different faces)
         const positions = [
-            -halfW,ay,az, -halfW,bly,blz, -halfW,bry,brz,
-            halfW,ay,az, halfW,bly,blz, halfW,bry,brz,
-            -halfW,ay,az, halfW,ay,az, -halfW,bly,blz, halfW,bly,blz,
-            -halfW,ay,az, halfW,ay,az, -halfW,bry,brz, halfW,bry,brz,
-            -halfW,bly,blz, halfW,bly,blz, -halfW,bry,brz, halfW,bry,brz,
+            -halfW,ay,az, -halfW,bly,blz, -halfW,bry,brz,           // 0-2:  left cap
+            halfW,ay,az, halfW,bly,blz, halfW,bry,brz,              // 3-5:  right cap
+            -halfW,ay,az, halfW,ay,az, -halfW,bly,blz, halfW,bly,blz, // 6-9:  front face
+            -halfW,ay,az, halfW,ay,az, -halfW,bry,brz, halfW,bry,brz, // 10-13: back face
+            -halfW,bly,blz, halfW,bly,blz, -halfW,bry,brz, halfW,bry,brz, // 14-17: base
         ];
         const indices = [0,2,1, 3,4,5, 6,8,7, 7,8,9, 10,11,12, 11,13,12, 14,15,16, 15,17,16];
+
+        // Compute flat per-face normals (NOT computeVertexNormals which averages)
+        // Front face: edge from apex → baseLeft, normal = perpendicular in YZ plane
+        const frontDy = bly - ay, frontDz = blz - az;
+        const frontLen = Math.sqrt(frontDy * frontDy + frontDz * frontDz);
+        const fnY = -frontDz / frontLen, fnZ = frontDy / frontLen;
+
+        // Back face: edge from apex → baseRight
+        const backDy = bry - ay, backDz = brz - az;
+        const backLen = Math.sqrt(backDy * backDy + backDz * backDz);
+        const bnY = backDz / backLen, bnZ = -backDy / backLen;
+
+        // Per-vertex normals: same normal for all verts of each face
+        const normals = [
+            -1,0,0, -1,0,0, -1,0,0,            // left cap
+             1,0,0,  1,0,0,  1,0,0,             // right cap
+            0,fnY,fnZ, 0,fnY,fnZ, 0,fnY,fnZ, 0,fnY,fnZ,  // front face
+            0,bnY,bnZ, 0,bnY,bnZ, 0,bnY,bnZ, 0,bnY,bnZ,  // back face
+            0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,     // base
+        ];
+
         const geo = new BufferGeometry();
         geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+        geo.setAttribute('normal', new Float32BufferAttribute(normals, 3));
         geo.setIndex(indices);
-        geo.computeVertexNormals();
         return geo;
     }, [component.apexAngle, component.height, component.width]);
 

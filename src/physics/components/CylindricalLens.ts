@@ -284,8 +284,12 @@ export class CylindricalLens extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        const dirIn = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
-        const normalIn = hit.normal.clone().transformDirection(this.worldToLocal).normalize();
+    // Use raw local-space values stored during chkIntersection to avoid
+    // floating-point errors from world↔local rotation matrix round-trips.
+    const dirIn = hit.localDirection?.clone().normalize()
+        ?? ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+    const normalIn = hit.localNormal?.clone().normalize()
+        ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
 
         return this.mesh.interact(
             normalIn,
