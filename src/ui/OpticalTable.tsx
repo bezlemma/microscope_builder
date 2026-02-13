@@ -214,7 +214,7 @@ export const CameraVisualizer = ({ component }: { component: Camera }) => {
 };
 export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
     const [, setSelection] = useAtom(selectionAtom);
-    const radius = component.width / 2; 
+    const radius = component.diameter / 2; 
     return (
         <group 
             position={[component.position.x, component.position.y, component.position.z]} 
@@ -222,7 +222,7 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
             <mesh rotation={[0, 0, Math.PI/2]}>
-                <cylinderGeometry args={[radius, radius, 2, 32]} />
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 {/* Shiny Metric Material */}
                 <meshPhysicalMaterial 
                     color="#ffffff" 
@@ -238,7 +238,7 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
 
 export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
     const [, setSelection] = useAtom(selectionAtom);
-    const radius = component.width / 2;
+    const radius = component.diameter / 2;
     return (
         <group 
             position={[component.position.x, component.position.y, component.position.z]} 
@@ -246,7 +246,7 @@ export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
             onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
         >
             <mesh rotation={[0, 0, Math.PI/2]}>
-                <cylinderGeometry args={[radius, radius, component.depth, 32]} />
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 <meshStandardMaterial color="#222" roughness={0.8} />
             </mesh>
         </group>

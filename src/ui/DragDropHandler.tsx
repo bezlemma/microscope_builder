@@ -59,11 +59,11 @@ export const DragDropHandler: React.FC = () => {
             if (type === 'lens') {
                 newComp = new SphericalLens(1/50, 15, 4, "New Lens");
             } else if (type === 'mirror') {
-                newComp = new Mirror(20, 20, "New Mirror");
+                newComp = new Mirror(25, 2, "New Mirror");
             } else if (type === 'laser') {
                 newComp = new Laser("New Laser");
             } else if (type === 'blocker') {
-                newComp = new Blocker(20, 20, 5, "Beam Blocker");
+                newComp = new Blocker(20, 5, "Beam Blocker");
             } else if (type === 'card') {
                 newComp = new Card(40, 40, "Viewing Card");
             } else if (type === 'sample') {

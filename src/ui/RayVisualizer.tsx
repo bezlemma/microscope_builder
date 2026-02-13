@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Line } from '@react-three/drei';
-import { Vector3 } from 'three';
+import { useFrame } from '@react-three/fiber';
+import { Vector3, Color } from 'three';
 import { Ray } from '../physics/types';
 
-// Wavelength (in meters) to visible spectrum color
-function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
+// Wavelength (in meters) to visible spectrum RGB values (0-1 range)
+function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number; isVisible: boolean } {
     const wavelength = wavelengthMeters * 1e9; // Convert to nm
     let r = 0, g = 0, b = 0;
     
@@ -34,16 +35,86 @@ function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible
     } else if (wavelength >= 645 && wavelength <= 780) {
         factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 645);
     } else if (wavelength < 380 || wavelength > 780) {
-        // UV or IR - gray color
-        return { color: '#888888', isVisible: false };
+        return { r: 0.53, g: 0.53, b: 0.53, isVisible: false };
     }
     
-    r = Math.round(255 * Math.pow(r * factor, 0.8));
-    g = Math.round(255 * Math.pow(g * factor, 0.8));
-    b = Math.round(255 * Math.pow(b * factor, 0.8));
+    r = Math.pow(r * factor, 0.8);
+    g = Math.pow(g * factor, 0.8);
+    b = Math.pow(b * factor, 0.8);
     
-    return { color: `rgb(${r}, ${g}, ${b})`, isVisible: true };
+    return { r, g, b, isVisible: true };
 }
+
+function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
+    const rgb = wavelengthToRGB(wavelengthMeters);
+    const ri = Math.round(rgb.r * 255);
+    const gi = Math.round(rgb.g * 255);
+    const bi = Math.round(rgb.b * 255);
+    return { color: `rgb(${ri}, ${gi}, ${bi})`, isVisible: rgb.isVisible };
+}
+
+/**
+ * Animated pulsating glow line for the main ray (Solver 2 skeleton).
+ * Sharp spike pulse that stays mostly at the wavelength color and briefly
+ * flashes to a bright HDR glow — feels like a laser lasing.
+ */
+const PulsatingRayLine: React.FC<{
+    points: Vector3[];
+    wavelengthMeters: number;
+    dashed: boolean;
+}> = ({ points, wavelengthMeters, dashed }) => {
+    const lineRef = useRef<any>(null);
+    const rgb = wavelengthToRGB(wavelengthMeters);
+    
+    // Base color at the wavelength's natural brightness
+    const baseColor = new Color(rgb.r, rgb.g, rgb.b);
+    // HDR glow color: boost the wavelength color to >1.0 for bloom-like intensity
+    // This keeps the hue but makes it "impossibly bright" during the spike
+    const glowColor = new Color(
+        rgb.r * 3.0 + 0.4,
+        rgb.g * 3.0 + 0.4,
+        rgb.b * 3.0 + 0.4
+    );
+    const mixedColor = new Color();
+    
+    useFrame(({ clock }) => {
+        if (!lineRef.current) return;
+        const elapsed = clock.getElapsedTime();
+        
+        // Sharp spike: pow(sin, 4) stays near 0 most of the time,
+        // only briefly spikes to 1. This keeps the beam in its
+        // natural color ~90% of the cycle.
+        const sinVal = Math.sin(elapsed * 2.5); // ~2.5Hz cycle
+        const spike = Math.pow(Math.max(0, sinVal), 4); // 0..1, sharp peak
+        
+        mixedColor.copy(baseColor).lerp(glowColor, spike);
+        
+        const mat = lineRef.current.material;
+        if (mat && mat.color) {
+            mat.color.copy(mixedColor);
+        }
+        
+        // Subtle lineWidth throb: 4.5 → 6 on spike
+        if (mat && mat.linewidth !== undefined) {
+            mat.linewidth = 4.5 + spike * 1.5;
+        }
+    });
+    
+    return (
+        <Line
+            ref={lineRef}
+            points={points}
+            color={baseColor}
+            lineWidth={4.5}
+            toneMapped={false}
+            dashed={dashed}
+            dashSize={dashed ? 3 : undefined}
+            gapSize={dashed ? 2 : undefined}
+            depthTest={false}
+            renderOrder={1}
+        />
+    );
+};
 
 interface RayVisualizerProps {
     paths: Ray[][];
@@ -66,7 +137,6 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
         <group>
             {sortedPaths.map(({ path, idx }) => {
                 // Build points array, inserting entryPoint and internalPath before origin
-                // This ensures visualization draws: prev→entryPoint→bounce1→bounce2→origin→next
                 const points: Vector3[] = [];
                 for (const r of path) {
                     if (r.entryPoint) {
@@ -81,7 +151,6 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                 }
                 
                 // Add an "infinite" end to the last ray for visualization
-                // (unless the ray was absorbed internally — terminationPoint means it died inside a component)
                 if (path.length > 0) {
                     const lastRay = path[path.length - 1];
                     if (!lastRay.terminationPoint) {
@@ -91,37 +160,34 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                     }
                 }
 
-                // Check if this is the main ray path (Solver 2 skeleton)
                 const isMain = path.length > 0 && path[0].isMainRay === true;
-
-                // Main ray: white. Others: wavelength color.
-                let color: string;
-                let lineWidth: number;
-                let dashed: boolean;
+                const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
 
                 if (isMain) {
-                    color = '#ffffff';
-                    lineWidth = 6;
-                    dashed = false;
-                } else {
-                    const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
-                    const wc = wavelengthToColor(wavelength);
-                    color = wc.color;
-                    lineWidth = 2;
-                    dashed = !wc.isVisible;
+                    const wc = wavelengthToRGB(wavelength);
+                    return (
+                        <PulsatingRayLine
+                            key={idx}
+                            points={points}
+                            wavelengthMeters={wavelength}
+                            dashed={!wc.isVisible}
+                        />
+                    );
                 }
 
+                // Non-main rays: static wavelength color
+                const wc = wavelengthToColor(wavelength);
                 return (
                     <Line
                         key={idx}
                         points={points}
-                        color={color}
-                        lineWidth={lineWidth}
-                        dashed={dashed}
-                        dashSize={dashed ? 3 : undefined}
-                        gapSize={dashed ? 2 : undefined}
-                        depthTest={!isMain}
-                        renderOrder={isMain ? 1 : 0}
+                        color={wc.color}
+                        lineWidth={2}
+                        dashed={!wc.isVisible}
+                        dashSize={!wc.isVisible ? 3 : undefined}
+                        gapSize={!wc.isVisible ? 2 : undefined}
+                        depthTest={true}
+                        renderOrder={0}
                     />
                 );
             })}

@@ -3,22 +3,20 @@ import { Ray, HitRecord, InteractionResult } from '../types';
 import { Vector3 } from 'three';
 
 export class Blocker extends OpticalComponent {
-    width: number;
-    height: number;
-    depth: number;
+    diameter: number;   // mm — circular aperture diameter
+    thickness: number;  // mm — body thickness along optical axis
 
-    constructor(width: number = 20, height: number = 40, depth: number = 5, name: string = "Blocker") {
+    constructor(diameter: number = 20, thickness: number = 5, name: string = "Blocker") {
         super(name);
-        this.width = width;
-        this.height = height;
-        this.depth = depth;
+        this.diameter = diameter;
+        this.thickness = thickness;
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
         // Cylindrical Intersection (Axis X - Thickness along X)
         // "Face" is in YZ plane.
-        const radius = this.width / 2;
-        const halfDepth = this.depth / 2;
+        const radius = this.diameter / 2;
+        const halfDepth = this.thickness / 2;
 
         const oy = rayLocal.origin.y;
         const oz = rayLocal.origin.z;
@@ -29,9 +27,6 @@ export class Blocker extends OpticalComponent {
         let normalClosest: Vector3 | null = null;
         
         // 1. Check Cylinder Wall / Rim: y^2 + z^2 = r^2  (Cylinder Axis X)
-        // Note: Blocker "Face" is usually flat. So the "Cylinder Wall" is the rim.
-        // The "Caps" are the main blocking faces.
-        
         const A = dy*dy + dz*dz;
         const B = 2 * (oy*dy + oz*dz);
         const C = oy*oy + oz*oz - radius*radius;
@@ -67,7 +62,7 @@ export class Blocker extends OpticalComponent {
                       // Check radius in YZ plane
                       if (hitP.y*hitP.y + hitP.z*hitP.z <= radius*radius) {
                           tClosest = t;
-                          normalClosest = new Vector3(Math.sign(capX), 0, 0); // point along X
+                          normalClosest = new Vector3(Math.sign(capX), 0, 0);
                       }
                  }
              });

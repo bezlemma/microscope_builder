@@ -68,9 +68,17 @@ export const Inspector: React.FC = () => {
     const [localY, setLocalY] = useState<string>('0');
     const [localRot, setLocalRot] = useState<string>('0');
     
-    // Geometry Params
+    // Geometry Params (Card)
     const [localWidth, setLocalWidth] = useState<string>('0');
     const [localHeight, setLocalHeight] = useState<string>('0');
+    
+    // Mirror Params
+    const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
+    const [localMirrorThickness, setLocalMirrorThickness] = useState<string>('2');
+    
+    // Blocker Params
+    const [localBlockerDiameter, setLocalBlockerDiameter] = useState<string>('20');
+    const [localBlockerThickness, setLocalBlockerThickness] = useState<string>('5');
     const [localRadius, setLocalRadius] = useState<string>('0');
     const [localFocal, setLocalFocal] = useState<string>('0');
     const [localR1, setLocalR1] = useState<string>('0');
@@ -118,11 +126,18 @@ export const Inspector: React.FC = () => {
                 }
 
                 // Type specific params
-                if (selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card) {
-                    // Check if properties exist (TS might complain if not cast, relying on JS flexibility or cast)
+                if (selectedComponent instanceof Card) {
                     const c = selectedComponent as any;
                     if (c.width != null) setLocalWidth(String(c.width));
                     if (c.height != null) setLocalHeight(String(c.height));
+                }
+                if (selectedComponent instanceof Mirror) {
+                    setLocalMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
+                }
+                if (selectedComponent instanceof Blocker) {
+                    setLocalBlockerDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalBlockerThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
                 if (selectedComponent instanceof SphericalLens) {
                     setLocalRadius(String(selectedComponent.apertureRadius));
@@ -327,7 +342,9 @@ export const Inspector: React.FC = () => {
         );
     }
 
-    const isRect = selectedComponent instanceof Mirror || selectedComponent instanceof Blocker || selectedComponent instanceof Card;
+    const isCard = selectedComponent instanceof Card;
+    const isMirror = selectedComponent instanceof Mirror;
+    const isBlocker = selectedComponent instanceof Blocker;
     const isLens = selectedComponent instanceof SphericalLens;
     const isIdealLens = selectedComponent instanceof IdealLens;
     const isObjective = selectedComponent instanceof Objective;
@@ -410,7 +427,7 @@ export const Inspector: React.FC = () => {
                 </div>
                 
                 {/* Dynamic Properties */}
-                {isRect && (
+                {isCard && (
                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Width (mm)</label>
@@ -432,6 +449,106 @@ export const Inspector: React.FC = () => {
                                 onBlur={() => commitGeometry('height', localHeight)}
                                 onKeyDown={(e) => handleKeyDown(e, () => commitGeometry('height', localHeight))}
                                 style={inputStyle}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isBlocker && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Blocker Geometry</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Diameter"
+                                suffix="mm"
+                                value={localBlockerDiameter}
+                                onChange={setLocalBlockerDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Blocker) {
+                                            c.diameter = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localBlockerThickness}
+                                onChange={setLocalBlockerThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Blocker) {
+                                            c.thickness = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.2}
+                                min={0.5}
+                                max={50}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isMirror && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Mirror Geometry</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Diameter"
+                                suffix="mm"
+                                value={localMirrorDiameter}
+                                onChange={setLocalMirrorDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Mirror) {
+                                            c.diameter = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localMirrorThickness}
+                                onChange={setLocalMirrorThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection && c instanceof Mirror) {
+                                            c.thickness = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.1}
+                                min={0.5}
+                                max={20}
                             />
                         </div>
                     </div>
