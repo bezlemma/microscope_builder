@@ -68,4 +68,16 @@ export class Mirror extends OpticalComponent {
             })]
         };
     }
+
+    /**
+     * ABCD matrix for Solver 2. Flat mirror = identity.
+     * (Curved mirrors would use [[1, 0], [-2/R, 1]].)
+     */
+    getABCD(): [number, number, number, number] {
+        return [1, 0, 0, 1];
+    }
+
+    getApertureRadius(): number {
+        return this.diameter / 2;
+    }
 }

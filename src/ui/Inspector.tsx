@@ -10,7 +10,9 @@ import { Laser } from '../physics/components/Laser';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
 import { PrismLens } from '../physics/components/PrismLens';
+import { Waveplate } from '../physics/components/Waveplate';
 import { ScrubInput } from './ScrubInput';
+import { CardViewer } from './CardViewer';
 
 // Wavelength to visible spectrum color (approximation)
 function wavelengthToColor(wavelength: number): string {
@@ -350,6 +352,7 @@ export const Inspector: React.FC = () => {
     const isObjective = selectedComponent instanceof Objective;
     const isLaser = selectedComponent instanceof Laser;
     const isPrism = selectedComponent instanceof PrismLens;
+    const isWaveplate = selectedComponent instanceof Waveplate;
     
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
@@ -1009,6 +1012,43 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
+                {isWaveplate && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Waveplate Settings</label>
+                        <div style={{ marginBottom: 8 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Mode: {(selectedComponent as Waveplate).waveplateMode === 'half' ? 'λ/2 Plate' :
+                                       (selectedComponent as Waveplate).waveplateMode === 'quarter' ? 'λ/4 Plate' : 'Linear Polarizer'}
+                            </label>
+                        </div>
+                        <div style={{ marginBottom: 8 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 6 }}>
+                                Fast Axis: {Math.round((selectedComponent as Waveplate).fastAxisAngle * 180 / Math.PI)}°
+                            </label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="180"
+                                step="1"
+                                value={Math.round((selectedComponent as Waveplate).fastAxisAngle * 180 / Math.PI)}
+                                onChange={(e) => {
+                                    const newAngle = parseInt(e.target.value) * Math.PI / 180;
+                                    if (selectedComponent instanceof Waveplate) {
+                                        selectedComponent.fastAxisAngle = newAngle;
+                                        setComponents([...components]);
+                                    }
+                                }}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+
+                {/* Card Viewer: E&M beam cross-section + polarization */}
+                {selectedComponent instanceof Card && (
+                    <CardViewer card={selectedComponent as Card} />
+                )}
 
                 <div style={{ fontSize: '11px', color: '#666', marginTop: 5 }}>
                     ID: {selectedComponent.id.substring(0,8)}

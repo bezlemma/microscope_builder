@@ -301,4 +301,48 @@ export class CylindricalLens extends OpticalComponent {
             ray
         );
     }
+
+    /**
+     * ABCD matrix for the tangential plane (Y-Z, where cylindrical curvature acts).
+     * Same thick-lens compound matrix as SphericalLens.
+     * Returns [A, B, C, D].
+     */
+    getABCD_tangential(): [number, number, number, number] {
+        const R1 = this.r1;
+        const R2 = this.r2;
+        const n = this.ior;
+        const t = this.thickness;
+
+        const C1 = -(n - 1) / (n * R1);
+        const D1 = 1 / n;
+        const B_prop = t / n;
+        const C2 = (n - 1) / R2;
+        const D2 = n;
+
+        // Chain: M2 × M_prop × M1
+        const a1 = 1;
+        const b1 = B_prop * D1;
+        const c1 = C1;
+        const d1 = B_prop * C1 + D1;
+
+        const A = a1;
+        const B = b1;
+        const C = C2 * a1 + D2 * c1;
+        const D = C2 * b1 + D2 * d1;
+
+        return [A, B, C, D];
+    }
+
+    /**
+     * ABCD matrix for the sagittal plane (X-Z, no curvature — flat window).
+     * Just propagation through glass: [[1, t/n], [0, 1]]
+     * Returns [A, B, C, D].
+     */
+    getABCD_sagittal(): [number, number, number, number] {
+        return [1, this.thickness / this.ior, 0, 1];
+    }
+
+    getApertureRadius(): number {
+        return this.apertureRadius;
+    }
 }

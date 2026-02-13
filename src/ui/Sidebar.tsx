@@ -103,6 +103,9 @@ export const Sidebar: React.FC = () => {
                     <DraggableItem type="objective" label="Objective" icon={Circle} />
                     <DraggableItem type="mirror" label="Mirror" icon={Square} />
                     <DraggableItem type="blocker" label="Blocker" icon={Box} />
+                    <DraggableItem type="halfWavePlate" label="λ/2 Plate" icon={Circle} />
+                    <DraggableItem type="quarterWavePlate" label="λ/4 Plate" icon={Circle} />
+                    <DraggableItem type="polarizer" label="Polarizer" icon={Box} />
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
@@ -139,6 +142,11 @@ export const Sidebar: React.FC = () => {
                     label="Prism Debug" 
                     active={activePreset === PresetName.PrismDebug} 
                     onClick={() => loadPreset(PresetName.PrismDebug)}
+                />
+                <PresetButton 
+                    label="Polarization Zoo" 
+                    active={activePreset === PresetName.PolarizationZoo} 
+                    onClick={() => loadPreset(PresetName.PolarizationZoo)}
                 />
             </div>
             

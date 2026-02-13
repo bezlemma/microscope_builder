@@ -14,6 +14,7 @@ import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
+import { Waveplate } from '../physics/components/Waveplate';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 
 export const DragDropHandler: React.FC = () => {
@@ -65,7 +66,7 @@ export const DragDropHandler: React.FC = () => {
             } else if (type === 'blocker') {
                 newComp = new Blocker(20, 5, "Beam Blocker");
             } else if (type === 'card') {
-                newComp = new Card(40, 40, "Viewing Card");
+                newComp = new Card(25, 25, "Viewing Card");
             } else if (type === 'sample') {
                 newComp = new Sample("New Sample");
             } else if (type === 'idealLens') {
@@ -80,6 +81,12 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new CylindricalLens(40, 1e9, 12, 24, 3, "Cylindrical Lens");
             } else if (type === 'prism') {
                 newComp = new PrismLens(Math.PI / 3, 20, 20, "Prism");
+            } else if (type === 'halfWavePlate') {
+                newComp = new Waveplate('half', 12.5, Math.PI / 4, 'λ/2 Plate');
+            } else if (type === 'quarterWavePlate') {
+                newComp = new Waveplate('quarter', 12.5, Math.PI / 4, 'λ/4 Plate');
+            } else if (type === 'polarizer') {
+                newComp = new Waveplate('polarizer', 12.5, 0, 'Linear Polarizer');
             }
 
             if (newComp) {

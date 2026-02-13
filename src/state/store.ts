@@ -6,11 +6,13 @@ import { createTransmissionMicroscopeScene } from '../presets/infinitySystem';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
 import { createPrismDebugScene } from '../presets/prismDebug';
+import { createPolarizationZooScene } from '../presets/polarizationZoo';
 
 // --- State Types ---
 export interface RayConfig {
     rayCount: number; // Number of intermediate rays
     showFootprint: boolean;
+    solver2Enabled: boolean; // E&M (Gaussian beam) solver toggle
 }
 
 // 1. Component List (The Scene Graph)
@@ -20,7 +22,8 @@ export enum PresetName {
     BeamExpander = "Beam Expander",
     TransmissionMicroscope = "Transmission Microscope",
     LensZoo = "Lens Zoo",
-    PrismDebug = "Prism Debug"
+    PrismDebug = "Prism Debug",
+    PolarizationZoo = "Polarization Zoo"
 }
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
@@ -43,6 +46,8 @@ export const loadPresetAtom = atom(
             set(componentsAtom, createLensZooScene());
         } else if (presetName === PresetName.PrismDebug) {
             set(componentsAtom, createPrismDebugScene());
+        } else if (presetName === PresetName.PolarizationZoo) {
+            set(componentsAtom, createPolarizationZooScene());
         }
     }
 );
@@ -53,7 +58,8 @@ export const selectionAtom = atom<string | null>(null);
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
     rayCount: 32, 
-    showFootprint: false
+    showFootprint: false,
+    solver2Enabled: true
 });
 
 // 4. Interaction State

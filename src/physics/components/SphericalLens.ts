@@ -365,4 +365,56 @@ export class SphericalLens extends OpticalComponent {
             ray
         );
     }
+
+    /**
+     * ABCD matrix for Solver 2 (Gaussian Beam Propagation).
+     * Thick-lens compound matrix:
+     *   M = M_refract(R2) × M_propagate(t/n) × M_refract(R1)
+     *
+     * Convention: R > 0 means center of curvature is to the right of the surface.
+     * Returns [A, B, C, D].
+     */
+    getABCD(): [number, number, number, number] {
+        const { R1, R2 } = this.getRadii();
+        const n = this.ior;
+        const t = this.thickness;
+
+        // M_refract at surface 1 (air→glass): [[1, 0], [-(n-1)/R1, 1]]
+        // Using the general form: [[1, 0], [-(n2-n1)/(n2*R), n1/n2]]
+        // Surface 1: n1=1 (air), n2=n (glass)
+        const C1 = -(n - 1) / (n * R1);
+        const D1 = 1 / n;
+
+        // M_propagate through glass: [[1, t/n], [0, 1]]
+        // Actually d = t (physical thickness), already in glass
+        const B_prop = t / n;
+
+        // M_refract at surface 2 (glass→air): [[1, 0], [-(1-n)/(1*R2), n/1]]
+        // n1=n (glass), n2=1 (air)
+        const C2 = -(1 - n) / R2; // = (n - 1) / R2
+        const D2 = n;
+
+        // Chain: M = M2 × M_prop × M1
+        // M1 = [[1, 0], [C1, D1]]
+        // M_prop = [[1, B_prop], [0, 1]]
+        // M2 = [[1, 0], [C2, D2]]
+        
+        // Step 1: M_prop × M1
+        const a1 = 1;
+        const b1 = B_prop * D1;
+        const c1 = C1;
+        const d1 = B_prop * C1 + D1;
+
+        // Step 2: M2 × (M_prop × M1)
+        const A = a1;
+        const B = b1;
+        const C = C2 * a1 + D2 * c1;
+        const D = C2 * b1 + D2 * d1;
+
+        return [A, B, C, D];
+    }
+
+    getApertureRadius(): number {
+        return this.apertureRadius;
+    }
 }

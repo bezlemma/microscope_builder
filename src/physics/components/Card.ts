@@ -1,11 +1,21 @@
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, JonesVector } from '../types';
 import { Vector3 } from 'three';
+
+export interface BeamProfile {
+    wx: number;           // beam half-width X (mm)
+    wy: number;           // beam half-width Y (mm)
+    wavelength: number;   // meters (SI)
+    power: number;        // axial power [0,1]
+    polarization: JonesVector;
+    phase: number;        // accumulated optical path length (mm)
+}
 
 export class Card extends OpticalComponent {
     width: number;
     height: number;
     hits: { localPoint: Vector3, ray: Ray }[] = [];
+    beamProfile: BeamProfile | null = null;
 
     constructor(width: number, height: number, name: string) {
         super(name);
@@ -51,5 +61,6 @@ export class Card extends OpticalComponent {
     // Clear hits before new trace
     resetHits() {
         this.hits = [];
+        this.beamProfile = null;
     }
 }

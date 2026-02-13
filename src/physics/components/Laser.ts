@@ -6,6 +6,8 @@ import { Vector3, Box3 } from 'three';
 export class Laser extends OpticalComponent {
     wavelength: number = 532; // nm (default green)
     beamRadius: number = 2;   // mm (half-width of beam)
+    beamWaist: number = 2;    // mm (1/e² waist radius for Solver 2, defaults to beamRadius)
+    power: number = 1.0;      // Watts (optical output power)
 
     private static readonly HOUSING = new Box3(
         new Vector3(-50, -7.5, -12.5),

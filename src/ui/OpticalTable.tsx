@@ -18,7 +18,10 @@ import { Camera } from '../physics/components/Camera';
 import { PointSource } from '../physics/components/PointSource';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
+import { Waveplate } from '../physics/components/Waveplate';
 import { RayVisualizer } from './RayVisualizer';
+import { BeamEnvelopeVisualizer } from './BeamEnvelopeVisualizer';
+import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
 import { Draggable } from './Draggable';
 
 
@@ -248,6 +251,34 @@ export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
             <mesh rotation={[0, 0, Math.PI/2]}>
                 <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 <meshStandardMaterial color="#222" roughness={0.8} />
+            </mesh>
+        </group>
+    );
+};
+
+export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => {
+    const [, setSelection] = useAtom(selectionAtom);
+    const r = component.apertureRadius;
+    const modeColors: Record<string, string> = {
+        'half': '#6a5acd',      // slate blue for λ/2
+        'quarter': '#20b2aa',   // teal for λ/4
+        'polarizer': '#b8860b'  // dark goldenrod for polarizer
+    };
+    const color = modeColors[component.waveplateMode] || '#888';
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[r, r, 1.5, 32]} />
+                <meshStandardMaterial color={color} transparent opacity={0.7} roughness={0.3} />
+            </mesh>
+            {/* Fast axis indicator line */}
+            <mesh rotation={[0, 0, component.fastAxisAngle]}>
+                <boxGeometry args={[0.5, r * 2 * 0.8, 0.3]} />
+                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.3} />
             </mesh>
         </group>
     );
@@ -660,6 +691,7 @@ export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [rayConfig] = useAtom(rayConfigAtom);
     const [rays, setRays] = useState<Ray[][]>([]);
+    const [beamSegments, setBeamSegments] = useState<GaussianBeamSegment[][]>([]);
 
     useEffect(() => {
         if (!components) return;
@@ -688,7 +720,7 @@ export const OpticalTable: React.FC = () => {
             sourceRays.push({
                 origin: origin.clone(),
                 direction: direction.clone(),
-                wavelength: laserWavelength, intensity: 1.0, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                wavelength: laserWavelength, intensity: laserComp.power, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
                 isMainRay: true, sourceId: laserComp.id
             });
             
@@ -1015,6 +1047,78 @@ export const OpticalTable: React.FC = () => {
 
         setRays(calculatedPaths);
 
+        // Run Solver 2: Gaussian beam propagation along main ray skeleton
+        let beamSegs: GaussianBeamSegment[][] = [];
+        if (rayConfig.solver2Enabled) {
+            try {
+                const solver2 = new Solver2();
+                beamSegs = solver2.propagate(calculatedPaths, components);
+            } catch (e) {
+                console.warn('Solver 2 error:', e);
+            }
+        }
+        setBeamSegments(beamSegs);
+
+        // Populate Card beam profiles from Solver 2 data
+        const cardComps = components.filter(c => c instanceof Card) as Card[];
+        for (const card of cardComps) {
+            card.beamProfile = null;
+            if (!rayConfig.solver2Enabled || beamSegs.length === 0) continue;
+            
+            // Find the beam segment closest to this card
+            let bestSeg: GaussianBeamSegment | null = null;
+            let bestDist = Infinity;
+            let bestZ = 0;
+            
+            for (const branch of beamSegs) {
+                for (const seg of branch) {
+                    // Check if card position projects onto this segment
+                    const toCard = card.position.clone().sub(seg.start);
+                    const segLen = seg.start.distanceTo(seg.end);
+                    const proj = toCard.dot(seg.direction);
+                    
+                    if (proj >= -1 && proj <= segLen + 1) {
+                        // Perpendicular distance to segment axis
+                        const along = seg.direction.clone().multiplyScalar(proj);
+                        const perpDist = toCard.clone().sub(along).length();
+                        
+                        if (perpDist < bestDist) {
+                            bestDist = perpDist;
+                            bestSeg = seg;
+                            bestZ = Math.max(0, Math.min(proj, segLen));
+                        }
+                    }
+                }
+            }
+            
+            if (bestSeg && bestDist < 50) {
+                // Sample beam at the card's Z position along this segment
+                const wavelengthMm = bestSeg.wavelength * 1e3;
+                const qx = { re: bestSeg.qx_start.re + bestZ, im: bestSeg.qx_start.im };
+                const qy = { re: bestSeg.qy_start.re + bestZ, im: bestSeg.qy_start.im };
+                
+                // Compute beam radius from q: w = sqrt(-λ/(π·Im(1/q)))
+                const invQx = { re: qx.re / (qx.re*qx.re + qx.im*qx.im), im: -qx.im / (qx.re*qx.re + qx.im*qx.im) };
+                const invQy = { re: qy.re / (qy.re*qy.re + qy.im*qy.im), im: -qy.im / (qy.re*qy.re + qy.im*qy.im) };
+                
+                const wx = invQx.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQx.im)) : 10;
+                const wy = invQy.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQy.im)) : 10;
+                
+                // Get polarization from the main ray hitting this card
+                const mainHit = card.hits.find(h => h.ray.isMainRay);
+                const pol = mainHit?.ray.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } };
+                const phase = mainHit?.ray.opticalPathLength ?? 0;
+                
+                card.beamProfile = {
+                    wx, wy,
+                    wavelength: bestSeg.wavelength,
+                    power: bestSeg.power,
+                    polarization: pol,
+                    phase
+                };
+            }
+        }
+
     }, [components, rayConfig]);
 
     return (
@@ -1034,6 +1138,7 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof PointSource) visual = <PointSourceVisualizer component={c} />;
                 else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
                 else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
+                else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
                 
                 if (visual) {
                     return (
@@ -1046,6 +1151,7 @@ export const OpticalTable: React.FC = () => {
                 }
                 return null;
             })}
+            {rayConfig.solver2Enabled && <BeamEnvelopeVisualizer beamSegments={beamSegments} />}
             <RayVisualizer paths={rays} />
         </group>
     );
