@@ -85,6 +85,7 @@ export class Solver1 {
             // Propagate main ray flag: ALL children of a main ray are main rays.
             // When a beam splits (prism, beam splitter), both branches are primary paths.
             nextRay.isMainRay = (currentRay.isMainRay === true);
+            nextRay.sourceId = currentRay.sourceId;
             
             // If ray was absorbed internally (e.g. TIR trapped in prism),
             // add it to path for visualization but don't trace further

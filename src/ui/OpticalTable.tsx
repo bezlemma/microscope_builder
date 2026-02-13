@@ -684,12 +684,12 @@ export const OpticalTable: React.FC = () => {
             const laserWavelength = laserComp.wavelength * 1e-9;
             const beamRadius = laserComp.beamRadius;
             
-            // Central Ray
+            // Central Ray (peak of Gaussian profile)
             sourceRays.push({
                 origin: origin.clone(),
                 direction: direction.clone(),
-                wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
-                isMainRay: true
+                wavelength: laserWavelength, intensity: 1.0, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                isMainRay: true, sourceId: laserComp.id
             });
             
             // Hierarchical ray distribution using binary subdivision:
@@ -738,10 +738,15 @@ export const OpticalTable: React.FC = () => {
                         .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
                         .addScaledVector(right, Math.cos(phi) * ringRadius);
 
+                    // Gaussian TEM00 profile: I(r) = exp(-2(r/w)²)
+                    const rNorm = radiusFractions[ringIndex]; // 0..1
+                    const gaussIntensity = Math.exp(-2 * rNorm * rNorm);
+                    
                     sourceRays.push({
                         origin: origin.clone().add(ringOffset),
                         direction: direction.clone().normalize(),
-                        wavelength: laserWavelength, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                        wavelength: laserWavelength, intensity: gaussIntensity, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                        sourceId: laserComp.id
                     });
                     raysPlaced++;
                 }
@@ -757,7 +762,8 @@ export const OpticalTable: React.FC = () => {
                     ...r,
                     polarization: {x:{re:1,im:0},y:{re:0,im:0}},
                     footprintRadius: 0,
-                    coherenceMode: Coherence.Coherent
+                    coherenceMode: Coherence.Coherent,
+                    sourceId: pointSourceComp.id
                 });
             }
         }
@@ -779,21 +785,31 @@ export const OpticalTable: React.FC = () => {
             });
             
             // Collect exit rays with exitSurfaceId (split-capable components only)
-            type SplitEntry = { path: Ray[]; exitRay: Ray; angle: number };
-            const splitCandidates: SplitEntry[] = [];
+            type SplitEntry = { path: Ray[]; exitRay: Ray; angle: number; sourceId?: string };
+            const allSplitCandidates: SplitEntry[] = [];
             for (const p of surviving) {
                 for (let i = p.length - 1; i >= 0; i--) {
                     if (p[i].exitSurfaceId) {
-                        splitCandidates.push({
+                        allSplitCandidates.push({
                             path: p,
                             exitRay: p[i],
-                            angle: Math.atan2(p[i].direction.y, p[i].direction.x)
+                            angle: Math.atan2(p[i].direction.y, p[i].direction.x),
+                            sourceId: p[0].sourceId
                         });
                         break;
                     }
                 }
             }
             
+            // Group by source to prevent cross-laser contamination
+            const splitBySource = new Map<string, SplitEntry[]>();
+            for (const sc of allSplitCandidates) {
+                const key = sc.sourceId || '__unknown__';
+                if (!splitBySource.has(key)) splitBySource.set(key, []);
+                splitBySource.get(key)!.push(sc);
+            }
+            
+            for (const [, splitCandidates] of splitBySource) {
             if (splitCandidates.length >= 4) {
                 // Sort by exit angle
                 splitCandidates.sort((a, b) => a.angle - b.angle);
@@ -812,7 +828,11 @@ export const OpticalTable: React.FC = () => {
                 const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
                 const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
                 const iqr = q3 - q1;
-                const fence = q3 + 1.5 * iqr;
+                // Median-based floor: when gaps are uniform (IQR ≈ 0), the raw
+                // fence collapses to Q3 and flags tiny variations as splits.
+                // Requiring 3× the median gap prevents false positives.
+                const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
+                const fence = Math.max(q3 + 1.5 * iqr, median * 3);
                 
                 const splitIndices: number[] = [];
                 for (let i = 0; i < gaps.length; i++) {
@@ -874,74 +894,124 @@ export const OpticalTable: React.FC = () => {
                     const uncoveredPops = populations.filter((_, i) => i !== mainRayPopIdx);
                     
                     if (uncoveredPops.length > 0) {
-                        // Find the main-ray path prefix up to the split component
-                        // (scoped to the same component)
-                        let mainPathPrefix: Ray[] = [];
-                        for (const p of calculatedPaths) {
-                            if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
-                                let splitIdx = p.length;
-                                for (let i = 0; i < p.length; i++) {
-                                    if (p[i].exitSurfaceId?.startsWith(splitCompName)) {
-                                        splitIdx = i;
-                                        break;
-                                    }
-                                }
-                                mainPathPrefix = p.slice(0, splitIdx);
-                                break;
-                            }
-                        }
-                        
                         for (const pop of uncoveredPops) {
-                            const centroidOrigin = new Vector3(0, 0, 0);
-                            const centroidDir = new Vector3(0, 0, 0);
-                            const centroidEntry = new Vector3(0, 0, 0);
-                            let entryCount = 0;
-                            
-                            for (const entry of pop) {
-                                centroidOrigin.add(entry.exitRay.origin);
-                                centroidDir.add(entry.exitRay.direction);
-                                if (entry.exitRay.entryPoint) {
-                                    centroidEntry.add(entry.exitRay.entryPoint);
-                                    entryCount++;
-                                }
-                            }
-                            centroidOrigin.divideScalar(pop.length);
-                            centroidDir.divideScalar(pop.length).normalize();
-                            if (entryCount > 0) centroidEntry.divideScalar(entryCount);
-                            
-                            const sampleRay = pop[0].exitRay;
-                            const nudgedOrigin = centroidOrigin.clone()
-                                .add(centroidDir.clone().multiplyScalar(0.1));
-                            
-                            const syntheticRay: Ray = {
-                                origin: nudgedOrigin,
-                                direction: centroidDir.clone(),
-                                wavelength: sampleRay.wavelength,
-                                intensity: sampleRay.intensity,
-                                polarization: { ...sampleRay.polarization },
-                                opticalPathLength: sampleRay.opticalPathLength,
-                                footprintRadius: 0,
-                                coherenceMode: sampleRay.coherenceMode,
-                                isMainRay: true,
-                                entryPoint: entryCount > 0 ? centroidEntry : undefined,
-                            };
-                            
-                            const syntheticPaths = solver.trace([syntheticRay]);
-                            for (const sp of syntheticPaths) {
-                                if (mainPathPrefix.length > 0) {
-                                    const prefixClone = mainPathPrefix.map(
-                                        r => ({ ...r, isMainRay: true })
-                                    );
-                                    sp.unshift(...prefixClone);
-                                }
-                                calculatedPaths.push(sp);
-                            }
+                            // Find the most central ring ray in this population
+                            // and clone its full path as the white center line.
+                            // This preserves the correct physical path (laser → prism
+                            // internal → exit → infinity) instead of creating a
+                            // synthetic ray that starts inside the prism.
+                            const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
+                            const closest = pop.reduce((best, e) =>
+                                Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
+                            );
+                            const syntheticPath = closest.path.map(
+                                r => ({ ...r, isMainRay: true })
+                            );
+                            calculatedPaths.push(syntheticPath);
                         }
                     }
                 }
             }
+            } // end for splitBySource
         }
 
+        // Fallback: ensure every population of boundary-terminating rays has a
+        // white center line. Fires for ANY ray that terminates in space (no
+        // further object hit), regardless of whether it passed through a prism,
+        // lens, or nothing. If populations are found that lack a main-ray path,
+        // the most central ring ray is cloned as white.
+        {
+            // Paths terminating in space: last ray has positive intensity and
+            // no interactionDistance (it went to infinity, not stopped by an object)
+            const boundaryPaths = calculatedPaths.filter(p => {
+                if (p.length < 1) return false;
+                const last = p[p.length - 1];
+                return last.intensity > 0 && last.interactionDistance === undefined;
+            });
+            
+            // Group by source — never mix rays from different lasers
+            const boundaryBySource = new Map<string, typeof boundaryPaths>();
+            for (const p of boundaryPaths) {
+                const key = p[0].sourceId || '__unknown__';
+                if (!boundaryBySource.has(key)) boundaryBySource.set(key, []);
+                boundaryBySource.get(key)!.push(p);
+            }
+            
+            for (const [, sourcePaths] of boundaryBySource) {
+            if (sourcePaths.length >= 3) {
+                type BEntry = { path: Ray[]; angle: number; isMain: boolean };
+                const entries: BEntry[] = sourcePaths.map(p => ({
+                    path: p,
+                    angle: Math.atan2(
+                        p[p.length - 1].direction.y,
+                        p[p.length - 1].direction.x
+                    ),
+                    isMain: p[0].isMainRay === true
+                }));
+                entries.sort((a, b) => a.angle - b.angle);
+                
+                // IQR histogram on ALL terminal angles to find populations
+                const gaps: number[] = [];
+                for (let i = 1; i < entries.length; i++) {
+                    gaps.push(entries[i].angle - entries[i - 1].angle);
+                }
+                
+                if (gaps.length >= 2) {
+                    const sortedGaps = [...gaps].sort((a, b) => a - b);
+                    const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
+                    const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
+                    const iqr = q3 - q1;
+                    // Median-based floor: prevents false splits when gaps are
+                    // nearly uniform (single wide population through a lens).
+                    const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
+                    const fence = Math.max(q3 + 1.5 * iqr, median * 3);
+                    
+                    // Identify split points (outlier gaps)
+                    const splitIndices: number[] = [];
+                    for (let i = 0; i < gaps.length; i++) {
+                        if (gaps[i] > fence && gaps[i] > 0.01) {
+                            splitIndices.push(i + 1);
+                        }
+                    }
+                    
+                    // Build populations
+                    const bounds = [0, ...splitIndices, entries.length];
+                    const populations: BEntry[][] = [];
+                    for (let i = 0; i < bounds.length - 1; i++) {
+                        const pop = entries.slice(bounds[i], bounds[i + 1]);
+                        if (pop.length > 0) populations.push(pop);
+                    }
+                    
+                    // For each population, check if it has a white line
+                    for (const pop of populations) {
+                        const hasMain = pop.some(e => e.isMain);
+                        if (hasMain) continue;
+                        if (pop.length < 2) continue;
+                        
+                        // No white line — clone the most central ring ray as white
+                        const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
+                        const closest = pop.reduce((best, e) =>
+                            Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
+                        );
+                        const syntheticPath = closest.path.map(
+                            r => ({ ...r, isMainRay: true })
+                        );
+                        calculatedPaths.push(syntheticPath);
+                    }
+                } else if (!entries.some(e => e.isMain)) {
+                    // Too few gaps for IQR but no main ray at all — single population
+                    const meanAngle = entries.reduce((s, e) => s + e.angle, 0) / entries.length;
+                    const closest = entries.reduce((best, e) =>
+                        Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
+                    );
+                    const syntheticPath = closest.path.map(
+                        r => ({ ...r, isMainRay: true })
+                    );
+                    calculatedPaths.push(syntheticPath);
+                }
+            }
+            } // end for boundaryBySource
+        }
 
         setRays(calculatedPaths);
 

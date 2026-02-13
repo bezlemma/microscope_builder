@@ -49,6 +49,10 @@ export interface Ray {
     // Format: "ComponentName:faceName" (e.g. "Prism:front", "Prism:back").
     // Used to group rays from the same source that exit through different faces.
     exitSurfaceId?: string;
+    // Source identification: which laser/source this ray originated from.
+    // Used to group rays by source in population analysis, preventing
+    // cross-laser contamination in split detection and fallback white lines.
+    sourceId?: string;
 }
 
 export interface HitRecord {
