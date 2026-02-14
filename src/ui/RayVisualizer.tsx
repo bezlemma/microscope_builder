@@ -8,7 +8,7 @@ import { Ray } from '../physics/types';
 function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number; isVisible: boolean } {
     const wavelength = wavelengthMeters * 1e9; // Convert to nm
     let r = 0, g = 0, b = 0;
-    
+
     if (wavelength >= 380 && wavelength < 440) {
         r = -(wavelength - 440) / (440 - 380);
         b = 1.0;
@@ -27,7 +27,7 @@ function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: n
     } else if (wavelength >= 645 && wavelength <= 780) {
         r = 1.0;
     }
-    
+
     // Apply intensity correction for edge wavelengths
     let factor = 1.0;
     if (wavelength >= 380 && wavelength < 420) {
@@ -37,11 +37,11 @@ function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: n
     } else if (wavelength < 380 || wavelength > 780) {
         return { r: 0.53, g: 0.53, b: 0.53, isVisible: false };
     }
-    
+
     r = Math.pow(r * factor, 0.8);
     g = Math.pow(g * factor, 0.8);
     b = Math.pow(b * factor, 0.8);
-    
+
     return { r, g, b, isVisible: true };
 }
 
@@ -65,7 +65,7 @@ const PulsatingRayLine: React.FC<{
 }> = ({ points, wavelengthMeters, dashed }) => {
     const lineRef = useRef<any>(null);
     const rgb = wavelengthToRGB(wavelengthMeters);
-    
+
     // Base color at the wavelength's natural brightness
     const baseColor = new Color(rgb.r, rgb.g, rgb.b);
     // HDR glow color: boost the wavelength color to >1.0 for bloom-like intensity
@@ -76,30 +76,30 @@ const PulsatingRayLine: React.FC<{
         rgb.b * 3.0 + 0.4
     );
     const mixedColor = new Color();
-    
+
     useFrame(({ clock }) => {
         if (!lineRef.current) return;
         const elapsed = clock.getElapsedTime();
-        
+
         // Sharp spike: pow(sin, 4) stays near 0 most of the time,
         // only briefly spikes to 1. This keeps the beam in its
         // natural color ~90% of the cycle.
         const sinVal = Math.sin(elapsed * 2.5); // ~2.5Hz cycle
         const spike = Math.pow(Math.max(0, sinVal), 4); // 0..1, sharp peak
-        
+
         mixedColor.copy(baseColor).lerp(glowColor, spike);
-        
+
         const mat = lineRef.current.material;
         if (mat && mat.color) {
             mat.color.copy(mixedColor);
         }
-        
+
         // Subtle lineWidth throb: 4.5 → 6 on spike
         if (mat && mat.linewidth !== undefined) {
             mat.linewidth = 4.5 + spike * 1.5;
         }
     });
-    
+
     return (
         <Line
             ref={lineRef}
@@ -118,10 +118,15 @@ const PulsatingRayLine: React.FC<{
 
 interface RayVisualizerProps {
     paths: Ray[][];
+    glowEnabled?: boolean;
+    hideAll?: boolean;  // E-field mode: hide all rays
 }
 
 
-export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
+export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled = true, hideAll = false }) => {
+    // In E-field mode, hide all rays entirely
+    if (hideAll) return null;
+
     // Sort paths: non-main rays first, main ray last so it renders on top
     const sortedPaths = React.useMemo(() => {
         const indexed = paths.map((path, idx) => ({ path, idx }));
@@ -139,6 +144,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                 // Build points array, inserting entryPoint and internalPath before origin
                 const points: Vector3[] = [];
                 for (const r of path) {
+                    // Skip zero-intensity rays (extinct after polarizer, etc.)
+                    if (r.intensity <= 0) break;
+
                     if (r.entryPoint) {
                         points.push(r.entryPoint);
                     }
@@ -149,11 +157,14 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
                     }
                     points.push(r.origin);
                 }
-                
+
                 // Add an "infinite" end to the last ray for visualization
-                if (path.length > 0) {
-                    const lastRay = path[path.length - 1];
-                    if (!lastRay.terminationPoint) {
+                // (only if the last ray in the built points list has nonzero intensity)
+                if (points.length > 0 && path.length > 0) {
+                    // Find the last ray that was actually included (non-zero intensity)
+                    const lastIncludedIdx = path.findIndex(r => r.intensity <= 0) - 1;
+                    const lastRay = lastIncludedIdx >= 0 ? path[lastIncludedIdx] : path[path.length - 1];
+                    if (lastRay.intensity > 0 && !lastRay.terminationPoint) {
                         const dist = lastRay.interactionDistance ?? 1000;
                         const endPoint = lastRay.origin.clone().add(lastRay.direction.clone().multiplyScalar(dist));
                         points.push(endPoint);
@@ -165,12 +176,32 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths }) => {
 
                 if (isMain) {
                     const wc = wavelengthToRGB(wavelength);
+
+                    // Pulsating glow only when E&M solver is enabled
+                    if (glowEnabled) {
+                        return (
+                            <PulsatingRayLine
+                                key={idx}
+                                points={points}
+                                wavelengthMeters={wavelength}
+                                dashed={!wc.isVisible}
+                            />
+                        );
+                    }
+
+                    // Static main ray (no glow) — thicker white/wavelength line
+                    const color = `rgb(${Math.round(wc.r * 255)}, ${Math.round(wc.g * 255)}, ${Math.round(wc.b * 255)})`;
                     return (
-                        <PulsatingRayLine
+                        <Line
                             key={idx}
                             points={points}
-                            wavelengthMeters={wavelength}
+                            color={wc.isVisible ? color : 'white'}
+                            lineWidth={4}
                             dashed={!wc.isVisible}
+                            dashSize={!wc.isVisible ? 3 : undefined}
+                            gapSize={!wc.isVisible ? 2 : undefined}
+                            depthTest={false}
+                            renderOrder={1}
                         />
                     );
                 }

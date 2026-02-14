@@ -339,13 +339,7 @@ Result: Displays the beam cross-section, polarization ellipse, and intensity pro
 - **Accidental correctness.** Any return path that happens to override the field masks the bug.
 
 **Prevention:** Always use the `childRay()` helper from `types.ts` instead of raw `{ ...ray }` spreads:
-```typescript
-// ✅ CORRECT — childRay strips visualization fields automatically
-return { rays: [childRay(ray, { origin: exitPoint, direction: dirOut })] };
 
-// ❌ WRONG — leaks parent's internalPath, terminationPoint, etc.
-return { rays: [{ ...ray, origin: exitPoint, direction: dirOut }] };
-```
 
 The `childRay()` helper works by:
 1. Spreading the parent ray (to carry forward `wavelength`, `intensity`, `polarization`, etc.)

@@ -1,6 +1,5 @@
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, Complex, childRay } from '../types';
-import { intersectAABB } from '../math_solvers';
 import { Vector3, Box3 } from 'three';
 
 export type WaveplateMode = 'half' | 'quarter' | 'polarizer';
@@ -55,15 +54,16 @@ export class Waveplate extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        const { hit, tMin, tMax } = intersectAABB(rayLocal.origin, rayLocal.direction, this.bounds);
-        if (!hit) return null;
+        // Thin-plane intersection at x=0 (waveplate face)
+        // Normal is along ±X  
+        if (Math.abs(rayLocal.direction.x) < 1e-6) return null; // Parallel to face
 
-        const t = tMin > 0.01 ? tMin : tMax;
+        const t = -rayLocal.origin.x / rayLocal.direction.x;
         if (t < 0.01) return null;
 
         const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
 
-        // Check aperture (cylinder clip)
+        // Circular aperture check
         if (point.y * point.y + point.z * point.z > this.apertureRadius * this.apertureRadius) {
             return null;
         }

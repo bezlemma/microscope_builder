@@ -1,13 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Card, BeamProfile } from '../physics/components/Card';
 
-/**
- * Wavelength (meters) to CSS color string.
- */
+// ─── Wavelength → Color helpers ─────────────────────────────────────
+
 function wavelengthToCSS(wavelengthMeters: number): string {
     const wl = wavelengthMeters * 1e9;
     let r = 0, g = 0, b = 0;
-    
+
     if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60; b = 1.0; }
     else if (wl >= 440 && wl < 490) { g = (wl - 440) / 50; b = 1.0; }
     else if (wl >= 490 && wl < 510) { g = 1.0; b = -(wl - 510) / 20; }
@@ -26,13 +25,10 @@ function wavelengthToCSS(wavelengthMeters: number): string {
     return `rgb(${R},${G},${B})`;
 }
 
-/**
- * Get wavelength RGB components (0-255).
- */
 function wavelengthRGB(wavelengthMeters: number): [number, number, number] {
     const wl = wavelengthMeters * 1e9;
     let cr = 0, cg = 0, cb = 0;
-    
+
     if (wl >= 380 && wl < 440) { cr = -(wl - 440) / 60; cb = 1.0; }
     else if (wl >= 440 && wl < 490) { cg = (wl - 440) / 50; cb = 1.0; }
     else if (wl >= 490 && wl < 510) { cg = 1.0; cb = -(wl - 510) / 20; }
@@ -53,232 +49,409 @@ function wavelengthRGB(wavelengthMeters: number): [number, number, number] {
 }
 
 /**
- * Draw static Gaussian beam cross-section I(x,y) on canvas.
- * View extent is fixed at viewExtentMm — beam ring will change size as beam width changes.
+ * Complementary color of the wavelength, for max contrast against Gaussian glow.
  */
-function drawBeamCrossSection(
+function complementaryCSS(wavelengthMeters: number): string {
+    const [r, g, b] = wavelengthRGB(wavelengthMeters);
+    const cr = 255 - r;
+    const cg = 255 - g;
+    const cb = 255 - b;
+    const maxC = Math.max(cr, cg, cb, 1);
+    const boost = Math.max(1, 180 / maxC);
+    return `rgb(${Math.min(255, Math.round(cr * boost))},${Math.min(255, Math.round(cg * boost))},${Math.min(255, Math.round(cb * boost))})`;
+}
+
+// ─── Multi-beam drawing with coherent interference ──────────────────
+
+/**
+ * Draw multiple beam profiles with coherent interference.
+ * Same-wavelength beams interfere (fringes), different-λ beams add incoherently.
+ * Tilt-based spatial fringes: beams at different angles create spatially varying
+ * interference patterns across the card.
+ */
+function drawMultiBeam(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    profile: BeamProfile,
-    viewExtentMm: number
+    profiles: BeamProfile[],
+    viewExtentMm: number,
+    time: number
 ) {
     const imageData = ctx.createImageData(width, height);
     const data = imageData.data;
-    const [R, G, B] = wavelengthRGB(profile.wavelength);
-
-    const scaleX = viewExtentMm / width;   // mm per pixel
+    const scaleX = viewExtentMm / width;
     const scaleY = viewExtentMm / height;
+
+    // Group profiles by wavelength for coherent interference
+    const wavelengthGroups = new Map<number, BeamProfile[]>();
+    for (const p of profiles) {
+        // Round wavelength to avoid floating-point key mismatches
+        const key = Math.round(p.wavelength * 1e12);
+        if (!wavelengthGroups.has(key)) wavelengthGroups.set(key, []);
+        wavelengthGroups.get(key)!.push(p);
+    }
+
+    // Animation phase (for polarization ellipse overlay only, NOT for interference)
+    const omega = time * 3.5;
 
     for (let py = 0; py < height; py++) {
         for (let px = 0; px < width; px++) {
             const x = (px - width / 2) * scaleX;
             const y = (py - height / 2) * scaleY;
 
-            // Gaussian intensity: I = exp(-2(x²/wx² + y²/wy²))
-            const gauss = Math.exp(-2 * (x * x / (profile.wx * profile.wx) + y * y / (profile.wy * profile.wy)));
+            let totalR = 0, totalG = 0, totalB = 0;
 
-            if (gauss < 0.001) {
-                const idx = (py * width + px) * 4;
-                data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 255;
-                continue;
+            for (const [, group] of wavelengthGroups) {
+                const [R, G, B] = wavelengthRGB(group[0].wavelength);
+
+                if (group.length === 1) {
+                    // Single beam — no interference, just Gaussian
+                    const p = group[0];
+                    const dx = x - (p.centerX ?? 0);
+                    const dy = y - (p.centerY ?? 0);
+                    const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
+                    if (gauss < 0.001) continue;
+                    const intensity = Math.sqrt(gauss) * p.power;
+                    totalR += R * intensity;
+                    totalG += G * intensity;
+                    totalB += B * intensity;
+                } else {
+                    // Multiple coherent beams — sum E-fields then compute intensity
+                    // Use REAL wavenumber k = 2π/λ for physically correct interference
+                    // ω cancels in |E|² = |ΣEᵢ|², so we omit it from pixel shading
+                    const wavelengthMm = group[0].wavelength * 1e3; // SI meters → mm
+                    const k_real = (2 * Math.PI) / wavelengthMm;
+
+                    let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
+
+                    for (const p of group) {
+                        const dx = x - (p.centerX ?? 0);
+                        const dy = y - (p.centerY ?? 0);
+                        const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
+                        if (gauss < 0.0001) continue;
+                        const amp = Math.sqrt(Math.sqrt(gauss) * p.power);
+
+                        // Phase: real OPL-based phase + spatial tilt phase
+                        // tiltX/Y create spatial fringes when beams arrive at different angles
+                        const tiltPhase = k_real * ((p.tiltX ?? 0) * x + (p.tiltY ?? 0) * y);
+                        const phi = k_real * p.phase + tiltPhase;
+
+                        // Jones vector contribution
+                        const Jx = p.polarization.x;
+                        const Jy = p.polarization.y;
+                        const cosPhi = Math.cos(phi);
+                        const sinPhi = Math.sin(phi);
+
+                        exRe += amp * (Jx.re * cosPhi - Jx.im * sinPhi);
+                        exIm += amp * (Jx.re * sinPhi + Jx.im * cosPhi);
+                        eyRe += amp * (Jy.re * cosPhi - Jy.im * sinPhi);
+                        eyIm += amp * (Jy.re * sinPhi + Jy.im * cosPhi);
+                    }
+
+                    const intensity = exRe * exRe + exIm * exIm + eyRe * eyRe + eyIm * eyIm;
+                    if (intensity < 0.001) continue;
+                    const bright = Math.sqrt(intensity);
+                    totalR += R * bright;
+                    totalG += G * bright;
+                    totalB += B * bright;
+                }
             }
 
-            const intensity = gauss;
             const idx = (py * width + px) * 4;
-            data[idx] = Math.min(255, Math.round(R * intensity));
-            data[idx + 1] = Math.min(255, Math.round(G * intensity));
-            data[idx + 2] = Math.min(255, Math.round(B * intensity));
+            data[idx] = Math.min(255, Math.round(totalR));
+            data[idx + 1] = Math.min(255, Math.round(totalG));
+            data[idx + 2] = Math.min(255, Math.round(totalB));
             data[idx + 3] = 255;
         }
     }
-
     ctx.putImageData(imageData, 0, 0);
 
-    // Draw 1/e² beam width ring
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    const rxPx = profile.wx / scaleX;
-    const ryPx = profile.wy / scaleY;
-    ctx.ellipse(width / 2, height / 2, rxPx, ryPx, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // === Overlays: draw per-beam 1/e² rings and polarization for primary beam ===
+    const primary = profiles[0];
+    const beamCxPx = width / 2 + (primary.centerX ?? 0) / scaleX;
+    const beamCyPx = height / 2 + (primary.centerY ?? 0) / scaleY;
 
-    // Label beam width
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    // Draw 1/e² rings for each beam
+    for (const p of profiles) {
+        const cx = width / 2 + (p.centerX ?? 0) / scaleX;
+        const cy = height / 2 + (p.centerY ?? 0) / scaleY;
+        const rxPx = p.wx / scaleX;
+        const ryPx = p.wy / scaleY;
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Beam width labels for primary
+    const rxPx = primary.wx / scaleX;
+    const ryPx = primary.wy / scaleY;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(`${(profile.wx * 2).toFixed(2)} mm`, width / 2 + rxPx + 3, height / 2 + 3);
-    if (Math.abs(profile.wx - profile.wy) > 0.001 * profile.wx) {
+    ctx.fillText(`${(primary.wx * 2).toFixed(2)} mm`, beamCxPx + rxPx + 3, beamCyPx + 3);
+    if (Math.abs(primary.wx - primary.wy) > 0.001 * primary.wx) {
         ctx.textAlign = 'center';
-        ctx.fillText(`${(profile.wy * 2).toFixed(2)} mm`, width / 2, height / 2 - ryPx - 4);
+        ctx.fillText(`${(primary.wy * 2).toFixed(2)} mm`, beamCxPx, beamCyPx - ryPx - 4);
     }
     ctx.textAlign = 'start';
 
-    // Subtle crosshair
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    // Subtle crosshair at card center
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
     ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
     ctx.stroke();
+
+    // === Polarization overlay for EACH beam ===
+    for (const prof of profiles) {
+        const pCx = width / 2 + (prof.centerX ?? 0) / scaleX;
+        const pCy = height / 2 + (prof.centerY ?? 0) / scaleY;
+        const pRxPx = prof.wx / scaleX;
+        const pRyPx = prof.wy / scaleY;
+
+        const Jx = prof.polarization.x;
+        const Jy = prof.polarization.y;
+        const ampX = Math.sqrt(Jx.re * Jx.re + Jx.im * Jx.im);
+        const ampY = Math.sqrt(Jy.re * Jy.re + Jy.im * Jy.im);
+        const phiX = Math.atan2(Jx.im, Jx.re);
+        const phiY = Math.atan2(Jy.im, Jy.re);
+
+        const maxAmp = Math.max(ampX, ampY, 0.001);
+        const arrowScale = Math.min(pRxPx, pRyPx) * 1.0;
+
+        const exNow = (ampX / maxAmp) * Math.cos(omega + phiX);
+        const eyNow = (ampY / maxAmp) * Math.cos(omega + phiY);
+
+        const compColor = complementaryCSS(prof.wavelength);
+
+        // Polarization ellipse trace
+        ctx.strokeStyle = compColor;
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i <= 120; i++) {
+            const t = (i / 120) * Math.PI * 2;
+            const ex = (ampX / maxAmp) * Math.cos(t + phiX) * arrowScale;
+            const ey = (ampY / maxAmp) * Math.cos(t + phiY) * arrowScale;
+            const ppx = pCx + ex;
+            const ppy = pCy - ey;
+            if (i === 0) ctx.moveTo(ppx, ppy);
+            else ctx.lineTo(ppx, ppy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+
+        // Ex arrow
+        const exLen = exNow * arrowScale;
+        drawArrow(ctx, pCx, pCy, pCx + exLen, pCy,
+            'rgba(100, 180, 255, 0.7)', 1.5);
+
+        // Ey arrow
+        const eyLen = eyNow * arrowScale;
+        drawArrow(ctx, pCx, pCy, pCx, pCy - eyLen,
+            'rgba(255, 130, 100, 0.7)', 1.5);
+
+        // Resultant E-field vector
+        const resTipX = pCx + exNow * arrowScale;
+        const resTipY = pCy - eyNow * arrowScale;
+        drawArrow(ctx, pCx, pCy, resTipX, resTipY, compColor, 2.5);
+
+        // Bright dot at resultant tip
+        ctx.fillStyle = compColor;
+        ctx.shadowColor = compColor;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(resTipX, resTipY, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Trailing glow
+        ctx.globalAlpha = 0.15;
+        for (let k = 1; k <= 30; k++) {
+            const tt = omega - k * 0.12;
+            const tx = (ampX / maxAmp) * Math.cos(tt + phiX) * arrowScale;
+            const ty = (ampY / maxAmp) * Math.cos(tt + phiY) * arrowScale;
+            ctx.fillStyle = compColor;
+            ctx.beginPath();
+            ctx.arc(pCx + tx, pCy - ty, Math.max(0.5, 2.5 - k * 0.06), 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Component labels
+        ctx.font = '8px sans-serif';
+        ctx.fillStyle = 'rgba(100, 180, 255, 0.5)';
+        ctx.textAlign = 'center';
+        ctx.fillText('Eₓ', pCx + arrowScale + 10, pCy + 3);
+        ctx.fillStyle = 'rgba(255, 130, 100, 0.5)';
+        ctx.fillText('Eᵧ', pCx + 5, pCy - arrowScale - 5);
+        ctx.textAlign = 'start';
+    }
+
+    // === Interference metrics overlay (when 2+ beams present) ===
+    if (profiles.length > 1) {
+        // Compute interference info for same-wavelength groups
+        for (const [, group] of wavelengthGroups) {
+            if (group.length < 2) continue;
+
+            // Real wavenumber for this wavelength group
+            const wavelengthMm = group[0].wavelength * 1e3; // SI meters → mm
+            const k_real = (2 * Math.PI) / wavelengthMm;
+
+            // OPL difference between first two beams
+            const oplDiff = Math.abs(group[1].phase - group[0].phase);
+            const phaseDiffRad = (k_real * (group[1].phase - group[0].phase)) % (2 * Math.PI);
+            const phaseDiffNorm = ((phaseDiffRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+            // Fringe visibility: V = 2√(I1·I2) / (I1 + I2)
+            const I1 = group[0].power, I2 = group[1].power;
+            const visibility = (I1 + I2 > 0) ? (2 * Math.sqrt(I1 * I2)) / (I1 + I2) : 0;
+
+            // Constructive/destructive indicator
+            const cos_dphi = Math.cos(phaseDiffNorm);
+            const interferenceType = cos_dphi > 0.5 ? 'constructive'
+                : cos_dphi < -0.5 ? 'destructive' : 'partial';
+            const typeColor = interferenceType === 'constructive' ? '#64ffda'
+                : interferenceType === 'destructive' ? '#ff6b6b' : '#ffd93d';
+
+            // Tilt difference → fringe spacing
+            const dtiltX = (group[1].tiltX ?? 0) - (group[0].tiltX ?? 0);
+            const dtiltY = (group[1].tiltY ?? 0) - (group[0].tiltY ?? 0);
+            const tiltMag = Math.sqrt(dtiltX * dtiltX + dtiltY * dtiltY);
+            const fringeSpacing = tiltMag > 1e-6 ? wavelengthMm / tiltMag : Infinity;
+
+            // Draw metrics panel
+            const panelY = 4;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(2, panelY, 150, tiltMag > 1e-6 ? 66 : 56);
+            ctx.strokeStyle = 'rgba(100, 255, 218, 0.3)';
+            ctx.strokeRect(2, panelY, 150, tiltMag > 1e-6 ? 66 : 56);
+
+            ctx.font = '8px monospace';
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${group.length} beams  λ=${(group[0].wavelength * 1e9).toFixed(0)}nm`, 6, panelY + 10);
+
+            // ΔOPL in µm (more useful for optical wavelengths)
+            const oplDiffUm = oplDiff * 1000; // mm → µm
+            const numWavelengths = oplDiff / wavelengthMm;
+            ctx.fillStyle = '#bbb';
+            ctx.fillText(`ΔOPL: ${oplDiffUm.toFixed(2)} µm  (${numWavelengths.toFixed(1)}λ)`, 6, panelY + 20);
+
+            ctx.fillStyle = typeColor;
+            ctx.fillText(`Δφ: ${(phaseDiffNorm * 180 / Math.PI).toFixed(1)}°  ${interferenceType}`, 6, panelY + 30);
+
+            // Intensity bar: shows how bright the combined output is
+            const normIntensity = (1 + cos_dphi) / 2; // 0 = destructive, 1 = constructive
+            const barWidth = 80;
+            const barY = panelY + 34;
+            ctx.fillStyle = '#222';
+            ctx.fillRect(6, barY, barWidth, 6);
+            ctx.fillStyle = typeColor;
+            ctx.fillRect(6, barY, barWidth * normIntensity, 6);
+            ctx.strokeStyle = '#555';
+            ctx.strokeRect(6, barY, barWidth, 6);
+
+            ctx.fillStyle = '#888';
+            ctx.fillText(`visibility: ${(visibility * 100).toFixed(0)}%`, 6, panelY + 50);
+
+            if (tiltMag > 1e-6) {
+                ctx.fillText(`fringes: ${fringeSpacing.toFixed(2)} mm`, 6, panelY + 60);
+            }
+        }
+
+        // Multi-beam count indicator (bottom-right)
+        ctx.fillStyle = 'rgba(100, 255, 218, 0.6)';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${profiles.length} beams`, width - 4, height - 4);
+        ctx.textAlign = 'start';
+    }
 }
 
-/**
- * Draw animated polarization ellipse from Jones vector.
- */
-function drawPolarizationEllipse(
+// ─── Arrow drawing utility ──────────────────────────────────────────
+
+function drawArrow(
     ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    profile: BeamProfile,
-    time: number
+    x1: number, y1: number,
+    x2: number, y2: number,
+    color: string,
+    lineWidth: number
 ) {
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, width, height);
-
-    const cx = width / 2;
-    const cy = height / 2;
-    const scale = width * 0.35;
-    const color = wavelengthToCSS(profile.wavelength);
-
-    const Jx = profile.polarization.x;
-    const Jy = profile.polarization.y;
-    const ampX = Math.sqrt(Jx.re * Jx.re + Jx.im * Jx.im);
-    const ampY = Math.sqrt(Jy.re * Jy.re + Jy.im * Jy.im);
-    const phiX = Math.atan2(Jx.im, Jx.re);
-    const phiY = Math.atan2(Jy.im, Jy.re);
-
-    // Draw the ellipse trace (full cycle)
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = 0.3;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i <= 100; i++) {
-        const t = (i / 100) * Math.PI * 2;
-        const ex = ampX * Math.cos(t + phiX) * scale;
-        const ey = ampY * Math.cos(t + phiY) * scale;
-        if (i === 0) ctx.moveTo(cx + ex, cy - ey);
-        else ctx.lineTo(cx + ex, cy - ey);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.globalAlpha = 1.0;
-
-    // Draw animated E-field vector
-    const omega = time * 3;
-    const ex = ampX * Math.cos(omega + phiX) * scale;
-    const ey = ampY * Math.cos(omega + phiY) * scale;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return;
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + ex, cy - ey);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
 
-    // Tip dot
+    const headLen = Math.min(6, len * 0.3);
+    const angle = Math.atan2(dy, dx);
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(cx + ex, cy - ey, 3, 0, Math.PI * 2);
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(
+        x2 - headLen * Math.cos(angle - Math.PI / 6),
+        y2 - headLen * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+        x2 - headLen * Math.cos(angle + Math.PI / 6),
+        y2 - headLen * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
     ctx.fill();
-
-    // Trailing glow — last 20 positions
-    ctx.globalAlpha = 0.15;
-    for (let k = 1; k <= 20; k++) {
-        const tt = omega - k * 0.15;
-        const tx = ampX * Math.cos(tt + phiX) * scale;
-        const ty = ampY * Math.cos(tt + phiY) * scale;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(cx + tx, cy - ty, 2 - k * 0.08, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.globalAlpha = 1.0;
-
-    // Axes
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, cy); ctx.lineTo(width, cy);
-    ctx.moveTo(cx, 0); ctx.lineTo(cx, height);
-    ctx.stroke();
-
-    // Labels
-    ctx.fillStyle = '#555';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('u', width - 12, cy - 4);
-    ctx.fillText('v', cx + 4, 12);
-
-    // Polarization type label
-    const delta = phiY - phiX;
-    let polLabel = 'Linear';
-    if (ampX > 0.01 && ampY > 0.01) {
-        const deltaNorm = ((delta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        if (Math.abs(deltaNorm - Math.PI / 2) < 0.15 || Math.abs(deltaNorm - 3 * Math.PI / 2) < 0.15) {
-            if (Math.abs(ampX - ampY) < 0.1 * Math.max(ampX, ampY)) {
-                polLabel = 'Circular';
-            } else {
-                polLabel = 'Elliptical';
-            }
-        } else if (Math.abs(deltaNorm) < 0.15 || Math.abs(deltaNorm - Math.PI) < 0.15) {
-            polLabel = 'Linear';
-        } else {
-            polLabel = 'Elliptical';
-        }
-    }
-
-    ctx.fillStyle = '#888';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(polLabel, cx, height - 4);
-    ctx.textAlign = 'start';
 }
 
-export const CardViewer: React.FC<{ card: Card }> = ({ card }) => {
-    const crossSectionRef = useRef<HTMLCanvasElement>(null);
-    const polRef = useRef<HTMLCanvasElement>(null);
-    const animFrameRef = useRef<number>(0);
-    const profile = card.beamProfile;
+// ─── Main CardViewer Component ──────────────────────────────────────
 
-    // Draw beam cross-section (static, redraws when profile changes)
+export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, compact }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animFrameRef = useRef<number>(0);
+    const profiles = card.beamProfiles;
+    const hasBeams = profiles.length > 0;
+
+    const canvasSize = compact ? 160 : 220;
+
     useEffect(() => {
-        const canvas = crossSectionRef.current;
+        const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        if (profile) {
-            // Fixed view extent = 4× max beam radius
-            const viewExtent = Math.max(profile.wx, profile.wy) * 4;
-            drawBeamCrossSection(ctx, canvas.width, canvas.height, profile, viewExtent);
-        } else {
-            ctx.fillStyle = '#555';
+        if (!hasBeams) {
+            // No beam: dark empty state
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#444';
             ctx.font = '11px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('No E&M data', canvas.width / 2, canvas.height / 2);
-            ctx.fillText('(enable E&M solver)', canvas.width / 2, canvas.height / 2 + 14);
+            ctx.fillText('No E&M data', canvas.width / 2, canvas.height / 2 - 6);
+            ctx.fillStyle = '#333';
+            ctx.font = '9px sans-serif';
+            ctx.fillText('(enable E&M solver)', canvas.width / 2, canvas.height / 2 + 10);
             ctx.textAlign = 'start';
+            return;
         }
-    }, [profile]);
 
-    // Animate polarization ellipse
-    useEffect(() => {
-        const canvas = polRef.current;
-        if (!canvas || !profile) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
+        const viewExtent = Math.max(card.width, card.height);
         let running = true;
+
         const animate = () => {
             if (!running) return;
             const t = performance.now() / 1000;
-            drawPolarizationEllipse(ctx, canvas.width, canvas.height, profile, t);
+            drawMultiBeam(ctx, canvas.width, canvas.height, profiles, viewExtent, t);
             animFrameRef.current = requestAnimationFrame(animate);
         };
         animate();
@@ -287,77 +460,80 @@ export const CardViewer: React.FC<{ card: Card }> = ({ card }) => {
             running = false;
             cancelAnimationFrame(animFrameRef.current);
         };
-    }, [profile]);
+    }, [profiles, hasBeams, card.width, card.height, canvasSize]);
 
-    const wavelengthNm = profile ? (profile.wavelength * 1e9).toFixed(0) : '—';
-    const powerMw = profile ? (profile.power * 1000).toFixed(1) : '—';
-    const phaseStr = profile
-        ? ((profile.phase % (profile.wavelength * 1e3)) / (profile.wavelength * 1e3) * 360).toFixed(1) + '°'
+    const primary = hasBeams ? profiles[0] : null;
+    const wavelengthNm = primary ? (primary.wavelength * 1e9).toFixed(0) : '—';
+    const powerMw = primary ? (primary.power * 1000).toFixed(1) : '—';
+    const beamStr = primary
+        ? `${(primary.wx * 2).toFixed(2)} × ${(primary.wy * 2).toFixed(2)} mm`
         : '—';
 
     const labelStyle: React.CSSProperties = { color: '#777', fontSize: '10px' };
     const valueStyle: React.CSSProperties = { color: '#ddd', fontSize: '11px', fontFamily: 'monospace' };
 
     return (
-        <div style={{ marginTop: '10px' }}>
-            {/* Beam cross-section */}
-            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '5px' }}>
-                Beam Cross-Section
-            </div>
+        <div style={{ marginTop: '4px' }}>
+
             <canvas
-                ref={crossSectionRef}
-                width={200}
-                height={200}
-                style={{ border: '1px solid #444', borderRadius: '4px', display: 'block' }}
+                ref={canvasRef}
+                width={canvasSize}
+                height={canvasSize}
+                style={{
+                    border: '1px solid #333',
+                    borderRadius: '4px',
+                    display: 'block',
+                    backgroundColor: '#000',
+                }}
             />
 
-            {/* Readout panel */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '4px 12px',
-                marginTop: '8px',
-                padding: '6px 8px',
-                backgroundColor: '#1a1a1a',
-                borderRadius: '4px',
-                border: '1px solid #333'
-            }}>
-                <div>
-                    <div style={labelStyle}>Wavelength</div>
-                    <div style={{ ...valueStyle, color: profile ? wavelengthToCSS(profile.wavelength) : '#ddd' }}>
-                        {wavelengthNm} nm
+            {/* Readout panel — hidden in compact mode */}
+            {!compact && (
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '4px 12px',
+                    marginTop: '8px',
+                    padding: '6px 8px',
+                    backgroundColor: '#111',
+                    borderRadius: '4px',
+                    border: '1px solid #282828'
+                }}>
+                    <div>
+                        <div style={labelStyle}>Wavelength</div>
+                        <div style={{ ...valueStyle, color: primary ? wavelengthToCSS(primary.wavelength) : '#ddd' }}>
+                            {wavelengthNm} nm{profiles.length > 1 ? ` (+${profiles.length - 1})` : ''}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <div style={labelStyle}>Power</div>
-                    <div style={valueStyle}>{powerMw} mW</div>
-                </div>
-                <div>
-                    <div style={labelStyle}>Beam (1/e²)</div>
-                    <div style={valueStyle}>
-                        {profile ? `${profile.wx.toFixed(3)} × ${profile.wy.toFixed(3)} mm` : '—'}
+                    <div>
+                        <div style={labelStyle}>Power</div>
+                        <div style={valueStyle}>{powerMw} mW</div>
                     </div>
-                </div>
-                <div>
-                    <div style={labelStyle}>Phase</div>
-                    <div style={valueStyle}>{phaseStr}</div>
-                </div>
-            </div>
-
-            {/* Polarization widget */}
-            {profile && (
-                <div style={{ marginTop: '8px' }}>
-                    <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '4px' }}>
-                        Polarization
+                    <div>
+                        <div style={labelStyle}>Beam ⌀ (1/e²)</div>
+                        <div style={valueStyle}>{beamStr}</div>
                     </div>
-                    <canvas
-                        ref={polRef}
-                        width={120}
-                        height={120}
-                        style={{ border: '1px solid #444', borderRadius: '4px', display: 'block' }}
-                    />
+                    <div>
+                        <div style={labelStyle}>Jones Vector</div>
+                        <div style={{ ...valueStyle, fontSize: '9px' }}>
+                            {primary ? formatJones(primary.polarization) : '—'}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
     );
 };
+
+// ─── Jones vector compact display ───────────────────────────────────
+
+function formatJones(pol: { x: { re: number; im: number }; y: { re: number; im: number } }): string {
+    const formatC = (c: { re: number; im: number }) => {
+        const amp = Math.sqrt(c.re * c.re + c.im * c.im);
+        if (amp < 0.01) return '0';
+        const phase = Math.atan2(c.im, c.re) * 180 / Math.PI;
+        if (Math.abs(phase) < 1) return amp.toFixed(2);
+        return `${amp.toFixed(1)}∠${phase.toFixed(0)}°`;
+    };
+    return `(${formatC(pol.x)}, ${formatC(pol.y)})`;
+}

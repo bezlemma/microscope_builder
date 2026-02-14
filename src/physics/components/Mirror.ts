@@ -19,13 +19,13 @@ export class Mirror extends OpticalComponent {
         // Test both planes and return the closest hit.
         const radius = this.diameter / 2;
         const halfThickness = this.thickness / 2;
-        
+
         const denom = rayLocal.direction.x;
         if (Math.abs(denom) < 1e-6) return null; // Parallel to both planes
-        
+
         let bestT = Infinity;
         let bestHit: HitRecord | null = null;
-        
+
         for (const planeX of [-halfThickness, halfThickness]) {
             const t = (planeX - rayLocal.origin.x) / denom;
             if (t > 0.001 && t < bestT) {
@@ -46,7 +46,7 @@ export class Mirror extends OpticalComponent {
                 }
             }
         }
-        
+
         return bestHit;
     }
 
@@ -56,14 +56,23 @@ export class Mirror extends OpticalComponent {
         if (ray.direction.dot(hit.normal) >= 0) {
             return { rays: [] };
         }
-        
+
         // Ray approaching from outside → reflect
         const reflectedDir = reflectVector(ray.direction, hit.normal);
+
+        // Mirror reflection introduces a π phase shift (E → -E)
+        // This negates both Jones vector components
+        const polX = ray.polarization.x;
+        const polY = ray.polarization.y;
 
         return {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
+                polarization: {
+                    x: { re: -polX.re, im: -polX.im },
+                    y: { re: -polY.re, im: -polY.im }
+                },
                 opticalPathLength: ray.opticalPathLength + hit.t
             })]
         };

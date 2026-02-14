@@ -24,12 +24,8 @@
 [] Test light source + sample + infinity objective + tube lens + camera.
     - Test in browser
     - Create a Mickey Mouse geometry for the sample, where the mickey main sphere is 1 mm in diameter, the ears are 300 um in diamter. The ears are placed above the main sphere in the +Z direction, so that the camera sees the shadow of the mickey. The sample should sit in a sample holder, the sample itself is probably too small to be visibsle, but the sample holder will be visible. In the properties viewer for the mickey mouse sample, you can see the 3D orientation of the mickey sample in the world view coordinate system. 
-[] Pause for user feedback
-
-Do not go past this point until user has verified that both tests work, and that basic UI functionality is working.
-
-[] Implement Solver 2
-[] Tests for Solver 1 and Solver 2, final test using browser.
+[DONE] Implement Solver 2
+[] Tests for Solver 1 and Solver 2
 [] Pause for user feedback
 
 [] Implement Solver 3 using WebGPU

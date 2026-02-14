@@ -15,6 +15,7 @@ import { Camera } from '../physics/components/Camera';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 
 export const DragDropHandler: React.FC = () => {
@@ -44,7 +45,7 @@ export const DragDropHandler: React.FC = () => {
             const plane = new Plane(new Vector3(0, 0, 1), 0);
             const target = new Vector3();
             raycaster.ray.intersectPlane(plane, target);
-            
+
             // If we didn't hit the infinite plane (parallel ray?), fallback to 0,0
             // But with Top-Down or Angle, we should usually hit.
             if (!target) return;
@@ -53,12 +54,12 @@ export const DragDropHandler: React.FC = () => {
             // "Drop in to where I drag it". Usually implies exact position. 
             // Draggable has snap logic. Let's start with exact, maybe snap if Alt is held?
             // Let's stick to exact for now as it feels smoother.
-            
+
             console.log(`Dropped ${type} at`, target);
 
             let newComp;
             if (type === 'lens') {
-                newComp = new SphericalLens(1/50, 15, 4, "New Lens");
+                newComp = new SphericalLens(1 / 50, 15, 4, "New Lens");
             } else if (type === 'mirror') {
                 newComp = new Mirror(25, 2, "New Mirror");
             } else if (type === 'laser') {
@@ -66,7 +67,7 @@ export const DragDropHandler: React.FC = () => {
             } else if (type === 'blocker') {
                 newComp = new Blocker(20, 5, "Beam Blocker");
             } else if (type === 'card') {
-                newComp = new Card(25, 25, "Viewing Card");
+                newComp = new Card(20, 20, "Viewing Card");
             } else if (type === 'sample') {
                 newComp = new Sample("New Sample");
             } else if (type === 'idealLens') {
@@ -87,28 +88,32 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new Waveplate('quarter', 12.5, Math.PI / 4, 'λ/4 Plate');
             } else if (type === 'polarizer') {
                 newComp = new Waveplate('polarizer', 12.5, 0, 'Linear Polarizer');
+            } else if (type === 'beamSplitter') {
+                newComp = new BeamSplitter(25, 2, 0.5, 'Beam Splitter');
             }
 
             if (newComp) {
                 // Z-up world: set position on XY plane at Z=0
                 newComp.setPosition(target.x, target.y, 0);
-                
+
                 // Align Optical Axis (Local Z) with World X
                 // Rotate 90 degrees around Y axis: Local Z -> World X
                 if (type === 'mirror') {
-                   // Mirror Normal is Local X.
-                   // To reflect X -> Y, we need Normal at 135 deg in XY plane.
-                   // Just rotate around Z axis.
-                   newComp.setRotation(0, 0, 3 * Math.PI / 4); 
-                } else if (type === 'blocker') {
-                    // Blocker Normal is Local X. Points along X.
-                    // If we want it to block X-beam, it should face X.
-                    // Default Logic (0,0,0) points X.
+                    // Mirror Normal is Local X.
+                    // To reflect X -> Y, we need Normal at 135 deg in XY plane.
+                    // Just rotate around Z axis.
+                    newComp.setRotation(0, 0, 3 * Math.PI / 4);
+                } else if (type === 'beamSplitter') {
+                    // Beam splitter at 45° — reflects upward, transmits straight
+                    newComp.setRotation(0, 0, 3 * Math.PI / 4);
+                } else if (type === 'blocker' || type === 'halfWavePlate' || type === 'quarterWavePlate' || type === 'polarizer') {
+                    // These components have their normal along Local X.
+                    // Default (0,0,0) faces the X-direction beam correctly.
                     newComp.setRotation(0, 0, 0);
                 } else {
-                   newComp.setRotation(0, Math.PI / 2, 0);
+                    newComp.setRotation(0, Math.PI / 2, 0);
                 }
-                
+
                 // Laser is a bit special, usually points along X by default without rotation if its geometry is defined that way.
                 // But if Laser follows Component logic (Local Z is output), then it also needs rotation if we want it to emit along X?
                 // Visualizer draws box along Local -X?
@@ -116,7 +121,7 @@ export const DragDropHandler: React.FC = () => {
                 if (type === 'laser') {
                     newComp.setRotation(0, 0, 0); // Laser visualizer assumes default
                 }
-                
+
                 setComponents(prev => [...prev, newComp]);
             }
         };

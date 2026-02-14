@@ -1,8 +1,8 @@
 import React from 'react';
-import { 
-    Box, 
-    Circle, 
-    Square, 
+import {
+    Box,
+    Circle,
+    Square,
     Search,
     Zap
 } from 'lucide-react';
@@ -18,8 +18,8 @@ const DraggableItem = ({ type, label, icon: Icon }: { type: string, label: strin
     };
 
     return (
-        <div 
-            draggable 
+        <div
+            draggable
             onDragStart={handleDragStart}
             className="sidebar-button" // We will add global CSS or inline styles
             style={{
@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
     const [, loadPreset] = useAtom(loadPresetAtom);
 
     const PresetButton = ({ label, active, onClick }: { label: string, active: boolean, onClick?: () => void }) => (
-        <div 
+        <div
             onClick={onClick}
             style={{
                 padding: '8px 12px',
@@ -63,8 +63,8 @@ export const Sidebar: React.FC = () => {
                 color: active ? '#fff' : '#888',
                 userSelect: 'none'
             }}
-            onMouseOver={(e) => { if(active) e.currentTarget.style.backgroundColor = '#3a5a4a' }}
-            onMouseOut={(e) => { if(active) e.currentTarget.style.backgroundColor = '#2a4a3a' }}
+            onMouseOver={(e) => { if (active) e.currentTarget.style.backgroundColor = '#3a5a4a' }}
+            onMouseOut={(e) => { if (active) e.currentTarget.style.backgroundColor = '#2a4a3a' }}
         >
             {label}
         </div>
@@ -87,7 +87,7 @@ export const Sidebar: React.FC = () => {
         }}>
             <div style={{ flex: 1 }}>
                 <h3 style={{ color: '#fff', marginBottom: '15px' }}>Components</h3>
-                
+
                 <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Sources</h4>
                     <DraggableItem type="laser" label="Laser Source" icon={Zap} />
@@ -106,6 +106,7 @@ export const Sidebar: React.FC = () => {
                     <DraggableItem type="halfWavePlate" label="λ/2 Plate" icon={Circle} />
                     <DraggableItem type="quarterWavePlate" label="λ/4 Plate" icon={Circle} />
                     <DraggableItem type="polarizer" label="Polarizer" icon={Box} />
+                    <DraggableItem type="beamSplitter" label="Beam Splitter" icon={Square} />
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
@@ -113,8 +114,8 @@ export const Sidebar: React.FC = () => {
                     <DraggableItem type="card" label="Viewing Card" icon={Search} />
                     <DraggableItem type="camera" label="Camera" icon={Box} />
                 </div>
-                
-                 <div style={{ marginBottom: '20px' }}>
+
+                <div style={{ marginBottom: '20px' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase' }}>Samples</h4>
                     <DraggableItem type="sample" label="Sample (Mickey)" icon={Box} />
                 </div>
@@ -123,33 +124,33 @@ export const Sidebar: React.FC = () => {
             {/* Presets Section */}
             <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
                 <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
-                <PresetButton 
-                    label="Beam Expander" 
-                    active={activePreset === PresetName.BeamExpander} 
-                    onClick={() => loadPreset(PresetName.BeamExpander)} 
+                <PresetButton
+                    label="Beam Expander"
+                    active={activePreset === PresetName.BeamExpander}
+                    onClick={() => loadPreset(PresetName.BeamExpander)}
                 />
-                <PresetButton 
-                    label="Transmission Microscope" 
-                    active={activePreset === PresetName.TransmissionMicroscope} 
+                <PresetButton
+                    label="Transmission Microscope"
+                    active={activePreset === PresetName.TransmissionMicroscope}
                     onClick={() => loadPreset(PresetName.TransmissionMicroscope)}
                 />
-                <PresetButton 
-                    label="Lens Zoo" 
-                    active={activePreset === PresetName.LensZoo} 
+                <PresetButton
+                    label="Lens Zoo"
+                    active={activePreset === PresetName.LensZoo}
                     onClick={() => loadPreset(PresetName.LensZoo)}
                 />
-                <PresetButton 
-                    label="Prism Debug" 
-                    active={activePreset === PresetName.PrismDebug} 
+                <PresetButton
+                    label="Prism Debug"
+                    active={activePreset === PresetName.PrismDebug}
                     onClick={() => loadPreset(PresetName.PrismDebug)}
                 />
-                <PresetButton 
-                    label="Polarization Zoo" 
-                    active={activePreset === PresetName.PolarizationZoo} 
+                <PresetButton
+                    label="Polarization Zoo"
+                    active={activePreset === PresetName.PolarizationZoo}
                     onClick={() => loadPreset(PresetName.PolarizationZoo)}
                 />
             </div>
-            
+
         </div>
     );
 };

@@ -13,6 +13,7 @@ export interface RayConfig {
     rayCount: number; // Number of intermediate rays
     showFootprint: boolean;
     solver2Enabled: boolean; // E&M (Gaussian beam) solver toggle
+    emFieldVisible: boolean; // 3D E-field visualization mode
 }
 
 // 1. Component List (The Scene Graph)
@@ -52,14 +53,15 @@ export const loadPresetAtom = atom(
     }
 );
 
-// 2. Selection State
-export const selectionAtom = atom<string | null>(null);
+// 2. Selection State (supports multi-select via Ctrl+Click)
+export const selectionAtom = atom<string[]>([]);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
-    rayCount: 32, 
+    rayCount: 32,
     showFootprint: false,
-    solver2Enabled: true
+    solver2Enabled: true,
+    emFieldVisible: false
 });
 
 // 4. Interaction State
@@ -67,3 +69,6 @@ export const isDraggingAtom = atom<boolean>(false);
 
 // 5. Handle Dragging State — prevents Draggable from stealing pointer events
 export const handleDraggingAtom = atom<boolean>(false);
+
+// 6. Pinned Viewer Panels — card IDs whose viewer panels are toggled on
+export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());

@@ -9,13 +9,17 @@ export interface BeamProfile {
     power: number;        // axial power [0,1]
     polarization: JonesVector;
     phase: number;        // accumulated optical path length (mm)
+    centerX: number;      // beam center X on card surface (mm, local frame)
+    centerY: number;      // beam center Y on card surface (mm, local frame)
+    tiltX: number;        // beam direction tilt in card local X (rad, ≈ sin θ)
+    tiltY: number;        // beam direction tilt in card local Y (rad, ≈ sin θ)
 }
 
 export class Card extends OpticalComponent {
     width: number;
     height: number;
     hits: { localPoint: Vector3, ray: Ray }[] = [];
-    beamProfile: BeamProfile | null = null;
+    beamProfiles: BeamProfile[] = [];
 
     constructor(width: number, height: number, name: string) {
         super(name);
@@ -38,7 +42,7 @@ export class Card extends OpticalComponent {
             return {
                 t,
                 point: point.clone(), // This helps debugging, but Solver needs World point. 
-                                      // Wait, chkIntersection handles transformation.
+                // Wait, chkIntersection handles transformation.
                 normal: new Vector3(0, 0, 1),
                 localPoint: point
             };
@@ -49,18 +53,19 @@ export class Card extends OpticalComponent {
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         // Record the hit for visualization
         this.hits.push({ localPoint: hit.localPoint, ray });
-        
+
         // Pass the ray through unaffected (Viewing card probe)
-        return { 
-            rays: [childRay(ray, { 
+        return {
+            rays: [childRay(ray, {
                 origin: hit.point
-            })] 
+            })],
+            passthrough: true
         };
     }
-    
+
     // Clear hits before new trace
     resetHits() {
         this.hits = [];
-        this.beamProfile = null;
+        this.beamProfiles = [];
     }
 }

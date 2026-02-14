@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { Ray } from './types';
+import { Ray, JonesVector } from './types';
 import { OpticalComponent } from './Component';
 import { SphericalLens } from './components/SphericalLens';
 import { CylindricalLens } from './components/CylindricalLens';
@@ -8,6 +8,8 @@ import { Objective } from './components/Objective';
 import { Mirror } from './components/Mirror';
 import { Laser } from './components/Laser';
 import { Waveplate } from './components/Waveplate';
+import { PrismLens } from './components/PrismLens';
+import { BeamSplitter } from './components/BeamSplitter';
 
 // ─── Complex Number Helpers ───────────────────────────────────────────
 interface Complex {
@@ -50,7 +52,7 @@ function cInv(a: Complex): Complex {
  * 1/q = 1/R - i·λ/(π·w²)
  * So Im(1/q) = -λ/(π·w²), therefore w = sqrt(-λ/(π·Im(1/q)))
  */
-function beamRadius(q: Complex, wavelengthMm: number): number {
+export function beamRadius(q: Complex, wavelengthMm: number): number {
     const invQ = cInv(q);
     const imInvQ = invQ.im;
     if (imInvQ >= 0) return 100; // Fallback: shouldn't happen for valid q
@@ -108,13 +110,20 @@ export interface GaussianBeamSegment {
     direction: Vector3;
     wavelength: number;     // meters (SI, matching Ray.wavelength)
     power: number;          // Axial power P(z)
-    
+
     // q-parameter at start and end (tangential / X-plane)
     qx_start: Complex;
     qx_end: Complex;
     // q-parameter at start and end (sagittal / Y-plane)
     qy_start: Complex;
     qy_end: Complex;
+
+    // Polarization state at the start of this segment (from Solver 1 ray data)
+    polarization: JonesVector;
+    // Accumulated optical path length at segment start (mm)
+    opticalPathLength: number;
+    // Refractive index of the medium (1.0 for air, >1 for glass)
+    refractiveIndex: number;
 }
 
 // ─── Solver 2 ─────────────────────────────────────────────────────────
@@ -146,11 +155,11 @@ export class Solver2 {
 
         // 2. Find the source laser for each main path to get initial q
         const laserComponents = components.filter(c => c instanceof Laser) as Laser[];
-        
+
         const allSegments: GaussianBeamSegment[][] = [];
 
         for (const path of mainPaths) {
-            if (path.length < 2) continue;
+            if (path.length < 1) continue;
 
             const wavelengthSI = path[0].wavelength; // meters
             const wavelengthMm = wavelengthSI * 1e3; // Convert m → mm (world units)
@@ -170,12 +179,18 @@ export class Solver2 {
             // 3. Walk the ray tree segment by segment
             for (let i = 0; i < path.length; i++) {
                 const ray = path[i];
-                
+
+                // Update power from ray intensity (polarizers, beam splitters, etc.)
+                power = ray.intensity;
+
+                // If beam is fully extinct, stop generating segments
+                if (power < 1e-6) break;
+
                 // Determine segment length
                 let segmentLength: number;
                 if (i < path.length - 1) {
                     // Distance to next interaction point
-                    segmentLength = ray.interactionDistance ?? 
+                    segmentLength = ray.interactionDistance ??
                         path[i + 1].origin.clone().sub(ray.origin).length();
                 } else {
                     // Last segment: use interactionDistance or extend to reasonable distance
@@ -183,6 +198,57 @@ export class Solver2 {
                 }
 
                 if (segmentLength < 1e-6) continue;
+
+                // Generate segments for internal path through glass (if any)
+                // The ray's entryPoint and internalPath describe the path through
+                // a refractive component (prism, lens). The path is:
+                //   entryPoint → [internalPath bounce points] → ray.origin
+                if (ray.entryPoint) {
+                    const internalPts: Vector3[] = [ray.entryPoint.clone()];
+                    if (ray.internalPath) {
+                        for (const p of ray.internalPath) internalPts.push(p.clone());
+                    }
+                    internalPts.push(ray.origin.clone());
+
+                    // Look up the refractive index of the component at the entry point
+                    const glassComponent = this.findComponentAt(ray.entryPoint, components);
+                    const glassIOR = (glassComponent && 'ior' in glassComponent)
+                        ? (glassComponent as any).ior as number : 1.5;
+
+                    for (let ip = 0; ip < internalPts.length - 1; ip++) {
+                        const iStart = internalPts[ip];
+                        const iEnd = internalPts[ip + 1];
+                        const iDir = iEnd.clone().sub(iStart);
+                        const iLen = iDir.length();
+                        if (iLen < 1e-6) continue;
+                        iDir.normalize();
+
+                        // Propagate q through this internal leg
+                        const qx_int_end = propagateFreeSpace(qx, iLen);
+                        const qy_int_end = propagateFreeSpace(qy, iLen);
+
+                        segments.push({
+                            start: iStart,
+                            end: iEnd,
+                            direction: iDir,
+                            wavelength: wavelengthSI,
+                            power,
+                            qx_start: { ...qx },
+                            qx_end: { ...qx_int_end },
+                            qy_start: { ...qy },
+                            qy_end: { ...qy_int_end },
+                            polarization: {
+                                x: { ...ray.polarization.x },
+                                y: { ...ray.polarization.y }
+                            },
+                            opticalPathLength: ray.opticalPathLength,
+                            refractiveIndex: glassIOR
+                        });
+
+                        qx = qx_int_end;
+                        qy = qy_int_end;
+                    }
+                }
 
                 // Propagate q through free space for this segment
                 const qx_end = propagateFreeSpace(qx, segmentLength);
@@ -202,7 +268,13 @@ export class Solver2 {
                     qx_start: { ...qx },
                     qx_end: { ...qx_end },
                     qy_start: { ...qy },
-                    qy_end: { ...qy_end }
+                    qy_end: { ...qy_end },
+                    polarization: {
+                        x: { ...ray.polarization.x },
+                        y: { ...ray.polarization.y }
+                    },
+                    opticalPathLength: ray.opticalPathLength,
+                    refractiveIndex: 1.0
                 });
 
                 // Update q for the next iteration (after free-space propagation)
@@ -217,9 +289,9 @@ export class Solver2 {
                     );
 
                     if (interactingComponent) {
-                        // Get ABCD and apply
-                        const { abcdX, abcdY, apertureRadius } = 
-                            this.getComponentABCD(interactingComponent);
+                        // Get ABCD and apply (pass ray direction for prism)
+                        const { abcdX, abcdY, apertureRadius } =
+                            this.getComponentABCD(interactingComponent, ray.direction);
 
                         // Aperture clipping check
                         const wx = beamRadius(qx, wavelengthMm);
@@ -285,7 +357,7 @@ export class Solver2 {
      * Returns separate tangential (X) and sagittal (Y) matrices,
      * plus aperture radius for clipping checks.
      */
-    private getComponentABCD(component: OpticalComponent): {
+    private getComponentABCD(component: OpticalComponent, rayDirection?: Vector3): {
         abcdX: [number, number, number, number];
         abcdY: [number, number, number, number];
         apertureRadius: number;
@@ -344,6 +416,26 @@ export class Solver2 {
             };
         }
 
+        if (component instanceof BeamSplitter) {
+            const abcd = component.getABCD();
+            return {
+                abcdX: abcd,
+                abcdY: abcd,
+                apertureRadius: component.getApertureRadius()
+            };
+        }
+
+        if (component instanceof PrismLens && rayDirection) {
+            const { abcdTangential, abcdSagittal } = component.getABCD_for_ray(rayDirection);
+            // Prism's tangential plane (plane of incidence) is the Y-Z plane
+            // (vertical), which maps to beam's Y-axis (qy). Sagittal → qx.
+            return {
+                abcdX: abcdSagittal,
+                abcdY: abcdTangential,
+                apertureRadius: 0
+            };
+        }
+
         // Default: identity (blockers, cards, etc.)
         return { abcdX: identity, abcdY: identity, apertureRadius: 0 };
     }
@@ -361,13 +453,13 @@ export function sampleBeamProfile(
 ): { z: number; wx: number; wy: number }[] {
     const wavelengthMm = segment.wavelength * 1e3;
     const segLength = segment.start.distanceTo(segment.end);
-    
+
     const samples: { z: number; wx: number; wy: number }[] = [];
-    
+
     for (let i = 0; i <= numSamples; i++) {
         const t = i / numSamples;
         const z = t * segLength;
-        
+
         // q at position z along segment (linear interpolation of free-space)
         // q(z) = q_start + z  (free-space propagation is just adding distance)
         // But since q_end = q_start + segLength, we can interpolate:
@@ -379,12 +471,12 @@ export function sampleBeamProfile(
             re: segment.qy_start.re + z,
             im: segment.qy_start.im
         };
-        
+
         const wx = beamRadius(qx, wavelengthMm);
         const wy = beamRadius(qy, wavelengthMm);
-        
+
         samples.push({ z, wx, wy });
     }
-    
+
     return samples;
 }

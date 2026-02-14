@@ -231,12 +231,12 @@ export class PrismLens extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-    // Use raw local-space values stored during chkIntersection to avoid
-    // floating-point errors from world↔local rotation matrix round-trips.
-    const dirIn = hit.localDirection?.clone().normalize()
-        ?? ray.direction.clone().transformDirection(this.worldToLocal).normalize();
-    const normalIn = hit.localNormal?.clone().normalize()
-        ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
+        // Use raw local-space values stored during chkIntersection to avoid
+        // floating-point errors from world↔local rotation matrix round-trips.
+        const dirIn = hit.localDirection?.clone().normalize()
+            ?? ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const normalIn = hit.localNormal?.clone().normalize()
+            ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
 
         return this.mesh.interact(
             normalIn,
@@ -249,5 +249,103 @@ export class PrismLens extends OpticalComponent {
             true, // allowInternalReflection — prisms can TIR
             (faceIndex) => this.classifyFace(faceIndex)
         );
+    }
+
+    /**
+     * Compute anamorphic ABCD matrices for a ray passing through the prism.
+     *
+     * @param worldDir Incoming ray direction (world space)
+     * @returns Tangential and sagittal ABCD tuples [A,B,C,D]
+     *
+     * Physics:
+     *  - Entry surface: tangential magnification cos(θ₂)/cos(θ₁)
+     *  - Exit surface:  tangential magnification cos(θ₄)/cos(θ₃)
+     *  - Internal propagation distance d between the two faces
+     *  - Sagittal plane: no angular magnification, just propagation d/n
+     */
+    getABCD_for_ray(worldDir: Vector3): {
+        abcdTangential: [number, number, number, number];
+        abcdSagittal: [number, number, number, number];
+    } {
+        const identity: [number, number, number, number] = [1, 0, 0, 1];
+
+        // Transform world direction into prism local frame
+        const localDir = worldDir.clone().transformDirection(this.worldToLocal).normalize();
+
+        // Get prism face normals in local space (Y-Z plane, outward-pointing)
+        const { apex, baseLeft, baseRight } = this.getTriangleVertices();
+
+        // Front face normal (same computation as in mesh getter)
+        const frontEdge = new Vector3(0, baseLeft[0] - apex[0], baseLeft[1] - apex[1]);
+        const frontNormal = new Vector3(0, -frontEdge.z, frontEdge.y).normalize();
+
+        // Back face normal
+        const backEdge = new Vector3(0, baseRight[0] - apex[0], baseRight[1] - apex[1]);
+        const backNormal = new Vector3(0, backEdge.z, -backEdge.y).normalize();
+
+        // Determine which face the beam enters (the one it hits first)
+        // Entry face is the one whose outward normal opposes the beam direction
+        const frontDot = localDir.dot(frontNormal);
+        const backDot = localDir.dot(backNormal);
+
+        let entryNormal: Vector3, exitNormal: Vector3;
+        if (frontDot < backDot) {
+            entryNormal = frontNormal;
+            exitNormal = backNormal;
+        } else {
+            entryNormal = backNormal;
+            exitNormal = frontNormal;
+        }
+
+        // Entry surface: Snell's law
+        const cosTheta1 = Math.abs(localDir.dot(entryNormal));
+        if (cosTheta1 < 0.01) return { abcdTangential: identity, abcdSagittal: identity };
+
+        const sinTheta1 = Math.sqrt(1 - cosTheta1 * cosTheta1);
+        const sinTheta2 = sinTheta1 / this.ior;
+        if (sinTheta2 >= 1) return { abcdTangential: identity, abcdSagittal: identity }; // TIR
+        const cosTheta2 = Math.sqrt(1 - sinTheta2 * sinTheta2);
+
+        // Internal direction (refracted) — compute for path length estimation
+        // Using Snell's vector form: d_t = (n1/n2)d_i + (n1/n2 · cosθ1 - cosθ2)n
+        const n = entryNormal.clone().multiplyScalar(-Math.sign(localDir.dot(entryNormal)));
+        const internalDir = localDir.clone().multiplyScalar(1 / this.ior)
+            .add(n.clone().multiplyScalar(cosTheta1 / this.ior - cosTheta2));
+        internalDir.normalize();
+
+        // Exit surface: angle of incidence inside
+        const cosTheta3 = Math.abs(internalDir.dot(exitNormal));
+        if (cosTheta3 < 0.01) return { abcdTangential: identity, abcdSagittal: identity };
+
+        const sinTheta3 = Math.sqrt(1 - cosTheta3 * cosTheta3);
+        const sinTheta4 = sinTheta3 * this.ior;
+        if (sinTheta4 >= 1) return { abcdTangential: identity, abcdSagittal: identity }; // TIR
+        const cosTheta4 = Math.sqrt(1 - sinTheta4 * sinTheta4);
+
+        // Internal path length (approximate: distance between face planes along internal ray)
+        // Use the distance between the two face planes along the internal direction
+        const d = this.height * 0.6; // Rough estimate for typical configurations
+
+        // Combined ABCD (exit × propagation × entry)
+        // Tangential plane:
+        //   M_entry = [[cos2/cos1, 0], [0, cos1/(n·cos2)]]
+        //   M_prop  = [[1, d], [0, 1]]
+        //   M_exit  = [[cos4/cos3, 0], [0, n·cos3/cos4]]
+        const A_t = (cosTheta4 * cosTheta2) / (cosTheta3 * cosTheta1);
+        const B_t = d * cosTheta4 * cosTheta1 / (this.ior * cosTheta3 * cosTheta2);
+        const C_t = 0;
+        const D_t = (cosTheta3 * cosTheta1) / (cosTheta4 * cosTheta2);
+
+        // Sagittal plane:
+        //   Combined = [[1, d/n], [0, 1]]
+        const A_s = 1;
+        const B_s = d / this.ior;
+        const C_s = 0;
+        const D_s = 1;
+
+        return {
+            abcdTangential: [A_t, B_t, C_t, D_t],
+            abcdSagittal: [A_s, B_s, C_s, D_s]
+        };
     }
 }

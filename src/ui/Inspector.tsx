@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom } from '../state/store';
+import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom } from '../state/store';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
@@ -17,7 +17,7 @@ import { CardViewer } from './CardViewer';
 // Wavelength to visible spectrum color (approximation)
 function wavelengthToColor(wavelength: number): string {
     let r = 0, g = 0, b = 0;
-    
+
     if (wavelength >= 380 && wavelength < 440) {
         r = -(wavelength - 440) / (440 - 380);
         b = 1.0;
@@ -36,7 +36,7 @@ function wavelengthToColor(wavelength: number): string {
     } else if (wavelength >= 645 && wavelength <= 780) {
         r = 1.0;
     }
-    
+
     // Apply intensity correction for edge wavelengths
     let factor = 1.0;
     if (wavelength >= 380 && wavelength < 420) {
@@ -46,11 +46,11 @@ function wavelengthToColor(wavelength: number): string {
     } else if (wavelength < 380 || wavelength > 780) {
         return '#888888'; // Gray for UV/IR
     }
-    
+
     r = Math.round(255 * Math.pow(r * factor, 0.8));
     g = Math.round(255 * Math.pow(g * factor, 0.8));
     b = Math.round(255 * Math.pow(b * factor, 0.8));
-    
+
     return `rgb(${r}, ${g}, ${b})`;
 }
 
@@ -58,26 +58,69 @@ function isVisibleSpectrum(wavelength: number): boolean {
     return wavelength >= 380 && wavelength <= 780;
 }
 
+// ─── CardViewer with pin toggle ─────────────────────────────────────
+
+const CardViewerWithPin: React.FC<{
+    card: Card;
+    pinnedIds: Set<string>;
+    setPinnedIds: (s: Set<string>) => void;
+}> = ({ card, pinnedIds, setPinnedIds }) => {
+    const isPinned = pinnedIds.has(card.id);
+    return (
+        <div style={{ marginTop: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#aaa' }}>Beam Profile</span>
+                <button
+                    onClick={() => {
+                        const next = new Set(pinnedIds);
+                        if (isPinned) next.delete(card.id);
+                        else next.add(card.id);
+                        setPinnedIds(next);
+                    }}
+                    title={isPinned ? 'Unpin viewer' : 'Pin viewer (keep visible when deselected)'}
+                    style={{
+                        background: isPinned ? '#333' : 'none',
+                        border: isPinned ? '1px solid #555' : '1px solid #444',
+                        borderRadius: '3px',
+                        color: isPinned ? '#fff' : '#888',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        padding: '1px 5px',
+                        lineHeight: 1.2,
+                    }}
+                >
+                    📌
+                </button>
+            </div>
+            <CardViewer card={card} />
+        </div>
+    );
+};
+
 export const Inspector: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
-    
-    // Derived state
-    const selectedComponent = components.find(c => c.id === selection);
-    
+    const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
+    const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
+
+    // Derived state — only show single-component properties when exactly 1 is selected
+    const selectedComponent = selection.length === 1
+        ? components.find(c => c.id === selection[0])
+        : undefined;
+
     // Local state for inputs
     const [localX, setLocalX] = useState<string>('0');
     const [localY, setLocalY] = useState<string>('0');
     const [localRot, setLocalRot] = useState<string>('0');
-    
+
     // Geometry Params (Card)
     const [localWidth, setLocalWidth] = useState<string>('0');
     const [localHeight, setLocalHeight] = useState<string>('0');
-    
+
     // Mirror Params
     const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
     const [localMirrorThickness, setLocalMirrorThickness] = useState<string>('2');
-    
+
     // Blocker Params
     const [localBlockerDiameter, setLocalBlockerDiameter] = useState<string>('20');
     const [localBlockerThickness, setLocalBlockerThickness] = useState<string>('5');
@@ -88,17 +131,17 @@ export const Inspector: React.FC = () => {
     const [localThickness, setLocalThickness] = useState<string>('0');
     const [localIor, setLocalIor] = useState<string>('1.5');
     const [localLensType, setLocalLensType] = useState<string>('biconvex');
-    
+
     // IdealLens Params
     const [localIdealFocal, setLocalIdealFocal] = useState<string>('50');
     const [localIdealAperture, setLocalIdealAperture] = useState<string>('15');
-    
+
     // Objective Params
     const [localObjNA, setLocalObjNA] = useState<string>('0.25');
     const [localObjMag, setLocalObjMag] = useState<string>('10');
     const [localObjImmersion, setLocalObjImmersion] = useState<string>('1.0');
     const [localObjWD, setLocalObjWD] = useState<string>('10');
-    
+
     // Laser Params
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
@@ -115,15 +158,13 @@ export const Inspector: React.FC = () => {
             try {
                 setLocalX(String(Math.round(selectedComponent.position.x * 100) / 100));
                 setLocalY(String(Math.round(selectedComponent.position.y * 100) / 100));
-                
-                // Rotation around Z (World Up) - extract the world-space Z rotation
-                // For optical components, the optical axis (local +Z) is rotated to world space.
-                // The world-Z rotation is the angle of this axis projected onto the XY plane.
+
+                // Rotation around Z (World Up) - extract via ZYX Euler decomposition
+                // The Z component in ZYX order IS the world-Z rotation, regardless of
+                // the component's base rotation (works for Laser, Mirror, Lens, etc.)
                 if (selectedComponent.rotation) {
-                    const forwardLocal = new Vector3(0, 0, 1);
-                    const forwardWorld = forwardLocal.clone().applyQuaternion(selectedComponent.rotation);
-                    const worldZAngle = Math.atan2(forwardWorld.y, forwardWorld.x);
-                    const zDeg = Math.round(worldZAngle * 180 / Math.PI);
+                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
+                    const zDeg = Math.round(euler.z * 180 / Math.PI);
                     setLocalRot(String(zDeg));
                 }
 
@@ -147,21 +188,21 @@ export const Inspector: React.FC = () => {
                     setLocalFocal(String(Math.round(f * 100) / 100));
                     setLocalThickness(String(selectedComponent.thickness));
                     setLocalIor(String(selectedComponent.ior));
-                    
+
                     // Lens type detection
                     if (typeof selectedComponent.getLensType === 'function') {
                         setLocalLensType(selectedComponent.getLensType());
                     }
-                    
+
                     // Radii
                     if (typeof selectedComponent.getRadii === 'function') {
                         const radii = selectedComponent.getRadii();
-                        setLocalR1(Math.abs(radii.R1) >= 1e6 ? "Infinity" : String(Math.round(radii.R1 * 100)/100));
-                        setLocalR2(Math.abs(radii.R2) >= 1e6 ? "Infinity" : String(Math.round(radii.R2 * 100)/100));
+                        setLocalR1(Math.abs(radii.R1) >= 1e6 ? "Infinity" : String(Math.round(radii.R1 * 100) / 100));
+                        setLocalR2(Math.abs(radii.R2) >= 1e6 ? "Infinity" : String(Math.round(radii.R2 * 100) / 100));
                     } else {
                         const R = f !== 0 ? (2 * (selectedComponent.ior - 1)) * f : 1e9;
-                        setLocalR1(String(Math.round(R * 100)/100));
-                        setLocalR2(String(Math.round(-R * 100)/100));
+                        setLocalR1(String(Math.round(R * 100) / 100));
+                        setLocalR2(String(Math.round(-R * 100) / 100));
                     }
                 }
                 if (selectedComponent instanceof IdealLens) {
@@ -188,24 +229,17 @@ export const Inspector: React.FC = () => {
                 console.error("Inspector Update Error:", err);
             }
         }
-    }, [selectedComponent, selection, 
-        selectedComponent?.position.x, 
-        selectedComponent?.position.y, 
-        selectedComponent?.rotation.x,
-        selectedComponent?.rotation.y,
-        selectedComponent?.rotation.z,
-        selectedComponent?.rotation.w
-    ]);
+    }, [selectedComponent, selection, components]);
 
     // Handlers
     // ... existing commitPosition ...
-    const commitPosition = (axis: 'x'|'y'|'z', valueStr: string) => { /* ... same ... */ 
+    const commitPosition = (axis: 'x' | 'y' | 'z', valueStr: string) => { /* ... same ... */
         if (!selectedComponent) return;
         const val = parseFloat(valueStr);
-        if (isNaN(val)) return; 
-        
+        if (isNaN(val)) return;
+
         const newComponents = components.map(c => {
-            if (c.id === selection) {
+            if (c.id === selection[0]) {
                 const newPos = c.position.clone();
                 newPos[axis] = val;
                 c.setPosition(newPos.x, newPos.y, newPos.z);
@@ -218,39 +252,25 @@ export const Inspector: React.FC = () => {
 
 
     const commitRotation = (valueStr: string) => {
-         if (!selectedComponent) return;
+        if (!selectedComponent) return;
         const val = parseFloat(valueStr);
         if (isNaN(val)) return;
 
         const newComponents = components.map(c => {
-            if (c.id === selection) {
-                // Use same logic as scroll wheel in GlobalRotation.tsx:
-                // The rotation value is the WORLD Z rotation (spin on the table).
-                // Start from the component's base rotation and apply desired world-Z rotation.
-                
-                const zRotRad = val * Math.PI / 180;
-                
-                // Base rotation: 90° around Y aligns local Z with world X for optical components
-                // For non-optical components, base is identity
-                const needsBaseYRotation = c.constructor.name === 'Objective' || 
-                                          c.constructor.name === 'SphericalLens' ||
-                                          c.constructor.name === 'CylindricalLens' ||
-                                          c.constructor.name === 'PrismLens' ||
-                                          c.constructor.name === 'Sample' ||
-                                          c.constructor.name === 'Camera';
-                
-                // Create base quaternion
-                const baseQuat = new Quaternion();
-                if (needsBaseYRotation) {
-                    baseQuat.setFromEuler(new Euler(0, Math.PI / 2, 0));
-                }
-                
-                // Apply world-Z rotation on top (premultiply to rotate in world space)
-                const worldZQuat = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), zRotRad);
-                const finalQuat = worldZQuat.multiply(baseQuat);
-                
-                // Extract euler and set
-                const euler = new Euler().setFromQuaternion(finalQuat);
+            if (c.id === selection[0]) {
+                // Unified rotation: same approach as Q/E keys and Shift+scroll.
+                // Extract current world-Z angle, compute delta to desired, premultiply.
+                // This preserves each component's base rotation (Y-axis for lenses,
+                // identity for blockers/cards, etc.) regardless of component type.
+                const currentEuler = new Euler().setFromQuaternion(c.rotation, 'ZYX');
+                const currentZRad = currentEuler.z;
+                const desiredZRad = val * Math.PI / 180;
+                const deltaZ = desiredZRad - currentZRad;
+
+                const qStep = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), deltaZ);
+                c.rotation.premultiply(qStep);
+
+                const euler = new Euler().setFromQuaternion(c.rotation);
                 c.setRotation(euler.x, euler.y, euler.z);
                 return c;
             }
@@ -259,21 +279,21 @@ export const Inspector: React.FC = () => {
         setComponents(newComponents);
     };
 
-    const commitGeometry = (param: 'width'|'height'|'radius'|'focal'|'r1'|'r2'|'thickness'|'ior', valueStr: string) => {
+    const commitGeometry = (param: 'width' | 'height' | 'radius' | 'focal' | 'r1' | 'r2' | 'thickness' | 'ior', valueStr: string) => {
         if (!selectedComponent) return;
-        
+
         // Handle "Infinity" case for radii
         let val: number;
         if (valueStr.toLowerCase() === 'infinity') {
-             val = 1e9;
+            val = 1e9;
         } else {
-             val = parseFloat(valueStr);
+            val = parseFloat(valueStr);
         }
-        
+
         if (isNaN(val)) return;
 
         const newComponents = components.map(c => {
-            if (c.id === selection) {
+            if (c.id === selection[0]) {
                 // TypeScript casting to access specific props
                 if (param === 'width' && 'width' in c) (c as any).width = val;
                 if (param === 'height' && 'height' in c) (c as any).height = val;
@@ -294,15 +314,15 @@ export const Inspector: React.FC = () => {
                 if (param === 'r1' && c instanceof SphericalLens) {
                     c.r1 = val;
                     if (c.r2 === undefined) {
-                         const old = c.getRadii();
-                         c.r2 = old.R2;
+                        const old = c.getRadii();
+                        c.r2 = old.R2;
                     }
                 }
                 if (param === 'r2' && c instanceof SphericalLens) {
                     c.r2 = val;
                     if (c.r1 === undefined) {
-                         const old = c.getRadii();
-                         c.r1 = old.R1;
+                        const old = c.getRadii();
+                        c.r1 = old.R1;
                     }
                 }
                 // Invalidate cached physics mesh so it rebuilds with new parameters
@@ -313,10 +333,10 @@ export const Inspector: React.FC = () => {
             }
             return c;
         });
-        
+
         setComponents([...newComponents]);
     };
-    
+
     // ... handleKeyDown ...
     const handleKeyDown = (e: React.KeyboardEvent, commitFn: () => void) => {
         if (e.key === 'Enter') {
@@ -326,7 +346,7 @@ export const Inspector: React.FC = () => {
     };
 
     if (!selectedComponent) {
-         return (
+        return (
             <div style={{
                 position: 'absolute',
                 top: 20,
@@ -337,9 +357,79 @@ export const Inspector: React.FC = () => {
                 padding: 15,
                 borderRadius: 8,
                 border: '1px solid #444',
-                fontFamily: 'sans-serif'
+                fontFamily: 'sans-serif',
+                fontSize: '12px',
             }}>
-                <div style={{ color: '#888', fontStyle: 'italic' }}>No selection</div>
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Physics Solvers</div>
+
+                {/* Ray Tracer (always on) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
+                    <span>Ray Tracer</span>
+                </div>
+                <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
+                    <input
+                        type="range"
+                        min="4"
+                        max="128"
+                        step="1"
+                        value={Math.max(4, rayConfig.rayCount)}
+                        onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
+                        style={{ width: '80px' }}
+                    />
+                    <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
+                </div>
+
+                {/* E&M (toggleable) */}
+                <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}
+                >
+                    <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
+                        transition: 'background-color 0.2s'
+                    }}></div>
+                    <input
+                        type="checkbox"
+                        checked={rayConfig.solver2Enabled}
+                        onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                        style={{ cursor: 'pointer' }}
+                    />
+                    <span
+                        style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
+                        onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                    >E&M</span>
+
+                    {/* E-field visualization toggle (eyeball) */}
+                    {rayConfig.solver2Enabled && (
+                        <button
+                            onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
+                            title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
+                            style={{
+                                background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
+                                border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
+                                borderRadius: '3px',
+                                color: rayConfig.emFieldVisible ? '#4af' : '#666',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                padding: '1px 4px',
+                                lineHeight: 1,
+                                marginLeft: '4px',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            👁
+                        </button>
+                    )}
+                </div>
+
+                {/* Solver 3: Wave (Placeholder) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.5, marginTop: 4 }}>
+                    <input type="checkbox" disabled />
+                    <span>Wave (WIP)</span>
+                </div>
             </div>
         );
     }
@@ -353,14 +443,14 @@ export const Inspector: React.FC = () => {
     const isLaser = selectedComponent instanceof Laser;
     const isPrism = selectedComponent instanceof PrismLens;
     const isWaveplate = selectedComponent instanceof Waveplate;
-    
+
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
         const radius = parseFloat(localBeamRadius);
         if (isNaN(radius)) return;
-        
+
         const newComponents = components.map(c => {
-            if (c.id === selection && c instanceof Laser) {
+            if (c.id === selection[0] && c instanceof Laser) {
                 c.wavelength = localWavelength;
                 c.beamRadius = radius;
                 return c;
@@ -387,14 +477,14 @@ export const Inspector: React.FC = () => {
             <h3 style={{ marginTop: 0, marginBottom: 15, borderBottom: '1px solid #555', paddingBottom: 10 }}>
                 {selectedComponent.name}
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Position Group */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {/* X / Y / Rotation — compact single row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px', gap: 6 }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Position X (mm)</label>
-                        <input 
-                            type="text" 
+                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>X (mm)</label>
+                        <input
+                            type="text"
                             value={localX}
                             onChange={(e) => setLocalX(e.target.value)}
                             onBlur={() => commitPosition('x', localX)}
@@ -402,11 +492,10 @@ export const Inspector: React.FC = () => {
                             style={inputStyle}
                         />
                     </div>
-                    
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Position Y (mm)</label>
-                        <input 
-                            type="text" 
+                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>Y (mm)</label>
+                        <input
+                            type="text"
                             value={localY}
                             onChange={(e) => setLocalY(e.target.value)}
                             onBlur={() => commitPosition('y', localY)}
@@ -414,28 +503,26 @@ export const Inspector: React.FC = () => {
                             style={inputStyle}
                         />
                     </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>Rot°</label>
+                        <input
+                            type="text"
+                            value={localRot}
+                            onChange={(e) => setLocalRot(e.target.value)}
+                            onBlur={() => commitRotation(localRot)}
+                            onKeyDown={(e) => handleKeyDown(e, () => commitRotation(localRot))}
+                            style={inputStyle}
+                        />
+                    </div>
                 </div>
 
-                {/* Rotation Group */}
-                <div style={{ marginTop: 6 }}>
-                    <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Rotation (deg)</label>
-                    <input 
-                        type="text" 
-                        value={localRot}
-                        onChange={(e) => setLocalRot(e.target.value)}
-                        onBlur={() => commitRotation(localRot)}
-                        onKeyDown={(e) => handleKeyDown(e, () => commitRotation(localRot))}
-                        style={{ ...inputStyle, width: '100%' }}
-                    />
-                </div>
-                
                 {/* Dynamic Properties */}
                 {isCard && (
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Width (mm)</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 value={localWidth}
                                 onChange={(e) => setLocalWidth(e.target.value)}
                                 onBlur={() => commitGeometry('width', localWidth)}
@@ -445,8 +532,8 @@ export const Inspector: React.FC = () => {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Height (mm)</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 value={localHeight}
                                 onChange={(e) => setLocalHeight(e.target.value)}
                                 onBlur={() => commitGeometry('height', localHeight)}
@@ -470,7 +557,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Blocker) {
+                                        if (c.id === selection[0] && c instanceof Blocker) {
                                             c.diameter = val;
                                             return c;
                                         }
@@ -491,7 +578,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Blocker) {
+                                        if (c.id === selection[0] && c instanceof Blocker) {
                                             c.thickness = val;
                                             return c;
                                         }
@@ -520,7 +607,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Mirror) {
+                                        if (c.id === selection[0] && c instanceof Mirror) {
                                             c.diameter = val;
                                             return c;
                                         }
@@ -541,7 +628,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Mirror) {
+                                        if (c.id === selection[0] && c instanceof Mirror) {
                                             c.thickness = val;
                                             return c;
                                         }
@@ -569,7 +656,7 @@ export const Inspector: React.FC = () => {
                                     setLocalLensType(type);
                                     if (selectedComponent instanceof SphericalLens) {
                                         const newComponents = components.map(c => {
-                                            if (c.id === selection && c instanceof SphericalLens) {
+                                            if (c.id === selection[0] && c instanceof SphericalLens) {
                                                 c.setFromLensType(type);
                                                 c.invalidateMesh();
                                                 return c;
@@ -591,7 +678,7 @@ export const Inspector: React.FC = () => {
                                 <option value="meniscus-neg">Meniscus (−)</option>
                             </select>
                         </div>
-                        
+
                         {/* Primary Controls — all scrubbable */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                             <ScrubInput
@@ -635,7 +722,7 @@ export const Inspector: React.FC = () => {
                                 title="Index of Refraction (1.0 = air, 1.5 = BK7, 1.7 = Lanthanum Crown)"
                             />
                         </div>
-                        
+
                         {/* Surface Radii — scrubbable */}
                         <div style={{ borderTop: '1px solid #333', paddingTop: 8 }}>
                             <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Surface Radii (drag labels ↔ to scrub)</label>
@@ -672,8 +759,8 @@ export const Inspector: React.FC = () => {
                             <select
                                 value={
                                     Math.abs(parseFloat(localApexAngle) - 60) < 0.5 ? 'equilateral' :
-                                    Math.abs(parseFloat(localApexAngle) - 90) < 0.5 ? 'right-angle' :
-                                    Math.abs(parseFloat(localApexAngle) - 45) < 0.5 ? '45-degree' : 'custom'
+                                        Math.abs(parseFloat(localApexAngle) - 90) < 0.5 ? 'right-angle' :
+                                            Math.abs(parseFloat(localApexAngle) - 45) < 0.5 ? '45-degree' : 'custom'
                                 }
                                 onChange={(e) => {
                                     const type = e.target.value;
@@ -683,7 +770,7 @@ export const Inspector: React.FC = () => {
                                     setLocalApexAngle(String(angle));
                                     if (selectedComponent instanceof PrismLens) {
                                         const newComponents = components.map(c => {
-                                            if (c.id === selection && c instanceof PrismLens) {
+                                            if (c.id === selection[0] && c instanceof PrismLens) {
                                                 c.apexAngle = angle * Math.PI / 180;
                                                 c.invalidateMesh();
                                                 return c;
@@ -711,7 +798,7 @@ export const Inspector: React.FC = () => {
                                     const deg = parseFloat(v);
                                     if (isNaN(deg) || deg <= 0 || deg >= 180) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof PrismLens) {
+                                        if (c.id === selection[0] && c instanceof PrismLens) {
                                             c.apexAngle = deg * Math.PI / 180;
                                             c.invalidateMesh();
                                             return c;
@@ -734,7 +821,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val < 1.0 || val > 3.0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof PrismLens) {
+                                        if (c.id === selection[0] && c instanceof PrismLens) {
                                             c.ior = val;
                                             return c;
                                         }
@@ -757,7 +844,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof PrismLens) {
+                                        if (c.id === selection[0] && c instanceof PrismLens) {
                                             c.height = val;
                                             c.invalidateMesh();
                                             return c;
@@ -779,7 +866,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof PrismLens) {
+                                        if (c.id === selection[0] && c instanceof PrismLens) {
                                             c.width = val;
                                             c.invalidateMesh();
                                             return c;
@@ -809,7 +896,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val === 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof IdealLens) {
+                                        if (c.id === selection[0] && c instanceof IdealLens) {
                                             c.focalLength = val;
                                             return c;
                                         }
@@ -829,7 +916,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof IdealLens) {
+                                        if (c.id === selection[0] && c instanceof IdealLens) {
                                             c.apertureRadius = val;
                                             c.bounds.set(
                                                 new Vector3(-val, -val, -0.01),
@@ -862,7 +949,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Objective) {
+                                        if (c.id === selection[0] && c instanceof Objective) {
                                             c.magnification = val;
                                             c.recalculate();
                                             return c;
@@ -884,7 +971,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Objective) {
+                                        if (c.id === selection[0] && c instanceof Objective) {
                                             c.NA = val;
                                             c.recalculate();
                                             return c;
@@ -907,7 +994,7 @@ export const Inspector: React.FC = () => {
                                         const val = parseFloat(e.target.value);
                                         setLocalObjImmersion(e.target.value);
                                         const newComponents = components.map(c => {
-                                            if (c.id === selection && c instanceof Objective) {
+                                            if (c.id === selection[0] && c instanceof Objective) {
                                                 c.immersionIndex = val;
                                                 c.recalculate();
                                                 return c;
@@ -940,7 +1027,7 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection && c instanceof Objective) {
+                                        if (c.id === selection[0] && c instanceof Objective) {
                                             c.workingDistance = val;
                                             return c;
                                         }
@@ -966,14 +1053,14 @@ export const Inspector: React.FC = () => {
                         {/* Wavelength Slider */}
                         <div style={{ marginBottom: 12 }}>
                             <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 6 }}>
-                                Wavelength: {localWavelength} nm 
+                                Wavelength: {localWavelength} nm
                                 {!isVisibleSpectrum(localWavelength) && <span style={{ color: '#888' }}> (IR/UV)</span>}
                             </label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input 
-                                    type="range" 
-                                    min="200" 
-                                    max="1000" 
+                                <input
+                                    type="range"
+                                    min="200"
+                                    max="1000"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {
@@ -996,12 +1083,12 @@ export const Inspector: React.FC = () => {
                                 }} />
                             </div>
                         </div>
-                        
+
                         {/* Beam Radius */}
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Beam Radius (mm)</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 value={localBeamRadius}
                                 onChange={(e) => setLocalBeamRadius(e.target.value)}
                                 onBlur={commitLaserParams}
@@ -1018,7 +1105,7 @@ export const Inspector: React.FC = () => {
                         <div style={{ marginBottom: 8 }}>
                             <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
                                 Mode: {(selectedComponent as Waveplate).waveplateMode === 'half' ? 'λ/2 Plate' :
-                                       (selectedComponent as Waveplate).waveplateMode === 'quarter' ? 'λ/4 Plate' : 'Linear Polarizer'}
+                                    (selectedComponent as Waveplate).waveplateMode === 'quarter' ? 'λ/4 Plate' : 'Linear Polarizer'}
                             </label>
                         </div>
                         <div style={{ marginBottom: 8 }}>
@@ -1047,17 +1134,21 @@ export const Inspector: React.FC = () => {
 
                 {/* Card Viewer: E&M beam cross-section + polarization */}
                 {selectedComponent instanceof Card && (
-                    <CardViewer card={selectedComponent as Card} />
+                    <CardViewerWithPin
+                        card={selectedComponent as Card}
+                        pinnedIds={pinnedIds}
+                        setPinnedIds={setPinnedIds}
+                    />
                 )}
 
                 <div style={{ fontSize: '11px', color: '#666', marginTop: 5 }}>
-                    ID: {selectedComponent.id.substring(0,8)}
+                    ID: {selectedComponent.id.substring(0, 8)}
                 </div>
 
-                <button 
+                <button
                     onClick={() => {
-                        setComponents(components.filter(c => c.id !== selection));
-                        setSelection(null);
+                        setComponents(components.filter(c => c.id !== selection[0]));
+                        setSelection([]);
                     }}
                     style={deleteButtonStyle}
                 >

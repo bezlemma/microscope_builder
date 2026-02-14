@@ -16,6 +16,7 @@ export abstract class OpticalComponent implements Surface {
     declare worldToLocal: Matrix4;
     declare localToWorld: Matrix4;
     declare bounds: Box3; // Local bounds
+    version: number = 0; // Increments on every mutation — used by React to detect changes on mutable objects
 
     constructor(name: string = "Unnamed Component") {
         this.id = uuidv4();
@@ -31,11 +32,13 @@ export abstract class OpticalComponent implements Surface {
     setPosition(x: number, y: number, z: number) {
         this.position.set(x, y, z);
         this.updateMatrices();
+        this.version++;
     }
 
     setRotation(x: number, y: number, z: number) {
         this.rotation.setFromEuler(new Euler(x, y, z));
         this.updateMatrices();
+        this.version++;
     }
 
     updateMatrices() {
@@ -56,10 +59,10 @@ export abstract class OpticalComponent implements Surface {
         const rayLocalOrigin = cleanVec(rayWorld.origin.clone().applyMatrix4(this.worldToLocal));
         const rayLocalDir = cleanVec(rayWorld.direction.clone().transformDirection(this.worldToLocal)).normalize();
 
-        const rayLocal: Ray = { 
-            ...rayWorld, 
-            origin: rayLocalOrigin, 
-            direction: rayLocalDir 
+        const rayLocal: Ray = {
+            ...rayWorld,
+            origin: rayLocalOrigin,
+            direction: rayLocalDir
         };
 
         const hitLocal = this.intersect(rayLocal);
@@ -68,7 +71,7 @@ export abstract class OpticalComponent implements Surface {
             // Transform hit back to world
             const pointWorld = hitLocal.point.clone().applyMatrix4(this.localToWorld);
             const normalWorld = hitLocal.normal.clone().transformDirection(this.localToWorld).normalize();
-            
+
             // Re-calculate t in world space (distance might scale if we had scaling, but we assume scale=1)
             const tWorld = pointWorld.distanceTo(rayWorld.origin);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
 import { componentsAtom, rayConfigAtom, selectionAtom } from '../state/store';
@@ -19,46 +19,48 @@ import { PointSource } from '../physics/components/PointSource';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { RayVisualizer } from './RayVisualizer';
-import { BeamEnvelopeVisualizer } from './BeamEnvelopeVisualizer';
+// BeamEnvelopeVisualizer import removed — Gaussian tubes disabled
+import { EFieldVisualizer } from './EFieldVisualizer';
 import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
 import { Draggable } from './Draggable';
 
 
 // Visualization components
 export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* Transparent Housing - Glassy */}
-             <mesh rotation={[Math.PI / 2, 0, 0]}> 
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
                 <cylinderGeometry args={[8, 8, 20, 32]} />
-                 <meshPhysicalMaterial 
-                    color="#ffffff" 
-                    transmission={0.99} 
-                    opacity={0.15} 
-                    transparent 
+                <meshPhysicalMaterial
+                    color="#ffffff"
+                    transmission={0.99}
+                    opacity={0.15}
+                    transparent
                     depthWrite={false}
-                    roughness={0} 
+                    roughness={0}
                     metalness={0.05}
                     side={DoubleSide}
                 />
             </mesh>
-             {/* Grip Ring - Centered or towards rear */}
-             <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -5, 0]}>
-                 <cylinderGeometry args={[8.2, 8.2, 5, 32]} />
-                 <meshStandardMaterial color="#444" metalness={0.5} roughness={0.7} />
-             </mesh>
-             
+            {/* Grip Ring - Centered or towards rear */}
+            <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -5, 0]}>
+                <cylinderGeometry args={[8.2, 8.2, 5, 32]} />
+                <meshStandardMaterial color="#444" metalness={0.5} roughness={0.7} />
+            </mesh>
+
             {isSelected && (
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
-                     <cylinderGeometry args={[8.5, 8.5, 20.5, 32]} />
-                     <meshBasicMaterial color="#64ffda" transparent opacity={0.3} wireframe />
+                    <cylinderGeometry args={[8.5, 8.5, 20.5, 32]} />
+                    <meshBasicMaterial color="#64ffda" transparent opacity={0.3} wireframe />
                 </mesh>
             )}
         </group>
@@ -67,22 +69,22 @@ export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) 
 
 // Sample Visualizer (Sample Holder)
 export const SampleVisualizer = ({ component }: { component: Sample }) => {
-    const [, setSelection] = useAtom(selectionAtom);
-    
+
+
     // Frame Dimensions
     const outerSize = 40;
     const innerSize = 30;
     const thickness = 2;
     const frameWidth = (outerSize - innerSize) / 2; // 5mm
-    
+
     // Helpers
     const offset = outerSize / 2 - frameWidth / 2; // 17.5
-    
+
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* Detailed Hollow Frame */}
             <group>
@@ -96,13 +98,13 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     <boxGeometry args={[outerSize, frameWidth, thickness]} />
                     <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                 </mesh>
-                 {/* Left Bar */}
+                {/* Left Bar */}
                 <mesh position={[-offset, 0, 0]}>
                     <boxGeometry args={[frameWidth, innerSize, thickness]} />
                     <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                 </mesh>
                 {/* Right Bar */}
-                 <mesh position={[offset, 0, 0]}>
+                <mesh position={[offset, 0, 0]}>
                     <boxGeometry args={[frameWidth, innerSize, thickness]} />
                     <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                 </mesh>
@@ -110,8 +112,8 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 
             {/* Glass Pane - Hollow effect */}
             <mesh position={[0, 0, 0]}>
-                 <boxGeometry args={[innerSize, innerSize, 0.5]} />
-                 <meshPhysicalMaterial 
+                <boxGeometry args={[innerSize, innerSize, 0.5]} />
+                <meshPhysicalMaterial
                     color="#ffffff"
                     transmission={0.99}
                     opacity={0.1}
@@ -119,7 +121,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     roughness={0}
                     metalness={0.0}
                     depthWrite={false} // Prevent sorting issues with other glass components?
-                 />
+                />
             </mesh>
 
             {/* Mickey Mouse Geometry inside the window */}
@@ -144,8 +146,8 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 };
 
 export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
     const a = component.apertureRadius;
     const wd = component.workingDistance;
 
@@ -153,10 +155,10 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
         new Float32Array([0, -a, 0, 0, a, 0]), [a]);
 
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* Vertical line at principal plane */}
             <line>
@@ -181,8 +183,8 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
             {/* Selection highlight */}
             {isSelected && (
                 <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -wd / 2]}>
-                     <cylinderGeometry args={[a * 1.3, a * 1.3, wd + 2, 16]} />
-                     <meshBasicMaterial color="#b388ff" transparent opacity={0.15} wireframe />
+                    <cylinderGeometry args={[a * 1.3, a * 1.3, wd + 2, 16]} />
+                    <meshBasicMaterial color="#b388ff" transparent opacity={0.15} wireframe />
                 </mesh>
             )}
         </group>
@@ -190,47 +192,72 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
 };
 
 export const CameraVisualizer = ({ component }: { component: Camera }) => {
-    const [, setSelection] = useAtom(selectionAtom);
-    const width = 25; 
+
+    const width = 25;
     const height = 25;
     const depth = 50;
 
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
-             {/* Camera Body (Box) - centered */}
-             <mesh position={[0, 0, 0]}> 
+            {/* Camera Body (Box) - centered */}
+            <mesh position={[0, 0, 0]}>
                 <boxGeometry args={[width, height, depth]} />
                 <meshStandardMaterial color="#333" metalness={0.6} roughness={0.4} />
-             </mesh>
-             
-             {/* Sensor Face (Blue) - at front of centered body */}
-             <mesh position={[0, 0, depth/2 + 0.1]}>
-                 <planeGeometry args={[width * 0.8, height * 0.8]} />
-                 <meshStandardMaterial color="#224" metalness={0.9} roughness={0.1} />
-             </mesh>
+            </mesh>
+
+            {/* Sensor Face (Blue) - at front of centered body */}
+            <mesh position={[0, 0, depth / 2 + 0.1]}>
+                <planeGeometry args={[width * 0.8, height * 0.8]} />
+                <meshStandardMaterial color="#224" metalness={0.9} roughness={0.1} />
+            </mesh>
         </group>
     );
 };
 export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
-    const [, setSelection] = useAtom(selectionAtom);
-    const radius = component.diameter / 2; 
+
+    const radius = component.diameter / 2;
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[0, 0, Math.PI/2]}>
+            <mesh rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 {/* Shiny Metric Material */}
-                <meshPhysicalMaterial 
-                    color="#ffffff" 
-                    metalness={0.95} 
-                    roughness={0.05} 
+                <meshPhysicalMaterial
+                    color="#ffffff"
+                    metalness={0.95}
+                    roughness={0.05}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.05}
+                />
+            </mesh>
+        </group>
+    );
+};
+
+export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter }) => {
+
+    const radius = component.diameter / 2;
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                <meshPhysicalMaterial
+                    color="#88ccff"
+                    metalness={0.3}
+                    roughness={0.1}
+                    transparent={true}
+                    opacity={0.6}
                     clearcoat={1.0}
                     clearcoatRoughness={0.05}
                 />
@@ -240,15 +267,15 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
 };
 
 export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     const radius = component.diameter / 2;
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[0, 0, Math.PI/2]}>
+            <mesh rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 <meshStandardMaterial color="#222" roughness={0.8} />
             </mesh>
@@ -257,7 +284,7 @@ export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
 };
 
 export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     const r = component.apertureRadius;
     const modeColors: Record<string, string> = {
         'half': '#6a5acd',      // slate blue for λ/2
@@ -269,53 +296,67 @@ export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => 
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             <mesh rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[r, r, 1.5, 32]} />
                 <meshStandardMaterial color={color} transparent opacity={0.7} roughness={0.3} />
             </mesh>
-            {/* Fast axis indicator line */}
-            <mesh rotation={[0, 0, component.fastAxisAngle]}>
-                <boxGeometry args={[0.5, r * 2 * 0.8, 0.3]} />
-                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.3} />
+            {/* Fast axis arc indicators — two small arcs on opposite sides of rim.
+                Ring default plane = XY (normal Z). Cylinder face = YZ plane (normal X).
+                Euler XYZ intrinsic: [0, π/2, fastAxisAngle]
+                  Step 1: 0 around X (no-op)
+                  Step 2: π/2 around Y → ring normal Z maps to X (ring now in YZ plane) ✓
+                  Step 3: fastAxisAngle around new Z'' = beam axis X → rotates within face */}
+            <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
+                <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
+                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
+            </mesh>
+            <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
+                <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, -Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
+                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
             </mesh>
         </group>
     );
 };
 
 export const CardVisualizer = ({ component }: { component: Card }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* White Screen */}
             <mesh>
-                <boxGeometry args={[component.width, component.height, 1]} /> 
+                <boxGeometry args={[component.width, component.height, 1]} />
                 <meshStandardMaterial color="white" roughness={0.5} emissive="white" emissiveIntensity={0.1} />
+            </mesh>
+            {/* Invisible hitbox for easier selection — extends along beam axis */}
+            <mesh>
+                <boxGeometry args={[component.width, component.height, 10]} />
+                <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} />
             </mesh>
         </group>
     );
 };
 
 export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
-    
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+
     // Safety check for malformed components
     if (!component || !component.rotation || !component.position) return null;
 
     // Safety defaults
-    const aperture = component.apertureRadius || 10; 
+    const aperture = component.apertureRadius || 10;
     const thickness = component.thickness || 2;
-    
+
     // Get Radii (Asymmetric support)
     let R1 = 1e9; // Default flat
     let R2 = -1e9;
-    
+
     try {
         if (typeof component.getRadii === 'function') {
             const r = component.getRadii();
@@ -337,36 +378,37 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     // Generate profile using the SAME function as the physics mesh — single source of truth
     const profilePoints = useMemo(() => {
         const profile = SphericalLens.generateProfile(R1, R2, aperture, thickness, 32);
-        
+
         // Safety: ensure at least 2 points to avoid Lathe crash
         if (profile.length < 2) {
             const frontApex = -thickness / 2;
             const backApex = thickness / 2;
             return [new Vector2(0, frontApex), new Vector2(aperture, frontApex), new Vector2(aperture, backApex), new Vector2(0, backApex)];
         }
-        
+
         return profile;
     }, [aperture, thickness, R1, R2]);
 
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* Lens body - LatheGeometry for accurate spherical cap profile */}
             {/* Rotate Lathe (Y-axis symmetry) to Optical Axis (Z-axis) */}
             <mesh rotation={[Math.PI / 2, 0, 0]}>
                 <latheGeometry args={[profilePoints, 32]} />
-                <meshPhysicalMaterial 
+                <meshPhysicalMaterial
                     color={component.ior > 1.55 ? "#88ffee" : "#aaddff"}
-                    transmission={isSelected ? 0.85 : 0.95} 
+                    transmission={isSelected ? 0.85 : 0.95}
                     opacity={isSelected ? 0.6 : 0.4}
                     transparent
-                    roughness={0} 
+                    roughness={0}
                     metalness={0}
                     ior={component.ior || 1.5}
                     side={DoubleSide}
+                    depthWrite={false}
                     emissive={isSelected ? "#64ffda" : "#000000"}
                     emissiveIntensity={isSelected ? 0.15 : 0}
                 />
@@ -376,42 +418,42 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
 };
 
 export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
-             {/* Laser Box Body - centered */}
-             <mesh position={[0, 0, 0]}> 
+            {/* Laser Box Body - centered */}
+            <mesh position={[0, 0, 0]}>
                 <boxGeometry args={[50, 25, 25]} />
                 <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
-             </mesh>
-             {/* Aperture Ring - at emission end (+X) */}
-             <mesh position={[27, 0, 0]} rotation={[0, 0, Math.PI/2]}>
-                 <cylinderGeometry args={[4, 4, 4, 16]} />
-                 <meshStandardMaterial color="#666" />
-             </mesh>
-             {/* Emission Point */}
-             <mesh position={[29, 0, 0]}>
-                 <sphereGeometry args={[1, 16, 16]} />
-                 <meshBasicMaterial color="lime" />
-             </mesh>
+            </mesh>
+            {/* Aperture Ring - at emission end (+X) */}
+            <mesh position={[27, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[4, 4, 4, 16]} />
+                <meshStandardMaterial color="#666" />
+            </mesh>
+            {/* Emission Point */}
+            <mesh position={[29, 0, 0]}>
+                <sphereGeometry args={[1, 16, 16]} />
+                <meshBasicMaterial color="lime" />
+            </mesh>
         </group>
     );
 };
 
 // Point Source Visualizer - for demonstrating infinity correction
 export const PointSourceVisualizer = ({ component }: { component: PointSource }) => {
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const isSelected = selection === component.id;
-    
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+
     return (
-        <group 
-            position={[component.position.x, component.position.y, component.position.z]} 
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             {/* Glowing point source - small sphere */}
             <mesh>
@@ -467,7 +509,7 @@ const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
 
 // Cylindrical Lens Visualizer — curved in Y, flat in X, matching physics profile
 export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     if (!component || !component.rotation || !component.position) return null;
 
     const geometry = useMemo(() => {
@@ -599,7 +641,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
@@ -609,6 +651,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
                     transparent
                     roughness={0}
                     side={2}
+                    depthWrite={false}
                 />
             </mesh>
         </group>
@@ -617,7 +660,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
 
 // Prism Visualizer — triangular cross-section extruded along X
 export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-    const [, setSelection] = useAtom(selectionAtom);
+
     if (!component || !component.rotation || !component.position) return null;
 
     const halfAngle = component.apexAngle / 2;
@@ -632,13 +675,13 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
         // Vertices are duplicated per face so each face has its own normals
         // (sharp edges, no smooth interpolation across different faces)
         const positions = [
-            -halfW,ay,az, -halfW,bly,blz, -halfW,bry,brz,           // 0-2:  left cap
-            halfW,ay,az, halfW,bly,blz, halfW,bry,brz,              // 3-5:  right cap
-            -halfW,ay,az, halfW,ay,az, -halfW,bly,blz, halfW,bly,blz, // 6-9:  front face
-            -halfW,ay,az, halfW,ay,az, -halfW,bry,brz, halfW,bry,brz, // 10-13: back face
-            -halfW,bly,blz, halfW,bly,blz, -halfW,bry,brz, halfW,bry,brz, // 14-17: base
+            -halfW, ay, az, -halfW, bly, blz, -halfW, bry, brz,           // 0-2:  left cap
+            halfW, ay, az, halfW, bly, blz, halfW, bry, brz,              // 3-5:  right cap
+            -halfW, ay, az, halfW, ay, az, -halfW, bly, blz, halfW, bly, blz, // 6-9:  front face
+            -halfW, ay, az, halfW, ay, az, -halfW, bry, brz, halfW, bry, brz, // 10-13: back face
+            -halfW, bly, blz, halfW, bly, blz, -halfW, bry, brz, halfW, bry, brz, // 14-17: base
         ];
-        const indices = [0,2,1, 3,4,5, 6,8,7, 7,8,9, 10,11,12, 11,13,12, 14,15,16, 15,17,16];
+        const indices = [0, 2, 1, 3, 4, 5, 6, 8, 7, 7, 8, 9, 10, 11, 12, 11, 13, 12, 14, 15, 16, 15, 17, 16];
 
         // Compute flat per-face normals (NOT computeVertexNormals which averages)
         // Front face: edge from apex → baseLeft, normal = perpendicular in YZ plane
@@ -653,11 +696,11 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
 
         // Per-vertex normals: same normal for all verts of each face
         const normals = [
-            -1,0,0, -1,0,0, -1,0,0,            // left cap
-             1,0,0,  1,0,0,  1,0,0,             // right cap
-            0,fnY,fnZ, 0,fnY,fnZ, 0,fnY,fnZ, 0,fnY,fnZ,  // front face
-            0,bnY,bnZ, 0,bnY,bnZ, 0,bnY,bnZ, 0,bnY,bnZ,  // back face
-            0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,     // base
+            -1, 0, 0, -1, 0, 0, -1, 0, 0,            // left cap
+            1, 0, 0, 1, 0, 0, 1, 0, 0,             // right cap
+            0, fnY, fnZ, 0, fnY, fnZ, 0, fnY, fnZ, 0, fnY, fnZ,  // front face
+            0, bnY, bnZ, 0, bnY, bnZ, 0, bnY, bnZ, 0, bnY, bnZ,  // back face
+            0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,     // base
         ];
 
         const geo = new BufferGeometry();
@@ -671,7 +714,7 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); setSelection(component.id); }}
+            onClick={(e) => { e.stopPropagation(); }}
         >
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
@@ -681,6 +724,7 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
                     transparent
                     roughness={0}
                     side={2}
+                    depthWrite={false}
                 />
             </mesh>
         </group>
@@ -693,37 +737,72 @@ export const OpticalTable: React.FC = () => {
     const [rays, setRays] = useState<Ray[][]>([]);
     const [beamSegments, setBeamSegments] = useState<GaussianBeamSegment[][]>([]);
 
+    // ─── Optics fingerprint: changes only when non-Card components change ───
+    // Cards are passive detectors and don't affect the optical path, so moving
+    // them should NOT trigger the expensive Solver1/Solver2 re-computation.
+    const opticsFingerprint = useMemo(() => {
+        if (!components) return '';
+        return components
+            .filter(c => !(c instanceof Card))
+            .map(c => {
+                // Include position, rotation, AND optical properties in the fingerprint
+                // so changing wavelength, IOR, etc. triggers a re-solve
+                const base = `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}`;
+                const props: string[] = [];
+                if ('wavelength' in c) props.push(`wl=${(c as any).wavelength}`);
+                if ('beamRadius' in c) props.push(`br=${(c as any).beamRadius}`);
+                if ('beamWaist' in c) props.push(`bw=${(c as any).beamWaist}`);
+                if ('power' in c) props.push(`pw=${(c as any).power}`);
+                if ('ior' in c) props.push(`ior=${(c as any).ior}`);
+                if ('curvature' in c) props.push(`cv=${(c as any).curvature}`);
+                if ('aperture' in c) props.push(`ap=${(c as any).aperture}`);
+                if ('thickness' in c) props.push(`th=${(c as any).thickness}`);
+                return props.length > 0 ? `${base}:${props.join(',')}` : base;
+            })
+            .join('|');
+    }, [components]);
+
+    // Refs to hold expensive solver results for card sampling effect
+    const solverPathsRef = useRef<Ray[][]>([]);
+    const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
+
     useEffect(() => {
         if (!components) return;
 
+        // Clear card hits before each trace to prevent stale data accumulation
+        const cardsToReset = components.filter(c => c instanceof Card) as Card[];
+        for (const card of cardsToReset) {
+            card.hits = [];
+        }
+
         const solver = new Solver1(components);
-        
+
         // Find ALL source components (support multiple lasers and point sources)
         const laserComps = components.filter(c => c instanceof Laser) as Laser[];
         const pointSourceComps = components.filter(c => c instanceof PointSource) as PointSource[];
-        
+
         const sourceRays: Ray[] = [];
-        
+
         // Generate rays from every Laser
         for (const laserComp of laserComps) {
             let origin = laserComp.position.clone();
-            const direction = new Vector3(1,0,0).applyQuaternion(laserComp.rotation).normalize();
-            
+            const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
+
             // Offset origin slightly so it starts "outside" the box 
             const offset = direction.clone().multiplyScalar(5);
             origin.add(offset);
-            
+
             const laserWavelength = laserComp.wavelength * 1e-9;
             const beamRadius = laserComp.beamRadius;
-            
+
             // Central Ray (peak of Gaussian profile)
             sourceRays.push({
                 origin: origin.clone(),
                 direction: direction.clone(),
-                wavelength: laserWavelength, intensity: laserComp.power, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                wavelength: laserWavelength, intensity: laserComp.power, polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } }, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
                 isMainRay: true, sourceId: laserComp.id
             });
-            
+
             // Hierarchical ray distribution using binary subdivision:
             //   Ring 0: 24 rays at full beam radius (marginal rays)
             //   Ring 1+: 12 rays each at radii that fill gaps via binary subdivision
@@ -732,7 +811,7 @@ export const OpticalTable: React.FC = () => {
             const totalRays = Math.max(1, rayConfig.rayCount);
             const FIRST_RING_COUNT = Math.min(24, totalRays);
             const INNER_RING_COUNT = 12;
-            
+
             // Build radius fractions via breadth-first binary subdivision:
             // Level 0: [1/2]  Level 1: [1/4, 3/4]  Level 2: [1/8, 3/8, 5/8, 7/8] ...
             const radiusFractions: number[] = [1]; // ring 0 = marginal (full radius)
@@ -744,25 +823,25 @@ export const OpticalTable: React.FC = () => {
                 }
                 subdivLevel++;
             }
-            
+
             // Basis Vectors for the aperture plane
-            const up = new Vector3(0, 1, 0); 
+            const up = new Vector3(0, 1, 0);
             if (Math.abs(direction.dot(up)) > 0.9) {
-                 up.set(0, 0, 1); 
+                up.set(0, 0, 1);
             }
             const right = new Vector3().crossVectors(direction, up).normalize();
             const trueUp = new Vector3().crossVectors(right, direction).normalize();
-            
+
             let raysPlaced = 0;
             let ringIndex = 0;
             while (raysPlaced < totalRays && ringIndex < radiusFractions.length) {
                 const ringRadius = beamRadius * radiusFractions[ringIndex];
                 const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
                 const raysThisRing = Math.min(raysForThisRing, totalRays - raysPlaced);
-                
+
                 // Angular offset per ring to avoid 2D line overlap
                 const angularOffset = ringIndex * Math.PI / 7; // golden-ish rotation
-                
+
                 for (let i = 0; i < raysThisRing; i++) {
                     const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
 
@@ -773,11 +852,11 @@ export const OpticalTable: React.FC = () => {
                     // Gaussian TEM00 profile: I(r) = exp(-2(r/w)²)
                     const rNorm = radiusFractions[ringIndex]; // 0..1
                     const gaussIntensity = Math.exp(-2 * rNorm * rNorm);
-                    
+
                     sourceRays.push({
                         origin: origin.clone().add(ringOffset),
                         direction: direction.clone().normalize(),
-                        wavelength: laserWavelength, intensity: gaussIntensity, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
+                        wavelength: laserWavelength, intensity: gaussIntensity, polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } }, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
                         sourceId: laserComp.id
                     });
                     raysPlaced++;
@@ -785,14 +864,14 @@ export const OpticalTable: React.FC = () => {
                 ringIndex++;
             }
         }
-        
+
         // Generate rays from every PointSource
         for (const pointSourceComp of pointSourceComps) {
             const psRays = pointSourceComp.generateRays();
             for (const r of psRays) {
                 sourceRays.push({
                     ...r,
-                    polarization: {x:{re:1,im:0},y:{re:0,im:0}},
+                    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
                     footprintRadius: 0,
                     coherenceMode: Coherence.Coherent,
                     sourceId: pointSourceComp.id
@@ -803,19 +882,15 @@ export const OpticalTable: React.FC = () => {
         const calculatedPaths = solver.trace(sourceRays);
 
         // Post-trace: detect beam splits via angle histogram population analysis.
-        // Exit angles from split-capable components (exitSurfaceId) are sorted,
-        // and the gaps between consecutive angles are analyzed statistically.
-        // If all gaps are similar (one population), no split is detected.
-        // Outlier gaps (IQR fence: Q3 + 1.5×IQR) indicate boundaries between
-        // distinct populations. For each population not already covered by the
-        // main ray, a synthetic center ray is spawned.
-        {
+        // Only needed when E&M solver is enabled — the branching path logic
+        // relies on marginal rays to detect population splits.
+        if (rayConfig.solver2Enabled) {
             const surviving = calculatedPaths.filter(p => {
                 if (p.length < 2) return false;
                 const last = p[p.length - 1];
                 return last.intensity > 0 && !last.terminationPoint;
             });
-            
+
             // Collect exit rays with exitSurfaceId (split-capable components only)
             type SplitEntry = { path: Ray[]; exitRay: Ray; angle: number; sourceId?: string };
             const allSplitCandidates: SplitEntry[] = [];
@@ -832,7 +907,7 @@ export const OpticalTable: React.FC = () => {
                     }
                 }
             }
-            
+
             // Group by source to prevent cross-laser contamination
             const splitBySource = new Map<string, SplitEntry[]>();
             for (const sc of allSplitCandidates) {
@@ -840,100 +915,199 @@ export const OpticalTable: React.FC = () => {
                 if (!splitBySource.has(key)) splitBySource.set(key, []);
                 splitBySource.get(key)!.push(sc);
             }
-            
+
             for (const [, splitCandidates] of splitBySource) {
-            if (splitCandidates.length >= 4) {
-                // Sort by exit angle
-                splitCandidates.sort((a, b) => a.angle - b.angle);
-                
-                // Compute consecutive angle gaps
-                const gaps: number[] = [];
-                for (let i = 1; i < splitCandidates.length; i++) {
-                    gaps.push(splitCandidates[i].angle - splitCandidates[i - 1].angle);
-                }
-                
-                // IQR-based outlier detection on gaps.
-                // A gap is a split boundary if it's a statistical outlier —
-                // this naturally distinguishes "one spread-out population" from
-                // "two distinct clusters" regardless of absolute angle scale.
-                const sortedGaps = [...gaps].sort((a, b) => a - b);
-                const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
-                const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
-                const iqr = q3 - q1;
-                // Median-based floor: when gaps are uniform (IQR ≈ 0), the raw
-                // fence collapses to Q3 and flags tiny variations as splits.
-                // Requiring 3× the median gap prevents false positives.
-                const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
-                const fence = Math.max(q3 + 1.5 * iqr, median * 3);
-                
-                const splitIndices: number[] = [];
-                for (let i = 0; i < gaps.length; i++) {
-                    if (gaps[i] > fence && gaps[i] > 0.01) {
-                        splitIndices.push(i + 1);
+                if (splitCandidates.length >= 4) {
+                    // Sort by exit angle
+                    splitCandidates.sort((a, b) => a.angle - b.angle);
+
+                    // Compute consecutive angle gaps
+                    const gaps: number[] = [];
+                    for (let i = 1; i < splitCandidates.length; i++) {
+                        gaps.push(splitCandidates[i].angle - splitCandidates[i - 1].angle);
                     }
-                }
-                
-                if (splitIndices.length > 0) {
-                    // Build population groups from split points
-                    const boundaries = [0, ...splitIndices, splitCandidates.length];
-                    const populations: SplitEntry[][] = [];
-                    for (let i = 0; i < boundaries.length - 1; i++) {
-                        const pop = splitCandidates.slice(boundaries[i], boundaries[i + 1]);
-                        if (pop.length > 0) populations.push(pop);
+
+                    // IQR-based outlier detection on gaps.
+                    // A gap is a split boundary if it's a statistical outlier —
+                    // this naturally distinguishes "one spread-out population" from
+                    // "two distinct clusters" regardless of absolute angle scale.
+                    const sortedGaps = [...gaps].sort((a, b) => a - b);
+                    const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
+                    const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
+                    const iqr = q3 - q1;
+                    // Median-based floor: when gaps are uniform (IQR ≈ 0), the raw
+                    // fence collapses to Q3 and flags tiny variations as splits.
+                    // Requiring 3× the median gap prevents false positives.
+                    const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
+                    const fence = Math.max(q3 + 1.5 * iqr, median * 3);
+
+                    const splitIndices: number[] = [];
+                    for (let i = 0; i < gaps.length; i++) {
+                        if (gaps[i] > fence && gaps[i] > 0.01) {
+                            splitIndices.push(i + 1);
+                        }
                     }
-                    
-                    // Identify the split component name from candidates' exitSurfaceId.
-                    // e.g. "Prism:front" → "Prism". Only match main-ray paths that
-                    // interact with this same component (prevents cross-laser contamination
-                    // when multiple lasers are on the table).
-                    const splitCompName = splitCandidates[0].exitRay.exitSurfaceId?.split(':')[0] ?? '';
-                    const mainPathMatchesSplitComp = (p: Ray[]) =>
-                        p.some(r => r.exitSurfaceId?.startsWith(splitCompName));
-                    
-                    // Find the main ray's exit angle (only from the matching component)
-                    let mainRayExitAngle: number | null = null;
-                    for (const p of calculatedPaths) {
-                        if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
-                            for (let i = p.length - 1; i >= 0; i--) {
-                                if (p[i].exitSurfaceId?.startsWith(splitCompName)) {
-                                    mainRayExitAngle = Math.atan2(
-                                        p[i].direction.y, p[i].direction.x
-                                    );
+
+                    if (splitIndices.length > 0) {
+                        // Build population groups from split points
+                        const boundaries = [0, ...splitIndices, splitCandidates.length];
+                        const populations: SplitEntry[][] = [];
+                        for (let i = 0; i < boundaries.length - 1; i++) {
+                            const pop = splitCandidates.slice(boundaries[i], boundaries[i + 1]);
+                            if (pop.length > 0) populations.push(pop);
+                        }
+
+                        // Identify the split component name from candidates' exitSurfaceId.
+                        // e.g. "Prism:front" → "Prism". Only match main-ray paths that
+                        // interact with this same component (prevents cross-laser contamination
+                        // when multiple lasers are on the table).
+                        const splitCompName = splitCandidates[0].exitRay.exitSurfaceId?.split(':')[0] ?? '';
+                        const mainPathMatchesSplitComp = (p: Ray[]) =>
+                            p.some(r => r.exitSurfaceId?.startsWith(splitCompName));
+
+                        // Find the main ray's exit angle (only from the matching component)
+                        let mainRayExitAngle: number | null = null;
+                        for (const p of calculatedPaths) {
+                            if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
+                                for (let i = p.length - 1; i >= 0; i--) {
+                                    if (p[i].exitSurfaceId?.startsWith(splitCompName)) {
+                                        mainRayExitAngle = Math.atan2(
+                                            p[i].direction.y, p[i].direction.x
+                                        );
+                                        break;
+                                    }
+                                }
+                                if (mainRayExitAngle !== null) break;
+                            }
+                        }
+
+                        // Find which population the main ray belongs to
+                        let mainRayPopIdx = -1;
+                        if (mainRayExitAngle !== null) {
+                            for (let pi = 0; pi < populations.length; pi++) {
+                                const pop = populations[pi];
+                                const minA = pop[0].angle;
+                                const maxA = pop[pop.length - 1].angle;
+                                const margin = (maxA - minA) * 0.5 + 0.05;
+                                if (mainRayExitAngle >= minA - margin &&
+                                    mainRayExitAngle <= maxA + margin) {
+                                    mainRayPopIdx = pi;
                                     break;
                                 }
                             }
-                            if (mainRayExitAngle !== null) break;
                         }
-                    }
-                    
-                    // Find which population the main ray belongs to
-                    let mainRayPopIdx = -1;
-                    if (mainRayExitAngle !== null) {
-                        for (let pi = 0; pi < populations.length; pi++) {
-                            const pop = populations[pi];
-                            const minA = pop[0].angle;
-                            const maxA = pop[pop.length - 1].angle;
-                            const margin = (maxA - minA) * 0.5 + 0.05;
-                            if (mainRayExitAngle >= minA - margin &&
-                                mainRayExitAngle <= maxA + margin) {
-                                mainRayPopIdx = pi;
-                                break;
+
+                        // Only spawn synthetic center rays for uncovered populations
+                        const uncoveredPops = populations.filter((_, i) => i !== mainRayPopIdx);
+
+                        if (uncoveredPops.length > 0) {
+                            for (const pop of uncoveredPops) {
+                                // Find the most central ring ray in this population
+                                // and clone its full path as the white center line.
+                                // This preserves the correct physical path (laser → prism
+                                // internal → exit → infinity) instead of creating a
+                                // synthetic ray that starts inside the prism.
+                                const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
+                                const closest = pop.reduce((best, e) =>
+                                    Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
+                                );
+                                const syntheticPath = closest.path.map(
+                                    r => ({ ...r, isMainRay: true })
+                                );
+                                calculatedPaths.push(syntheticPath);
                             }
                         }
                     }
-                    
-                    // Only spawn synthetic center rays for uncovered populations
-                    const uncoveredPops = populations.filter((_, i) => i !== mainRayPopIdx);
-                    
-                    if (uncoveredPops.length > 0) {
-                        for (const pop of uncoveredPops) {
-                            // Find the most central ring ray in this population
-                            // and clone its full path as the white center line.
-                            // This preserves the correct physical path (laser → prism
-                            // internal → exit → infinity) instead of creating a
-                            // synthetic ray that starts inside the prism.
-                            const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
-                            const closest = pop.reduce((best, e) =>
+                }
+            } // end for splitBySource
+
+            // Fallback: ensure every population of boundary-terminating rays has a
+            // white center line. Fires for ANY ray that terminates in space (no
+            // further object hit), regardless of whether it passed through a prism,
+            // lens, or nothing. If populations are found that lack a main-ray path,
+            // the most central ring ray is cloned as white.
+            {
+                // Paths terminating in space: last ray has positive intensity and
+                // no interactionDistance (it went to infinity, not stopped by an object)
+                const boundaryPaths = calculatedPaths.filter(p => {
+                    if (p.length < 1) return false;
+                    const last = p[p.length - 1];
+                    return last.intensity > 0 && last.interactionDistance === undefined;
+                });
+
+                // Group by source — never mix rays from different lasers
+                const boundaryBySource = new Map<string, typeof boundaryPaths>();
+                for (const p of boundaryPaths) {
+                    const key = p[0].sourceId || '__unknown__';
+                    if (!boundaryBySource.has(key)) boundaryBySource.set(key, []);
+                    boundaryBySource.get(key)!.push(p);
+                }
+
+                for (const [, sourcePaths] of boundaryBySource) {
+                    if (sourcePaths.length >= 3) {
+                        type BEntry = { path: Ray[]; angle: number; isMain: boolean };
+                        const entries: BEntry[] = sourcePaths.map(p => ({
+                            path: p,
+                            angle: Math.atan2(
+                                p[p.length - 1].direction.y,
+                                p[p.length - 1].direction.x
+                            ),
+                            isMain: p[0].isMainRay === true
+                        }));
+                        entries.sort((a, b) => a.angle - b.angle);
+
+                        // IQR histogram on ALL terminal angles to find populations
+                        const gaps: number[] = [];
+                        for (let i = 1; i < entries.length; i++) {
+                            gaps.push(entries[i].angle - entries[i - 1].angle);
+                        }
+
+                        if (gaps.length >= 2) {
+                            const sortedGaps = [...gaps].sort((a, b) => a - b);
+                            const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
+                            const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
+                            const iqr = q3 - q1;
+                            // Median-based floor: prevents false splits when gaps are
+                            // nearly uniform (single wide population through a lens).
+                            const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
+                            const fence = Math.max(q3 + 1.5 * iqr, median * 3);
+
+                            // Identify split points (outlier gaps)
+                            const splitIndices: number[] = [];
+                            for (let i = 0; i < gaps.length; i++) {
+                                if (gaps[i] > fence && gaps[i] > 0.01) {
+                                    splitIndices.push(i + 1);
+                                }
+                            }
+
+                            // Build populations
+                            const bounds = [0, ...splitIndices, entries.length];
+                            const populations: BEntry[][] = [];
+                            for (let i = 0; i < bounds.length - 1; i++) {
+                                const pop = entries.slice(bounds[i], bounds[i + 1]);
+                                if (pop.length > 0) populations.push(pop);
+                            }
+
+                            // For each population, check if it has a white line
+                            for (const pop of populations) {
+                                const hasMain = pop.some(e => e.isMain);
+                                if (hasMain) continue;
+                                if (pop.length < 2) continue;
+
+                                // No white line — clone the most central ring ray as white
+                                const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
+                                const closest = pop.reduce((best, e) =>
+                                    Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
+                                );
+                                const syntheticPath = closest.path.map(
+                                    r => ({ ...r, isMainRay: true })
+                                );
+                                calculatedPaths.push(syntheticPath);
+                            }
+                        } else if (!entries.some(e => e.isMain)) {
+                            // Too few gaps for IQR but no main ray at all — single population
+                            const meanAngle = entries.reduce((s, e) => s + e.angle, 0) / entries.length;
+                            const closest = entries.reduce((best, e) =>
                                 Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
                             );
                             const syntheticPath = closest.path.map(
@@ -942,110 +1116,13 @@ export const OpticalTable: React.FC = () => {
                             calculatedPaths.push(syntheticPath);
                         }
                     }
-                }
-            }
-            } // end for splitBySource
-        }
+                } // end for boundaryBySource
 
-        // Fallback: ensure every population of boundary-terminating rays has a
-        // white center line. Fires for ANY ray that terminates in space (no
-        // further object hit), regardless of whether it passed through a prism,
-        // lens, or nothing. If populations are found that lack a main-ray path,
-        // the most central ring ray is cloned as white.
-        {
-            // Paths terminating in space: last ray has positive intensity and
-            // no interactionDistance (it went to infinity, not stopped by an object)
-            const boundaryPaths = calculatedPaths.filter(p => {
-                if (p.length < 1) return false;
-                const last = p[p.length - 1];
-                return last.intensity > 0 && last.interactionDistance === undefined;
-            });
-            
-            // Group by source — never mix rays from different lasers
-            const boundaryBySource = new Map<string, typeof boundaryPaths>();
-            for (const p of boundaryPaths) {
-                const key = p[0].sourceId || '__unknown__';
-                if (!boundaryBySource.has(key)) boundaryBySource.set(key, []);
-                boundaryBySource.get(key)!.push(p);
-            }
-            
-            for (const [, sourcePaths] of boundaryBySource) {
-            if (sourcePaths.length >= 3) {
-                type BEntry = { path: Ray[]; angle: number; isMain: boolean };
-                const entries: BEntry[] = sourcePaths.map(p => ({
-                    path: p,
-                    angle: Math.atan2(
-                        p[p.length - 1].direction.y,
-                        p[p.length - 1].direction.x
-                    ),
-                    isMain: p[0].isMainRay === true
-                }));
-                entries.sort((a, b) => a.angle - b.angle);
-                
-                // IQR histogram on ALL terminal angles to find populations
-                const gaps: number[] = [];
-                for (let i = 1; i < entries.length; i++) {
-                    gaps.push(entries[i].angle - entries[i - 1].angle);
-                }
-                
-                if (gaps.length >= 2) {
-                    const sortedGaps = [...gaps].sort((a, b) => a - b);
-                    const q1 = sortedGaps[Math.floor(sortedGaps.length * 0.25)];
-                    const q3 = sortedGaps[Math.floor(sortedGaps.length * 0.75)];
-                    const iqr = q3 - q1;
-                    // Median-based floor: prevents false splits when gaps are
-                    // nearly uniform (single wide population through a lens).
-                    const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
-                    const fence = Math.max(q3 + 1.5 * iqr, median * 3);
-                    
-                    // Identify split points (outlier gaps)
-                    const splitIndices: number[] = [];
-                    for (let i = 0; i < gaps.length; i++) {
-                        if (gaps[i] > fence && gaps[i] > 0.01) {
-                            splitIndices.push(i + 1);
-                        }
-                    }
-                    
-                    // Build populations
-                    const bounds = [0, ...splitIndices, entries.length];
-                    const populations: BEntry[][] = [];
-                    for (let i = 0; i < bounds.length - 1; i++) {
-                        const pop = entries.slice(bounds[i], bounds[i + 1]);
-                        if (pop.length > 0) populations.push(pop);
-                    }
-                    
-                    // For each population, check if it has a white line
-                    for (const pop of populations) {
-                        const hasMain = pop.some(e => e.isMain);
-                        if (hasMain) continue;
-                        if (pop.length < 2) continue;
-                        
-                        // No white line — clone the most central ring ray as white
-                        const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
-                        const closest = pop.reduce((best, e) =>
-                            Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
-                        );
-                        const syntheticPath = closest.path.map(
-                            r => ({ ...r, isMainRay: true })
-                        );
-                        calculatedPaths.push(syntheticPath);
-                    }
-                } else if (!entries.some(e => e.isMain)) {
-                    // Too few gaps for IQR but no main ray at all — single population
-                    const meanAngle = entries.reduce((s, e) => s + e.angle, 0) / entries.length;
-                    const closest = entries.reduce((best, e) =>
-                        Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
-                    );
-                    const syntheticPath = closest.path.map(
-                        r => ({ ...r, isMainRay: true })
-                    );
-                    calculatedPaths.push(syntheticPath);
-                }
-            }
-            } // end for boundaryBySource
-        }
+            } // end fallback split detection block
+        } // end solver2Enabled guard
 
         setRays(calculatedPaths);
+        solverPathsRef.current = calculatedPaths;
 
         // Run Solver 2: Gaussian beam propagation along main ray skeleton
         let beamSegs: GaussianBeamSegment[][] = [];
@@ -1058,64 +1135,143 @@ export const OpticalTable: React.FC = () => {
             }
         }
         setBeamSegments(beamSegs);
+        beamSegsRef.current = beamSegs;
 
-        // Populate Card beam profiles from Solver 2 data
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opticsFingerprint, rayConfig]);
+
+    // ─── Effect 2: Cheap card beam profile sampling ───
+    // Runs whenever ANY component changes (including card drags).
+    // Uses cached solver results — no physics re-computation.
+    useEffect(() => {
+        if (!components) return;
+
+        const beamSegs = beamSegsRef.current;
+        const solverPaths = solverPathsRef.current;
+
         const cardComps = components.filter(c => c instanceof Card) as Card[];
         for (const card of cardComps) {
-            card.beamProfile = null;
-            if (!rayConfig.solver2Enabled || beamSegs.length === 0) continue;
-            
-            // Find the beam segment closest to this card
-            let bestSeg: GaussianBeamSegment | null = null;
-            let bestDist = Infinity;
-            let bestZ = 0;
-            
-            for (const branch of beamSegs) {
-                for (const seg of branch) {
-                    // Check if card position projects onto this segment
-                    const toCard = card.position.clone().sub(seg.start);
-                    const segLen = seg.start.distanceTo(seg.end);
-                    const proj = toCard.dot(seg.direction);
-                    
-                    if (proj >= -1 && proj <= segLen + 1) {
-                        // Perpendicular distance to segment axis
-                        const along = seg.direction.clone().multiplyScalar(proj);
-                        const perpDist = toCard.clone().sub(along).length();
-                        
-                        if (perpDist < bestDist) {
-                            bestDist = perpDist;
-                            bestSeg = seg;
-                            bestZ = Math.max(0, Math.min(proj, segLen));
-                        }
+            card.beamProfiles = [];
+
+            const invQ = card.rotation.clone().conjugate();
+
+            // Collect ALL main rays that hit this card (not just the nearest)
+            const hitRays: { ray: Ray; hitLocalPoint: Vector3; t: number }[] = [];
+
+            for (const path of solverPaths) {
+                for (const ray of path) {
+                    if (!ray.isMainRay) continue;
+
+                    // Transform ray into card's local frame
+                    const localOrigin = ray.origin.clone().sub(card.position).applyQuaternion(invQ);
+                    const localDir = ray.direction.clone().applyQuaternion(invQ);
+
+                    // Card plane at local z=0
+                    if (Math.abs(localDir.z) < 1e-6) continue;
+                    const t = -localOrigin.z / localDir.z;
+                    if (t < 0.001) continue;
+
+                    // Respect interactionDistance
+                    if (ray.interactionDistance !== undefined && t > ray.interactionDistance + 0.1) continue;
+
+                    const hitPt = localOrigin.clone().add(localDir.clone().multiplyScalar(t));
+
+                    // Check card bounds
+                    if (Math.abs(hitPt.x) <= card.width / 2 && Math.abs(hitPt.y) <= card.height / 2) {
+                        hitRays.push({ ray, hitLocalPoint: hitPt, t });
                     }
                 }
             }
-            
-            if (bestSeg && bestDist < 50) {
-                // Sample beam at the card's Z position along this segment
+
+            if (hitRays.length === 0 || beamSegs.length === 0) continue;
+
+            // For each hitting ray, find the closest beam segment and create a profile
+            for (const { ray: mainHitRay, hitLocalPoint } of hitRays) {
+                let bestSeg: GaussianBeamSegment | null = null;
+                let bestDist = Infinity;
+                let bestZ = 0;
+
+                // Compute the world-space hit point for this specific ray
+                const worldHitPt = hitLocalPoint.clone().applyQuaternion(card.rotation).add(card.position);
+
+                // Find the beam segment closest to this ray's hit point (NOT card center)
+                for (const branch of beamSegs) {
+                    for (const seg of branch) {
+                        const toHit = worldHitPt.clone().sub(seg.start);
+                        const segLen = seg.start.distanceTo(seg.end);
+                        const proj = toHit.dot(seg.direction);
+
+                        if (proj >= -1 && proj <= segLen + 1) {
+                            const along = seg.direction.clone().multiplyScalar(proj);
+                            const perpDist = toHit.clone().sub(along).length();
+
+                            // Also check that this segment's direction roughly matches the ray
+                            const dirDot = Math.abs(seg.direction.dot(mainHitRay.direction.clone().normalize()));
+                            if (dirDot < 0.5) continue; // Wrong beam branch
+
+                            if (perpDist < bestDist) {
+                                bestDist = perpDist;
+                                bestSeg = seg;
+                                bestZ = Math.max(0, Math.min(proj, segLen));
+                            }
+                        }
+                    }
+                }
+
+                if (!bestSeg || bestDist >= 50) continue;
+
                 const wavelengthMm = bestSeg.wavelength * 1e3;
                 const qx = { re: bestSeg.qx_start.re + bestZ, im: bestSeg.qx_start.im };
                 const qy = { re: bestSeg.qy_start.re + bestZ, im: bestSeg.qy_start.im };
-                
-                // Compute beam radius from q: w = sqrt(-λ/(π·Im(1/q)))
-                const invQx = { re: qx.re / (qx.re*qx.re + qx.im*qx.im), im: -qx.im / (qx.re*qx.re + qx.im*qx.im) };
-                const invQy = { re: qy.re / (qy.re*qy.re + qy.im*qy.im), im: -qy.im / (qy.re*qy.re + qy.im*qy.im) };
-                
-                const wx = invQx.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQx.im)) : 10;
-                const wy = invQy.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQy.im)) : 10;
-                
-                // Get polarization from the main ray hitting this card
-                const mainHit = card.hits.find(h => h.ray.isMainRay);
-                const pol = mainHit?.ray.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } };
-                const phase = mainHit?.ray.opticalPathLength ?? 0;
-                
-                card.beamProfile = {
+
+                const invQx = { re: qx.re / (qx.re * qx.re + qx.im * qx.im), im: -qx.im / (qx.re * qx.re + qx.im * qx.im) };
+                const invQy = { re: qy.re / (qy.re * qy.re + qy.im * qy.im), im: -qy.im / (qy.re * qy.re + qy.im * qy.im) };
+
+                const beamWx = invQx.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQx.im)) : 10;
+                const beamWy = invQy.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQy.im)) : 10;
+
+                // Project beam frame wx/wy into card's local XY frame
+                const beamDir = bestSeg.direction.clone().normalize();
+                const worldZ = new Vector3(0, 0, 1);
+                let beamU = new Vector3().crossVectors(beamDir, worldZ);
+                if (beamU.length() < 0.01) {
+                    beamU = new Vector3().crossVectors(beamDir, new Vector3(1, 0, 0));
+                }
+                beamU.normalize();
+                const beamV = new Vector3().crossVectors(beamU, beamDir).normalize();
+
+                const cardLocalX = new Vector3(1, 0, 0).applyQuaternion(card.rotation);
+                const cardLocalY = new Vector3(0, 1, 0).applyQuaternion(card.rotation);
+
+                const ux = beamU.dot(cardLocalX);
+                const vx = beamV.dot(cardLocalX);
+                const uy = beamU.dot(cardLocalY);
+                const vy = beamV.dot(cardLocalY);
+
+                const wx = Math.sqrt(ux * ux * beamWx * beamWx + vx * vx * beamWy * beamWy);
+                const wy = Math.sqrt(uy * uy * beamWx * beamWx + vy * vy * beamWy * beamWy);
+
+                const pol = mainHitRay.polarization;
+                const phase = mainHitRay.opticalPathLength ?? 0;
+
+                // Compute beam tilt in card's local frame
+                // localDir.x / localDir.z and localDir.y / localDir.z give the tangent of the
+                // incidence angle in each transverse direction  (≈ sin θ for small angles)
+                const localDir2 = mainHitRay.direction.clone().applyQuaternion(invQ);
+                const tiltX = Math.abs(localDir2.z) > 1e-6 ? localDir2.x / Math.abs(localDir2.z) : 0;
+                const tiltY = Math.abs(localDir2.z) > 1e-6 ? localDir2.y / Math.abs(localDir2.z) : 0;
+
+                card.beamProfiles.push({
                     wx, wy,
                     wavelength: bestSeg.wavelength,
                     power: bestSeg.power,
                     polarization: pol,
-                    phase
-                };
+                    phase,
+                    centerX: hitLocalPoint.x,
+                    centerY: hitLocalPoint.y,
+                    tiltX,
+                    tiltY
+                });
             }
         }
 
@@ -1127,7 +1283,7 @@ export const OpticalTable: React.FC = () => {
                 let visual = null;
                 if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
                 else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
-                else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />; 
+                else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
                 else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
                 else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
                 else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
@@ -1139,7 +1295,8 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
                 else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
                 else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
-                
+                else if (c instanceof BeamSplitter) visual = <BeamSplitterVisualizer component={c} />;
+
                 if (visual) {
                     return (
                         <group key={c.id}>
@@ -1151,8 +1308,9 @@ export const OpticalTable: React.FC = () => {
                 }
                 return null;
             })}
-            {rayConfig.solver2Enabled && <BeamEnvelopeVisualizer beamSegments={beamSegments} />}
-            <RayVisualizer paths={rays} />
+            {/* BeamEnvelopeVisualizer removed — Gaussian tubes not useful in normal E&M view */}
+            {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
+            <RayVisualizer paths={rays} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
         </group>
     );
 };

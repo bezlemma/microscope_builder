@@ -29,14 +29,14 @@ export interface Ray {
     interactionDistance?: number; // Distance to intersection (if any)
     footprintRadius: number; // [mm]
     coherenceMode: Coherence;
-    
+
     // Quantum (Solver 5 support)
     entanglementId?: number;
-    
+
     // Solver 2 skeleton: marks the primary path for Gaussian beam propagation.
     // Only the first child ray (index 0) from each interaction inherits this flag.
     isMainRay?: boolean;
-    
+
     // Visualization: For thick components, the point where ray entered (front surface)
     // This allows the visualizer to draw: prev.origin → entryPoint → internalPath → origin → next
     entryPoint?: Vector3;
@@ -67,6 +67,7 @@ export interface HitRecord {
 
 export interface InteractionResult {
     rays: Ray[]; // Child rays spawned by interaction
+    passthrough?: boolean; // If true, the component is transparent — don't break the ray path
 }
 
 /**
@@ -90,7 +91,6 @@ export function childRay(parent: Ray, overrides: Partial<Ray>): Ray {
         internalPath: undefined,
         terminationPoint: undefined,
         interactionDistance: undefined,
-        isMainRay: undefined,
         exitSurfaceId: undefined,
         // Apply caller's overrides last — these win
         ...overrides

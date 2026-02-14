@@ -6,25 +6,25 @@ import { selectionAtom } from '../state/store';
 export const InfiniteTable: React.FC = () => {
   const [, setSelection] = useAtom(selectionAtom);
   // A very large plane to simulate infinity
-  const size = 10000; 
-  
+  const size = 10000;
+
   // Custom Shader for the Hole Pattern
   // Frags based on world position (or UV scaled)
   // UV 0..1 covers 'size' units.
   // We want holes every 25 units.
   // freq = size / 25.
-  
+
 
   return (
-    <mesh 
-        position={[0, 0, -25]} 
-        receiveShadow
-        onClick={() => setSelection(null)}
+    <mesh
+      position={[0, 0, -25]}
+      receiveShadow
+      onClick={() => setSelection([])}
     >
       {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
       <planeGeometry args={[size, size]} />
-      <meshStandardMaterial 
-        color="#333" 
+      <meshStandardMaterial
+        color="#333"
         roughness={0.8}
         metalness={0.2}
       >
@@ -35,7 +35,7 @@ export const InfiniteTable: React.FC = () => {
             let's just make a CanvasTexture or DataTexture and repeat it.
         */}
       </meshStandardMaterial>
-      
+
       {/* 
          Better approach for "Holes":
          A GridHelper is lines.
@@ -52,7 +52,7 @@ function TableHoleMaterial({ size }: { size: number }) {
   // Vertex Shader: Pass world pos or UV
   // Fragment Shader: dist = length(fract(vUv * repeat) - 0.5)
   // If dist < radius_fraction, color = black.
-  
+
   const vertexShader = `
     varying vec2 vUv;
     void main() {
@@ -94,7 +94,7 @@ function TableHoleMaterial({ size }: { size: number }) {
   `;
 
   return (
-    <shaderMaterial 
+    <shaderMaterial
       attach="material"
       vertexShader={vertexShader}
       fragmentShader={fragmentShader}
