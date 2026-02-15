@@ -15,11 +15,13 @@ import { Objective } from '../physics/components/Objective';
 import { ObjectiveCasing } from '../physics/components/ObjectiveCasing';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
-import { PointSource } from '../physics/components/PointSource';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { Aperture } from '../physics/components/Aperture';
+import { Filter } from '../physics/components/Filter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { RayVisualizer } from './RayVisualizer';
 // BeamEnvelopeVisualizer import removed — Gaussian tubes disabled
 import { EFieldVisualizer } from './EFieldVisualizer';
@@ -266,6 +268,99 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
     );
 };
 
+// Aperture Visualizer — black annular ring with visible opening
+export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
+    const outerR = component.housingDiameter / 2;
+    const innerR = component.openingDiameter / 2;
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Outer ring — dark housing */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[innerR, outerR, 48]} />
+                <meshStandardMaterial color="#1a1a1a" roughness={0.9} side={DoubleSide} />
+            </mesh>
+            {/* Invisible hitbox */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0, outerR, 32]} />
+                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            </mesh>
+        </group>
+    );
+};
+
+// Filter Visualizer — colored semi-transparent disc
+export const FilterVisualizer = ({ component }: { component: Filter }) => {
+    const radius = component.diameter / 2;
+    // Get tint color from spectral profile
+    const dominantNm = component.spectralProfile.getDominantPassWavelength();
+    const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#888888';
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                <meshPhysicalMaterial
+                    color={tintColor}
+                    metalness={0.1}
+                    roughness={0.1}
+                    transparent={true}
+                    opacity={0.5}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.05}
+                />
+            </mesh>
+        </group>
+    );
+};
+
+// Dichroic Mirror Visualizer — like BeamSplitter but with colored tint
+export const DichroicVisualizer = ({ component }: { component: DichroicMirror }) => {
+    const radius = component.diameter / 2;
+    const dominantNm = component.spectralProfile.getDominantPassWavelength();
+    const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#88ccff';
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                <meshPhysicalMaterial
+                    color={tintColor}
+                    metalness={0.4}
+                    roughness={0.05}
+                    transparent={true}
+                    opacity={0.55}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.02}
+                />
+            </mesh>
+        </group>
+    );
+};
+
+// Helper: wavelength to hex color for visualizer tinting
+function wavelengthToHex(nm: number): string {
+    let r = 0, g = 0, b = 0;
+    if (nm >= 380 && nm < 440) { r = -(nm - 440) / 60; b = 1; }
+    else if (nm >= 440 && nm < 490) { g = (nm - 440) / 50; b = 1; }
+    else if (nm >= 490 && nm < 510) { g = 1; b = -(nm - 510) / 20; }
+    else if (nm >= 510 && nm < 580) { r = (nm - 510) / 70; g = 1; }
+    else if (nm >= 580 && nm < 645) { r = 1; g = -(nm - 645) / 65; }
+    else if (nm >= 645 && nm <= 780) { r = 1; }
+    else { return '#888888'; }
+    const toHex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
 
     const radius = component.diameter / 2;
@@ -440,38 +535,6 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
                 <sphereGeometry args={[1, 16, 16]} />
                 <meshBasicMaterial color="lime" />
             </mesh>
-        </group>
-    );
-};
-
-// Point Source Visualizer - for demonstrating infinity correction
-export const PointSourceVisualizer = ({ component }: { component: PointSource }) => {
-    const [selection] = useAtom(selectionAtom);
-    const isSelected = selection.includes(component.id);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Glowing point source - small sphere */}
-            <mesh>
-                <sphereGeometry args={[1.5, 32, 32]} />
-                <meshBasicMaterial color="#00ff88" />
-            </mesh>
-            {/* Outer glow ring */}
-            <mesh>
-                <sphereGeometry args={[2.5, 16, 16]} />
-                <meshBasicMaterial color="#00ff88" transparent opacity={0.3} />
-            </mesh>
-            {/* Selection indicator */}
-            {isSelected && (
-                <mesh>
-                    <sphereGeometry args={[4, 16, 16]} />
-                    <meshBasicMaterial color="#64ffda" wireframe transparent opacity={0.5} />
-                </mesh>
-            )}
         </group>
     );
 };
@@ -747,7 +810,7 @@ export const OpticalTable: React.FC = () => {
             .map(c => {
                 // Include position, rotation, AND optical properties in the fingerprint
                 // so changing wavelength, IOR, etc. triggers a re-solve
-                const base = `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}`;
+                const base = `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`;
                 const props: string[] = [];
                 if ('wavelength' in c) props.push(`wl=${(c as any).wavelength}`);
                 if ('beamRadius' in c) props.push(`br=${(c as any).beamRadius}`);
@@ -757,6 +820,11 @@ export const OpticalTable: React.FC = () => {
                 if ('curvature' in c) props.push(`cv=${(c as any).curvature}`);
                 if ('aperture' in c) props.push(`ap=${(c as any).aperture}`);
                 if ('thickness' in c) props.push(`th=${(c as any).thickness}`);
+                if ('openingDiameter' in c) props.push(`od=${(c as any).openingDiameter}`);
+                if ('spectralProfile' in c) {
+                    const sp = (c as any).spectralProfile;
+                    props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
+                }
                 return props.length > 0 ? `${base}:${props.join(',')}` : base;
             })
             .join('|');
@@ -777,9 +845,8 @@ export const OpticalTable: React.FC = () => {
 
         const solver = new Solver1(components);
 
-        // Find ALL source components (support multiple lasers and point sources)
+        // Find ALL source components (support multiple lasers)
         const laserComps = components.filter(c => c instanceof Laser) as Laser[];
-        const pointSourceComps = components.filter(c => c instanceof PointSource) as PointSource[];
 
         const sourceRays: Ray[] = [];
 
@@ -862,20 +929,6 @@ export const OpticalTable: React.FC = () => {
                     raysPlaced++;
                 }
                 ringIndex++;
-            }
-        }
-
-        // Generate rays from every PointSource
-        for (const pointSourceComp of pointSourceComps) {
-            const psRays = pointSourceComp.generateRays();
-            for (const r of psRays) {
-                sourceRays.push({
-                    ...r,
-                    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                    footprintRadius: 0,
-                    coherenceMode: Coherence.Coherent,
-                    sourceId: pointSourceComp.id
-                });
             }
         }
 
@@ -1291,11 +1344,13 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof Card) visual = <CardVisualizer component={c} />;
                 else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                 else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
-                else if (c instanceof PointSource) visual = <PointSourceVisualizer component={c} />;
                 else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
                 else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
                 else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
                 else if (c instanceof BeamSplitter) visual = <BeamSplitterVisualizer component={c} />;
+                else if (c instanceof Aperture) visual = <ApertureVisualizer component={c} />;
+                else if (c instanceof Filter) visual = <FilterVisualizer component={c} />;
+                else if (c instanceof DichroicMirror) visual = <DichroicVisualizer component={c} />;
 
                 if (visual) {
                     return (

@@ -8,7 +8,6 @@ import { Laser } from '../physics/components/Laser';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
-import { PointSource } from '../physics/components/PointSource';
 import { Objective } from '../physics/components/Objective';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Camera } from '../physics/components/Camera';
@@ -16,6 +15,10 @@ import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { Aperture } from '../physics/components/Aperture';
+import { Filter } from '../physics/components/Filter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { SpectralProfile } from '../physics/SpectralProfile';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 
 export const DragDropHandler: React.FC = () => {
@@ -74,8 +77,6 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new IdealLens(50, 15, "Ideal Lens"); // f=50mm, aperture=15mm
             } else if (type === 'objective') {
                 newComp = new Objective({ magnification: 10, NA: 0.25, name: "New Objective" });
-            } else if (type === 'pointSource') {
-                newComp = new PointSource("Point Source");
             } else if (type === 'camera') {
                 newComp = new Camera(50, 25, "New Camera");
             } else if (type === 'cylindricalLens') {
@@ -90,6 +91,12 @@ export const DragDropHandler: React.FC = () => {
                 newComp = new Waveplate('polarizer', 12.5, 0, 'Linear Polarizer');
             } else if (type === 'beamSplitter') {
                 newComp = new BeamSplitter(25, 2, 0.5, 'Beam Splitter');
+            } else if (type === 'aperture') {
+                newComp = new Aperture(10, 25, 'Aperture');
+            } else if (type === 'filter') {
+                newComp = new Filter(25, 3, new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]), 'Filter');
+            } else if (type === 'dichroic') {
+                newComp = new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
             }
 
             if (newComp) {
@@ -103,10 +110,10 @@ export const DragDropHandler: React.FC = () => {
                     // To reflect X -> Y, we need Normal at 135 deg in XY plane.
                     // Just rotate around Z axis.
                     newComp.setRotation(0, 0, 3 * Math.PI / 4);
-                } else if (type === 'beamSplitter') {
+                } else if (type === 'beamSplitter' || type === 'dichroic') {
                     // Beam splitter at 45° — reflects upward, transmits straight
                     newComp.setRotation(0, 0, 3 * Math.PI / 4);
-                } else if (type === 'blocker' || type === 'halfWavePlate' || type === 'quarterWavePlate' || type === 'polarizer') {
+                } else if (type === 'blocker' || type === 'halfWavePlate' || type === 'quarterWavePlate' || type === 'polarizer' || type === 'aperture' || type === 'filter') {
                     // These components have their normal along Local X.
                     // Default (0,0,0) faces the X-direction beam correctly.
                     newComp.setRotation(0, 0, 0);

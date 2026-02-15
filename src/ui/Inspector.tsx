@@ -11,6 +11,10 @@ import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
+import { Aperture } from '../physics/components/Aperture';
+import { Filter } from '../physics/components/Filter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
 
@@ -152,6 +156,16 @@ export const Inspector: React.FC = () => {
     const [localPrismWidth, setLocalPrismWidth] = useState<string>('20');
     const [localPrismIor, setLocalPrismIor] = useState<string>('1.5168');
 
+    // Aperture Params
+    const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
+
+    // Spectral Profile Params (shared by Filter & Dichroic)
+    const [localSpectralPreset, setLocalSpectralPreset] = useState<ProfilePreset>('bandpass');
+    const [localSpectralCutoff, setLocalSpectralCutoff] = useState<string>('500');
+    const [localSpectralCenter, setLocalSpectralCenter] = useState<string>('525');
+    const [localSpectralWidth, setLocalSpectralWidth] = useState<string>('50');
+    const [localSpectralSteepness, setLocalSpectralSteepness] = useState<string>('15');
+
     // Sync local state when selection or actual values change externally
     useEffect(() => {
         if (selectedComponent) {
@@ -224,6 +238,29 @@ export const Inspector: React.FC = () => {
                     setLocalPrismHeight(String(selectedComponent.height));
                     setLocalPrismWidth(String(selectedComponent.width));
                     setLocalPrismIor(String(selectedComponent.ior));
+                }
+                if (selectedComponent instanceof Aperture) {
+                    setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
+                }
+                if (selectedComponent instanceof Filter) {
+                    const sp = selectedComponent.spectralProfile;
+                    setLocalSpectralPreset(sp.preset);
+                    setLocalSpectralCutoff(String(sp.cutoffNm));
+                    setLocalSpectralSteepness(String(sp.edgeSteepness));
+                    if (sp.bands.length > 0) {
+                        setLocalSpectralCenter(String(sp.bands[0].center));
+                        setLocalSpectralWidth(String(sp.bands[0].width));
+                    }
+                }
+                if (selectedComponent instanceof DichroicMirror) {
+                    const sp = selectedComponent.spectralProfile;
+                    setLocalSpectralPreset(sp.preset);
+                    setLocalSpectralCutoff(String(sp.cutoffNm));
+                    setLocalSpectralSteepness(String(sp.edgeSteepness));
+                    if (sp.bands.length > 0) {
+                        setLocalSpectralCenter(String(sp.bands[0].center));
+                        setLocalSpectralWidth(String(sp.bands[0].width));
+                    }
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -443,6 +480,10 @@ export const Inspector: React.FC = () => {
     const isLaser = selectedComponent instanceof Laser;
     const isPrism = selectedComponent instanceof PrismLens;
     const isWaveplate = selectedComponent instanceof Waveplate;
+    const isAperture = selectedComponent instanceof Aperture;
+    const isFilter = selectedComponent instanceof Filter;
+    const isDichroic = selectedComponent instanceof DichroicMirror;
+    const hasSpectralProfile = isFilter || isDichroic;
 
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
@@ -1130,6 +1171,227 @@ export const Inspector: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {isAperture && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Aperture / Iris</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Opening ∅"
+                                suffix="mm"
+                                value={localApertureDiameter}
+                                onChange={setLocalApertureDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Aperture) {
+                                            c.openingDiameter = Math.min(val, c.housingDiameter - 1);
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={0.5}
+                                max={24}
+                                title="Opening diameter of the iris aperture"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {hasSpectralProfile && (() => {
+                    const comp = selectedComponent as (Filter | DichroicMirror);
+                    const profile = comp.spectralProfile;
+                    const curveData = profile.getSampleCurve(180);
+                    const chartW = 250;
+                    const chartH = 100;
+                    const padL = 0;
+                    const padR = 0;
+                    const plotW = chartW - padL - padR;
+
+                    // Build the SVG path for the transmission curve
+                    const pathPoints = curveData.map((pt, i) => {
+                        const x = padL + (i / (curveData.length - 1)) * plotW;
+                        const y = chartH - pt.t * chartH;
+                        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+                    }).join(' ');
+
+                    // Rainbow gradient stops for visible spectrum background
+                    const spectrumStops = [
+                        { nm: 350, color: '#1a0020' },
+                        { nm: 380, color: '#2a0040' },
+                        { nm: 420, color: '#4400aa' },
+                        { nm: 450, color: '#0000ff' },
+                        { nm: 480, color: '#0066ff' },
+                        { nm: 500, color: '#00cccc' },
+                        { nm: 520, color: '#00ff00' },
+                        { nm: 560, color: '#aaff00' },
+                        { nm: 580, color: '#ffff00' },
+                        { nm: 600, color: '#ff8800' },
+                        { nm: 640, color: '#ff0000' },
+                        { nm: 700, color: '#aa0000' },
+                        { nm: 780, color: '#400000' },
+                        { nm: 850, color: '#1a0000' },
+                    ];
+
+                    const commitSpectral = () => {
+                        const cutoff = parseFloat(localSpectralCutoff) || 500;
+                        const center = parseFloat(localSpectralCenter) || 525;
+                        const width = parseFloat(localSpectralWidth) || 50;
+                        const steep = parseFloat(localSpectralSteepness) || 15;
+
+                        const newProfile = new SpectralProfile(
+                            localSpectralPreset,
+                            cutoff,
+                            localSpectralPreset === 'bandpass' || localSpectralPreset === 'multiband'
+                                ? [{ center, width }]
+                                : profile.bands,
+                            steep
+                        );
+                        const newComponents = components.map(c => {
+                            if (c.id === selection[0]) {
+                                if (c instanceof Filter) { c.spectralProfile = newProfile; c.version++; }
+                                if (c instanceof DichroicMirror) { c.spectralProfile = newProfile; c.version++; }
+                                return c;
+                            }
+                            return c;
+                        });
+                        setComponents([...newComponents]);
+                    };
+
+                    return (
+                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>
+                                {isDichroic ? 'Dichroic Spectrum' : 'Filter Spectrum'}: {profile.getLabel()}
+                            </label>
+
+                            {/* Chroma-style Transmission Chart */}
+                            <div style={{ marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '1px solid #333' }}>
+                                <svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: 'block' }}>
+                                    <defs>
+                                        <linearGradient id="spectrumGrad" x1="0" x2="1" y1="0" y2="0">
+                                            {spectrumStops.map((s, i) => (
+                                                <stop key={i} offset={`${((s.nm - 350) / 500) * 100}%`} stopColor={s.color} />
+                                            ))}
+                                        </linearGradient>
+                                    </defs>
+                                    {/* Rainbow background */}
+                                    <rect x={padL} y="0" width={plotW} height={chartH} fill="url(#spectrumGrad)" opacity="0.4" />
+                                    {/* Grid lines */}
+                                    {[0.25, 0.5, 0.75].map(t => (
+                                        <line key={t} x1={padL} x2={padL + plotW} y1={chartH - t * chartH} y2={chartH - t * chartH} stroke="#555" strokeWidth="0.5" strokeDasharray="2,2" />
+                                    ))}
+                                    {/* Filled area under curve */}
+                                    <path
+                                        d={`${pathPoints} L${(padL + plotW).toFixed(1)},${chartH} L${padL},${chartH} Z`}
+                                        fill="white" fillOpacity="0.15"
+                                    />
+                                    {/* Transmission curve */}
+                                    <path d={pathPoints} fill="none" stroke="#fff" strokeWidth="2" />
+                                    {/* Axis labels */}
+                                    <text x={padL + 2} y={chartH - 2} fill="#888" fontSize="8">350</text>
+                                    <text x={padL + plotW - 20} y={chartH - 2} fill="#888" fontSize="8">850nm</text>
+                                    <text x={padL + 2} y={10} fill="#888" fontSize="8">100%</text>
+                                </svg>
+                            </div>
+
+                            {/* Preset Selector */}
+                            <div style={{ marginBottom: 8 }}>
+                                <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 4 }}>Type</label>
+                                <select
+                                    value={localSpectralPreset}
+                                    onChange={(e) => {
+                                        const preset = e.target.value as ProfilePreset;
+                                        setLocalSpectralPreset(preset);
+                                        const cutoff = parseFloat(localSpectralCutoff) || 500;
+                                        const center = parseFloat(localSpectralCenter) || 525;
+                                        const width = parseFloat(localSpectralWidth) || 50;
+                                        const steep = parseFloat(localSpectralSteepness) || 15;
+                                        const newProfile = new SpectralProfile(
+                                            preset, cutoff,
+                                            preset === 'bandpass' || preset === 'multiband' ? [{ center, width }] : profile.bands,
+                                            steep
+                                        );
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0]) {
+                                                if (c instanceof Filter) { c.spectralProfile = newProfile; c.version++; }
+                                                if (c instanceof DichroicMirror) { c.spectralProfile = newProfile; c.version++; }
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{
+                                        width: '100%', background: '#333', color: '#ccc',
+                                        border: '1px solid #555', borderRadius: 4,
+                                        padding: '4px 6px', fontSize: '12px'
+                                    }}
+                                >
+                                    <option value="longpass">Longpass</option>
+                                    <option value="shortpass">Shortpass</option>
+                                    <option value="bandpass">Bandpass</option>
+                                    <option value="multiband">Multiband</option>
+                                </select>
+                            </div>
+
+                            {/* Conditional inputs */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                {(localSpectralPreset === 'longpass' || localSpectralPreset === 'shortpass') && (
+                                    <ScrubInput
+                                        label="Cutoff"
+                                        suffix="nm"
+                                        value={localSpectralCutoff}
+                                        onChange={setLocalSpectralCutoff}
+                                        onCommit={commitSpectral}
+                                        speed={2}
+                                        min={350}
+                                        max={850}
+                                    />
+                                )}
+                                {(localSpectralPreset === 'bandpass' || localSpectralPreset === 'multiband') && (
+                                    <>
+                                        <ScrubInput
+                                            label="Center"
+                                            suffix="nm"
+                                            value={localSpectralCenter}
+                                            onChange={setLocalSpectralCenter}
+                                            onCommit={commitSpectral}
+                                            speed={2}
+                                            min={350}
+                                            max={850}
+                                        />
+                                        <ScrubInput
+                                            label="Width"
+                                            suffix="nm"
+                                            value={localSpectralWidth}
+                                            onChange={setLocalSpectralWidth}
+                                            onCommit={commitSpectral}
+                                            speed={1}
+                                            min={5}
+                                            max={300}
+                                        />
+                                    </>
+                                )}
+                                <ScrubInput
+                                    label="Edge"
+                                    suffix="nm"
+                                    value={localSpectralSteepness}
+                                    onChange={setLocalSpectralSteepness}
+                                    onCommit={commitSpectral}
+                                    speed={0.5}
+                                    min={1}
+                                    max={50}
+                                    title="Edge steepness — smaller = sharper transition"
+                                />
+                            </div>
+                        </div>
+                    );
+                })()}
 
 
                 {/* Card Viewer: E&M beam cross-section + polarization */}

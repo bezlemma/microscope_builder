@@ -75,12 +75,14 @@ function interpolatedBeamRadius(
     axis: 'x' | 'y'
 ): number {
     const wavelengthMm = seg.wavelength * 1e3;
+    // Use effective wavelength in medium: λ/n
+    const effectiveWl = wavelengthMm / (seg.refractiveIndex || 1.0);
     const qStart = axis === 'x' ? seg.qx_start : seg.qy_start;
     const segLen = seg.start.distanceTo(seg.end);
     const z = frac * segLen;
     // q(z) = q_start + z
     const qz = { re: qStart.re + z, im: qStart.im };
-    return beamRadius(qz, wavelengthMm);
+    return beamRadius(qz, effectiveWl);
 }
 
 // ─── Compute NORMALIZED E-field vector (amplitude ≤1, no beam-radius scaling) ─
@@ -484,8 +486,10 @@ export const EFieldVisualizer: React.FC<EFieldVisualizerProps> = ({ beamSegments
                 if (segLen < 0.1) continue;
 
                 const wavelengthMm = seg.wavelength * 1e3;
-                const wxStart = beamRadius(seg.qx_start, wavelengthMm);
-                const wyStart = beamRadius(seg.qy_start, wavelengthMm);
+                // Use effective wavelength in medium: λ/n
+                const effectiveWl = wavelengthMm / (seg.refractiveIndex || 1.0);
+                const wxStart = beamRadius(seg.qx_start, effectiveWl);
+                const wyStart = beamRadius(seg.qy_start, effectiveWl);
                 const maxW = Math.max(wxStart, wyStart);
                 if (maxW < 0.01 || maxW > 500) { runningZ += segLen * (seg.refractiveIndex || 1.0); continue; }
 

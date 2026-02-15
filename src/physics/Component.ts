@@ -17,6 +17,7 @@ export abstract class OpticalComponent implements Surface {
     declare localToWorld: Matrix4;
     declare bounds: Box3; // Local bounds
     version: number = 0; // Increments on every mutation — used by React to detect changes on mutable objects
+    absorptionCoeff: number = 0; // Beer-Lambert absorption coefficient [mm⁻¹], 0 = transparent
 
     constructor(name: string = "Unnamed Component") {
         this.id = uuidv4();

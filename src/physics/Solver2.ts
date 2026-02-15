@@ -10,6 +10,9 @@ import { Laser } from './components/Laser';
 import { Waveplate } from './components/Waveplate';
 import { PrismLens } from './components/PrismLens';
 import { BeamSplitter } from './components/BeamSplitter';
+import { Aperture } from './components/Aperture';
+import { Filter } from './components/Filter';
+import { DichroicMirror } from './components/DichroicMirror';
 
 // ─── Complex Number Helpers ───────────────────────────────────────────
 interface Complex {
@@ -94,7 +97,7 @@ function propagateFreeSpace(q: Complex, distance: number): Complex {
  *   q₀ = i · π · w₀² / λ
  * where w₀ is beam waist radius and λ is wavelength (both in mm).
  */
-function initialQ(waistRadius: number, wavelengthMm: number): Complex {
+export function initialQ(waistRadius: number, wavelengthMm: number): Complex {
     return { re: 0, im: Math.PI * waistRadius * waistRadius / wavelengthMm };
 }
 
@@ -214,6 +217,8 @@ export class Solver2 {
                     const glassComponent = this.findComponentAt(ray.entryPoint, components);
                     const glassIOR = (glassComponent && 'ior' in glassComponent)
                         ? (glassComponent as any).ior as number : 1.5;
+                    const glassAbsorption = glassComponent
+                        ? glassComponent.absorptionCoeff : 0;
 
                     for (let ip = 0; ip < internalPts.length - 1; ip++) {
                         const iStart = internalPts[ip];
@@ -244,6 +249,11 @@ export class Solver2 {
                             opticalPathLength: ray.opticalPathLength,
                             refractiveIndex: glassIOR
                         });
+
+                        // Beer-Lambert absorption: P(z) = P₀ · exp(-μ · Δz)
+                        if (glassAbsorption > 0) {
+                            power *= Math.exp(-glassAbsorption * iLen);
+                        }
 
                         qx = qx_int_end;
                         qy = qy_int_end;
@@ -425,6 +435,31 @@ export class Solver2 {
             };
         }
 
+        if (component instanceof Aperture) {
+            return {
+                abcdX: identity,
+                abcdY: identity,
+                apertureRadius: component.getApertureRadius()
+            };
+        }
+
+        if (component instanceof Filter) {
+            return {
+                abcdX: identity,
+                abcdY: identity,
+                apertureRadius: component.getApertureRadius()
+            };
+        }
+
+        if (component instanceof DichroicMirror) {
+            const abcd = component.getABCD();
+            return {
+                abcdX: abcd,
+                abcdY: abcd,
+                apertureRadius: component.getApertureRadius()
+            };
+        }
+
         if (component instanceof PrismLens && rayDirection) {
             const { abcdTangential, abcdSagittal } = component.getABCD_for_ray(rayDirection);
             // Prism's tangential plane (plane of incidence) is the Y-Z plane
@@ -439,6 +474,141 @@ export class Solver2 {
         // Default: identity (blockers, cards, etc.)
         return { abcdX: identity, abcdY: identity, apertureRadius: 0 };
     }
+
+    // ─── Solver Handshake: E-field Query (PhysicsPlan §3.G) ───────────
+
+    /**
+     * Query the Gaussian beam intensity at any 3D point from a single branch.
+     * Returns intensity [W/mm²], polarization, and accumulated phase.
+     *
+     * @param point  Query position in world coordinates (mm)
+     * @param segments  Segments from a single beam branch (one element of propagate()'s output)
+     * @returns {intensity, polarization, phase} or null if point is outside all beams
+     */
+    static queryIntensity(
+        point: Vector3,
+        segments: GaussianBeamSegment[]
+    ): { intensity: number; polarization: JonesVector; phase: number } | null {
+        if (segments.length === 0) return null;
+
+        // Find the nearest segment to the query point
+        let bestSeg: GaussianBeamSegment | null = null;
+        let bestDist = Infinity;
+        let bestT = 0; // fraction along segment
+
+        for (const seg of segments) {
+            const segDir = seg.end.clone().sub(seg.start);
+            const segLen = segDir.length();
+            if (segLen < 1e-6) continue;
+            segDir.normalize();
+
+            // Project point onto segment axis
+            const toPoint = point.clone().sub(seg.start);
+            const along = toPoint.dot(segDir);
+            const t = Math.max(0, Math.min(segLen, along));
+
+            const closest = seg.start.clone().add(segDir.clone().multiplyScalar(t));
+            const dist = point.distanceTo(closest);
+
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestSeg = seg;
+                bestT = t;
+            }
+        }
+
+        if (!bestSeg) return null;
+
+        const seg = bestSeg;
+        const segDir = seg.end.clone().sub(seg.start).normalize();
+        const wavelengthMm = seg.wavelength * 1e3;
+        const n = seg.refractiveIndex || 1.0;
+        const effectiveWl = wavelengthMm / n;
+
+        // q-parameter at the projected point
+        const qx: Complex = { re: seg.qx_start.re + bestT, im: seg.qx_start.im };
+        const qy: Complex = { re: seg.qy_start.re + bestT, im: seg.qy_start.im };
+
+        const wx = beamRadius(qx, effectiveWl);
+        const wy = beamRadius(qy, effectiveWl);
+
+        if (wx <= 0 || wy <= 0) return null;
+
+        // Decompose displacement into transverse coordinates
+        const toPoint = point.clone().sub(seg.start);
+        const along = toPoint.dot(segDir);
+        const transverse = toPoint.clone().sub(segDir.clone().multiplyScalar(along));
+
+        // Build local frame (consistent with EFieldVisualizer)
+        const up = new Vector3(0, 1, 0);
+        if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
+        const right = new Vector3().crossVectors(segDir, up).normalize();
+        const localUp = new Vector3().crossVectors(right, segDir).normalize();
+
+        const x = transverse.dot(right);
+        const y = transverse.dot(localUp);
+
+        // Astigmatic Gaussian intensity:
+        // I(x,y) = P·(w0x·w0y)/(wx·wy) · exp(-2(x²/wx² + y²/wy²))
+        // For simplicity, use P/(π·wx·wy) · exp(-2(x²/wx² + y²/wy²))
+        const gaussArg = 2 * (x * x / (wx * wx) + y * y / (wy * wy));
+        const gaussFactor = Math.exp(-gaussArg);
+        const intensity = (seg.power / (Math.PI * wx * wy)) * gaussFactor;
+
+        // Phase: accumulated OPL + local propagation
+        const k = 2 * Math.PI / wavelengthMm; // real wavenumber in air
+        const phase = k * (seg.opticalPathLength + bestT * n);
+
+        return {
+            intensity,
+            polarization: seg.polarization,
+            phase
+        };
+    }
+
+    /**
+     * Query the total intensity at a 3D point from ALL beam branches,
+     * coherently summing E-fields for interference.
+     *
+     * @param point  Query position (mm)
+     * @param allSegments  All beam branches from propagate()
+     * @returns total intensity [W/mm²]
+     */
+    static queryIntensityMultiBeam(
+        point: Vector3,
+        allSegments: GaussianBeamSegment[][]
+    ): number {
+        // Collect contributions from each branch
+        let ex_re = 0, ex_im = 0;
+        let ey_re = 0, ey_im = 0;
+
+        for (const branch of allSegments) {
+            const result = Solver2.queryIntensity(point, branch);
+            if (!result || result.intensity < 1e-12) continue;
+
+            // E-field amplitude ∝ √I
+            const amplitude = Math.sqrt(result.intensity);
+            const phi = result.phase;
+
+            // Vector E-field: E = amplitude · polarization · e^{iφ}
+            const cosPhi = Math.cos(phi);
+            const sinPhi = Math.sin(phi);
+
+            // Jones x-component
+            const jx = result.polarization.x;
+            ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
+            ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
+
+            // Jones y-component
+            const jy = result.polarization.y;
+            ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
+            ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+        }
+
+        // I = |Ex|² + |Ey|²
+        return (ex_re * ex_re + ex_im * ex_im) +
+            (ey_re * ey_re + ey_im * ey_im);
+    }
 }
 
 // ─── Utility Exports ──────────────────────────────────────────────────
@@ -452,6 +622,8 @@ export function sampleBeamProfile(
     numSamples: number = 20
 ): { z: number; wx: number; wy: number }[] {
     const wavelengthMm = segment.wavelength * 1e3;
+    // In a medium with index n, the effective wavelength is λ/n
+    const effectiveWavelength = wavelengthMm / (segment.refractiveIndex || 1.0);
     const segLength = segment.start.distanceTo(segment.end);
 
     const samples: { z: number; wx: number; wy: number }[] = [];
@@ -472,8 +644,8 @@ export function sampleBeamProfile(
             im: segment.qy_start.im
         };
 
-        const wx = beamRadius(qx, wavelengthMm);
-        const wy = beamRadius(qy, wavelengthMm);
+        const wx = beamRadius(qx, effectiveWavelength);
+        const wy = beamRadius(qy, effectiveWavelength);
 
         samples.push({ z, wx, wy });
     }
