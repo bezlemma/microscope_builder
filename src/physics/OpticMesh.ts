@@ -302,7 +302,7 @@ export class OpticMesh {
                 if (!allowInternalReflection && bounce === 0) {
                     // Try small perpendicular nudge to escape axis singularity
                     const perturbed = currentOrigin.clone();
-                    perturbed.x += 0.005;  // Nudge in local x (radial for LatheGeometry)
+                    perturbed.x += 0.005;  // Nudge in local u (radial for LatheGeometry)
                     hits = this.intersectRayAll(perturbed, currentDir);
                     if (hits.length > 0) {
                         // Found it — use this hit as the exit surface

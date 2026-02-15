@@ -2,17 +2,20 @@ import React, { useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { useThree } from '@react-three/fiber';
 import { Vector3, Euler, Quaternion } from 'three';
-import { componentsAtom, selectionAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom } from '../state/store';
 
 export const GlobalRotation: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection] = useAtom(selectionAtom);
+    const [isDragging] = useAtom(isDraggingAtom);
     const { gl } = useThree();
 
     useEffect(() => {
         const handleWheel = (e: WheelEvent) => {
-            // Shift+Scroll = rotate selected component (works on both mouse scroll wheel and trackpad two-finger scroll)
-            if (selection.length === 0 || !e.shiftKey) return;
+            // Rotate selected component when:
+            //   - Click-holding on a component + scroll, OR
+            //   - Shift+Scroll (original shortcut)
+            if (selection.length === 0 || (!e.shiftKey && !isDragging)) return;
 
             // Prevent OrbitControls from zooming while we're rotating the object
             e.preventDefault();
@@ -46,7 +49,7 @@ export const GlobalRotation: React.FC = () => {
         return () => {
             domElement.removeEventListener('wheel', handleWheel);
         };
-    }, [selection, components, setComponents, gl.domElement]);
+    }, [selection, components, setComponents, gl.domElement, isDragging]);
 
     return null;
 };

@@ -16,23 +16,28 @@ export class Camera extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Sensor plane at w=0 (XY locally), facing +W
-        if (Math.abs(rayLocal.direction.z) < 1e-6) return null;
+        // Sensor plane at w=0, facing +w direction
+        const ow = rayLocal.origin.z;
+        const dw = rayLocal.direction.z;
 
-        const t = -rayLocal.origin.z / rayLocal.direction.z;
+        if (Math.abs(dw) < 1e-6) return null;
+
+        const t = -ow / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
 
-        // Check bounds
-        if (Math.abs(hitPoint.x) > this.width / 2 || Math.abs(hitPoint.y) > this.height / 2) {
+        // Check bounds in uv transverse plane
+        const hu = hitPoint.x;  // u coordinate
+        const hv = hitPoint.y;  // v coordinate
+        if (Math.abs(hu) > this.width / 2 || Math.abs(hv) > this.height / 2) {
             return null;
         }
 
         return {
             t: t,
             point: hitPoint,
-            normal: new Vector3(0, 0, 1),
+            normal: new Vector3(0, 0, 1),  // +w normal
             localPoint: hitPoint
         };
     }

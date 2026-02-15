@@ -30,7 +30,7 @@ export class SphericalCap extends OpticalSurface {
     radius: number;
     radiusSq: number;
     apertureRadiusSq: number;
-    hemisphereDir: number; // +1 for Z > center.z, -1 for Z < center.z
+    hemisphereDir: number; // +1 for w > center.w, -1 for w < center.w
 
     constructor(id: string, center: Vector3, radius: number, apertureRadius: number, hemisphereDir: number) {
         super(id);
@@ -66,17 +66,16 @@ export class SphericalCap extends OpticalSurface {
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
             // 2. Aperture Clip (Cylindrical Limit)
-            // Check radial distance from optic axis (assumed 0,0 locally)
-            // Note: If the lens is centered at 0,0 locally.
-            // If the cap is part of a lens, the aperture check is usually relative to the lens axis (0,0).
-            const r2 = hitPoint.x * hitPoint.x + hitPoint.y * hitPoint.y;
+            // Check radial distance from optic axis in uv transverse plane
+            const hu = hitPoint.x;
+            const hv = hitPoint.y;
+            const r2 = hu * hu + hv * hv;
             if (r2 > this.apertureRadiusSq) continue;
 
             // 3. Hemisphere Check
-            // Ensure the hit is on the correct side of the sphere center.
-            // (e.g. Front convex face: Center is at -Z, Cap is at +Z relative to center)
-            const dz = hitPoint.z - this.center.z;
-            if (dz * this.hemisphereDir <= 0) continue; 
+            // Ensure the hit is on the correct side of the sphere center along w
+            const dw = hitPoint.z - this.center.z;
+            if (dw * this.hemisphereDir <= 0) continue; 
 
             // Valid hit!
             bestT = t;
@@ -124,11 +123,10 @@ export class PlanarFace extends OpticalSurface {
 
         const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
         
-        // Aperture Check (Circular)
-        // Assumes aperture is centered at 0,0 locally!
-        // If the plane is shifted, we might need 2D check.
-        // For standard lenses, flat face is centered at 0,0.
-        const r2 = hitPoint.x * hitPoint.x + hitPoint.y * hitPoint.y;
+        // Aperture Check (Circular) in uv transverse plane
+        const hu = hitPoint.x;
+        const hv = hitPoint.y;
+        const r2 = hu * hu + hv * hv;
         if (r2 > this.apertureRadiusSq) return null;
 
         return {
@@ -159,22 +157,21 @@ export class CylindricalFace extends OpticalSurface {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Ray-Cylinder Intersection (Infinite cylinder along Z)
-        // x^2 + y^2 = r^2
+        // Ray-Cylinder Intersection (infinite cylinder along w axis)
+        // u² + v² = r²  (w=z is the optical axis, u=x, v=y transverse)
         // Ray: O + tD
-        // (Ox + tDx)^2 + (Oy + tDy)^2 = r^2
-        // t^2(Dx^2 + Dy^2) + 2t(OxDx + OyDy) + (Ox^2 + Oy^2 - r^2) = 0
+        // (ou + t·du)² + (ov + t·dv)² = r²
         
-        const dx = rayLocal.direction.x;
-        const dy = rayLocal.direction.y;
-        const ox = rayLocal.origin.x;
-        const oy = rayLocal.origin.y;
+        const du = rayLocal.direction.x;
+        const dv = rayLocal.direction.y;
+        const ou = rayLocal.origin.x;
+        const ov = rayLocal.origin.y;
 
-        const A = dx * dx + dy * dy;
-        const B = 2 * (ox * dx + oy * dy);
-        const C = ox * ox + oy * oy - this.radiusSq;
+        const A = du * du + dv * dv;
+        const B = 2 * (ou * du + ov * dv);
+        const C = ou * ou + ov * ov - this.radiusSq;
 
-        if (Math.abs(A) < 1e-10) return null; // Ray parallel to Z axis (and usually missed)
+        if (Math.abs(A) < 1e-10) return null; // Ray parallel to w axis
 
         const disc = B * B - 4 * A * C;
         if (disc < 0) return null;
@@ -193,12 +190,12 @@ export class CylindricalFace extends OpticalSurface {
 
             const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
             
-            // Z-Extent Check
+            // w-Extent Check
             if (hitPoint.z < this.zMin || hitPoint.z > this.zMax) continue;
 
             bestT = t;
             bestHit = hitPoint;
-            bestNormal = new Vector3(hitPoint.x, hitPoint.y, 0).normalize();
+            bestNormal = new Vector3(hitPoint.x, hitPoint.y, 0).normalize();  // radial normal in uv
         }
 
         if (bestHit && bestNormal) {

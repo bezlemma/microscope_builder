@@ -2,9 +2,27 @@ import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 
+/**
+ * Sample — specimen on the optical table.
+ *
+ * Geometry: Mickey Mouse (3 spheres) in local space.
+ *
+ * Physics:
+ *   - Brightfield: pass-through (ray continues unchanged).
+ *   - Fluorescence metadata (excitation/emission wavelengths) is stored here
+ *     for Solver 3 to query when backward rays hit the sample.
+ *     The Sample does NOT generate emission rays itself.
+ */
 export class Sample extends OpticalComponent {
+    excitationNm: number;           // Excitation center wavelength (nm)
+    emissionNm: number;             // Emission center wavelength (nm)
+    excitationBandwidth: number;    // Excitation band FWHM (nm)
+
     constructor(name: string = "Sample (Mickey)") {
         super(name);
+        this.excitationNm = 488;       // Default: GFP excitation
+        this.emissionNm = 520;         // Default: GFP emission
+        this.excitationBandwidth = 30; // ±15 nm acceptance
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -12,7 +30,7 @@ export class Sample extends OpticalComponent {
         // Head: Sphere r=0.5 at (0,0,0)
         // Left Ear: Sphere r=0.25 at (-0.5, 0.5, 0)
         // Right Ear: Sphere r=0.25 at (0.5, 0.5, 0)
-        
+
         const spheres = [
             { center: new Vector3(0, 0, 0), radius: 0.5 },
             { center: new Vector3(-0.5, 0.5, 0), radius: 0.25 },
@@ -62,12 +80,11 @@ export class Sample extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Brightfield transmission: rays pass through the sample unchanged.
-        // The sample geometry is used for visualization and future imaging solvers.
-        const hitWorld = hit.point.clone();
+        // Brightfield pass-through: ray continues unchanged.
+        // Fluorescence emission is handled by Solver 3 (backward tracing).
         return {
             rays: [childRay(ray, {
-                origin: hitWorld,
+                origin: hit.point,
                 direction: ray.direction.clone()
             })]
         };

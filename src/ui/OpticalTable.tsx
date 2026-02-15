@@ -22,6 +22,7 @@ import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Aperture } from '../physics/components/Aperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
+
 import { RayVisualizer } from './RayVisualizer';
 // BeamEnvelopeVisualizer import removed — Gaussian tubes disabled
 import { EFieldVisualizer } from './EFieldVisualizer';
@@ -268,25 +269,32 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
     );
 };
 
-// Aperture Visualizer — black annular ring with visible opening
+// Aperture Visualizer — hollowed cylinder (annular disc / washer shape)
 export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
     const outerR = component.housingDiameter / 2;
     const innerR = component.openingDiameter / 2;
+    const halfT = 0.5; // fixed half-thickness (1mm total, similar to polarizers)
+
+    // LatheGeometry revolves a 2D profile around Y.
+    // Profile: thin rectangle from innerR to outerR at ±halfT depth.
+    // Points go: inner-bottom → outer-bottom → outer-top → inner-top
+    const points = useMemo(() => [
+        new Vector2(innerR, -halfT),
+        new Vector2(outerR, -halfT),
+        new Vector2(outerR,  halfT),
+        new Vector2(innerR,  halfT),
+    ], [innerR, outerR, halfT]);
+
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Outer ring — dark housing */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[innerR, outerR, 48]} />
-                <meshStandardMaterial color="#1a1a1a" roughness={0.9} side={DoubleSide} />
-            </mesh>
-            {/* Invisible hitbox */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[0, outerR, 32]} />
-                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            {/* Solid annular disc — revolved rectangular cross-section */}
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <latheGeometry args={[points, 48]} />
+                <meshStandardMaterial color="#333" roughness={0.6} metalness={0.4} />
             </mesh>
         </group>
     );
@@ -538,6 +546,7 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
         </group>
     );
 };
+
 
 // Ideal Lens Visualizer — textbook thin-lens diagram
 // Thin vertical line with arrowheads: inward for converging, outward for diverging
@@ -825,6 +834,7 @@ export const OpticalTable: React.FC = () => {
                     const sp = (c as any).spectralProfile;
                     props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
                 }
+
                 return props.length > 0 ? `${base}:${props.join(',')}` : base;
             })
             .join('|');
@@ -931,6 +941,8 @@ export const OpticalTable: React.FC = () => {
                 ringIndex++;
             }
         }
+
+
 
         const calculatedPaths = solver.trace(sourceRays);
 
@@ -1308,11 +1320,11 @@ export const OpticalTable: React.FC = () => {
                 const phase = mainHitRay.opticalPathLength ?? 0;
 
                 // Compute beam tilt in card's local frame
-                // localDir.x / localDir.z and localDir.y / localDir.z give the tangent of the
+                // localDir.u / localDir.w and localDir.v / localDir.w give the tangent of the
                 // incidence angle in each transverse direction  (≈ sin θ for small angles)
                 const localDir2 = mainHitRay.direction.clone().applyQuaternion(invQ);
-                const tiltX = Math.abs(localDir2.z) > 1e-6 ? localDir2.x / Math.abs(localDir2.z) : 0;
-                const tiltY = Math.abs(localDir2.z) > 1e-6 ? localDir2.y / Math.abs(localDir2.z) : 0;
+                const tiltU = Math.abs(localDir2.z) > 1e-6 ? localDir2.x / Math.abs(localDir2.z) : 0;
+                const tiltV = Math.abs(localDir2.z) > 1e-6 ? localDir2.y / Math.abs(localDir2.z) : 0;
 
                 card.beamProfiles.push({
                     wx, wy,
@@ -1320,10 +1332,10 @@ export const OpticalTable: React.FC = () => {
                     power: bestSeg.power,
                     polarization: pol,
                     phase,
-                    centerX: hitLocalPoint.x,
-                    centerY: hitLocalPoint.y,
-                    tiltX,
-                    tiltY
+                    centerU: hitLocalPoint.x,
+                    centerV: hitLocalPoint.y,
+                    tiltU,
+                    tiltV
                 });
             }
         }
@@ -1340,6 +1352,7 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
                 else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
                 else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
+
                 else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                 else if (c instanceof Card) visual = <CardVisualizer component={c} />;
                 else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;

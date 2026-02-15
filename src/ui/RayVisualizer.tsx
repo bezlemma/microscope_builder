@@ -144,8 +144,8 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 // Build points array, inserting entryPoint and internalPath before origin
                 const points: Vector3[] = [];
                 for (const r of path) {
-                    // Skip zero-intensity rays (extinct after polarizer, etc.)
-                    if (r.intensity <= 0) break;
+                    // Skip near-zero intensity rays (extinct after polarizer, etc.)
+                    if (r.intensity < 1e-6) break;
 
                     if (r.entryPoint) {
                         points.push(r.entryPoint);
@@ -161,10 +161,10 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 // Add an "infinite" end to the last ray for visualization
                 // (only if the last ray in the built points list has nonzero intensity)
                 if (points.length > 0 && path.length > 0) {
-                    // Find the last ray that was actually included (non-zero intensity)
-                    const lastIncludedIdx = path.findIndex(r => r.intensity <= 0) - 1;
+                    // Find the last ray that was actually included (non-extinct)
+                    const lastIncludedIdx = path.findIndex(r => r.intensity < 1e-6) - 1;
                     const lastRay = lastIncludedIdx >= 0 ? path[lastIncludedIdx] : path[path.length - 1];
-                    if (lastRay.intensity > 0 && !lastRay.terminationPoint) {
+                    if (lastRay.intensity >= 1e-6 && !lastRay.terminationPoint) {
                         const dist = lastRay.interactionDistance ?? 1000;
                         const endPoint = lastRay.origin.clone().add(lastRay.direction.clone().multiplyScalar(dist));
                         points.push(endPoint);

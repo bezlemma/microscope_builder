@@ -2,11 +2,7 @@
 
 -Please see PhysicsPlan.md and Tests.md to complete your plan.
 
--Creating a microscope builder simulator "Bez's Microscope Builder" to help me and others design and build microscopes.
-
 -Vite + Typescript, compiled with bun.
-
--Focus on Solver 1 and UI to begin with, as everything else will be built on top of that and we want to make sure that works.
 
 
 # UI
@@ -20,13 +16,9 @@
 
 [DONE] Implement Solver 1
 [DONE] UI / UX / Components / Tests for Solver 1
-[DONE] Test beam expander for Solver 1 using browser.
-[] Test light source + sample + infinity objective + tube lens + camera.
-    - Test in browser
-    - Create a Mickey Mouse geometry for the sample, where the mickey main sphere is 1 mm in diameter, the ears are 300 um in diamter. The ears are placed above the main sphere in the +Z direction, so that the camera sees the shadow of the mickey. The sample should sit in a sample holder, the sample itself is probably too small to be visibsle, but the sample holder will be visible. In the properties viewer for the mickey mouse sample, you can see the 3D orientation of the mickey sample in the world view coordinate system. 
+
 [DONE] Implement Solver 2
-[] Tests for Solver 1 and Solver 2
-[] Pause for user feedback
+[DONE] Tests for Solver 1 and Solver 2
 
 [] Implement Solver 3 using WebGPU
 [] Tests for Solver 3, final test using browser, confirm image generation.

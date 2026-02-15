@@ -3,16 +3,16 @@ import { Ray, HitRecord, InteractionResult, childRay, JonesVector } from '../typ
 import { Vector3 } from 'three';
 
 export interface BeamProfile {
-    wx: number;           // beam half-width X (mm)
-    wy: number;           // beam half-width Y (mm)
+    wx: number;           // beam half-width u (mm)
+    wy: number;           // beam half-width v (mm)
     wavelength: number;   // meters (SI)
     power: number;        // axial power [0,1]
     polarization: JonesVector;
     phase: number;        // accumulated optical path length (mm)
-    centerX: number;      // beam center X on card surface (mm, local frame)
-    centerY: number;      // beam center Y on card surface (mm, local frame)
-    tiltX: number;        // beam direction tilt in card local X (rad, ≈ sin θ)
-    tiltY: number;        // beam direction tilt in card local Y (rad, ≈ sin θ)
+    centerU: number;      // beam center u on card surface (mm, local frame)
+    centerV: number;      // beam center v on card surface (mm, local frame)
+    tiltU: number;        // beam direction tilt in card local u (rad, ≈ sin θ)
+    tiltV: number;        // beam direction tilt in card local v (rad, ≈ sin θ)
 }
 
 export class Card extends OpticalComponent {
@@ -28,22 +28,24 @@ export class Card extends OpticalComponent {
     }
 
     intersect(localRay: Ray): HitRecord | null {
-        // Plane intersection at z=0 (Local frame)
-        // Normal is (0,0,1)
-        if (Math.abs(localRay.direction.z) < 1e-6) return null; // Parallel
+        // Plane intersection at w=0 (optical axis along z → w)
+        // Transverse plane: u=x, v=y
+        const dw = localRay.direction.z;
+        if (Math.abs(dw) < 1e-6) return null; // Parallel
 
-        const t = -localRay.origin.z / localRay.direction.z;
+        const t = -localRay.origin.z / dw;
         if (t < 0) return null;
 
         const point = localRay.origin.clone().add(localRay.direction.clone().multiplyScalar(t));
 
-        // Check bounds (Rectangle)
-        if (Math.abs(point.x) <= this.width / 2 && Math.abs(point.y) <= this.height / 2) {
+        // Check bounds in uv transverse plane
+        const hu = point.x;
+        const hv = point.y;
+        if (Math.abs(hu) <= this.width / 2 && Math.abs(hv) <= this.height / 2) {
             return {
                 t,
-                point: point.clone(), // This helps debugging, but Solver needs World point. 
-                // Wait, chkIntersection handles transformation.
-                normal: new Vector3(0, 0, 1),
+                point: point.clone(),
+                normal: new Vector3(0, 0, 1),  // +w normal
                 localPoint: point
             };
         }

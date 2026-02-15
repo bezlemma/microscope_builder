@@ -6,6 +6,7 @@ import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
+
 import { Laser } from '../physics/components/Laser';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
@@ -159,12 +160,15 @@ export const Inspector: React.FC = () => {
     // Aperture Params
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
 
+
+
     // Spectral Profile Params (shared by Filter & Dichroic)
     const [localSpectralPreset, setLocalSpectralPreset] = useState<ProfilePreset>('bandpass');
     const [localSpectralCutoff, setLocalSpectralCutoff] = useState<string>('500');
     const [localSpectralCenter, setLocalSpectralCenter] = useState<string>('525');
     const [localSpectralWidth, setLocalSpectralWidth] = useState<string>('50');
     const [localSpectralSteepness, setLocalSpectralSteepness] = useState<string>('15');
+    const [localBands, setLocalBands] = useState<{ center: string; width: string }[]>([{ center: '525', width: '50' }]);
 
     // Sync local state when selection or actual values change externally
     useEffect(() => {
@@ -242,6 +246,7 @@ export const Inspector: React.FC = () => {
                 if (selectedComponent instanceof Aperture) {
                     setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
                 }
+
                 if (selectedComponent instanceof Filter) {
                     const sp = selectedComponent.spectralProfile;
                     setLocalSpectralPreset(sp.preset);
@@ -251,6 +256,7 @@ export const Inspector: React.FC = () => {
                         setLocalSpectralCenter(String(sp.bands[0].center));
                         setLocalSpectralWidth(String(sp.bands[0].width));
                     }
+                    setLocalBands(sp.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                 }
                 if (selectedComponent instanceof DichroicMirror) {
                     const sp = selectedComponent.spectralProfile;
@@ -261,6 +267,7 @@ export const Inspector: React.FC = () => {
                         setLocalSpectralCenter(String(sp.bands[0].center));
                         setLocalSpectralWidth(String(sp.bands[0].width));
                     }
+                    setLocalBands(sp.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -483,6 +490,7 @@ export const Inspector: React.FC = () => {
     const isAperture = selectedComponent instanceof Aperture;
     const isFilter = selectedComponent instanceof Filter;
     const isDichroic = selectedComponent instanceof DichroicMirror;
+
     const hasSpectralProfile = isFilter || isDichroic;
 
     const commitLaserParams = () => {
@@ -1203,6 +1211,8 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
+
+
                 {hasSpectralProfile && (() => {
                     const comp = selectedComponent as (Filter | DichroicMirror);
                     const profile = comp.spectralProfile;
@@ -1238,18 +1248,29 @@ export const Inspector: React.FC = () => {
                         { nm: 850, color: '#1a0000' },
                     ];
 
-                    const commitSpectral = () => {
+                    const commitSpectral = (overrideBands?: { center: string; width: string }[]) => {
                         const cutoff = parseFloat(localSpectralCutoff) || 500;
                         const center = parseFloat(localSpectralCenter) || 525;
                         const width = parseFloat(localSpectralWidth) || 50;
                         const steep = parseFloat(localSpectralSteepness) || 15;
 
+                        let bands: { center: number; width: number }[];
+                        if (localSpectralPreset === 'multiband') {
+                            const src = overrideBands || localBands;
+                            bands = src.map(b => ({
+                                center: parseFloat(b.center) || 525,
+                                width: parseFloat(b.width) || 50
+                            }));
+                        } else if (localSpectralPreset === 'bandpass') {
+                            bands = [{ center, width }];
+                        } else {
+                            bands = profile.bands;
+                        }
+
                         const newProfile = new SpectralProfile(
                             localSpectralPreset,
                             cutoff,
-                            localSpectralPreset === 'bandpass' || localSpectralPreset === 'multiband'
-                                ? [{ center, width }]
-                                : profile.bands,
+                            bands,
                             steep
                         );
                         const newComponents = components.map(c => {
@@ -1311,9 +1332,15 @@ export const Inspector: React.FC = () => {
                                         const center = parseFloat(localSpectralCenter) || 525;
                                         const width = parseFloat(localSpectralWidth) || 50;
                                         const steep = parseFloat(localSpectralSteepness) || 15;
+                                        const currentBands = localBands.map(b => ({
+                                            center: parseFloat(b.center) || 525,
+                                            width: parseFloat(b.width) || 50
+                                        }));
                                         const newProfile = new SpectralProfile(
                                             preset, cutoff,
-                                            preset === 'bandpass' || preset === 'multiband' ? [{ center, width }] : profile.bands,
+                                            preset === 'bandpass' ? [{ center, width }] :
+                                            preset === 'multiband' ? (currentBands.length > 0 ? currentBands : [{ center, width }]) :
+                                            profile.bands,
                                             steep
                                         );
                                         const newComponents = components.map(c => {
@@ -1347,20 +1374,20 @@ export const Inspector: React.FC = () => {
                                         suffix="nm"
                                         value={localSpectralCutoff}
                                         onChange={setLocalSpectralCutoff}
-                                        onCommit={commitSpectral}
+                                        onCommit={() => commitSpectral()}
                                         speed={2}
                                         min={350}
                                         max={850}
                                     />
                                 )}
-                                {(localSpectralPreset === 'bandpass' || localSpectralPreset === 'multiband') && (
+                                {localSpectralPreset === 'bandpass' && (
                                     <>
                                         <ScrubInput
                                             label="Center"
                                             suffix="nm"
                                             value={localSpectralCenter}
                                             onChange={setLocalSpectralCenter}
-                                            onCommit={commitSpectral}
+                                            onCommit={() => commitSpectral()}
                                             speed={2}
                                             min={350}
                                             max={850}
@@ -1370,19 +1397,101 @@ export const Inspector: React.FC = () => {
                                             suffix="nm"
                                             value={localSpectralWidth}
                                             onChange={setLocalSpectralWidth}
-                                            onCommit={commitSpectral}
+                                            onCommit={() => commitSpectral()}
                                             speed={1}
                                             min={5}
                                             max={300}
                                         />
                                     </>
                                 )}
+                            </div>
+                            {/* Multiband: per-band editors */}
+                            {localSpectralPreset === 'multiband' && (
+                                <div style={{ marginTop: 8 }}>
+                                    {localBands.map((band, idx) => (
+                                        <div key={idx} style={{
+                                            display: 'flex', alignItems: 'center', gap: 6,
+                                            marginBottom: 6, padding: '4px 6px',
+                                            background: '#2a2a2a', borderRadius: 4, border: '1px solid #444'
+                                        }}>
+                                            <span style={{ fontSize: '10px', color: '#888', minWidth: 12 }}>#{idx + 1}</span>
+                                            <ScrubInput
+                                                label="λ"
+                                                suffix="nm"
+                                                value={band.center}
+                                                onChange={(v: string) => {
+                                                    const updated = [...localBands];
+                                                    updated[idx] = { ...updated[idx], center: v };
+                                                    setLocalBands(updated);
+                                                }}
+                                                onCommit={(v: string) => {
+                                                    const updated = [...localBands];
+                                                    updated[idx] = { ...updated[idx], center: v };
+                                                    setLocalBands(updated);
+                                                    commitSpectral(updated);
+                                                }}
+                                                speed={2}
+                                                min={350}
+                                                max={850}
+                                            />
+                                            <ScrubInput
+                                                label="W"
+                                                suffix="nm"
+                                                value={band.width}
+                                                onChange={(v: string) => {
+                                                    const updated = [...localBands];
+                                                    updated[idx] = { ...updated[idx], width: v };
+                                                    setLocalBands(updated);
+                                                }}
+                                                onCommit={(v: string) => {
+                                                    const updated = [...localBands];
+                                                    updated[idx] = { ...updated[idx], width: v };
+                                                    setLocalBands(updated);
+                                                    commitSpectral(updated);
+                                                }}
+                                                speed={1}
+                                                min={5}
+                                                max={300}
+                                            />
+                                            {localBands.length > 1 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const updated = localBands.filter((_, i) => i !== idx);
+                                                        setLocalBands(updated);
+                                                        commitSpectral(updated);
+                                                    }}
+                                                    style={{
+                                                        background: 'none', border: 'none', color: '#f55',
+                                                        cursor: 'pointer', fontSize: '14px', padding: '0 2px',
+                                                        lineHeight: 1
+                                                    }}
+                                                    title="Remove band"
+                                                >×</button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => {
+                                            const updated = [...localBands, { center: '600', width: '40' }];
+                                            setLocalBands(updated);
+                                            commitSpectral(updated);
+                                        }}
+                                        style={{
+                                            width: '100%', padding: '4px 8px', marginTop: 2,
+                                            background: '#2a3a2a', border: '1px solid #4a6a4a',
+                                            borderRadius: 4, color: '#8c8', cursor: 'pointer',
+                                            fontSize: '11px'
+                                        }}
+                                    >+ Add Band</button>
+                                </div>
+                            )}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: localSpectralPreset === 'multiband' ? 8 : 0 }}>
                                 <ScrubInput
                                     label="Edge"
                                     suffix="nm"
                                     value={localSpectralSteepness}
                                     onChange={setLocalSpectralSteepness}
-                                    onCommit={commitSpectral}
+                                    onCommit={() => commitSpectral()}
                                     speed={0.5}
                                     min={1}
                                     max={50}

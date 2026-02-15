@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 
@@ -15,6 +15,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const [selection, setSelection] = useAtom(selectionAtom);
     const { controls } = useThree();
     const [isDragging, setIsDragging] = useState(false);
+    const [, setGlobalDragging] = useAtom(isDraggingAtom);
 
     // Store offset from center to click point to prevent jumping
     const dragOffset = useRef(new Vector3(0, 0, 0));
@@ -55,6 +56,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         setIsDragging(true);
+        setGlobalDragging(true);
 
         // Calculate offset: Component Center - Click Point
         const hitPoint = getRayIntersection(e);
@@ -73,6 +75,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         e.stopPropagation();
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         setIsDragging(false);
+        setGlobalDragging(false);
 
         // Enable Orbit Controls
         if (controls) (controls as any).enabled = true;

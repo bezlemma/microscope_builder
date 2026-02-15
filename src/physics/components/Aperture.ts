@@ -26,27 +26,31 @@ export class Aperture extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Flat plane at x = 0
-        const denom = rayLocal.direction.x;
-        if (Math.abs(denom) < 1e-6) return null;  // Parallel
+        // Flat plane at w=0 (optical axis along x → w)
+        // Transverse plane: u=y, v=z
+        const dw = rayLocal.direction.x;
+        if (Math.abs(dw) < 1e-6) return null;  // Parallel
 
-        const t = (0 - rayLocal.origin.x) / denom;
+        const t = -rayLocal.origin.x / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(
             rayLocal.direction.clone().multiplyScalar(t)
         );
 
-        const rSq = hitPoint.y * hitPoint.y + hitPoint.z * hitPoint.z;
+        // Annular ring check in uv transverse plane
+        const hu = hitPoint.y;
+        const hv = hitPoint.z;
+        const rSq = hu * hu + hv * hv;
         const innerR = this.openingDiameter / 2;
         const outerR = this.housingDiameter / 2;
 
-        // Only intersect if the hit is on the annular ring (outside opening, inside housing)
+        // Only intersect if hit is on the annular ring (outside opening, inside housing)
         if (rSq < innerR * innerR || rSq > outerR * outerR) {
             return null;  // Passes through the opening or misses entirely
         }
 
-        const normal = new Vector3(denom < 0 ? 1 : -1, 0, 0);
+        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);  // ±w normal
         return {
             t,
             point: hitPoint,

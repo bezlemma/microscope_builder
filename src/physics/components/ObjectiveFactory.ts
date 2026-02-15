@@ -28,7 +28,7 @@ export class ObjectiveFactory {
         const nBK7 = 1.517;
 
         // Origin at Front Vertex for local calculations
-        let localZ = 0;
+        let localW = 0;
         
         // Helper to add lens relative to Front Vertex
         const addLens = (
@@ -43,29 +43,24 @@ export class ObjectiveFactory {
             const lens = new SphericalLens(curvature, aperture, thickness, name, r1, r2, ior);
             
             // Calculate center position of this lens element
-            // LocalZ is at the FRONT face of this element.
-            // Center is at LocalZ + thickness/2.
-            const centerLocalZ = localZ + thickness / 2;
+            // localW is at the FRONT face of this element.
+            // Center is at localW + thickness/2.
+            const centerLocalW = localW + thickness / 2;
             
             // Transform to World Space
-            // We assume standard orientation: +Z local = +X World (if no rotation)
-            // But with rotationEuler, we apply full transform.
+            // In local space, w is the optical axis (mapped to Vector3.z).
+            // The rotation transforms local w into world space.
             
-            // Start with vector (0, 0, centerLocalZ) in "Lens Space" (where Z is optical axis)
-            // If Lens Space Z aligns with World X:
-            // We need to be careful about rotation application order.
-            // Standard SphericalLens assumes Optical Axis is Local Z? 
-            // - Check SphericalLens.ts: "Spherical lens centered at local Z=0"
-            // - Check OpticalComponent.ts: WorldToLocal logic.
-            // If we rotate the Lens object, its Local Z points in the direction of rotation.
+            // Start with vector (0, 0, centerLocalW) in local space (w = optical axis)
+            // Standard SphericalLens: optical axis is local w (Vector3.z)
+            // If we rotate the Lens object, its local w points in the direction of rotation.
             
-            // Position Calculation:
-            // P_world = P_ref + Rotation * (0, 0, centerLocalZ)
-            // But wait, the standard "Face X" rotation is (0, PI/2, 0).
+            // P_world = P_ref + Rotation * (0, 0, centerLocalW)
+            // Standard "Face X" rotation is (0, PI/2, 0).
             // A vector (0,0,1) rot(0, PI/2, 0) becomes (1, 0, 0). Correct.
             
             const euler = new Euler(rotationEuler.x, rotationEuler.y, rotationEuler.z);
-            const offset = new Vector3(0, 0, centerLocalZ).applyEuler(euler);
+            const offset = new Vector3(0, 0, centerLocalW).applyEuler(euler);
             const worldPos = position.clone().add(offset);
             
             lens.setPosition(worldPos.x, worldPos.y, worldPos.z);
@@ -73,14 +68,14 @@ export class ObjectiveFactory {
             
             components.push(lens);
             
-            // Advance cursor
-            localZ += thickness;
+            // Advance cursor along optical axis
+            localW += thickness;
             return lens;
         };
         
         // Helper for Air Gap
         const addGap = (dist: number) => {
-            localZ += dist;
+            localW += dist;
         };
 
         // --- Construction ---

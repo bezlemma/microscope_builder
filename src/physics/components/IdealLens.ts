@@ -37,13 +37,13 @@ export class IdealLens extends OpticalComponent {
      * Intersect: flat plane at w = 0, clipped to circular aperture.
      */
     intersect(rayLocal: Ray): HitRecord | null {
-        const oz = rayLocal.origin.z;
-        const dz = rayLocal.direction.z;
+        const ow = rayLocal.origin.z;
+        const dw = rayLocal.direction.z;
 
         // Ray parallel to the plane — no intersection
-        if (Math.abs(dz) < 1e-12) return null;
+        if (Math.abs(dw) < 1e-12) return null;
 
-        const t = -oz / dz;
+        const t = -ow / dw;
         // Must be in front of the ray
         if (t < 1e-6) return null;
 
@@ -55,8 +55,8 @@ export class IdealLens extends OpticalComponent {
         const h = transverseRadius(point);
         if (h > this.apertureRadius) return null;
 
-        // Normal: always along +w (optical axis), facing the incoming ray
-        const normal = new Vector3(0, 0, dz > 0 ? -1 : 1);
+        // Normal: along ±w, facing the incoming ray
+        const normal = new Vector3(0, 0, dw > 0 ? -1 : 1);
 
         return {
             t,

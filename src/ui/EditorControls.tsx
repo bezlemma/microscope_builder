@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { OrbitControls } from '@react-three/drei';
-import { MOUSE, TOUCH, Vector3, Euler, Quaternion } from 'three';
+import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera } from 'three';
 import { useAtom, useSetAtom } from 'jotai';
 import { componentsAtom, selectionAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
-    const [enableRotate, setEnableRotate] = useState(false);
+    const [altHeld, setAltHeld] = useState(false);
     const [shiftHeld, setShiftHeld] = useState(false);
     const setSelection = useSetAtom(selectionAtom);
     const [components, setComponents] = useAtom(componentsAtom);
@@ -15,20 +15,20 @@ export const EditorControls: React.FC = () => {
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.altKey) setEnableRotate(true);
+            if (e.altKey) setAltHeld(true);
             if (e.shiftKey) setShiftHeld(true);
             if (e.key === 'Escape') setSelection([]);
 
-            // Zoom shortcuts: [ = zoom out 2x, ] = zoom in 2x
+            // Zoom shortcuts: [ = zoom out, ] = zoom in (orthographic camera)
             if (e.key === '[' || e.key === ']') {
                 const controls = controlsRef.current;
                 if (controls) {
                     const camera = controls.object;
-                    const target = controls.target;
-                    const direction = camera.position.clone().sub(target);
-                    const factor = e.key === ']' ? 0.5 : 2.0;
-                    direction.multiplyScalar(factor);
-                    camera.position.copy(target.clone().add(direction));
+                    if (camera instanceof OrthographicCamera) {
+                        const factor = e.key === ']' ? 1.5 : (1 / 1.5);
+                        camera.zoom *= factor;
+                        camera.updateProjectionMatrix();
+                    }
                     controls.update();
                 }
             }
@@ -92,7 +92,7 @@ export const EditorControls: React.FC = () => {
             }
         };
         const handleKeyUp = (e: KeyboardEvent) => {
-            if (!e.altKey) setEnableRotate(false);
+            if (!e.altKey) setAltHeld(false);
             if (!e.shiftKey) setShiftHeld(false);
         };
 
@@ -109,18 +109,27 @@ export const EditorControls: React.FC = () => {
         <OrbitControls
             ref={controlsRef}
             makeDefault
-            enableRotate={enableRotate}
+            enableRotate={true}
             enableZoom={true}
-            enablePan={!shiftHeld}
+            enablePan={true}
 
-            // Mouse Mappings
+            // Mouse Mappings (same on Mac + Windows):
+            //
+            //   Left-click             = Select / drag component (not OrbitControls)
+            //   Shift + Left-drag      = Pan
+            //   Middle-drag            = Pan
+            //   Alt + Left-drag        = Rotate camera
+            //   Alt + Middle-drag      = Rotate camera
+            //   Right-click           = (reserved)
+            //   Scroll                 = Zoom
+            //   Ctrl                   = (nothing)
             mouseButtons={{
-                LEFT: MOUSE.ROTATE, // Shift+Click to Rotate. Regular Click = Nothing (if enableRotate=false)
-                MIDDLE: MOUSE.PAN,
-                RIGHT: MOUSE.PAN
+                LEFT: altHeld ? MOUSE.ROTATE : (shiftHeld ? MOUSE.PAN : -1 as any),
+                MIDDLE: altHeld ? MOUSE.ROTATE : MOUSE.PAN,
+                RIGHT: -1 as any
             }}
 
-            // Touch Mappings (for Mac trackpad & mobile)
+            // Touch Mappings (touchscreens / tablets)
             touches={{
                 ONE: TOUCH.PAN,
                 TWO: TOUCH.DOLLY_ROTATE
@@ -131,8 +140,6 @@ export const EditorControls: React.FC = () => {
             maxDistance={2000}
             enableDamping={true}
             dampingFactor={0.1}
-
-        // Initial View defaults (Target handling is usually external, but we keep it neutral here)
         />
     );
 };

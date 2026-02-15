@@ -107,8 +107,8 @@ function drawMultiBeam(
                 if (group.length === 1) {
                     // Single beam — no interference, just Gaussian
                     const p = group[0];
-                    const dx = x - (p.centerX ?? 0);
-                    const dy = y - (p.centerY ?? 0);
+                    const dx = x - (p.centerU ?? 0);
+                    const dy = y - (p.centerV ?? 0);
                     const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
                     if (gauss < 0.001) continue;
                     const intensity = Math.sqrt(gauss) * p.power;
@@ -125,15 +125,15 @@ function drawMultiBeam(
                     let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
 
                     for (const p of group) {
-                        const dx = x - (p.centerX ?? 0);
-                        const dy = y - (p.centerY ?? 0);
+                        const dx = x - (p.centerU ?? 0);
+                        const dy = y - (p.centerV ?? 0);
                         const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
                         if (gauss < 0.0001) continue;
                         const amp = Math.sqrt(Math.sqrt(gauss) * p.power);
 
                         // Phase: real OPL-based phase + spatial tilt phase
-                        // tiltX/Y create spatial fringes when beams arrive at different angles
-                        const tiltPhase = k_real * ((p.tiltX ?? 0) * x + (p.tiltY ?? 0) * y);
+                        // tiltU/V create spatial fringes when beams arrive at different angles
+                        const tiltPhase = k_real * ((p.tiltU ?? 0) * x + (p.tiltV ?? 0) * y);
                         const phi = k_real * p.phase + tiltPhase;
 
                         // Jones vector contribution
@@ -168,13 +168,13 @@ function drawMultiBeam(
 
     // === Overlays: draw per-beam 1/e² rings and polarization for primary beam ===
     const primary = profiles[0];
-    const beamCxPx = width / 2 + (primary.centerX ?? 0) / scaleX;
-    const beamCyPx = height / 2 + (primary.centerY ?? 0) / scaleY;
+    const beamCxPx = width / 2 + (primary.centerU ?? 0) / scaleX;
+    const beamCyPx = height / 2 + (primary.centerV ?? 0) / scaleY;
 
     // Draw 1/e² rings for each beam
     for (const p of profiles) {
-        const cx = width / 2 + (p.centerX ?? 0) / scaleX;
-        const cy = height / 2 + (p.centerY ?? 0) / scaleY;
+        const cx = width / 2 + (p.centerU ?? 0) / scaleX;
+        const cy = height / 2 + (p.centerV ?? 0) / scaleY;
         const rxPx = p.wx / scaleX;
         const ryPx = p.wy / scaleY;
 
@@ -210,8 +210,8 @@ function drawMultiBeam(
 
     // === Polarization overlay for EACH beam ===
     for (const prof of profiles) {
-        const pCx = width / 2 + (prof.centerX ?? 0) / scaleX;
-        const pCy = height / 2 + (prof.centerY ?? 0) / scaleY;
+        const pCx = width / 2 + (prof.centerU ?? 0) / scaleX;
+        const pCy = height / 2 + (prof.centerV ?? 0) / scaleY;
         const pRxPx = prof.wx / scaleX;
         const pRyPx = prof.wy / scaleY;
 
@@ -322,9 +322,9 @@ function drawMultiBeam(
                 : interferenceType === 'destructive' ? '#ff6b6b' : '#ffd93d';
 
             // Tilt difference → fringe spacing
-            const dtiltX = (group[1].tiltX ?? 0) - (group[0].tiltX ?? 0);
-            const dtiltY = (group[1].tiltY ?? 0) - (group[0].tiltY ?? 0);
-            const tiltMag = Math.sqrt(dtiltX * dtiltX + dtiltY * dtiltY);
+            const dtiltU = (group[1].tiltU ?? 0) - (group[0].tiltU ?? 0);
+            const dtiltV = (group[1].tiltV ?? 0) - (group[0].tiltV ?? 0);
+            const tiltMag = Math.sqrt(dtiltU * dtiltU + dtiltV * dtiltV);
             const fringeSpacing = tiltMag > 1e-6 ? wavelengthMm / tiltMag : Infinity;
 
             // Draw metrics panel

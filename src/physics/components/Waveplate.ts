@@ -54,21 +54,24 @@ export class Waveplate extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Thin-plane intersection at x=0 (waveplate face)
-        // Normal is along ±X  
-        if (Math.abs(rayLocal.direction.x) < 1e-6) return null; // Parallel to face
+        // Thin-plane intersection at w=0 (optical axis along x → w)
+        // Transverse plane: u=y, v=z
+        const dw = rayLocal.direction.x;
+        if (Math.abs(dw) < 1e-6) return null; // Parallel to face
 
-        const t = -rayLocal.origin.x / rayLocal.direction.x;
+        const t = -rayLocal.origin.x / dw;
         if (t < 0.01) return null;
 
         const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
 
-        // Circular aperture check
-        if (point.y * point.y + point.z * point.z > this.apertureRadius * this.apertureRadius) {
+        // Circular aperture check in uv transverse plane
+        const hu = point.y;
+        const hv = point.z;
+        if (hu * hu + hv * hv > this.apertureRadius * this.apertureRadius) {
             return null;
         }
 
-        const normal = new Vector3(rayLocal.direction.x > 0 ? -1 : 1, 0, 0);
+        const normal = new Vector3(dw > 0 ? -1 : 1, 0, 0);  // ±w normal facing incoming ray
 
         return {
             t,

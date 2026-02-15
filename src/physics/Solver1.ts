@@ -101,9 +101,9 @@ export class Solver1 {
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
 
-            // If ray was absorbed internally (e.g. TIR trapped in prism),
+            // If ray was absorbed or extinguished (e.g. TIR, crossed polarizers),
             // add it to path for visualization but don't trace further
-            if (nextRay.intensity <= 0) {
+            if (nextRay.intensity < 1e-6) {
                 allPaths.push([...currentPath, nextRay]);
                 continue;
             }

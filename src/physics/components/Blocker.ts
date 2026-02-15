@@ -13,23 +13,23 @@ export class Blocker extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Cylindrical Intersection (Axis X - Thickness along X)
-        // "Face" is in YZ plane.
+        // Cylindrical body (optical axis along x → w)
+        // Transverse plane: u=y, v=z
         const radius = this.diameter / 2;
         const halfDepth = this.thickness / 2;
 
-        const oy = rayLocal.origin.y;
-        const oz = rayLocal.origin.z;
-        const dy = rayLocal.direction.y;
-        const dz = rayLocal.direction.z;
+        const ou = rayLocal.origin.y;
+        const ov = rayLocal.origin.z;
+        const du = rayLocal.direction.y;
+        const dv = rayLocal.direction.z;
 
         let tClosest = Infinity;
         let normalClosest: Vector3 | null = null;
         
-        // 1. Check Cylinder Wall / Rim: y^2 + z^2 = r^2  (Cylinder Axis X)
-        const A = dy*dy + dz*dz;
-        const B = 2 * (oy*dy + oz*dz);
-        const C = oy*oy + oz*oz - radius*radius;
+        // 1. Check Cylinder Wall / Rim: u² + v² = r²  (cylinder axis along w)
+        const A = du*du + dv*dv;
+        const B = 2 * (ou*du + ov*dv);
+        const C = ou*ou + ov*ov - radius*radius;
 
         if (Math.abs(A) > 1e-6) {
             const det = B*B - 4*A*C;
@@ -40,29 +40,31 @@ export class Blocker extends OpticalComponent {
 
                 [t1, t2].forEach(t => {
                    if (t > 0.001 && t < tClosest) {
-                       const x = rayLocal.origin.x + t * rayLocal.direction.x;
-                       if (x >= -halfDepth && x <= halfDepth) {
+                       const w = rayLocal.origin.x + t * rayLocal.direction.x;
+                       if (w >= -halfDepth && w <= halfDepth) {
                            tClosest = t;
                            const hitP = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                           normalClosest = new Vector3(0, hitP.y, hitP.z).normalize();
+                           normalClosest = new Vector3(0, hitP.y, hitP.z).normalize();  // radial normal in uv
                        }
                    }
                 });
             }
         }
 
-        // 2. Check Caps (X = -halfDepth, X = +halfDepth)
-        const d_x = rayLocal.direction.x;
-        if (Math.abs(d_x) > 1e-6) {
+        // 2. Check Caps at w = ±halfDepth
+        const dw = rayLocal.direction.x;
+        if (Math.abs(dw) > 1e-6) {
              const caps = [-halfDepth, halfDepth];
-             caps.forEach(capX => {
-                 const t = (capX - rayLocal.origin.x) / d_x;
+             caps.forEach(capW => {
+                 const t = (capW - rayLocal.origin.x) / dw;
                  if (t > 0.001 && t < tClosest) {
                       const hitP = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                      // Check radius in YZ plane
-                      if (hitP.y*hitP.y + hitP.z*hitP.z <= radius*radius) {
+                      // Check radius in uv transverse plane
+                      const hu = hitP.y;
+                      const hv = hitP.z;
+                      if (hu*hu + hv*hv <= radius*radius) {
                           tClosest = t;
-                          normalClosest = new Vector3(Math.sign(capX), 0, 0);
+                          normalClosest = new Vector3(Math.sign(capW), 0, 0);  // ±w normal
                       }
                  }
              });

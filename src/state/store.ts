@@ -7,6 +7,8 @@ import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
 import { createPrismDebugScene } from '../presets/prismDebug';
 import { createPolarizationZooScene } from '../presets/polarizationZoo';
+import { createMZInterferometerScene } from '../presets/mzInterferometer';
+import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 
 // --- State Types ---
 export interface RayConfig {
@@ -24,7 +26,9 @@ export enum PresetName {
     TransmissionMicroscope = "Transmission Microscope",
     LensZoo = "Lens Zoo",
     PrismDebug = "Prism Debug",
-    PolarizationZoo = "Polarization Zoo"
+    PolarizationZoo = "Polarization Zoo",
+    MZInterferometer = "MZ Interferometer",
+    EpiFluorescence = "Epi-Fluorescence"
 }
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
@@ -49,6 +53,10 @@ export const loadPresetAtom = atom(
             set(componentsAtom, createPrismDebugScene());
         } else if (presetName === PresetName.PolarizationZoo) {
             set(componentsAtom, createPolarizationZooScene());
+        } else if (presetName === PresetName.MZInterferometer) {
+            set(componentsAtom, createMZInterferometerScene());
+        } else if (presetName === PresetName.EpiFluorescence) {
+            set(componentsAtom, createEpiFluorescenceScene());
         }
     }
 );

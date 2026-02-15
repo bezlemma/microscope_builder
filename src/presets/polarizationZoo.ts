@@ -2,48 +2,40 @@ import { OpticalComponent } from '../physics/Component';
 import { Laser } from '../physics/components/Laser';
 import { Card } from '../physics/components/Card';
 import { Waveplate } from '../physics/components/Waveplate';
-import { Mirror } from '../physics/components/Mirror';
-import { BeamSplitter } from '../physics/components/BeamSplitter';
 
 /**
- * Polarization Zoo Preset — stress-test demos for the optics engine
- * 
- * Path 1 (top):    Mach-Zehnder Interferometer
- *   Laser → BS1 → Mirror_A (reflected arm) + Mirror_B (transmitted arm) → BS2 → Card
- *   Tests: OPL accumulation, beam splitting, coherent recombination, interference fringes
- *   Expected: Card shows interference pattern that shifts if a mirror is moved
+ * Polarization Zoo Preset — three classic polarization demonstrations
  *
- * Path 2 (middle): Crossed Polarizers with Waveplate
- *   Laser → Polarizer@0° → λ/4@45° → Polarizer@90° → Card
- *   Tests: Jones matrix chain accuracy — the waveplate converts
- *   linear→circular→linear(rotated), allowing light through "crossed" polarizers
- *   Expected: ~50% transmission through otherwise-blocking configuration
+ * Path 1 (top):    Half-Wave Plate Polarization Rotation
+ *   Laser → Pol@0° → HWP@45° → Pol@90° → Card
+ *   The HWP at 45° rotates horizontal polarization by 2×45° = 90°,
+ *   converting it to vertical. The crossed analyzer at 90° now passes
+ *   everything — compared to total blocking without the HWP.
  *
- * Path 3 (bottom): Two-Beam Coherent Overlap
- *   Laser_A + Laser_B (same λ, slight vertical offset) → Card
- *   Tests: Multi-beam card rendering, spatial overlap, coherent interference
- *   Expected: Where beams overlap, interference fringes appear
+ * Path 2 (middle): Crossed Polarizers with λ/4 Waveplate
+ *   Laser → Pol@0° → QWP@45° → Pol@90° → Card
+ *   The QWP converts linear→circular, and the crossed analyzer projects
+ *   the circular state onto its axis → ~50% transmission.
+ *
+ * Path 3 (bottom): Three-Polarizer Paradox
+ *   Laser → Pol@0° → Pol@45° → Pol@90° → Card
+ *   Without the middle polarizer, 0° and 90° are crossed → total block.
+ *   Inserting a 45° polarizer between them lets light through!
+ *   Each step transmits cos²(45°) ≈ 50%, so total ≈ 25%.
+ *   This is the famous "quantum eraser" classroom demo.
  */
 export const createPolarizationZooScene = (): OpticalComponent[] => [
 
-    // ═══ Path 1: Mach-Zehnder Interferometer ═══
+    // ═══ Path 1: Half-Wave Plate Polarization Rotation ═══
     //
-    //  Laser ──→ BS1 ──(transmitted)──→ Mirror_B ──→ (down)
-    //               │                                    │
-    //          (reflected, up)                            │
-    //               │                                    ↓
-    //          Mirror_A ──→ (right) ──→ BS2 ──→ Card
+    //  Laser → Pol@0° → HWP@45° → Pol@90° → Card
     //
-    // Layout (all at z=0, XY plane):
-    //   Laser at x=-200, y=80
-    //   BS1   at x=-100, y=80  (45° → reflects up)
-    //   Mirror_A at x=-100, y=160 (reflects right)
-    //   Mirror_B at x=0, y=80   (reflects down → toward BS2)
-    //   BS2   at x=0, y=160    (recombines beams → Card)
-    //   Card  at x=80, y=160
+    //  Without the HWP: crossed polarizers block all light.
+    //  With HWP@45°: rotates polarization by 90° → analyzer passes everything.
+    //  Try dragging the HWP fast axis angle to see transmission vary!
 
     (() => {
-        const c = new Laser("MZ Laser (532nm)");
+        const c = new Laser("HWP Laser");
         c.wavelength = 532;
         c.power = 1.0;
         c.setPosition(-200, 80, 0);
@@ -51,38 +43,28 @@ export const createPolarizationZooScene = (): OpticalComponent[] => [
         return c;
     })(),
     (() => {
-        const c = new BeamSplitter(20, 2, 0.5, "BS1 (50/50)");
-        c.setPosition(-100, 80, 0);
-        // 45° to reflect upward (+Y) and transmit forward (+X)
-        c.setRotation(0, 0, 3 * Math.PI / 4);
+        const c = new Waveplate('polarizer', 12.5, 0, 'Pol @ 0°');
+        c.setPosition(-120, 80, 0);
+        c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        // Mirror A: at top-left, reflects the upward beam to the right
-        const c = new Mirror(20, 2, "Mirror A");
-        c.setPosition(-100, 160, 0);
-        // Normal pointing down-right at 45° → reflects +Y beam to +X
-        c.setRotation(0, 0, -Math.PI / 4);
+        // HWP at 45°: rotates polarization by 2×45° = 90°
+        const c = new Waveplate('half', 12.5, Math.PI / 4, 'λ/2 @ 45°');
+        c.setPosition(-50, 80, 0);
+        c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        // Mirror B: at bottom-right, reflects the rightward beam upward
-        const c = new Mirror(20, 2, "Mirror B");
-        c.setPosition(0, 80, 0);
-        // Normal pointing up-left at 45° → reflects +X beam to +Y
-        c.setRotation(0, 0, 3 * Math.PI / 4);
+        // Analyzer at 90° — crossed with input polarizer
+        const c = new Waveplate('polarizer', 12.5, Math.PI / 2, 'Pol @ 90°');
+        c.setPosition(20, 80, 0);
+        c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        const c = new BeamSplitter(20, 2, 0.5, "BS2 (50/50)");
-        c.setPosition(0, 160, 0);
-        // 45° to recombine beams
-        c.setRotation(0, 0, 3 * Math.PI / 4);
-        return c;
-    })(),
-    (() => {
-        const c = new Card(30, 30, "MZ Detector");
-        c.setPosition(80, 160, 0);
+        const c = new Card(20, 20, "HWP Card");
+        c.setPosition(100, 80, 0);
         c.setRotation(0, Math.PI / 2, 0);
         return c;
     })(),
@@ -95,10 +77,9 @@ export const createPolarizationZooScene = (): OpticalComponent[] => [
     //  The λ/4 plate converts horizontal linear → circular, and the
     //  second polarizer projects the circular state onto its axis.
     //  Result: ~50% of photons pass through (not blocked!).
-    //  This is the quantum eraser concept in classical optics.
 
     (() => {
-        const c = new Laser("Crossed Pol Laser");
+        const c = new Laser("QWP Laser");
         c.wavelength = 632;  // HeNe red
         c.power = 1.0;
         c.setPosition(-200, -20, 0);
@@ -106,63 +87,71 @@ export const createPolarizationZooScene = (): OpticalComponent[] => [
         return c;
     })(),
     (() => {
-        // First polarizer: horizontal (0°)
         const c = new Waveplate('polarizer', 12.5, 0, 'Pol @ 0°');
         c.setPosition(-120, -20, 0);
         c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        // λ/4 plate at 45°: converts linear → circular
         const c = new Waveplate('quarter', 12.5, Math.PI / 4, 'λ/4 @ 45°');
         c.setPosition(-50, -20, 0);
         c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        // Second polarizer: vertical (90°) — "crossed" with the first
         const c = new Waveplate('polarizer', 12.5, Math.PI / 2, 'Pol @ 90°');
         c.setPosition(20, -20, 0);
         c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        const c = new Card(20, 20, "Crossed Pol Card");
+        const c = new Card(20, 20, "QWP Card");
         c.setPosition(100, -20, 0);
         c.setRotation(0, Math.PI / 2, 0);
         return c;
     })(),
 
-    // ═══ Path 3: Two-Beam Coherent Overlap ═══
+    // ═══ Path 3: Three-Polarizer Paradox ═══
     //
-    //  Laser_A (532nm, y=-100) ──→ Card (shared)
-    //  Laser_B (532nm, y=-110) ──→ Card (shared)
+    //  Laser → Pol@0° → Pol@45° → Pol@90° → Card
     //
-    //  Both lasers are same λ, slightly offset vertically.
-    //  Where beams overlap on the card, coherent interference
-    //  should produce fringes based on OPL difference.
-    //  Tests: multi-beam card profiling, spatial overlap detection.
+    //  Two crossed polarizers (0° and 90°) block all light.
+    //  But inserting a third polarizer at 45° between them lets light through!
+    //  Step 1: cos²(45°) ≈ 50% passes the middle polarizer.
+    //  Step 2: cos²(45°) ≈ 50% of that passes the final polarizer.
+    //  Total: ~25% transmission through "opaque" crossed polarizers.
 
     (() => {
-        const c = new Laser("Overlap Laser A");
-        c.wavelength = 532;
+        const c = new Laser("3-Pol Laser");
+        c.wavelength = 473;  // Blue
         c.power = 1.0;
-        c.setPosition(-150, -100, 0);
+        c.setPosition(-200, -120, 0);
         c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        const c = new Laser("Overlap Laser B");
-        c.wavelength = 532;
-        c.power = 1.0;
-        c.setPosition(-150, -115, 0);
+        const c = new Waveplate('polarizer', 12.5, 0, 'Pol @ 0°');
+        c.setPosition(-120, -120, 0);
         c.setRotation(0, 0, 0);
         return c;
     })(),
     (() => {
-        const c = new Card(30, 30, "Overlap Card");
-        c.setPosition(50, -107, 0);
+        // The "paradox" polarizer: without this, light is blocked
+        const c = new Waveplate('polarizer', 12.5, Math.PI / 4, 'Pol @ 45°');
+        c.setPosition(-50, -120, 0);
+        c.setRotation(0, 0, 0);
+        return c;
+    })(),
+    (() => {
+        const c = new Waveplate('polarizer', 12.5, Math.PI / 2, 'Pol @ 90°');
+        c.setPosition(20, -120, 0);
+        c.setRotation(0, 0, 0);
+        return c;
+    })(),
+    (() => {
+        const c = new Card(20, 20, "3-Pol Card");
+        c.setPosition(100, -120, 0);
         c.setRotation(0, Math.PI / 2, 0);
         return c;
-    })()
+    })(),
 ];

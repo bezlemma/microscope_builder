@@ -1,37 +1,28 @@
 ## 1. Core Philosophy: 
-The "Source of Truth" - The Scene Graph is the only Truth. 
 
-The UI is a viewport.
-
-Physics over Heuristics. Components do not "know" they are part of a microscope. Any lens, including a complex Objective Lens is simply a collection of glass surfaces. It does not enforce focal lengths; the curvature of the glass enforces them physically.
-
-No "Hybrid" Rays. We explicitly separate "Layout Rays" (Geometry) from "Imaging Rays" (Stochastic). They share no logic, only data.
+Three tenants:
+1. The "Source of Truth" - The Scene Graph is the only Truth. 
+2. The UI is faithful viewport to this truth.
+3. Physics over Heuristics. Components do not "know" they are part of a microscope.
 
 ## 2. Coordinate Systems & Units
-We utilize two distinct coordinate systems to decouple positioning from geometry.
+Two distinct coordinate systems to decouple positioning from geometry.
 
 ### A. World Space (The Optics Table)
-Used for defining the position of components and the path of rays traveling between components.
-Type: Right-handed 3D Cartesian $(x, y, z)$.
-
-$Z$-axis: Height (Normal to the optical table).
-Positive Z is "Up" off the table.
-
-$XY$-axis The Table Surface.
-Used for placing components (e.g., "The laser is at x=0, y=10").Origin: The center of the optical table.
+$(x, y, z)$. Defines the position of components and the path of rays traveling between components.
+Positive $z$ is "Up" off the table. $xy$-axis The Table Surface.
 
 ### B. Light Space (Component Frame)
 
-Used STRICTLY for calculating intersections and surface physics only after coordinate transforms. This simplifies the math by normalizing all components to a standard orientation.
-Type: Right-handed 3D Cartesian $(u, v, w)$.
+Used for calculating intersections and surface physics after coordinate transforms. This simplifies the math by normalizing all components to a standard orientation.
+
+$(u, v, w)$.
 
 $W$-axis: The Optical Axis.The direction light travels through the component.
 For a lens, this is the axis of symmetry.
 
 $UV$ axis: The Transverse Plane. The cross-section of the component.
 Equation for a standard lens surface: $w = \text{sag}(u, v)$.
-
-Custom Surfaces: Any surface can be defined by a custom equation $w = f(u,v)$. The Normal vector is derived from the gradient of this function, enabling reflection/refraction on arbitrary shapes.
 
 Any time this transform occurs in the code, great care should be used! This can cause a lot of errors if we use this coordinate space anywhere else by accident.
 

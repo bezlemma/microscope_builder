@@ -11,6 +11,7 @@ import { Inspector } from './ui/Inspector'
 import { GlobalRotation } from './ui/GlobalRotation'
 import { ViewerPanels } from './ui/ViewerPanels'
 import { DragDropHandler } from './ui/DragDropHandler'
+import { ControlsHelp } from './ui/ControlsHelp'
 
 function App() {
 
@@ -39,6 +40,7 @@ function App() {
 
         <Inspector />
         <ViewerPanels />
+        <ControlsHelp />
       </div>
     </div>
   )

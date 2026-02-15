@@ -242,6 +242,7 @@ export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
+    const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
 
     const handleToggle = (groupName: string) => {
         setOpenGroup(prev => prev === groupName ? null : groupName);
@@ -251,22 +252,75 @@ export const Sidebar: React.FC = () => {
         <div
             onClick={onClick}
             style={{
-                padding: '8px 12px',
-                margin: '4px 0',
-                backgroundColor: active ? '#2a4a3a' : '#222',
+                padding: '6px 10px 6px 20px',
+                margin: '2px 0',
+                backgroundColor: active ? '#2a4a3a' : '#252525',
                 cursor: 'pointer',
-                border: `1px solid ${active ? '#64ffda' : '#333'}`,
+                border: `1px solid ${active ? '#64ffda' : 'transparent'}`,
                 borderRadius: '4px',
-                opacity: active ? 1 : 0.5,
-                transition: 'all 0.2s',
-                fontSize: '13px',
-                color: active ? '#fff' : '#888',
+                transition: 'all 0.15s',
+                fontSize: '12px',
+                color: active ? '#fff' : '#aaa',
                 userSelect: 'none'
             }}
-            onMouseOver={(e) => { if (active) e.currentTarget.style.backgroundColor = '#3a5a4a' }}
-            onMouseOut={(e) => { if (active) e.currentTarget.style.backgroundColor = '#2a4a3a' }}
+            onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = active ? '#3a5a4a' : '#333';
+                e.currentTarget.style.borderColor = active ? '#64ffda' : '#555';
+                e.currentTarget.style.color = '#fff';
+            }}
+            onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = active ? '#2a4a3a' : '#252525';
+                e.currentTarget.style.borderColor = active ? '#64ffda' : 'transparent';
+                e.currentTarget.style.color = active ? '#fff' : '#aaa';
+            }}
         >
             {label}
+        </div>
+    );
+
+    const PresetCategory = ({ label, isOpen, onToggle, children }: {
+        label: string, isOpen: boolean, onToggle: () => void,
+        children: React.ReactNode
+    }) => (
+        <div style={{ marginBottom: 4 }}>
+            <div
+                onClick={onToggle}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '7px 10px',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    backgroundColor: isOpen ? '#252525' : 'transparent',
+                    transition: 'background-color 0.15s',
+                    userSelect: 'none',
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#2a2a2a'; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = isOpen ? '#252525' : 'transparent'; }}
+            >
+                <ChevronRight
+                    size={12}
+                    style={{
+                        marginRight: 6,
+                        transition: 'transform 0.2s ease',
+                        transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                        color: '#666',
+                        flexShrink: 0,
+                    }}
+                />
+                <span style={{ fontSize: '12px', color: '#ccc', fontWeight: 500 }}>
+                    {label}
+                </span>
+            </div>
+            <div style={{
+                overflow: 'hidden',
+                maxHeight: isOpen ? '200px' : '0px',
+                transition: 'max-height 0.25s ease',
+                marginLeft: 4,
+                borderLeft: isOpen ? '2px solid #333' : '2px solid transparent',
+            }}>
+                {children}
+            </div>
         </div>
     );
 
@@ -308,34 +362,72 @@ export const Sidebar: React.FC = () => {
                 </div>
             </div>
 
-            {/* Presets Section */}
+            {/* Presets Section — categorized dropdowns */}
             <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
                 <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
-                <PresetButton
-                    label="Beam Expander"
-                    active={activePreset === PresetName.BeamExpander}
-                    onClick={() => loadPreset(PresetName.BeamExpander)}
-                />
-                <PresetButton
-                    label="Transmission Microscope"
-                    active={activePreset === PresetName.TransmissionMicroscope}
-                    onClick={() => loadPreset(PresetName.TransmissionMicroscope)}
-                />
-                <PresetButton
-                    label="Lens Zoo"
-                    active={activePreset === PresetName.LensZoo}
-                    onClick={() => loadPreset(PresetName.LensZoo)}
-                />
-                <PresetButton
-                    label="Prism Debug"
-                    active={activePreset === PresetName.PrismDebug}
-                    onClick={() => loadPreset(PresetName.PrismDebug)}
-                />
-                <PresetButton
-                    label="Polarization Zoo"
-                    active={activePreset === PresetName.PolarizationZoo}
-                    onClick={() => loadPreset(PresetName.PolarizationZoo)}
-                />
+
+                <PresetCategory
+                    label="Microscopes"
+                    isOpen={openPresetCat === 'Microscopes'}
+                    onToggle={() => setOpenPresetCat(prev => prev === 'Microscopes' ? null : 'Microscopes')}
+                >
+                    <PresetButton
+                        label="Transmission Microscope"
+                        active={activePreset === PresetName.TransmissionMicroscope}
+                        onClick={() => loadPreset(PresetName.TransmissionMicroscope)}
+                    />
+                    <PresetButton
+                        label="Epi-Fluorescence"
+                        active={activePreset === PresetName.EpiFluorescence}
+                        onClick={() => loadPreset(PresetName.EpiFluorescence)}
+                    />
+                </PresetCategory>
+
+                <PresetCategory
+                    label="Optics Demos"
+                    isOpen={openPresetCat === 'Optics'}
+                    onToggle={() => setOpenPresetCat(prev => prev === 'Optics' ? null : 'Optics')}
+                >
+                    <PresetButton
+                        label="Beam Expander"
+                        active={activePreset === PresetName.BeamExpander}
+                        onClick={() => loadPreset(PresetName.BeamExpander)}
+                    />
+                </PresetCategory>
+
+                <PresetCategory
+                    label="Physics Demos"
+                    isOpen={openPresetCat === 'Physics'}
+                    onToggle={() => setOpenPresetCat(prev => prev === 'Physics' ? null : 'Physics')}
+                >
+                    <PresetButton
+                        label="MZ Interferometer"
+                        active={activePreset === PresetName.MZInterferometer}
+                        onClick={() => loadPreset(PresetName.MZInterferometer)}
+                    />
+                </PresetCategory>
+
+                <PresetCategory
+                    label="Debugs"
+                    isOpen={openPresetCat === 'Debugs'}
+                    onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
+                >
+                    <PresetButton
+                        label="Lens Zoo"
+                        active={activePreset === PresetName.LensZoo}
+                        onClick={() => loadPreset(PresetName.LensZoo)}
+                    />
+                    <PresetButton
+                        label="Prism Debug"
+                        active={activePreset === PresetName.PrismDebug}
+                        onClick={() => loadPreset(PresetName.PrismDebug)}
+                    />
+                    <PresetButton
+                        label="Polarization Zoo"
+                        active={activePreset === PresetName.PolarizationZoo}
+                        onClick={() => loadPreset(PresetName.PolarizationZoo)}
+                    />
+                </PresetCategory>
             </div>
         </div>
     );

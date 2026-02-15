@@ -485,6 +485,9 @@ export const EFieldVisualizer: React.FC<EFieldVisualizerProps> = ({ beamSegments
                 const segLen = seg.start.distanceTo(seg.end);
                 if (segLen < 0.1) continue;
 
+                // Skip segments with near-zero power (extinct beams)
+                if (seg.power < 1e-6) continue;
+
                 const wavelengthMm = seg.wavelength * 1e3;
                 // Use effective wavelength in medium: λ/n
                 const effectiveWl = wavelengthMm / (seg.refractiveIndex || 1.0);

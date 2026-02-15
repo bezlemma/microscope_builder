@@ -32,24 +32,27 @@ export class DichroicMirror extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Flat plane at x = 0 (same as BeamSplitter)
+        // Flat plane at w=0 (optical axis along x → w)
+        // Transverse plane: u=y, v=z
         const radius = this.diameter / 2;
-        const denom = rayLocal.direction.x;
-        if (Math.abs(denom) < 1e-6) return null;
+        const dw = rayLocal.direction.x;
+        if (Math.abs(dw) < 1e-6) return null;
 
-        const t = (0 - rayLocal.origin.x) / denom;
+        const t = -rayLocal.origin.x / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(
             rayLocal.direction.clone().multiplyScalar(t)
         );
 
-        // Circular aperture check
-        if (hitPoint.y * hitPoint.y + hitPoint.z * hitPoint.z > radius * radius) {
+        // Circular aperture check in uv transverse plane
+        const hu = hitPoint.y;
+        const hv = hitPoint.z;
+        if (hu * hu + hv * hv > radius * radius) {
             return null;
         }
 
-        const normal = new Vector3(denom < 0 ? 1 : -1, 0, 0);
+        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);  // ±w normal
         return {
             t,
             point: hitPoint,
