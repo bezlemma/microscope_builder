@@ -23,6 +23,7 @@ import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Aperture } from '../physics/components/Aperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
 
 import { RayVisualizer } from './RayVisualizer';
 
@@ -240,6 +241,28 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
                     roughness={0.05}
                     clearcoat={1.0}
                     clearcoatRoughness={0.05}
+                />
+            </mesh>
+        </group>
+    );
+};
+
+export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
+    const geom = useMemo(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh geometry={geom} renderOrder={-1}>
+                <meshPhysicalMaterial
+                    color="#ffffff"
+                    metalness={0.95}
+                    roughness={0.05}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.05}
+                    side={DoubleSide}
                 />
             </mesh>
         </group>
@@ -859,6 +882,8 @@ export const OpticalTable: React.FC = () => {
                 if ('r2' in c) props.push(`r2=${(c as any).r2}`);
                 if ('focalLength' in c) props.push(`fl=${(c as any).focalLength}`);
                 if ('diameter' in c) props.push(`d=${(c as any).diameter}`);
+                if ('width' in c) props.push(`w=${(c as any).width}`);
+                if ('radiusOfCurvature' in c) props.push(`roc=${(c as any).radiusOfCurvature}`);
                 if ('spectralProfile' in c) {
                     const sp = (c as any).spectralProfile;
                     props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
@@ -1503,6 +1528,7 @@ export const OpticalTable: React.FC = () => {
             {components.map(c => {
                 let visual = null;
                 if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
+                else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
                 else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
                 else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
                 else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;

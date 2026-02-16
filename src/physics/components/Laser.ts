@@ -10,8 +10,8 @@ export class Laser extends OpticalComponent {
     power: number = 1.0;      // Watts (optical output power)
 
     private static readonly HOUSING = new Box3(
-        new Vector3(-50, -7.5, -12.5),
-        new Vector3(0, 7.5, 12.5)
+        new Vector3(-25, -12.5, -12.5),
+        new Vector3(3, 12.5, 12.5)
     );
     
     constructor(name: string = "Laser Source") {

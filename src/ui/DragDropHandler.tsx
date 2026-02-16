@@ -19,6 +19,7 @@ import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Aperture } from '../physics/components/Aperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { OpticalComponent } from '../physics/Component';
@@ -44,12 +45,13 @@ function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'aperture') return new Aperture(10, 25, 'Aperture');
     if (type === 'filter') return new Filter(25, 3, new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]), 'Filter');
     if (type === 'dichroic') return new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
+    if (type === 'curvedMirror') return new CurvedMirror(25, 100, 3, 'Curved Mirror');
     return null;
 }
 
 /** Apply a sensible default rotation for the given component type. */
 function applyDefaultRotation(comp: OpticalComponent, type: string): void {
-    if (type === 'mirror' || type === 'beamSplitter' || type === 'dichroic') {
+    if (type === 'mirror' || type === 'beamSplitter' || type === 'dichroic' || type === 'curvedMirror') {
         comp.setRotation(0, 0, 3 * Math.PI / 4);
     } else if (['blocker', 'halfWavePlate', 'quarterWavePlate', 'polarizer', 'aperture', 'filter'].includes(type)) {
         comp.setRotation(0, 0, 0);

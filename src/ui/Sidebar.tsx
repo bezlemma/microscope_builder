@@ -100,6 +100,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#74b9ff',
         items: [
             { type: 'mirror', label: 'Mirror', icon: Square },
+            { type: 'curvedMirror', label: 'Curved Mirror', icon: Square },
             { type: 'beamSplitter', label: 'Beam Splitter', icon: Square },
             { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
         ]

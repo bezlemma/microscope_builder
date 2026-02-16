@@ -74,8 +74,8 @@ export class Lamp extends OpticalComponent {
     }
 
     private static readonly HOUSING = new Box3(
-        new Vector3(-50, -7.5, -12.5),
-        new Vector3(0, 7.5, 12.5)
+        new Vector3(-20, -11, -15),
+        new Vector3(3, 11, 15)
     );
 
     constructor(name: string = "Lamp Source") {

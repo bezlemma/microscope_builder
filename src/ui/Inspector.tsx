@@ -19,6 +19,8 @@ import { Waveplate } from '../physics/components/Waveplate';
 import { Aperture } from '../physics/components/Aperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
@@ -344,6 +346,21 @@ export const Inspector: React.FC = () => {
 
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
+    const [localLaserPower, setLocalLaserPower] = useState<string>('1');
+    const [localLampPower, setLocalLampPower] = useState<string>('1');
+
+    // Cylindrical Lens
+    const [localCylR1, setLocalCylR1] = useState<string>('40');
+    const [localCylR2, setLocalCylR2] = useState<string>('1e9');
+    const [localCylAperture, setLocalCylAperture] = useState<string>('12');
+    const [localCylWidth, setLocalCylWidth] = useState<string>('24');
+    const [localCylThickness, setLocalCylThickness] = useState<string>('3');
+    const [localCylIor, setLocalCylIor] = useState<string>('1.5168');
+
+    // Curved Mirror
+    const [localCurvedMirrorDiameter, setLocalCurvedMirrorDiameter] = useState<string>('25');
+    const [localCurvedMirrorRoC, setLocalCurvedMirrorRoC] = useState<string>('100');
+    const [localCurvedMirrorThickness, setLocalCurvedMirrorThickness] = useState<string>('3');
 
 
     const [localApexAngle, setLocalApexAngle] = useState<string>('60');
@@ -429,9 +446,24 @@ export const Inspector: React.FC = () => {
                 if (selectedComponent instanceof Laser) {
                     setLocalWavelength(selectedComponent.wavelength);
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
+                    setLocalLaserPower(String(selectedComponent.power));
                 }
                 if (selectedComponent instanceof Lamp) {
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
+                    setLocalLampPower(String(selectedComponent.power));
+                }
+                if (selectedComponent instanceof CylindricalLens) {
+                    setLocalCylR1(Math.abs(selectedComponent.r1) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.r1 * 100) / 100));
+                    setLocalCylR2(Math.abs(selectedComponent.r2) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.r2 * 100) / 100));
+                    setLocalCylAperture(String(Math.round(selectedComponent.apertureRadius * 100) / 100));
+                    setLocalCylWidth(String(Math.round(selectedComponent.width * 100) / 100));
+                    setLocalCylThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
+                    setLocalCylIor(String(selectedComponent.ior));
+                }
+                if (selectedComponent instanceof CurvedMirror) {
+                    setLocalCurvedMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalCurvedMirrorRoC(Math.abs(selectedComponent.radiusOfCurvature) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.radiusOfCurvature * 100) / 100));
+                    setLocalCurvedMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
                 if (selectedComponent instanceof PrismLens) {
                     setLocalApexAngle(String(Math.round(selectedComponent.apexAngle * 180 / Math.PI * 100) / 100));
@@ -550,14 +582,16 @@ export const Inspector: React.FC = () => {
                     c.ior = Math.max(1.0, Math.min(3.0, val));
                 }
                 if (param === 'r1' && c instanceof SphericalLens) {
-                    c.r1 = val;
+                    const minR = c.apertureRadius * 1.05;
+                    c.r1 = Math.abs(val) < minR ? Math.sign(val) * minR : val;
                     if (c.r2 === undefined) {
                         const old = c.getRadii();
                         c.r2 = old.R2;
                     }
                 }
                 if (param === 'r2' && c instanceof SphericalLens) {
-                    c.r2 = val;
+                    const minR = c.apertureRadius * 1.05;
+                    c.r2 = Math.abs(val) < minR ? Math.sign(val) * minR : val;
                     if (c.r1 === undefined) {
                         const old = c.getRadii();
                         c.r1 = old.R1;
@@ -603,18 +637,23 @@ export const Inspector: React.FC = () => {
     const isAperture = selectedComponent instanceof Aperture;
     const isFilter = selectedComponent instanceof Filter;
     const isDichroic = selectedComponent instanceof DichroicMirror;
+    const isCylindrical = selectedComponent instanceof CylindricalLens;
+    const isCurvedMirror = selectedComponent instanceof CurvedMirror;
 
     const hasSpectralProfile = isFilter || isDichroic;
 
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
         const radius = parseFloat(localBeamRadius);
+        const power = parseFloat(localLaserPower);
         if (isNaN(radius)) return;
 
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Laser) {
                 c.wavelength = localWavelength;
                 c.beamRadius = radius;
+                if (!isNaN(power) && power > 0) c.power = power;
+                c.version++;
                 return c;
             }
             return c;
@@ -625,12 +664,15 @@ export const Inspector: React.FC = () => {
     const commitLampParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Lamp)) return;
         const radius = parseFloat(localBeamRadius);
+        const power = parseFloat(localLampPower);
         if (isNaN(radius)) return;
 
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Lamp) {
                 c.beamRadius = radius;
                 c.beamWaist = radius;
+                if (!isNaN(power) && power > 0) c.power = power;
+                c.version++;
                 return c;
             }
             return c;
@@ -735,17 +777,15 @@ export const Inspector: React.FC = () => {
                             style={inputStyle}
                         />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>Rot°</label>
-                        <input
-                            type="text"
-                            value={localRot}
-                            onChange={(e) => setLocalRot(e.target.value)}
-                            onBlur={() => commitRotation(localRot)}
-                            onKeyDown={(e) => handleKeyDown(e, () => commitRotation(localRot))}
-                            style={inputStyle}
-                        />
-                    </div>
+                    <ScrubInput
+                        label="Rot"
+                        suffix="°"
+                        value={localRot}
+                        onChange={setLocalRot}
+                        onCommit={(v: string) => commitRotation(v)}
+                        speed={1}
+                        step={1}
+                    />
                 </div>
 
                 {/* Dynamic Properties */}
@@ -871,6 +911,255 @@ export const Inspector: React.FC = () => {
                                 speed={0.1}
                                 min={0.5}
                                 max={20}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isCurvedMirror && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Curved Mirror</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Diameter"
+                                suffix="mm"
+                                value={localCurvedMirrorDiameter}
+                                onChange={setLocalCurvedMirrorDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CurvedMirror) {
+                                            c.diameter = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Radius of Curv."
+                                suffix="mm"
+                                value={localCurvedMirrorRoC}
+                                onChange={setLocalCurvedMirrorRoC}
+                                onCommit={(v: string) => {
+                                    let val: number;
+                                    if (v.toLowerCase() === 'infinity') val = 1e9;
+                                    else val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CurvedMirror) {
+                                            // Clamp |R| >= diameter/2 so sphere covers full aperture
+                                            const minR = c.diameter / 2 * 1.05;
+                                            if (Math.abs(val) < 1e6) {
+                                                val = Math.abs(val) < minR ? Math.sign(val || 1) * minR : val;
+                                            }
+                                            c.radiusOfCurvature = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                allowInfinity
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localCurvedMirrorThickness}
+                                onChange={setLocalCurvedMirrorThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CurvedMirror) {
+                                            c.thickness = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.1}
+                                min={0.5}
+                                max={20}
+                            />
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
+                            f = {Math.abs((selectedComponent as CurvedMirror).radiusOfCurvature) >= 1e6 ? '∞' : String(Math.round((selectedComponent as CurvedMirror).focalLength * 100) / 100)} mm
+                            {' · '}
+                            {(selectedComponent as CurvedMirror).radiusOfCurvature > 0 ? 'Concave' : (selectedComponent as CurvedMirror).radiusOfCurvature < 0 ? 'Convex' : 'Flat'}
+                        </div>
+                    </div>
+                )}
+
+                {isCylindrical && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Cylindrical Lens</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="R1"
+                                suffix="mm"
+                                value={localCylR1}
+                                onChange={setLocalCylR1}
+                                onCommit={(v: string) => {
+                                    let val: number;
+                                    if (v.toLowerCase() === 'infinity') val = 1e9;
+                                    else val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            // Clamp |R1| >= apertureRadius
+                                            const minR = c.apertureRadius * 1.05;
+                                            if (Math.abs(val) < 1e6) {
+                                                val = Math.abs(val) < minR ? Math.sign(val || 1) * minR : val;
+                                            }
+                                            c.r1 = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                allowInfinity
+                            />
+                            <ScrubInput
+                                label="R2"
+                                suffix="mm"
+                                value={localCylR2}
+                                onChange={setLocalCylR2}
+                                onCommit={(v: string) => {
+                                    let val: number;
+                                    if (v.toLowerCase() === 'infinity') val = 1e9;
+                                    else val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            const minR = c.apertureRadius * 1.05;
+                                            if (Math.abs(val) < 1e6) {
+                                                val = Math.abs(val) < minR ? Math.sign(val || 1) * minR : val;
+                                            }
+                                            c.r2 = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                allowInfinity
+                            />
+                            <ScrubInput
+                                label="Aperture"
+                                suffix="mm"
+                                value={localCylAperture}
+                                onChange={setLocalCylAperture}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            // Clamp aperture so it can't exceed the curvature radii
+                                            let maxAperture = 100;
+                                            if (Math.abs(c.r1) < 1e6) maxAperture = Math.min(maxAperture, Math.abs(c.r1) * 0.95);
+                                            if (Math.abs(c.r2) < 1e6) maxAperture = Math.min(maxAperture, Math.abs(c.r2) * 0.95);
+                                            // Also clamp so total sag doesn't exceed thickness
+                                            const sagAt = (R: number, r: number) => {
+                                                if (Math.abs(R) >= 1e6) return 0;
+                                                const v = R * R - r * r;
+                                                return v > 0 ? Math.abs(R) - Math.sqrt(v) : Math.abs(R);
+                                            };
+                                            while (maxAperture > 1 && sagAt(c.r1, maxAperture) + sagAt(c.r2, maxAperture) > c.thickness * 0.95) {
+                                                maxAperture *= 0.95;
+                                            }
+                                            c.apertureRadius = Math.min(val, maxAperture);
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="Width"
+                                suffix="mm"
+                                value={localCylWidth}
+                                onChange={setLocalCylWidth}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            c.width = val;
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localCylThickness}
+                                onChange={setLocalCylThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            c.thickness = Math.max(0.1, val);
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.1}
+                                min={0.1}
+                                max={30}
+                            />
+                            <ScrubInput
+                                label="IoR"
+                                value={localCylIor}
+                                onChange={setLocalCylIor}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            c.ior = Math.max(1.0, Math.min(3.0, val));
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.01}
+                                min={1.0}
+                                max={3.0}
+                                step={0.001}
                             />
                         </div>
                     </div>
@@ -1259,16 +1548,27 @@ export const Inspector: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Beam Radius */}
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Beam Radius (mm)</label>
-                            <input
-                                type="text"
+                        {/* Beam Radius + Power */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Beam Radius"
+                                suffix="mm"
                                 value={localBeamRadius}
-                                onChange={(e) => setLocalBeamRadius(e.target.value)}
-                                onBlur={commitLaserParams}
-                                onKeyDown={(e) => handleKeyDown(e, commitLaserParams)}
-                                style={inputStyle}
+                                onChange={setLocalBeamRadius}
+                                onCommit={() => commitLaserParams()}
+                                speed={0.5}
+                                min={0.1}
+                                max={50}
+                            />
+                            <ScrubInput
+                                label="Power"
+                                suffix="W"
+                                value={localLaserPower}
+                                onChange={setLocalLaserPower}
+                                onCommit={() => commitLaserParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={100}
                             />
                         </div>
                     </div>
@@ -1277,20 +1577,30 @@ export const Inspector: React.FC = () => {
                 {isLamp && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Lamp Settings (White Light)</label>
-                        {/* Beam Radius */}
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Beam Radius (mm)</label>
-                            <input
-                                type="text"
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Beam Radius"
+                                suffix="mm"
                                 value={localBeamRadius}
-                                onChange={(e) => setLocalBeamRadius(e.target.value)}
-                                onBlur={commitLampParams}
-                                onKeyDown={(e) => handleKeyDown(e, commitLampParams)}
-                                style={inputStyle}
+                                onChange={setLocalBeamRadius}
+                                onCommit={() => commitLampParams()}
+                                speed={0.5}
+                                min={0.1}
+                                max={50}
+                            />
+                            <ScrubInput
+                                label="Power"
+                                suffix="W"
+                                value={localLampPower}
+                                onChange={setLocalLampPower}
+                                onCommit={() => commitLampParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={100}
                             />
                         </div>
                         <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
-                            7-band visible spectrum (440–620 nm)
+                            13-band spectrum (340–820 nm)
                         </div>
                     </div>
                 )}
