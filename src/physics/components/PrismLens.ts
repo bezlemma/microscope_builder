@@ -21,7 +21,9 @@ export class PrismLens extends OpticalComponent {
     public apexAngle: number;    // Full apex angle in radians (default: 60° = π/3)
     public height: number;       // Height from base to apex (Y extent)
     public width: number;        // Extrusion depth (X extent)
-    public ior: number;
+    public ior: number;          // Base IOR at sodium D-line (589nm)
+
+
 
     private _mesh: OpticMesh | null = null;
 
@@ -230,6 +232,16 @@ export class PrismLens extends OpticalComponent {
         return `${name}:base`;
     }
 
+    // Cauchy dispersion: n(λ) = A + B/λ²
+    // Coefficients derived dynamically from this.ior at 589nm (sodium D-line).
+    // B ≈ 12000 nm² gives heavy flint glass dispersion (strong rainbow).
+    getIOR(wavelengthMeters: number): number {
+        const wlNm = wavelengthMeters * 1e9;
+        const B = 12000;
+        const A = this.ior - B / (589 * 589);
+        return A + B / (wlNm * wlNm);
+    }
+
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         // Use raw local-space values stored during chkIntersection to avoid
         // floating-point errors from world↔local rotation matrix round-trips.
@@ -238,11 +250,13 @@ export class PrismLens extends OpticalComponent {
         const normalIn = hit.localNormal?.clone().normalize()
             ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
 
+        const effectiveIOR = this.getIOR(ray.wavelength);
+
         return this.mesh.interact(
             normalIn,
             dirIn,
             hit.localPoint!,
-            this.ior,
+            effectiveIOR,
             this.localToWorld,
             hit.point,
             ray,
@@ -302,15 +316,16 @@ export class PrismLens extends OpticalComponent {
         if (cosTheta1 < 0.01) return { abcdTangential: identity, abcdSagittal: identity };
 
         const sinTheta1 = Math.sqrt(1 - cosTheta1 * cosTheta1);
-        const sinTheta2 = sinTheta1 / this.ior;
+        const ior = this.ior; // ABCD uses base IOR (beam propagation is monochromatic per-branch)
+        const sinTheta2 = sinTheta1 / ior;
         if (sinTheta2 >= 1) return { abcdTangential: identity, abcdSagittal: identity }; // TIR
         const cosTheta2 = Math.sqrt(1 - sinTheta2 * sinTheta2);
 
         // Internal direction (refracted) — compute for path length estimation
         // Using Snell's vector form: d_t = (n1/n2)d_i + (n1/n2 · cosθ1 - cosθ2)n
         const n = entryNormal.clone().multiplyScalar(-Math.sign(localDir.dot(entryNormal)));
-        const internalDir = localDir.clone().multiplyScalar(1 / this.ior)
-            .add(n.clone().multiplyScalar(cosTheta1 / this.ior - cosTheta2));
+        const internalDir = localDir.clone().multiplyScalar(1 / ior)
+            .add(n.clone().multiplyScalar(cosTheta1 / ior - cosTheta2));
         internalDir.normalize();
 
         // Exit surface: angle of incidence inside
@@ -318,7 +333,7 @@ export class PrismLens extends OpticalComponent {
         if (cosTheta3 < 0.01) return { abcdTangential: identity, abcdSagittal: identity };
 
         const sinTheta3 = Math.sqrt(1 - cosTheta3 * cosTheta3);
-        const sinTheta4 = sinTheta3 * this.ior;
+        const sinTheta4 = sinTheta3 * ior;
         if (sinTheta4 >= 1) return { abcdTangential: identity, abcdSagittal: identity }; // TIR
         const cosTheta4 = Math.sqrt(1 - sinTheta4 * sinTheta4);
 
@@ -332,14 +347,14 @@ export class PrismLens extends OpticalComponent {
         //   M_prop  = [[1, d], [0, 1]]
         //   M_exit  = [[cos4/cos3, 0], [0, n·cos3/cos4]]
         const A_t = (cosTheta4 * cosTheta2) / (cosTheta3 * cosTheta1);
-        const B_t = d * cosTheta4 * cosTheta1 / (this.ior * cosTheta3 * cosTheta2);
+        const B_t = d * cosTheta4 * cosTheta1 / (ior * cosTheta3 * cosTheta2);
         const C_t = 0;
         const D_t = (cosTheta3 * cosTheta1) / (cosTheta4 * cosTheta2);
 
         // Sagittal plane:
         //   Combined = [[1, d/n], [0, 1]]
         const A_s = 1;
-        const B_s = d / this.ior;
+        const B_s = d / ior;
         const C_s = 0;
         const D_s = 1;
 

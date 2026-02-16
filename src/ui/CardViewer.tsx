@@ -94,6 +94,9 @@ function drawMultiBeam(
     // Animation phase (for polarization ellipse overlay only, NOT for interference)
     const omega = time * 3.5;
 
+    // Detect broadband white light: 3+ distinct wavelength groups → render as white
+    const isBroadband = wavelengthGroups.size >= 3;
+
     for (let py = 0; py < height; py++) {
         for (let px = 0; px < width; px++) {
             const x = (px - width / 2) * scaleX;
@@ -102,7 +105,7 @@ function drawMultiBeam(
             let totalR = 0, totalG = 0, totalB = 0;
 
             for (const [, group] of wavelengthGroups) {
-                const [R, G, B] = wavelengthRGB(group[0].wavelength);
+                const [R, G, B] = isBroadband ? [255, 255, 255] : wavelengthRGB(group[0].wavelength);
 
                 if (group.length === 1) {
                     // Single beam — no interference, just Gaussian

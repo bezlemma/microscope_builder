@@ -35,9 +35,6 @@ export enum PresetName {
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
 
-// The components atom is now derived from an internal atom that can be set,
-// or we can make it an atom that defaults to the preset but is writable.
-// Simplest pattern for now: A loadable atom.
 export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene());
 
 // Action to load a preset
@@ -45,6 +42,8 @@ export const loadPresetAtom = atom(
     null,
     (_get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
+        // Reset E&M state for fresh preset
+        set(rayConfigAtom, { rayCount: 32, showFootprint: false, solver2Enabled: false, emFieldVisible: false });
         if (presetName === PresetName.BeamExpander) {
             set(componentsAtom, createBeamExpanderScene());
         } else if (presetName === PresetName.TransFluorescence) {
@@ -72,7 +71,7 @@ export const selectionAtom = atom<string[]>([]);
 export const rayConfigAtom = atom<RayConfig>({
     rayCount: 32,
     showFootprint: false,
-    solver2Enabled: true,
+    solver2Enabled: false,
     emFieldVisible: false
 });
 

@@ -10,13 +10,16 @@ import {
 
 import { useAtom } from 'jotai';
 import { loadPresetAtom, activePresetAtom, PresetName } from '../state/store';
+import { useIsMobile } from './useIsMobile';
 
 // ─── Draggable component item ─────────────────────────────────────────
 
-const DraggableItem = ({ type, label, icon: Icon }: { type: string, label: string, icon: any }) => {
+
+const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: string, label: string, icon: any, onDragStarted?: () => void }) => {
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('componentType', type);
         e.dataTransfer.effectAllowed = 'copy';
+        onDragStarted?.();
     };
 
     return (
@@ -76,6 +79,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#ff6b6b',
         items: [
             { type: 'laser', label: 'Laser Source', icon: Zap },
+            { type: 'lamp', label: 'Lamp Source', icon: Zap },
         ]
     },
     {
@@ -151,11 +155,13 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
 const ComponentGroupSection = ({
     group,
     isOpen,
-    onToggle
+    onToggle,
+    onDragStarted
 }: {
     group: ComponentGroup;
     isOpen: boolean;
     onToggle: () => void;
+    onDragStarted?: () => void;
 }) => {
     const GroupIcon = group.icon;
 
@@ -229,6 +235,7 @@ const ComponentGroupSection = ({
                         type={item.type}
                         label={item.label}
                         icon={item.icon}
+                        onDragStarted={onDragStarted}
                     />
                 ))}
             </div>
@@ -244,8 +251,18 @@ export const Sidebar: React.FC = () => {
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
 
+    // Mobile collapse state
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const isMobile = useIsMobile();
+
     const handleToggle = (groupName: string) => {
         setOpenGroup(prev => prev === groupName ? null : groupName);
+    };
+
+    // Auto-close sidebar on mobile after selecting a preset
+    const handlePresetClick = (preset: PresetName) => {
+        loadPreset(preset);
+        if (isMobile) setMobileOpen(false);
     };
 
     const PresetButton = ({ label, active, onClick }: { label: string, active: boolean, onClick?: () => void }) => (
@@ -324,118 +341,205 @@ export const Sidebar: React.FC = () => {
         </div>
     );
 
-    return (
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '250px',
-            height: '100%',
-            backgroundColor: '#1a1a1a',
-            borderRight: '1px solid #333',
-            padding: '10px',
-            overflowY: 'auto',
-            zIndex: 10,
-            display: 'flex',
-            flexDirection: 'column'
-        }}>
-            <div style={{ flex: 1 }}>
-                <h3 style={{
-                    color: '#fff',
-                    marginBottom: '12px',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    letterSpacing: '0.5px'
-                }}>
-                    Components
-                </h3>
+    // On mobile: show floating toggle button when collapsed
+    const isVisible = !isMobile || mobileOpen;
 
-                <div style={{ marginBottom: '16px' }}>
-                    {COMPONENT_GROUPS.map(group => (
-                        <ComponentGroupSection
-                            key={group.name}
-                            group={group}
-                            isOpen={openGroup === group.name}
-                            onToggle={() => handleToggle(group.name)}
+    return (
+        <>
+            {/* Mobile backdrop overlay */}
+            {isMobile && mobileOpen && (
+                <div
+                    onClick={() => setMobileOpen(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        zIndex: 14,
+                    }}
+                />
+            )}
+
+            {/* Mobile toggle button (visible only when sidebar is collapsed) */}
+            {isMobile && !mobileOpen && (
+                <button
+                    onClick={() => setMobileOpen(true)}
+                    style={{
+                        position: 'fixed',
+                        top: 10,
+                        left: 10,
+                        zIndex: 20,
+                        width: 40,
+                        height: 40,
+                        borderRadius: '8px',
+                        border: '1px solid #444',
+                        backgroundColor: '#1a1a1a',
+                        color: '#aaa',
+                        fontSize: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    }}
+                    title="Components & Presets"
+                >
+                    ☰
+                </button>
+            )}
+
+            {/* Sidebar panel */}
+            <div style={{
+                position: isMobile ? 'fixed' : 'absolute',
+                top: 0,
+                left: 0,
+                width: '250px',
+                height: '100%',
+                backgroundColor: '#1a1a1a',
+                borderRight: '1px solid #333',
+                padding: '10px',
+                overflowY: 'auto',
+                zIndex: 15,
+                display: 'flex',
+                flexDirection: 'column',
+                transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
+                transition: 'transform 0.25s ease',
+            }}>
+                {/* Mobile close button */}
+                {isMobile && (
+                    <button
+                        onClick={() => setMobileOpen(false)}
+                        style={{
+                            alignSelf: 'flex-end',
+                            background: 'none',
+                            border: 'none',
+                            color: '#888',
+                            fontSize: '20px',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            marginBottom: 4,
+                        }}
+                    >
+                        ✕
+                    </button>
+                )}
+                <div style={{ flex: 1 }}>
+                    <a
+                        href="https://bezialemma.com/"
+                        style={{
+                            display: 'block',
+                            color: '#888',
+                            fontSize: '11px',
+                            textDecoration: 'none',
+                            marginBottom: '8px',
+                            padding: '4px 0',
+                            transition: 'color 0.15s',
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.color = '#64ffda'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.color = '#888'; }}
+                    >
+                        ← Bezia Lemma
+                    </a>
+                    <h3 style={{
+                        color: '#fff',
+                        marginBottom: '12px',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px'
+                    }}>
+                        Components
+                    </h3>
+
+                    <div style={{ marginBottom: '16px' }}>
+                        {COMPONENT_GROUPS.map(group => (
+                            <ComponentGroupSection
+                                key={group.name}
+                                group={group}
+                                isOpen={openGroup === group.name}
+                                onToggle={() => handleToggle(group.name)}
+                                onDragStarted={isMobile ? () => setMobileOpen(false) : undefined}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Presets Section — categorized dropdowns */}
+                <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
+                    <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
+
+                    <PresetCategory
+                        label="Microscopes"
+                        isOpen={openPresetCat === 'Microscopes'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Microscopes' ? null : 'Microscopes')}
+                    >
+                        <PresetButton
+                            label="Reflection (Epi) Fluorescence "
+                            active={activePreset === PresetName.EpiFluorescence}
+                            onClick={() => handlePresetClick(PresetName.EpiFluorescence)}
                         />
-                    ))}
+                        <PresetButton
+                            label="Transmission Fluorescence"
+                            active={activePreset === PresetName.TransFluorescence}
+                            onClick={() => handlePresetClick(PresetName.TransFluorescence)}
+                        />
+                        <PresetButton
+                            label="Brightfield"
+                            active={activePreset === PresetName.Brightfield}
+                            onClick={() => handlePresetClick(PresetName.Brightfield)}
+                        />
+
+                    </PresetCategory>
+
+                    <PresetCategory
+                        label="Optics Demos"
+                        isOpen={openPresetCat === 'Optics'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Optics' ? null : 'Optics')}
+                    >
+                        <PresetButton
+                            label="Beam Expander"
+                            active={activePreset === PresetName.BeamExpander}
+                            onClick={() => handlePresetClick(PresetName.BeamExpander)}
+                        />
+                    </PresetCategory>
+
+                    <PresetCategory
+                        label="Physics Demos"
+                        isOpen={openPresetCat === 'Physics'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Physics' ? null : 'Physics')}
+                    >
+                        <PresetButton
+                            label="Interferometer"
+                            active={activePreset === PresetName.MZInterferometer}
+                            onClick={() => handlePresetClick(PresetName.MZInterferometer)}
+                        />
+                    </PresetCategory>
+
+                    <PresetCategory
+                        label="Debugs"
+                        isOpen={openPresetCat === 'Debugs'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
+                    >
+                        <PresetButton
+                            label="Lens Zoo"
+                            active={activePreset === PresetName.LensZoo}
+                            onClick={() => handlePresetClick(PresetName.LensZoo)}
+                        />
+                        <PresetButton
+                            label="Polarization Zoo"
+                            active={activePreset === PresetName.PolarizationZoo}
+                            onClick={() => handlePresetClick(PresetName.PolarizationZoo)}
+                        />
+                        <PresetButton
+                            label="Prism Debug"
+                            active={activePreset === PresetName.PrismDebug}
+                            onClick={() => handlePresetClick(PresetName.PrismDebug)}
+                        />
+
+                    </PresetCategory>
                 </div>
             </div>
-
-            {/* Presets Section — categorized dropdowns */}
-            <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
-                <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
-
-                <PresetCategory
-                    label="Microscopes"
-                    isOpen={openPresetCat === 'Microscopes'}
-                    onToggle={() => setOpenPresetCat(prev => prev === 'Microscopes' ? null : 'Microscopes')}
-                >
-                    <PresetButton
-                        label="Reflection (Epi) Fluorescence "
-                        active={activePreset === PresetName.EpiFluorescence}
-                        onClick={() => loadPreset(PresetName.EpiFluorescence)}
-                    />
-                    <PresetButton
-                        label="Transmission Fluorescence"
-                        active={activePreset === PresetName.TransFluorescence}
-                        onClick={() => loadPreset(PresetName.TransFluorescence)}
-                    />
-                    <PresetButton
-                        label="Brightfield"
-                        active={activePreset === PresetName.Brightfield}
-                        onClick={() => loadPreset(PresetName.Brightfield)}
-                    />
-
-                </PresetCategory>
-
-                <PresetCategory
-                    label="Optics Demos"
-                    isOpen={openPresetCat === 'Optics'}
-                    onToggle={() => setOpenPresetCat(prev => prev === 'Optics' ? null : 'Optics')}
-                >
-                    <PresetButton
-                        label="Beam Expander"
-                        active={activePreset === PresetName.BeamExpander}
-                        onClick={() => loadPreset(PresetName.BeamExpander)}
-                    />
-                </PresetCategory>
-
-                <PresetCategory
-                    label="Physics Demos"
-                    isOpen={openPresetCat === 'Physics'}
-                    onToggle={() => setOpenPresetCat(prev => prev === 'Physics' ? null : 'Physics')}
-                >
-                    <PresetButton
-                        label="Interferometer"
-                        active={activePreset === PresetName.MZInterferometer}
-                        onClick={() => loadPreset(PresetName.MZInterferometer)}
-                    />
-                </PresetCategory>
-
-                <PresetCategory
-                    label="Debugs"
-                    isOpen={openPresetCat === 'Debugs'}
-                    onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
-                >
-                    <PresetButton
-                        label="Lens Zoo"
-                        active={activePreset === PresetName.LensZoo}
-                        onClick={() => loadPreset(PresetName.LensZoo)}
-                    />
-                    <PresetButton
-                        label="Polarization Zoo"
-                        active={activePreset === PresetName.PolarizationZoo}
-                        onClick={() => loadPreset(PresetName.PolarizationZoo)}
-                    />
-                    <PresetButton
-                        label="Prism Debug"
-                        active={activePreset === PresetName.PrismDebug}
-                        onClick={() => loadPreset(PresetName.PrismDebug)}
-                    />
-
-                </PresetCategory>
-            </div>
-        </div>
+        </>
     );
 };

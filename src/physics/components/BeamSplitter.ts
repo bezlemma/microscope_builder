@@ -101,9 +101,8 @@ export class BeamSplitter extends OpticalComponent {
         };
     }
 
-    /**
-     * ABCD matrix for Solver 2 — thin flat plate = identity.
-     */
+    // ABCD matrix for Solver 2 — thin flat plate = identity.
+     
     getABCD(): [number, number, number, number] {
         return [1, 0, 0, 1];
     }

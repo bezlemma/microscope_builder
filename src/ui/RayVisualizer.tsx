@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { Line } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, Color } from 'three';
-import { Ray } from '../physics/types';
+import { Vector3, Color, NormalBlending, AdditiveBlending } from 'three';
+import { Ray, Coherence } from '../physics/types';
 
 // Wavelength (in meters) to visible spectrum RGB values (0-1 range)
 function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number; isVisible: boolean } {
@@ -107,11 +107,14 @@ const PulsatingRayLine: React.FC<{
             color={baseColor}
             lineWidth={4.5}
             toneMapped={false}
+            transparent={false}
+            opacity={1}
             dashed={dashed}
             dashSize={dashed ? 3 : undefined}
             gapSize={dashed ? 2 : undefined}
             depthTest={false}
             renderOrder={1}
+            blending={NormalBlending}
         />
     );
 };
@@ -127,13 +130,19 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
     // In E-field mode, hide all rays entirely
     if (hideAll) return null;
 
-    // Sort paths: non-main rays first, main ray last so it renders on top
+    // Sort paths: non-main rays first, main ray last so it renders on top.
+    // Within incoherent sets, sort by wavelength (longest first) so shorter
+    // wavelengths (blue/violet) draw on top and are visible in the rainbow fan.
     const sortedPaths = React.useMemo(() => {
         const indexed = paths.map((path, idx) => ({ path, idx }));
         indexed.sort((a, b) => {
             const aMain = a.path.length > 0 && a.path[0].isMainRay === true ? 1 : 0;
             const bMain = b.path.length > 0 && b.path[0].isMainRay === true ? 1 : 0;
-            return aMain - bMain;
+            if (aMain !== bMain) return aMain - bMain;
+            // Same main-ness: sort by wavelength descending (longest first → drawn first)
+            const aWl = a.path.length > 0 ? a.path[0].wavelength : 0;
+            const bWl = b.path.length > 0 ? b.path[0].wavelength : 0;
+            return bWl - aWl; // Longest wavelength first (red), shortest last (blue on top)
         });
         return indexed;
     }, [paths]);
@@ -174,6 +183,40 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                     }
                 }
 
+                const isIncoherent = path.length > 0 && path[0].coherenceMode === Coherence.Incoherent;
+
+                // Incoherent rays: always colored by wavelength.
+                // Additive blending makes overlapping ROYGBIV produce white naturally.
+                // Opacity from Lamp's additiveOpacity ensures balanced RGB white.
+                // (Coherent rays have explicit NormalBlending/transparent=false/opacity=1 to prevent state leaks.)
+                if (isIncoherent) {
+                    const rgb = wavelengthToRGB(wavelength);
+                    const color = rgb.isVisible
+                        ? `rgb(${Math.round(rgb.r * 255)}, ${Math.round(rgb.g * 255)}, ${Math.round(rgb.b * 255)})`
+                        : 'rgb(135, 135, 135)'; // Gray for UV/IR
+                    // Opacity from ray intensity (Lamp's additive white-balance value)
+                    const rayOpacity = path.length > 0 ? Math.min(1, path[0].intensity) : 0.5;
+
+                    return (
+                        <Line
+                            key={idx}
+                            points={points}
+                            color={color}
+                            lineWidth={isMain ? 4 : 2}
+                            depthTest={false}
+                            renderOrder={0}
+                            transparent
+                            opacity={rayOpacity}
+                            dashed={!rgb.isVisible}
+                            dashSize={!rgb.isVisible ? 3 : undefined}
+                            gapSize={!rgb.isVisible ? 2 : undefined}
+                            toneMapped={false}
+                            blending={AdditiveBlending}
+                        />
+                    );
+                }
+
+                // Coherent (laser) rays: wavelength-colored rendering
                 if (isMain) {
                     const wc = wavelengthToRGB(wavelength);
 
@@ -197,16 +240,20 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                             points={points}
                             color={wc.isVisible ? color : 'white'}
                             lineWidth={4}
+                            transparent={false}
+                            opacity={1}
                             dashed={!wc.isVisible}
                             dashSize={!wc.isVisible ? 3 : undefined}
                             gapSize={!wc.isVisible ? 2 : undefined}
                             depthTest={false}
                             renderOrder={1}
+                            toneMapped={false}
+                            blending={NormalBlending}
                         />
                     );
                 }
 
-                // Non-main rays: static wavelength color
+                // Non-main coherent rays: static wavelength color
                 const wc = wavelengthToColor(wavelength);
                 return (
                     <Line
@@ -214,11 +261,15 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                         points={points}
                         color={wc.color}
                         lineWidth={2}
+                        transparent={false}
+                        opacity={1}
                         dashed={!wc.isVisible}
                         dashSize={!wc.isVisible ? 3 : undefined}
                         gapSize={!wc.isVisible ? 2 : undefined}
-                        depthTest={true}
+                        depthTest={false}
                         renderOrder={0}
+                        toneMapped={false}
+                        blending={NormalBlending}
                     />
                 );
             })}

@@ -5,9 +5,7 @@ import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Card } from '../physics/components/Card';
 
 /**
- * Mach-Zehnder Interferometer (standalone)
- *
- * Copied directly from the working MZ setup in polarizationZoo.ts.
+ * Interferometer
  *
  *  Laser ──→ BS1 ──(transmitted)──→ Mirror_B ──→ (down)
  *               │                                    │
@@ -35,30 +33,24 @@ export const createMZInterferometerScene = (): OpticalComponent[] => [
     (() => {
         const c = new BeamSplitter(20, 2, 0.5, "BS1 (50/50)");
         c.setPosition(-100, 0, 0);
-        // 45° to reflect upward (+Y) and transmit forward (+X)
         c.setRotation(0, 0, 3 * Math.PI / 4);
         return c;
     })(),
     (() => {
-        // Mirror A: at top-left, reflects the upward beam to the right
         const c = new Mirror(20, 2, "Mirror A");
         c.setPosition(-100, 80, 0);
-        // Normal pointing down-right at 45° → reflects +Y beam to +X
         c.setRotation(0, 0, -Math.PI / 4);
         return c;
     })(),
     (() => {
-        // Mirror B: at bottom-right, reflects the rightward beam upward
         const c = new Mirror(20, 2, "Mirror B");
         c.setPosition(0, 0, 0);
-        // Normal pointing up-left at 45° → reflects +X beam to +Y
         c.setRotation(0, 0, 3 * Math.PI / 4);
         return c;
     })(),
     (() => {
         const c = new BeamSplitter(20, 2, 0.5, "BS2 (50/50)");
         c.setPosition(0, 80, 0);
-        // 45° to recombine beams
         c.setRotation(0, 0, 3 * Math.PI / 4);
         return c;
     })(),

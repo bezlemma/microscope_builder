@@ -8,6 +8,7 @@ import { Solver1 } from '../physics/Solver1';
 import { Mirror } from '../physics/components/Mirror';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
@@ -24,14 +25,14 @@ import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 
 import { RayVisualizer } from './RayVisualizer';
-// BeamEnvelopeVisualizer import removed — Gaussian tubes disabled
+
 import { EFieldVisualizer } from './EFieldVisualizer';
 import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { Draggable } from './Draggable';
 
 
-// Visualization components
+
 export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
@@ -71,7 +72,7 @@ export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) 
     );
 };
 
-// Sample Visualizer (Sample Holder)
+
 export const SampleVisualizer = ({ component }: { component: Sample }) => {
 
 
@@ -124,7 +125,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     transparent
                     roughness={0}
                     metalness={0.0}
-                    depthWrite={false} // Prevent sorting issues with other glass components?
+                    depthWrite={false}
                 />
             </mesh>
 
@@ -453,12 +454,10 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     // Safety check for malformed components
     if (!component || !component.rotation || !component.position) return null;
 
-    // Safety defaults
     const aperture = component.apertureRadius || 10;
     const thickness = component.thickness || 2;
 
-    // Get Radii (Asymmetric support)
-    let R1 = 1e9; // Default flat
+    let R1 = 1e9;
     let R2 = -1e9;
 
     try {
@@ -468,7 +467,6 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
             R1 = (!isNaN(r.R1) && Math.abs(r.R1) < 1e12) ? r.R1 : (r.R1 > 0 ? 1e9 : -1e9);
             R2 = (!isNaN(r.R2) && Math.abs(r.R2) < 1e12) ? r.R2 : (r.R2 > 0 ? 1e9 : -1e9);
         } else {
-            // Fallback
             const power = component.curvature || 0;
             const ior = component.ior || 1.5;
             const R = Math.abs(power) > 1e-6 ? (2 * (ior - 1)) / power : 1e9;
@@ -483,7 +481,7 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     const profilePoints = useMemo(() => {
         const profile = SphericalLens.generateProfile(R1, R2, aperture, thickness, 32);
 
-        // Safety: ensure at least 2 points to avoid Lathe crash
+
         if (profile.length < 2) {
             const frontApex = -thickness / 2;
             const backApex = thickness / 2;
@@ -548,9 +546,30 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
     );
 };
 
+// Lamp Visualizer — wider, shorter body with warm dome to distinguish from laser
+const LampVisualizer = ({ component }: { component: OpticalComponent }) => {
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Lamp Housing*/}
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[40, 22, 30]} />
+                <meshStandardMaterial color="#2a2520" metalness={0.3} roughness={0.7} />
+            </mesh>
+            {/* Aperture slit - at emission end (+X) */}
+            <mesh position={[21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[5, 5, 2, 16]} />
+                <meshStandardMaterial color="#BBB" />
+            </mesh>
+        </group>
+    );
+};
+
 
 // Ideal Lens Visualizer — textbook thin-lens diagram
-// Thin vertical line with arrowheads: inward for converging, outward for diverging
 const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
     const a = component.apertureRadius;
     const converging = component.focalLength > 0;
@@ -821,8 +840,7 @@ export const OpticalTable: React.FC = () => {
         return components
             .filter(c => !(c instanceof Card))
             .map(c => {
-                // Include position, rotation, AND optical properties in the fingerprint
-                // so changing wavelength, IOR, etc. triggers a re-solve
+
                 const base = `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`;
                 const props: string[] = [];
                 if ('wavelength' in c) props.push(`wl=${(c as any).wavelength}`);
@@ -831,9 +849,16 @@ export const OpticalTable: React.FC = () => {
                 if ('power' in c) props.push(`pw=${(c as any).power}`);
                 if ('ior' in c) props.push(`ior=${(c as any).ior}`);
                 if ('curvature' in c) props.push(`cv=${(c as any).curvature}`);
+                if ('apertureRadius' in c) props.push(`ar=${(c as any).apertureRadius}`);
                 if ('aperture' in c) props.push(`ap=${(c as any).aperture}`);
                 if ('thickness' in c) props.push(`th=${(c as any).thickness}`);
                 if ('openingDiameter' in c) props.push(`od=${(c as any).openingDiameter}`);
+                if ('apexAngle' in c) props.push(`aa=${(c as any).apexAngle}`);
+                if ('height' in c) props.push(`h=${(c as any).height}`);
+                if ('r1' in c) props.push(`r1=${(c as any).r1}`);
+                if ('r2' in c) props.push(`r2=${(c as any).r2}`);
+                if ('focalLength' in c) props.push(`fl=${(c as any).focalLength}`);
+                if ('diameter' in c) props.push(`d=${(c as any).diameter}`);
                 if ('spectralProfile' in c) {
                     const sp = (c as any).spectralProfile;
                     props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
@@ -851,7 +876,7 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         if (!components) return;
 
-        // Clear card hits before each trace to prevent stale data accumulation
+
         const cardsToReset = components.filter(c => c instanceof Card) as Card[];
         for (const card of cardsToReset) {
             card.hits = [];
@@ -859,24 +884,23 @@ export const OpticalTable: React.FC = () => {
 
         const solver = new Solver1(components);
 
-        // Find ALL source components (support multiple lasers)
         const laserComps = components.filter(c => c instanceof Laser) as Laser[];
 
         const sourceRays: Ray[] = [];
 
-        // Generate rays from every Laser
+
         for (const laserComp of laserComps) {
             let origin = laserComp.position.clone();
             const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
 
-            // Offset origin slightly so it starts "outside" the box 
+
             const offset = direction.clone().multiplyScalar(5);
             origin.add(offset);
 
             const laserWavelength = laserComp.wavelength * 1e-9;
             const beamRadius = laserComp.beamRadius;
 
-            // Central Ray (peak of Gaussian profile)
+
             sourceRays.push({
                 origin: origin.clone(),
                 direction: direction.clone(),
@@ -905,7 +929,6 @@ export const OpticalTable: React.FC = () => {
                 subdivLevel++;
             }
 
-            // Basis Vectors for the aperture plane
             const up = new Vector3(0, 1, 0);
             if (Math.abs(direction.dot(up)) > 0.9) {
                 up.set(0, 0, 1);
@@ -930,7 +953,7 @@ export const OpticalTable: React.FC = () => {
                         .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
                         .addScaledVector(right, Math.cos(phi) * ringRadius);
 
-                    // Gaussian TEM00 profile: I(r) = exp(-2(r/w)²)
+
                     const rNorm = radiusFractions[ringIndex]; // 0..1
                     const gaussIntensity = Math.exp(-2 * rNorm * rNorm);
 
@@ -948,6 +971,87 @@ export const OpticalTable: React.FC = () => {
 
 
 
+        const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
+        for (const lampComp of lampComps) {
+            let origin = lampComp.position.clone();
+            const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
+            const offset = direction.clone().multiplyScalar(5);
+            origin.add(offset);
+
+            const beamRadius = lampComp.beamRadius;
+            const rayOpacity = lampComp.additiveOpacity;
+
+            for (let wIdx = 0; wIdx < lampComp.spectralWavelengths.length; wIdx++) {
+                const wavelengthNm = lampComp.spectralWavelengths[wIdx];
+                const wavelengthM = wavelengthNm * 1e-9;
+
+
+                sourceRays.push({
+                    origin: origin.clone(),
+                    direction: direction.clone(),
+                    wavelength: wavelengthM, intensity: rayOpacity,
+                    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                    opticalPathLength: 0, footprintRadius: 0,
+                    coherenceMode: Coherence.Incoherent,
+                    isMainRay: true, sourceId: `${lampComp.id}_${wavelengthNm}nm`
+                });
+
+                const defaultRays = Math.max(1, rayConfig.rayCount);
+                // With many spectral bands, halve rays per wavelength to keep
+                // total count reasonable. Only reduce when default >= 16.
+                const totalRays = defaultRays >= 16
+                    ? Math.max(1, Math.floor(defaultRays / 2))
+                    : defaultRays;
+                const FIRST_RING_COUNT = Math.min(24, totalRays);
+                const INNER_RING_COUNT = 12;
+
+                const radiusFractions: number[] = [1];
+                let subdivLevel = 1;
+                while (radiusFractions.length < 100) {
+                    const denom = 1 << subdivLevel;
+                    for (let k = 1; k < denom; k += 2) {
+                        radiusFractions.push(k / denom);
+                    }
+                    subdivLevel++;
+                }
+
+                const up = new Vector3(0, 1, 0);
+                if (Math.abs(direction.dot(up)) > 0.9) up.set(0, 0, 1);
+                const right = new Vector3().crossVectors(direction, up).normalize();
+                const trueUp = new Vector3().crossVectors(right, direction).normalize();
+
+                let raysPlaced = 0;
+                let ringIndex = 0;
+                while (raysPlaced < totalRays && ringIndex < radiusFractions.length) {
+                    const ringRadius = beamRadius * radiusFractions[ringIndex];
+                    const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
+                    const raysThisRing = Math.min(raysForThisRing, totalRays - raysPlaced);
+                    const angularOffset = ringIndex * Math.PI / 7;
+
+                    for (let i = 0; i < raysThisRing; i++) {
+                        const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
+                        const ringOffset = new Vector3()
+                            .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
+                            .addScaledVector(right, Math.cos(phi) * ringRadius);
+
+
+                        sourceRays.push({
+                            origin: origin.clone().add(ringOffset),
+                            direction: direction.clone().normalize(),
+                            wavelength: wavelengthM, intensity: rayOpacity,
+                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                            opticalPathLength: 0, footprintRadius: 0,
+                            coherenceMode: Coherence.Incoherent,
+                            sourceId: `${lampComp.id}_${wavelengthNm}nm`
+                        });
+                        raysPlaced++;
+                    }
+                    ringIndex++;
+                }
+            }
+        }
+
+
         const calculatedPaths = solver.trace(sourceRays);
 
         // Post-trace: detect beam splits via angle histogram population analysis.
@@ -960,7 +1064,7 @@ export const OpticalTable: React.FC = () => {
                 return last.intensity > 0 && !last.terminationPoint;
             });
 
-            // Collect exit rays with exitSurfaceId (split-capable components only)
+
             type SplitEntry = { path: Ray[]; exitRay: Ray; angle: number; sourceId?: string };
             const allSplitCandidates: SplitEntry[] = [];
             for (const p of surviving) {
@@ -977,7 +1081,7 @@ export const OpticalTable: React.FC = () => {
                 }
             }
 
-            // Group by source to prevent cross-laser contamination
+
             const splitBySource = new Map<string, SplitEntry[]>();
             for (const sc of allSplitCandidates) {
                 const key = sc.sourceId || '__unknown__';
@@ -987,10 +1091,10 @@ export const OpticalTable: React.FC = () => {
 
             for (const [, splitCandidates] of splitBySource) {
                 if (splitCandidates.length >= 4) {
-                    // Sort by exit angle
+
                     splitCandidates.sort((a, b) => a.angle - b.angle);
 
-                    // Compute consecutive angle gaps
+
                     const gaps: number[] = [];
                     for (let i = 1; i < splitCandidates.length; i++) {
                         gaps.push(splitCandidates[i].angle - splitCandidates[i - 1].angle);
@@ -1018,7 +1122,6 @@ export const OpticalTable: React.FC = () => {
                     }
 
                     if (splitIndices.length > 0) {
-                        // Build population groups from split points
                         const boundaries = [0, ...splitIndices, splitCandidates.length];
                         const populations: SplitEntry[][] = [];
                         for (let i = 0; i < boundaries.length - 1; i++) {
@@ -1034,7 +1137,6 @@ export const OpticalTable: React.FC = () => {
                         const mainPathMatchesSplitComp = (p: Ray[]) =>
                             p.some(r => r.exitSurfaceId?.startsWith(splitCompName));
 
-                        // Find the main ray's exit angle (only from the matching component)
                         let mainRayExitAngle: number | null = null;
                         for (const p of calculatedPaths) {
                             if (p.length > 0 && p[0].isMainRay === true && mainPathMatchesSplitComp(p)) {
@@ -1050,7 +1152,7 @@ export const OpticalTable: React.FC = () => {
                             }
                         }
 
-                        // Find which population the main ray belongs to
+
                         let mainRayPopIdx = -1;
                         if (mainRayExitAngle !== null) {
                             for (let pi = 0; pi < populations.length; pi++) {
@@ -1066,7 +1168,7 @@ export const OpticalTable: React.FC = () => {
                             }
                         }
 
-                        // Only spawn synthetic center rays for uncovered populations
+
                         const uncoveredPops = populations.filter((_, i) => i !== mainRayPopIdx);
 
                         if (uncoveredPops.length > 0) {
@@ -1104,7 +1206,7 @@ export const OpticalTable: React.FC = () => {
                     return last.intensity > 0 && last.interactionDistance === undefined;
                 });
 
-                // Group by source — never mix rays from different lasers
+
                 const boundaryBySource = new Map<string, typeof boundaryPaths>();
                 for (const p of boundaryPaths) {
                     const key = p[0].sourceId || '__unknown__';
@@ -1125,7 +1227,7 @@ export const OpticalTable: React.FC = () => {
                         }));
                         entries.sort((a, b) => a.angle - b.angle);
 
-                        // IQR histogram on ALL terminal angles to find populations
+
                         const gaps: number[] = [];
                         for (let i = 1; i < entries.length; i++) {
                             gaps.push(entries[i].angle - entries[i - 1].angle);
@@ -1141,7 +1243,7 @@ export const OpticalTable: React.FC = () => {
                             const median = sortedGaps[Math.floor(sortedGaps.length * 0.5)];
                             const fence = Math.max(q3 + 1.5 * iqr, median * 3);
 
-                            // Identify split points (outlier gaps)
+
                             const splitIndices: number[] = [];
                             for (let i = 0; i < gaps.length; i++) {
                                 if (gaps[i] > fence && gaps[i] > 0.01) {
@@ -1149,7 +1251,7 @@ export const OpticalTable: React.FC = () => {
                                 }
                             }
 
-                            // Build populations
+
                             const bounds = [0, ...splitIndices, entries.length];
                             const populations: BEntry[][] = [];
                             for (let i = 0; i < bounds.length - 1; i++) {
@@ -1157,13 +1259,13 @@ export const OpticalTable: React.FC = () => {
                                 if (pop.length > 0) populations.push(pop);
                             }
 
-                            // For each population, check if it has a white line
+
                             for (const pop of populations) {
                                 const hasMain = pop.some(e => e.isMain);
                                 if (hasMain) continue;
                                 if (pop.length < 2) continue;
 
-                                // No white line — clone the most central ring ray as white
+
                                 const meanAngle = pop.reduce((s, e) => s + e.angle, 0) / pop.length;
                                 const closest = pop.reduce((best, e) =>
                                     Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
@@ -1174,7 +1276,7 @@ export const OpticalTable: React.FC = () => {
                                 calculatedPaths.push(syntheticPath);
                             }
                         } else if (!entries.some(e => e.isMain)) {
-                            // Too few gaps for IQR but no main ray at all — single population
+
                             const meanAngle = entries.reduce((s, e) => s + e.angle, 0) / entries.length;
                             const closest = entries.reduce((best, e) =>
                                 Math.abs(e.angle - meanAngle) < Math.abs(best.angle - meanAngle) ? e : best
@@ -1193,7 +1295,6 @@ export const OpticalTable: React.FC = () => {
         setRays(calculatedPaths);
         solverPathsRef.current = calculatedPaths;
 
-        // Run Solver 2: Gaussian beam propagation along main ray skeleton
         let beamSegs: GaussianBeamSegment[][] = [];
         if (rayConfig.solver2Enabled) {
             try {
@@ -1206,7 +1307,7 @@ export const OpticalTable: React.FC = () => {
         setBeamSegments(beamSegs);
         beamSegsRef.current = beamSegs;
 
-        // Mark all cameras as stale (scene changed since last Solver 3 render)
+
         for (const comp of components) {
             if (comp instanceof Camera) {
                 comp.markSolver3Stale();
@@ -1222,14 +1323,13 @@ export const OpticalTable: React.FC = () => {
         if (solver3Trigger === 0) return; // Skip initial mount
         if (!components) return;
 
-        // Find the first Camera in the scene
         const camera = components.find(c => c instanceof Camera) as Camera | undefined;
         if (!camera) return;
 
         const beamSegs = beamSegsRef.current;
         setSolver3Rendering(true);
 
-        // Use setTimeout to allow the UI to update before blocking render
+
         setTimeout(() => {
             try {
                 const solver3 = new Solver3(components, beamSegs);
@@ -1265,28 +1365,27 @@ export const OpticalTable: React.FC = () => {
 
             const invQ = card.rotation.clone().conjugate();
 
-            // Collect ALL main rays that hit this card (not just the nearest)
             const hitRays: { ray: Ray; hitLocalPoint: Vector3; t: number }[] = [];
 
             for (const path of solverPaths) {
                 for (const ray of path) {
                     if (!ray.isMainRay) continue;
 
-                    // Transform ray into card's local frame
+
                     const localOrigin = ray.origin.clone().sub(card.position).applyQuaternion(invQ);
                     const localDir = ray.direction.clone().applyQuaternion(invQ);
 
-                    // Card plane at local z=0
+
                     if (Math.abs(localDir.z) < 1e-6) continue;
                     const t = -localOrigin.z / localDir.z;
                     if (t < 0.001) continue;
 
-                    // Respect interactionDistance
+
                     if (ray.interactionDistance !== undefined && t > ray.interactionDistance + 0.1) continue;
 
                     const hitPt = localOrigin.clone().add(localDir.clone().multiplyScalar(t));
 
-                    // Check card bounds
+
                     if (Math.abs(hitPt.x) <= card.width / 2 && Math.abs(hitPt.y) <= card.height / 2) {
                         hitRays.push({ ray, hitLocalPoint: hitPt, t });
                     }
@@ -1295,16 +1394,15 @@ export const OpticalTable: React.FC = () => {
 
             if (hitRays.length === 0 || beamSegs.length === 0) continue;
 
-            // For each hitting ray, find the closest beam segment and create a profile
+
             for (const { ray: mainHitRay, hitLocalPoint } of hitRays) {
                 let bestSeg: GaussianBeamSegment | null = null;
                 let bestDist = Infinity;
                 let bestZ = 0;
 
-                // Compute the world-space hit point for this specific ray
                 const worldHitPt = hitLocalPoint.clone().applyQuaternion(card.rotation).add(card.position);
 
-                // Find the beam segment closest to this ray's hit point (NOT card center)
+
                 for (const branch of beamSegs) {
                     for (const seg of branch) {
                         const toHit = worldHitPt.clone().sub(seg.start);
@@ -1315,7 +1413,7 @@ export const OpticalTable: React.FC = () => {
                             const along = seg.direction.clone().multiplyScalar(proj);
                             const perpDist = toHit.clone().sub(along).length();
 
-                            // Also check that this segment's direction roughly matches the ray
+
                             const dirDot = Math.abs(seg.direction.dot(mainHitRay.direction.clone().normalize()));
                             if (dirDot < 0.5) continue; // Wrong beam branch
 
@@ -1340,7 +1438,7 @@ export const OpticalTable: React.FC = () => {
                 const beamWx = invQx.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQx.im)) : 10;
                 const beamWy = invQy.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQy.im)) : 10;
 
-                // Project beam frame wx/wy into card's local XY frame
+
                 const beamDir = bestSeg.direction.clone().normalize();
                 const worldZ = new Vector3(0, 0, 1);
                 let beamU = new Vector3().crossVectors(beamDir, worldZ);
@@ -1388,7 +1486,6 @@ export const OpticalTable: React.FC = () => {
             // total excitation power at the sample × fluorescence efficiency
             const sample = components.find(c => c instanceof Sample) as Sample | undefined;
             if (sample && beamSegs.length > 0) {
-                // Get total excitation power from the laser (sum first segment powers)
                 let totalLaserPower = 0;
                 for (const branch of beamSegs) {
                     if (branch.length > 0) totalLaserPower += branch[0].power;
@@ -1411,6 +1508,7 @@ export const OpticalTable: React.FC = () => {
                 else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
                 else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
                 else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
+                else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
 
                 else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                 else if (c instanceof Card) visual = <CardVisualizer component={c} />;
@@ -1435,9 +1533,10 @@ export const OpticalTable: React.FC = () => {
                 }
                 return null;
             })}
-            {/* BeamEnvelopeVisualizer removed — Gaussian tubes not useful in normal E&M view */}
+
             {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
-            <RayVisualizer paths={[...rays, ...solver3Paths]} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
+            <RayVisualizer paths={rays} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
+            {solver3Paths.length > 0 && <RayVisualizer paths={solver3Paths} glowEnabled={false} hideAll={false} />}
         </group>
     );
 };

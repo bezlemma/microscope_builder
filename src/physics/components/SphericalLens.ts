@@ -103,6 +103,7 @@ export class SphericalLens extends OpticalComponent {
     /** Invalidate mesh cache when parameters change */
     public invalidateMesh(): void {
         this._mesh = null;
+        this.version++;
     }
 
     // ========================================================================

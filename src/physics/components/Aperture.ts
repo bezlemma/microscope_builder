@@ -26,10 +26,9 @@ export class Aperture extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Flat plane at w=0 (optical axis along x → w)
-        // Transverse plane: u=y, v=z
+
         const dw = rayLocal.direction.x;
-        if (Math.abs(dw) < 1e-6) return null;  // Parallel
+        if (Math.abs(dw) < 1e-6) return null;
 
         const t = -rayLocal.origin.x / dw;
         if (t < 0.001) return null;
@@ -64,16 +63,12 @@ export class Aperture extends OpticalComponent {
         return { rays: [] };
     }
 
-    /**
-     * ABCD matrix — identity (aperture is just a stop, no optical power).
-     */
+    // ABCD matrix — identity (aperture is just a stop, no optical power).
     getABCD(): [number, number, number, number] {
         return [1, 0, 0, 1];
     }
 
-    /**
-     * Aperture radius for Solver2 beam clipping.
-     */
+    // Aperture radius for Solver2 beam clipping.
     getApertureRadius(): number {
         return this.openingDiameter / 2;
     }

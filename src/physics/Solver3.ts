@@ -118,9 +118,8 @@ export class Solver3 {
      * Show a sparse grid of paths, plus the center pixel.
      */
     private shouldVisualizePath(px: number, py: number, resX: number, resY: number): boolean {
-        // Center pixel
+
         if (px === Math.floor(resX / 2) && py === Math.floor(resY / 2)) return true;
-        // Sparse grid: every N pixels
         const step = Math.max(Math.floor(resX / 6), 1);
         return (px % step === Math.floor(step / 2)) && (py % step === Math.floor(step / 2));
     }
@@ -139,8 +138,7 @@ export class Solver3 {
         let throughput = 1.0;
 
         for (let depth = 0; depth < this.maxDepth; depth++) {
-            // Stop backward trace if we've overshot the sample position
-            // (ray has passed through the imaging path into the illumination path)
+            // Stop if ray has passed beyond the sample into the illumination path
             if (depth > 0 && sample) {
                 const toSample = sample.position.clone().sub(currentRay.origin);
                 if (toSample.dot(currentRay.direction) < 0) {
@@ -148,13 +146,12 @@ export class Solver3 {
                 }
             }
 
-            // Find nearest intersection (skip the Camera we started from)
+
             let nearestT = Infinity;
             let nearestHit = null;
             let nearestComponent: OpticalComponent | null = null;
 
             for (const component of this.scene) {
-                // Skip intersecting with the camera we originated from on the first bounce
                 if (depth === 0 && component instanceof Camera) continue;
 
                 const hit = component.chkIntersection(currentRay);
@@ -165,25 +162,17 @@ export class Solver3 {
                 }
             }
 
-            // No hit — ray escaped the system
+
             if (!nearestHit || !nearestComponent) {
                 break;
             }
 
-            // Record interaction distance for visualization
             currentRay.interactionDistance = nearestT;
 
-            // ──────────────────────────────────────────────────────
-            //  HIT A LASER → Terminate (backward ray reached light source)
-            // ──────────────────────────────────────────────────────
             if (nearestComponent instanceof Laser) {
-                // Backward trace reached the illumination source — terminate
                 break;
             }
 
-            // ──────────────────────────────────────────────────────
-            //  HIT THE SAMPLE → Evaluate radiance
-            // ──────────────────────────────────────────────────────
             if (nearestComponent instanceof Sample && sample) {
                 const hitPoint = nearestHit.point;
 
@@ -196,10 +185,7 @@ export class Solver3 {
                 // illumination so excitation intensity is ~constant.
                 const radiance = throughput;
 
-                // Add terminal ray segment at sample for visualization
-                // Mark as terminated so the visualizer doesn't extend it
-                // past the sample — backward rays represent emission that
-                // originates here, not continues through.
+                // Terminal ray segment at sample for visualization
                 const terminalRay: Ray = {
                     origin: hitPoint,
                     direction: currentRay.direction.clone(),
@@ -217,18 +203,14 @@ export class Solver3 {
                 return { radiance, path };
             }
 
-            // ──────────────────────────────────────────────────────
-            //  Hit another component → refract/reflect backward
-            // ──────────────────────────────────────────────────────
             const result = nearestComponent.interact(currentRay, nearestHit);
 
             if (result.rays.length === 0) {
-                // Blocked/absorbed — no radiance
+
                 break;
             }
 
-            // For backward tracing, take the primary transmitted/refracted ray
-            // (ignore splits for now — take the brightest child)
+            // Take the brightest child ray for backward tracing
             let bestChild = result.rays[0];
             for (const child of result.rays) {
                 if (child.intensity > bestChild.intensity) {
@@ -236,12 +218,12 @@ export class Solver3 {
                 }
             }
 
-            // Update throughput based on intensity ratio (transmission/reflection coefficient)
+
             if (currentRay.intensity > 1e-12) {
                 throughput *= bestChild.intensity / currentRay.intensity;
             }
 
-            // Handle passthrough components
+
             if (result.passthrough && result.rays.length === 1) {
                 currentRay.interactionDistance = undefined;
                 bestChild.interactionDistance = undefined;
@@ -249,13 +231,13 @@ export class Solver3 {
                 continue;
             }
 
-            // Continue tracing the best child
+
             bestChild.interactionDistance = undefined;
             bestChild.sourceId = currentRay.sourceId;
             path.push(bestChild);
             currentRay = bestChild;
 
-            // If throughput is negligible, stop
+
             if (throughput < 1e-6) break;
         }
 

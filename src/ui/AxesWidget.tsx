@@ -1,7 +1,11 @@
 import React from 'react';
 import { GizmoHelper, GizmoViewport } from '@react-three/drei';
+import { useIsMobile } from './useIsMobile';
 
 export const AxesWidget: React.FC = () => {
+    const isMobile = useIsMobile();
+    if (isMobile) return null;
+
     return (
         <GizmoHelper
             alignment="bottom-right"

@@ -3,7 +3,7 @@ import { OpticalComponent } from './Component';
 import { Laser } from './components/Laser';
 
 export class Solver1 {
-    maxDepth: number = 20; // Maximum number of bounces to prevent infinite loops
+    maxDepth: number = 20;
     scene: OpticalComponent[];
 
     constructor(scene: OpticalComponent[]) {
@@ -14,7 +14,7 @@ export class Solver1 {
         const allPaths: Ray[][] = [];
 
         for (const sourceRay of sources) {
-            // Safety Check: Ensure source ray is valid
+
             if (isNaN(sourceRay.origin.x) || isNaN(sourceRay.direction.x)) {
                 console.warn("Solver1: Skipping invalid source ray (NaN values)", sourceRay);
                 continue;
@@ -28,7 +28,7 @@ export class Solver1 {
     }
 
     private traceRecursive(currentRay: Ray, currentPath: Ray[], depth: number, allPaths: Ray[][]) {
-        // 0. Safety Checks
+
         if (depth >= this.maxDepth) {
             allPaths.push([...currentPath]);
             return;
@@ -44,11 +44,11 @@ export class Solver1 {
         let nearestHit = null;
         let nearestComponent = null;
 
-        // 1. Find Nearest Intersection
+
         for (const component of this.scene) {
             const hit = component.chkIntersection(currentRay);
 
-            // t > 0.001 prevents self-intersection (shadow acne)
+
             if (hit && hit.t < nearestT && hit.t > 0.001) {
                 nearestT = hit.t;
                 nearestHit = hit;
@@ -56,67 +56,57 @@ export class Solver1 {
             }
         }
 
-        // 2. Terminate if no hit (Ray goes to infinity)
+
         if (!nearestHit || !nearestComponent) {
             allPaths.push([...currentPath]);
             return;
         }
 
-        // 3. Interact
-        // Store where the ray ended its segment.
         currentRay.interactionDistance = nearestT;
 
-        // Terminate rays that re-enter a Laser (backward-refracted fan rays
-        // shouldn't pass through the light source housing)
+        // Terminate rays that re-enter a Laser housing
         if (nearestComponent instanceof Laser) {
             allPaths.push([...currentPath]);
             return;
         }
 
-        // component.interact() calculates the physics (reflection, refraction, etc.)
+
         const result: InteractionResult = nearestComponent.interact(currentRay, nearestHit);
 
-        // 4. Handle Termination (Blocker/Absorber)
-        // If no child rays are returned, the light stopped (absorbed or blocked).
+
         if (result.rays.length === 0) {
             allPaths.push([...currentPath]);
             return;
         }
 
-        // 5. Handle passthrough components (e.g., card viewer)
-        // The component recorded whatever it needed but doesn't break the ray path.
+        // Passthrough components (e.g., card) don't break the ray path
         if (result.passthrough && result.rays.length === 1) {
-            // Undo the interaction distance so this ray's segment extends past the card
             currentRay.interactionDistance = undefined;
             const nextRay = result.rays[0];
             nextRay.interactionDistance = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
-            // Continue tracing as if the ray passed right through — no new path entry
+
             this.traceRecursive(nextRay, currentPath, depth + 1, allPaths);
             return;
         }
 
-        // 5b. Handle Branching (Refraction, Reflection, Splitting)
-        // Spawn new rays for the next segments.
+
         for (let i = 0; i < result.rays.length; i++) {
             const nextRay = result.rays[i];
-            // CRITICAL: Reset interaction distance for the new ray.
+
             nextRay.interactionDistance = undefined;
 
-            // Propagate main ray flag: ALL children of a main ray are main rays.
-            // When a beam splits (prism, beam splitter), both branches are primary paths.
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
 
-            // If ray was absorbed or extinguished (e.g. TIR, crossed polarizers),
-            // add it to path for visualization but don't trace further
+
             if (nextRay.intensity < 1e-6) {
                 allPaths.push([...currentPath, nextRay]);
                 continue;
             }
 
-            // Branch the path history
+
             const nextPath = [...currentPath, nextRay];
 
             this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);

@@ -1,7 +1,7 @@
 import { OpticalComponent } from '../physics/Component';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Camera } from '../physics/components/Camera';
-import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
 
@@ -33,14 +33,13 @@ export const createBrightfieldScene = (): OpticalComponent[] => {
     //                                            parallel rays
     //                                           (infinity space = 200mm)
 
-    // 1. LED — broadband white light source (represented at 550 nm, peak of visual sensitivity)
-    const led = new Laser("White Light Source");
-    led.setPosition(-80, 0, 0);
-    led.setRotation(0, 0, 0);
-    led.beamRadius = 3;
-    led.wavelength = 550;    // green — representative of white light
-    led.power = 1.0;
-    scene.push(led);
+    // 1. Lamp — broadband white light source (7-band ROYGBIV)
+    const lamp = new Lamp("White Light Source");
+    lamp.setPosition(-80, 0, 0);
+    lamp.setRotation(0, 0, 0);
+    lamp.beamRadius = 3;
+    lamp.power = 1.0;
+    scene.push(lamp);
 
     // 2. Condenser — plano-convex, f = 25 mm
     //    Focuses illumination onto the sample plane

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useIsMobile } from './useIsMobile';
 import { useAtom } from 'jotai';
 import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
 import { Euler, Quaternion, Vector3 } from 'three';
@@ -9,6 +11,7 @@ import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 
 import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
 import { PrismLens } from '../physics/components/PrismLens';
@@ -104,6 +107,193 @@ const CardViewerWithPin: React.FC<{
     );
 };
 
+// ─── Solver Panel (mobile-collapsible) ────────────────────────────────
+const SolverPanel: React.FC<{
+    rayConfig: any;
+    setRayConfig: (v: any) => void;
+    isRendering: boolean;
+    setSolver3Trigger: (fn: (prev: number) => number) => void;
+}> = ({ rayConfig, setRayConfig, isRendering, setSolver3Trigger }) => {
+    const isMobile = useIsMobile();
+    const [mobileOpen, setMobileOpen] = React.useState(false);
+    const isVisible = !isMobile || mobileOpen;
+
+    return (
+        <>
+            {/* Mobile backdrop */}
+            {isMobile && mobileOpen && (
+                <div
+                    onClick={() => setMobileOpen(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        zIndex: 14,
+                    }}
+                />
+            )}
+
+            {/* Mobile toggle button */}
+            {isMobile && !mobileOpen && (
+                <button
+                    onClick={() => setMobileOpen(true)}
+                    style={{
+                        position: 'fixed',
+                        top: 10,
+                        right: 10,
+                        zIndex: 20,
+                        width: 40,
+                        height: 40,
+                        borderRadius: '8px',
+                        border: '1px solid #444',
+                        backgroundColor: '#1a1a1a',
+                        color: '#aaa',
+                        fontSize: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    }}
+                    title="Physics Solvers"
+                >
+                    ⚙
+                </button>
+            )}
+
+            {/* Panel */}
+            <div style={{
+                position: isMobile ? 'fixed' : 'absolute',
+                top: 20,
+                right: 20,
+                width: 280,
+                backgroundColor: 'rgba(30, 30, 30, 0.95)',
+                color: 'white',
+                padding: 15,
+                borderRadius: 8,
+                border: '1px solid #444',
+                fontFamily: 'sans-serif',
+                fontSize: '12px',
+                zIndex: 15,
+                transform: isVisible ? 'translateX(0)' : 'translateX(calc(100% + 40px))',
+                transition: 'transform 0.25s ease',
+            }}>
+                {isMobile && (
+                    <button
+                        onClick={() => setMobileOpen(false)}
+                        style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 10,
+                            background: 'none',
+                            border: 'none',
+                            color: '#888',
+                            fontSize: '18px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ✕
+                    </button>
+                )}
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Physics Solvers</div>
+
+                {/* Ray Tracer (always on) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
+                    <span>Ray Tracer</span>
+                </div>
+                <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
+                    <input
+                        type="range"
+                        min="4"
+                        max="128"
+                        step="1"
+                        value={Math.max(4, rayConfig.rayCount)}
+                        onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
+                        style={{ width: '80px' }}
+                    />
+                    <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
+                </div>
+
+                {/* E&M (toggleable) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}>
+                    <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
+                        transition: 'background-color 0.2s'
+                    }}></div>
+                    <input
+                        type="checkbox"
+                        checked={rayConfig.solver2Enabled}
+                        onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                        style={{ cursor: 'pointer' }}
+                    />
+                    <span
+                        style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
+                        onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                    >E&M</span>
+
+                    {/* E-field visualization toggle */}
+                    {rayConfig.solver2Enabled && (
+                        <button
+                            onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
+                            title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
+                            style={{
+                                background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
+                                border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
+                                borderRadius: '3px',
+                                color: rayConfig.emFieldVisible ? '#4af' : '#666',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                padding: '1px 4px',
+                                lineHeight: 1,
+                                marginLeft: '4px',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            👁
+                        </button>
+                    )}
+                </div>
+
+                {/* Solver 3: Incoherent Imaging */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
+                    <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: isRendering ? '#fa4' : '#555',
+                        transition: 'background-color 0.2s'
+                    }}></div>
+                    <button
+                        onClick={() => setSolver3Trigger((prev: number) => prev + 1)}
+                        disabled={isRendering || !rayConfig.solver2Enabled}
+                        title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : 'Backward-trace rays from camera through optics to sample'}
+                        style={{
+                            padding: '3px 10px',
+                            background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
+                            cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            transition: 'background 0.2s',
+                        }}
+                    >
+                        {isRendering ? '⏳ Tracing...' : '▶ Reverse Trace'}
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+};
+
 export const Inspector: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
@@ -112,25 +302,25 @@ export const Inspector: React.FC = () => {
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
 
-    // Derived state — only show single-component properties when exactly 1 is selected
+
     const selectedComponent = selection.length === 1
         ? components.find(c => c.id === selection[0])
         : undefined;
 
-    // Local state for inputs
+
     const [localX, setLocalX] = useState<string>('0');
     const [localY, setLocalY] = useState<string>('0');
     const [localRot, setLocalRot] = useState<string>('0');
 
-    // Geometry Params (Card)
+
     const [localWidth, setLocalWidth] = useState<string>('0');
     const [localHeight, setLocalHeight] = useState<string>('0');
 
-    // Mirror Params
+
     const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
     const [localMirrorThickness, setLocalMirrorThickness] = useState<string>('2');
 
-    // Blocker Params
+
     const [localBlockerDiameter, setLocalBlockerDiameter] = useState<string>('20');
     const [localBlockerThickness, setLocalBlockerThickness] = useState<string>('5');
     const [localRadius, setLocalRadius] = useState<string>('0');
@@ -141,32 +331,31 @@ export const Inspector: React.FC = () => {
     const [localIor, setLocalIor] = useState<string>('1.5');
     const [localLensType, setLocalLensType] = useState<string>('biconvex');
 
-    // IdealLens Params
+
     const [localIdealFocal, setLocalIdealFocal] = useState<string>('50');
     const [localIdealAperture, setLocalIdealAperture] = useState<string>('15');
 
-    // Objective Params
+
     const [localObjNA, setLocalObjNA] = useState<string>('0.25');
     const [localObjMag, setLocalObjMag] = useState<string>('10');
     const [localObjImmersion, setLocalObjImmersion] = useState<string>('1.0');
     const [localObjWD, setLocalObjWD] = useState<string>('10');
 
-    // Laser Params
+
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
 
-    // Prism Params
+
     const [localApexAngle, setLocalApexAngle] = useState<string>('60');
     const [localPrismHeight, setLocalPrismHeight] = useState<string>('20');
-    const [localPrismWidth, setLocalPrismWidth] = useState<string>('20');
     const [localPrismIor, setLocalPrismIor] = useState<string>('1.5168');
 
-    // Aperture Params
+
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
 
 
 
-    // Spectral Profile Params (shared by Filter & Dichroic)
+
     const [localSpectralPreset, setLocalSpectralPreset] = useState<ProfilePreset>('bandpass');
     const [localSpectralCutoff, setLocalSpectralCutoff] = useState<string>('500');
     const [localSpectralCenter, setLocalSpectralCenter] = useState<string>('525');
@@ -174,7 +363,7 @@ export const Inspector: React.FC = () => {
     const [localSpectralSteepness, setLocalSpectralSteepness] = useState<string>('15');
     const [localBands, setLocalBands] = useState<{ center: string; width: string }[]>([{ center: '525', width: '50' }]);
 
-    // Sync local state when selection or actual values change externally
+
     useEffect(() => {
         if (selectedComponent) {
             try {
@@ -190,7 +379,7 @@ export const Inspector: React.FC = () => {
                     setLocalRot(String(zDeg));
                 }
 
-                // Type specific params
+
                 if (selectedComponent instanceof Card) {
                     const c = selectedComponent as any;
                     if (c.width != null) setLocalWidth(String(c.width));
@@ -211,12 +400,12 @@ export const Inspector: React.FC = () => {
                     setLocalThickness(String(selectedComponent.thickness));
                     setLocalIor(String(selectedComponent.ior));
 
-                    // Lens type detection
+
                     if (typeof selectedComponent.getLensType === 'function') {
                         setLocalLensType(selectedComponent.getLensType());
                     }
 
-                    // Radii
+
                     if (typeof selectedComponent.getRadii === 'function') {
                         const radii = selectedComponent.getRadii();
                         setLocalR1(Math.abs(radii.R1) >= 1e6 ? "Infinity" : String(Math.round(radii.R1 * 100) / 100));
@@ -241,10 +430,12 @@ export const Inspector: React.FC = () => {
                     setLocalWavelength(selectedComponent.wavelength);
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
                 }
+                if (selectedComponent instanceof Lamp) {
+                    setLocalBeamRadius(String(selectedComponent.beamRadius));
+                }
                 if (selectedComponent instanceof PrismLens) {
                     setLocalApexAngle(String(Math.round(selectedComponent.apexAngle * 180 / Math.PI * 100) / 100));
                     setLocalPrismHeight(String(selectedComponent.height));
-                    setLocalPrismWidth(String(selectedComponent.width));
                     setLocalPrismIor(String(selectedComponent.ior));
                 }
                 if (selectedComponent instanceof Aperture) {
@@ -279,8 +470,7 @@ export const Inspector: React.FC = () => {
         }
     }, [selectedComponent, selection, components]);
 
-    // Handlers
-    // ... existing commitPosition ...
+
     const commitPosition = (axis: 'x' | 'y' | 'z', valueStr: string) => { /* ... same ... */
         if (!selectedComponent) return;
         const val = parseFloat(valueStr);
@@ -330,7 +520,7 @@ export const Inspector: React.FC = () => {
     const commitGeometry = (param: 'width' | 'height' | 'radius' | 'focal' | 'r1' | 'r2' | 'thickness' | 'ior', valueStr: string) => {
         if (!selectedComponent) return;
 
-        // Handle "Infinity" case for radii
+
         let val: number;
         if (valueStr.toLowerCase() === 'infinity') {
             val = 1e9;
@@ -342,7 +532,7 @@ export const Inspector: React.FC = () => {
 
         const newComponents = components.map(c => {
             if (c.id === selection[0]) {
-                // TypeScript casting to access specific props
+
                 if (param === 'width' && 'width' in c) (c as any).width = val;
                 if (param === 'height' && 'height' in c) (c as any).height = val;
                 if (param === 'radius' && c instanceof SphericalLens) c.apertureRadius = val;
@@ -385,7 +575,7 @@ export const Inspector: React.FC = () => {
         setComponents([...newComponents]);
     };
 
-    // ... handleKeyDown ...
+
     const handleKeyDown = (e: React.KeyboardEvent, commitFn: () => void) => {
         if (e.key === 'Enter') {
             commitFn();
@@ -393,116 +583,11 @@ export const Inspector: React.FC = () => {
         }
     };
 
+    const [localName, setLocalName] = useState(selectedComponent?.name ?? '');
+    useEffect(() => { setLocalName(selectedComponent?.name ?? ''); }, [selectedComponent?.id]);
+
     if (!selectedComponent) {
-        return (
-            <div style={{
-                position: 'absolute',
-                top: 20,
-                right: 20,
-                width: 280,
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                color: 'white',
-                padding: 15,
-                borderRadius: 8,
-                border: '1px solid #444',
-                fontFamily: 'sans-serif',
-                fontSize: '12px',
-            }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Physics Solvers</div>
-
-                {/* Ray Tracer (always on) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
-                    <span>Ray Tracer</span>
-                </div>
-                <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                    <input
-                        type="range"
-                        min="4"
-                        max="128"
-                        step="1"
-                        value={Math.max(4, rayConfig.rayCount)}
-                        onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
-                        style={{ width: '80px' }}
-                    />
-                    <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
-                </div>
-
-                {/* E&M (toggleable) */}
-                <div
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}
-                >
-                    <div style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
-                        transition: 'background-color 0.2s'
-                    }}></div>
-                    <input
-                        type="checkbox"
-                        checked={rayConfig.solver2Enabled}
-                        onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <span
-                        style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
-                        onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                    >E&M</span>
-
-                    {/* E-field visualization toggle (eyeball) */}
-                    {rayConfig.solver2Enabled && (
-                        <button
-                            onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
-                            title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
-                            style={{
-                                background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
-                                border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
-                                borderRadius: '3px',
-                                color: rayConfig.emFieldVisible ? '#4af' : '#666',
-                                cursor: 'pointer',
-                                fontSize: '13px',
-                                padding: '1px 4px',
-                                lineHeight: 1,
-                                marginLeft: '4px',
-                                transition: 'all 0.2s',
-                            }}
-                        >
-                            👁
-                        </button>
-                    )}
-                </div>
-
-                {/* Solver 3: Incoherent Imaging — Trace Image button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                    <div style={{ 
-                        width: '8px', 
-                        height: '8px', 
-                        borderRadius: '50%', 
-                        backgroundColor: isRendering ? '#fa4' : '#555',
-                        transition: 'background-color 0.2s'
-                    }}></div>
-                    <button
-                        onClick={() => setSolver3Trigger((prev: number) => prev + 1)}
-                        disabled={isRendering || !rayConfig.solver2Enabled}
-                        title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : 'Backward-trace rays from camera through optics to sample'}
-                        style={{
-                            padding: '3px 10px',
-                            background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
-                            cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
-                            fontSize: '11px',
-                            fontFamily: 'monospace',
-                            transition: 'background 0.2s',
-                        }}
-                    >
-                        {isRendering ? '⏳ Tracing...' : '▶ Reverse Trace'}
-                    </button>
-                </div>
-            </div>
-        );
+        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} />;
     }
 
     const isCard = selectedComponent instanceof Card;
@@ -512,6 +597,7 @@ export const Inspector: React.FC = () => {
     const isIdealLens = selectedComponent instanceof IdealLens;
     const isObjective = selectedComponent instanceof Objective;
     const isLaser = selectedComponent instanceof Laser;
+    const isLamp = selectedComponent instanceof Lamp;
     const isPrism = selectedComponent instanceof PrismLens;
     const isWaveplate = selectedComponent instanceof Waveplate;
     const isAperture = selectedComponent instanceof Aperture;
@@ -536,6 +622,32 @@ export const Inspector: React.FC = () => {
         setComponents([...newComponents]);
     };
 
+    const commitLampParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof Lamp)) return;
+        const radius = parseFloat(localBeamRadius);
+        if (isNaN(radius)) return;
+
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof Lamp) {
+                c.beamRadius = radius;
+                c.beamWaist = radius;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitName = (name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) { setLocalName(selectedComponent.name); return; }
+        const newComponents = components.map(c => {
+            if (c.id === selection[0]) { c.name = trimmed; return c; }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
     return (
         <div style={{
             position: 'absolute',
@@ -544,15 +656,59 @@ export const Inspector: React.FC = () => {
             width: 280,
             backgroundColor: 'rgba(30, 30, 30, 0.95)',
             color: '#eee',
-            padding: 20,
+            padding: 14,
             borderRadius: 8,
             border: '1px solid #444',
             fontFamily: 'Inter, sans-serif',
             boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
         }}>
-            <h3 style={{ marginTop: 0, marginBottom: 15, borderBottom: '1px solid #555', paddingBottom: 10 }}>
-                {selectedComponent.name}
-            </h3>
+            {/* Editable name + delete trash icon */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, borderBottom: '1px solid #555', paddingBottom: 8 }}>
+                <input
+                    type="text"
+                    value={localName}
+                    onChange={e => setLocalName(e.target.value)}
+                    onBlur={() => commitName(localName)}
+                    onKeyDown={e => { if (e.key === 'Enter') { commitName(localName); (e.target as HTMLInputElement).blur(); } }}
+                    style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                        borderRadius: 4,
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        padding: '2px 4px',
+                        outline: 'none',
+                        transition: 'border-color 0.15s',
+                        minWidth: 0,
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#555'; }}
+                    onBlurCapture={e => { e.currentTarget.style.borderColor = 'transparent'; }}
+                />
+                <button
+                    onClick={() => {
+                        setComponents(components.filter(c => c.id !== selection[0]));
+                        setSelection([]);
+                    }}
+                    title="Delete component"
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: '#888',
+                        transition: 'color 0.15s',
+                        flexShrink: 0,
+                    }}
+                    onMouseOver={e => { e.currentTarget.style.color = '#ef4444'; }}
+                    onMouseOut={e => { e.currentTarget.style.color = '#888'; }}
+                >
+                    <Trash2 size={15} />
+                </button>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* X / Y / Rotation — compact single row */}
@@ -756,7 +912,7 @@ export const Inspector: React.FC = () => {
                         </div>
 
                         {/* Primary Controls — all scrubbable */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
                             <ScrubInput
                                 label="Focal Len"
                                 suffix="mm"
@@ -829,42 +985,7 @@ export const Inspector: React.FC = () => {
                 {isPrism && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Prism Geometry</label>
-                        {/* Shape Presets */}
-                        <div style={{ marginBottom: 10 }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Shape</label>
-                            <select
-                                value={
-                                    Math.abs(parseFloat(localApexAngle) - 60) < 0.5 ? 'equilateral' :
-                                        Math.abs(parseFloat(localApexAngle) - 90) < 0.5 ? 'right-angle' :
-                                            Math.abs(parseFloat(localApexAngle) - 45) < 0.5 ? '45-degree' : 'custom'
-                                }
-                                onChange={(e) => {
-                                    const type = e.target.value;
-                                    let angle = 60;
-                                    if (type === 'right-angle') angle = 90;
-                                    else if (type === '45-degree') angle = 45;
-                                    setLocalApexAngle(String(angle));
-                                    if (selectedComponent instanceof PrismLens) {
-                                        const newComponents = components.map(c => {
-                                            if (c.id === selection[0] && c instanceof PrismLens) {
-                                                c.apexAngle = angle * Math.PI / 180;
-                                                c.invalidateMesh();
-                                                return c;
-                                            }
-                                            return c;
-                                        });
-                                        setComponents([...newComponents]);
-                                    }
-                                }}
-                                style={{ ...inputStyle, cursor: 'pointer' }}
-                            >
-                                <option value="equilateral">Equilateral (60°)</option>
-                                <option value="45-degree">45° Prism</option>
-                                <option value="right-angle">Right-Angle (90°)</option>
-                                <option value="custom">Custom</option>
-                            </select>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
                             <ScrubInput
                                 label="Apex Angle"
                                 suffix="°"
@@ -912,7 +1033,7 @@ export const Inspector: React.FC = () => {
                                 title="Index of Refraction"
                             />
                             <ScrubInput
-                                label="Height"
+                                label="Edge Length"
                                 suffix="mm"
                                 value={localPrismHeight}
                                 onChange={setLocalPrismHeight}
@@ -922,28 +1043,6 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof PrismLens) {
                                             c.height = val;
-                                            c.invalidateMesh();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.5}
-                                min={1}
-                                max={200}
-                            />
-                            <ScrubInput
-                                label="Width"
-                                suffix="mm"
-                                value={localPrismWidth}
-                                onChange={setLocalPrismWidth}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PrismLens) {
-                                            c.width = val;
                                             c.invalidateMesh();
                                             return c;
                                         }
@@ -1142,7 +1241,7 @@ export const Inspector: React.FC = () => {
                                     onChange={(e) => {
                                         const newWavelength = parseInt(e.target.value);
                                         setLocalWavelength(newWavelength);
-                                        // Immediately commit wavelength change
+
                                         if (selectedComponent && selectedComponent instanceof Laser) {
                                             selectedComponent.wavelength = newWavelength;
                                             setComponents([...components]);
@@ -1171,6 +1270,27 @@ export const Inspector: React.FC = () => {
                                 onKeyDown={(e) => handleKeyDown(e, commitLaserParams)}
                                 style={inputStyle}
                             />
+                        </div>
+                    </div>
+                )}
+
+                {isLamp && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Lamp Settings (White Light)</label>
+                        {/* Beam Radius */}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', marginBottom: 4 }}>Beam Radius (mm)</label>
+                            <input
+                                type="text"
+                                value={localBeamRadius}
+                                onChange={(e) => setLocalBeamRadius(e.target.value)}
+                                onBlur={commitLampParams}
+                                onKeyDown={(e) => handleKeyDown(e, commitLampParams)}
+                                style={inputStyle}
+                            />
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
+                            7-band visible spectrum (440–620 nm)
                         </div>
                     </div>
                 )}
@@ -1573,19 +1693,7 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                <div style={{ fontSize: '11px', color: '#666', marginTop: 5 }}>
-                    ID: {selectedComponent.id.substring(0, 8)}
-                </div>
 
-                <button
-                    onClick={() => {
-                        setComponents(components.filter(c => c.id !== selection[0]));
-                        setSelection([]);
-                    }}
-                    style={deleteButtonStyle}
-                >
-                    Delete Component
-                </button>
             </div>
         </div>
     );
@@ -1601,14 +1709,4 @@ const inputStyle: React.CSSProperties = {
     boxSizing: 'border-box'
 };
 
-const deleteButtonStyle: React.CSSProperties = {
-    marginTop: 20,
-    backgroundColor: '#ef4444',
-    color: 'white',
-    border: 'none',
-    padding: '8px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    width: '100%',
-    fontWeight: 'bold'
-};
+

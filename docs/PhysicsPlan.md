@@ -55,10 +55,9 @@ Includes saturation_intensity to model non-linear bleaching effects.
 Absorption: The material returns an absorption coefficient $\mu$ (units: $mm^{-1}$).
 
 
-### B. Solver 1: The Layout Engine (Interactive UI)
-Goal: Instant visual feedback. "Is my mirror aligned?" and "Is my waveplate working?"
-Method: Deterministic Vector Ray Tracing via a recursive tree tracer.
-Ray Count: Low (e.g., 3 rays per source: Center + Marginal +/- NA).Sources: Supports Point, Parallel, Divergent, and Ray sources by varying initial vectors.
+### B. Solver 1: Ray-Tracing Engine
+
+Deterministic Vector Ray Tracing via a recursive tree tracer.
 
 Algorithm:
 1. For each source ray, find the nearest intersection across all components (`t > 0.001` to prevent self-intersection).
@@ -72,21 +71,23 @@ Output: `Ray[][]` — an array of ray paths, where each path is an ordered seque
 
 Physics:
 
--Snell's Law (Vector Form).Ray Termination (Blocking/Opacity).
+#### Snell's law
+The new ray direction $\vec{v}_{out}$ given incoming direction $\vec{v}_{in}$, surface normal $\vec{N}$, and index ratio $r = \frac{n_1}{n_2}$.
+$$\vec{v}_{out} = r \vec{v}_{in} + \left( r c - \sqrt{1 - r^2 (1 - c^2)} \right) \vec{N}$$
+Where: $c = -\vec{N} \cdot \vec{v}_{in}$ (Cosine of incident angle).
+Total Internal Reflection occurs if the term under the square root $1 - r^2(1 - c^2) < 0$. In this case, the ray reflects instead.
+
 If interact() returns an empty list (e.g., hitting a wall, the back of a mirror, or a closed iris), the ray path ends immediately at that point.
-This prevents rays from passing through opaque objects like camera bodies or optical posts.
 
 -Thick-Optic Interaction (The `OpticMesh` Engine): For thick refractive components (spherical lenses, cylindrical lenses, prisms), the physics mesh is a **separate internal mesh** from the visual renderer. Both share the same geometry generation (e.g., `generateProfile()` → `LatheGeometry`), but the physics mesh lives inside the component and is invisible to the UI. The raycaster uses `three-mesh-bvh` for acceleration and `THREE.DoubleSide` so rays can hit glass surfaces from inside during exit. Crucially, the mesh's interpolated vertex normals are replaced at query time by an **analytical `normalFn` callback** provided by each component — e.g., for a spherical lens, the normal is computed as `normalize(hitPoint - sphereCenter)`, not interpolated from neighboring triangle vertices. This eliminates refraction errors at surface discontinuities (rim ↔ optical surface) that plagued the original shared-mesh approach.
 
 The `OpticMesh.interact()` method handles the full entry→exit cycle: detect entry/exit via dot-product test, refract at entry (Air→Glass), internal raycast to find exit surface, refract at exit (Glass→Air), and TIR loop (up to 10 internal bounces). This unified method is used by `SphericalLens`, `CylindricalLens`, and `PrismLens`.
 
 -Polarization (Jones Calculus): The Ray carries a Jones Vector. Every interaction updates it (Reflections flip phase, Waveplates retard components).
-Visualization: The UI can draw polarization arrows or color-code rays to show state changes instantly.
-
 -No intensity/flux calculations.
 -No interference (requires detector screen sampling) or diffraction (requires wave/Gaussian propagation).
 
-### C. Solver 2: The Wave-Equation Engine (Paraxial)
+### C. Solver 2: E&M Wave-Equation Engine
 
 Goal: Visualize beam waist, focus quality, and diffraction limits. Allows you to simulate interference and diffraction.
 
@@ -129,111 +130,101 @@ Usage: Overlays a semi-transparent "beam" mesh on the layout.
 
 Metadata Extraction for ABCD Matrices: Ideal components (`IdealLens`, `Objective`) provide `getABCD()` methods that return the standard thin-lens matrix directly. For thick lenses (`SphericalLens`), the component already knows its `R1`, `R2`, and `ior`, so the ABCD matrix can be computed from the component's own parameters rather than from mesh metadata.
 
-### D. Solver 3: The Incoherent Imaging Engine
-Goal: Generate the actual pixels the camera sees for standard Microscopy (Fluorescence, Brightfield, Darkfield). Fast and robust.
-Method: Reverse Stochastic Path Tracing (Monte Carlo) with Incoherent Integration.
+### D. Solver 3: Imaging Engine
+Generates the pixels the camera sees for standard Microscopy (Fluorescence, Brightfield, Darkfield) using Reverse Stochastic Path Tracing (Monte Carlo) with Incoherent Integration.
 
-Robust Volume Stepping: By utilizing sealed, watertight meshes for the collision boundaries, Backward Tracing is highly robust. The raycaster strictly defines the entry and exit points of a glass volume, ensuring that step marching ($dL$) for absorption ($\mu_a$) and scattering phase functions perfectly matches the physical boundaries of the component, eliminating math leaks during Monte Carlo integration.
+By utilizing sealed, watertight meshes for the collision boundaries, Backward Tracing is highly robust. The raycaster strictly defines the entry and exit points of a glass volume, ensuring that step marching ($dL$) for absorption ($\mu_a$) and scattering phase functions perfectly matches the physical boundaries of the component, eliminating math leaks during Monte Carlo integration.
 
-(Trick 1: Backward Gaussian).
-Aperture: Sample a random point on the Objective's Entrance Pupil.
-Trace: Shoot ray into the system.
-Integration (Unified Incoherent): Ray enters Sample Volume.
+Some inspiration from this paper: 
+"A Generalized Ray Formulation For Wave-Optics Rendering" - (https://arxiv.org/pdf/2303.15762) 
+    Solver 1 finds the path (Sample). 
+    Solver 2 calculates the physics (Solve). 
+    Solver 3 rays carry a footprint_radius (equivalent to the paper's $\beta$). This represents the pixel's sensitivity cone. When a ray hits a diffractive surface, this footprint is used to filter the interference pattern, solving the sampling problem.
 
-#### i. Transmission (Shadows & Scattering):
-Absorption = Material_Mu_a(P) * dL.
-Throughput *= exp(-Absorption).
-Scattering (Darkfield Support): Check prob P_scat = Material_Mu_s(P) * dL.
+#### Potential optimization (Acceleration Structures (The )Light Field Grid)
+To prevent Solver 3/4 from iterating through thousands of Solver 2 beams ($O(N)$), we rasterize the Light Field.
+Structure: A sparse voxel grid (or Linear BVH) storing indices of active Beam Segments.
+Grid Resolution: Coarse (e.g., $10mm^3$ cells).
+Query Logic: Solver 3 finds the voxel for point $P$. It only iterates over the beams listed in that voxel.
+Performance: Reduces complexity to $O(1)$ or $O(\log N)$, essential for real-time framerates in complex scenes (microlens arrays, diffusers).
+Optimization Note: For low resolution sensors (<256px), simple Brute Force iteration is acceptable and easier to implement.
+
+#### i. Transmission:
+Absorption = Material_Mu_a(P) * dL.Throughput *= exp(-Absorption).
+Scattering (Darkfield Support): Check prob P_scat = Material_Mu_s(P) * dL
 If scattered: Ray.Direction = SamplePhaseFunction(). This allows the ray to turn and "find" a light source that was previously hidden (e.g., darkfield condenser).
 
-#### ii. Emission (The Glow - Stokes Shift Logic):
+#### ii. Emission:
 The ray (Camera $\lambda_{em}$) hits a fluorophore.
 Look up material property: excitation_lambda ($\lambda_{ex}$).
 
-The Cross-Channel Query: Ask Solver 2 for intensity of $\lambda_{ex}$ at this point.
-Ex_Intensity = Solver2.Query(P, lambda_ex).
-Emission = Fluorophore_Density(P) * Ex_Intensity * dL.Radiance += Emission * Throughput.
-Termination (The Global Field Query): When the ray exits the Sample Volume (or hits no other geometry), it performs a generic query of the Global Light Field generated by Solver 2.
+Ask Solver 2 for intensity of $\lambda_{ex}$ at this point.
+Ex_Intensity = Solver2.Query(P, lambda_ex).Emission = Fluorophore_Density(P) * Ex_Intensity * dL.Radiance += Emission * Throughput.
+Termination: When the ray exits the Sample Volume (or hits no other geometry), it performs a generic query of the Global Light Field generated by Solver 2.
 
-### E. Solver 4: The Coherent Imaging Engine
-Goal: Visualize complex interference phenomena (Phase Contrast, Holography, DIC). Slower, experimental "Hard Mode".
-Method: Reverse Stochastic Path Tracing with Coherent Amplitude Summation.
-Key Difference: Tracks Complex Electric Field $E$ instead of Intensity $I$. Sums amplitudes before squaring.
-Algorithm: Sensor & Trace: Same as Solver 3.
-Integration (Splitting Logic): When a ray hits a Phase Object (Sample with refractive index gradient $\nabla n$):Deterministic Split:
-Ray A (Direct/Ballistic): Continues straight. Accumulates Phase: $\phi += n(P) \cdot dL$.
-Ray B (Diffracted/Scattered): Scatters based on $\nabla n$. Accumulates Phase: $\phi += n(P) \cdot dL$.
+### E. Solver 4: Coherent Imaging
+Visualizes complex interference phenomena (Phase Contrast, Holography, DIC). using Reverse Stochastic Path Tracing with Coherent Amplitude Summation.
+
+- Tracks Complex Electric Field $E$ instead of Intensity $I$. Sums amplitudes before squaring.
+
+- When a ray hits a Phase Object (Sample with refractive index gradient $\nabla n$)
+    - Ray A (Direct/Ballistic): Continues straight. Accumulates Phase: $\phi += n(P) \cdot dL$.
+    - Ray B (Diffracted/Scattered): Scatters based on $\nabla n$. Accumulates Phase: $\phi += n(P) \cdot dL$.
 Both rays are traced independently back to the source.
-Termination (Coherent Handshake): When rays hit the Source Field (Solver 2):Amplitude = sqrt(Source_Intensity).Phase = Ray.
-Accumulated_Optical_Path_Length.
+
+Termination: When rays hit the Source Field (Solver 2):Amplitude = sqrt(Source_Intensity).Phase = Ray.Accumulated_Optical_Path_Length.
 Complex_E = Amplitude * exp(i * k * Phase).
 Recombination: E_total = E_Direct + E_Diffracted.Final_Pixel_Intensity = |E_total|^2.
 Effect: If the Direct ray passes through a Phase Ring (shifting phase by $\pi/2$), the interference term $2 \text{Re}(E_1 E_2^*)$ becomes non-zero, creating the halo contrast characteristic of Phase Contrast microscopy.
 
 ### F. Solver 5: The Quantum Correlation Engine
-Goal: Visualize Quantum phenomena relying on non-local correlations (Ghost Imaging) or modified statistics (Squeezed Light).
-Method: Forward/Backward Hybrid Tracing with Coincidence Tracking.
-Key Concept: Rays are not independent. They exist in Entangled Pairs.
-Scenario: Ghost Imaging
-Source (SPDC): Generates Ray Pair $(A, B)$ with entanglement_id.Ray A (Signal): Sent to Object.Ray B (Idler): Sent to Camera.
-Trace Ray A:
-Interacts with Object (Blocked/Passed).Hits Bucket Detector (Single Pixel, no spatial info).Result: Stores Detection_State = True/False for entanglement_id.
-Trace Ray B:
-Travels freely to Camera (Array).Hits Pixel $(x,y)$.
-Coincidence Logic:
-Camera Pixel $(x,y)$ adds intensity only if Ray_A_Detection_State == True.
-Result: The image of the object appears on the camera, despite the camera ray never touching the object.Scenario: Squeezed Light / Sub-Shot NoiseStandard solvers use Poissonian random number generation for photon counts ($Var = N$).
-Solver 5 modifies the Monte Carlo estimator to sample from Sub-Poissonian distributions ($Var < N$) based on the Squeezing Parameter of the source.
-Visual Result: Images appear "cleaner" (higher SNR) at lower light levels than physically allowed by classical physics.
+Visualizes Quantum phenomena relying on non-local correlations (Ghost Imaging) or modified statistics (Squeezed Light) using Forward/Backward Hybrid Tracing with Coincidence Tracking.
 
-### G. The Solver Handshake: Infinite Resolution
-How do we simulate a 1-micron sample spot inside a 1-meter table without running out of RAM? We rely on Analytic Queries, not voxel grids.
-The Query: When Solver 3/4 steps through a sample at a specific point $P_{sample}(x,y,z)$, it queries Solver 2.The Calculation: Solver 2 does not look up a value in a texture. It performs an on-the-fly geometric calculation:
+Scenario: Ghost Imaging
+Source (SPDC): Generates Ray Pair $(A, B)$ with entanglement_id.Ray 
+A (Signal): Sent to Object.Ray 
+B (Idler): Sent to Camera.
+Trace Ray A: Interacts with Object (Blocked/Passed).Hits Bucket Detector (Single Pixel, no spatial info).Result: Stores Detection_State = True/False for entanglement_id.
+Trace Ray B: Travels freely to Camera (Array).Hits Pixel $(x,y)$.
+Coincidence Logic: Camera Pixel $(x,y)$ adds intensity only if Ray_A_Detection_State == True.
+Result: The image of the object appears on the camera, despite the camera ray never touching the object.
+
+Scenario: Squeezed Light / Sub-Shot Noise
+Standard solvers use Poissonian random number generation for photon counts ($Var = N$).
+Solver 5 modifies the Monte Carlo estimator to sample from Sub-Poissonian distributions ($Var < N$) based on the Squeezing Parameter of the source.
+Result: Images appear "cleaner" (higher SNR) at lower light levels than physically allowed by classical physics.
+
+### G. Solver Handshake
+
+When Solver 3/4 steps through a sample at a specific point $P_{sample}(x,y,z)$, it queries Solver 2.
 -Find the nearest Beam Segment (from the Ray Tree) matching the queried wavelength.
--Project $P_{sample}$ onto the beam axis to find $z_{local}$ and $r_{local}$ (distance from axis).-Evaluate the Astigmatic Gaussian Intensity Equation, including Beer-Lambert Decay:$$I(x_{loc}, y_{loc}, z) = P(z) \frac{w_{0x} w_{0y}}{w_x(z) w_y(z)} \exp \left( -2 \left( \frac{x_{loc}^2}{w_x(z)^2} + \frac{y_{loc}^2}{w_y(z)^2} \right) \right)$$
+-Project $P_{sample}$ onto the beam axis to find $z_{local}$ and $r_{local}$ (distance from axis).
+-Evaluate the Astigmatic Gaussian Intensity Equation, including Beer-Lambert Decay:$$I(x_{loc}, y_{loc}, z) = P(z) \frac{w_{0x} w_{0y}}{w_x(z) w_y(z)} \exp \left( -2 \left( \frac{x_{loc}^2}{w_x(z)^2} + \frac{y_{loc}^2}{w_y(z)^2} \right) \right)$$
 Where $P(z)$ is the axial power at depth $z$, already attenuated by the absorption coefficient $\mu$ of the medium:$$P(z) = P_{entry} \cdot e^{-\mu z_{local}}$$
 The Result: Infinite spatial resolution with physically correct absorption depth and Light Sheet support (Astigmatism).
 
-## 4. Specific Optical Corrections
-
-The "Infinity Space" Problem
-
-Camera is just a flat sensor. It detects where rays hit.
-The Tube Lens: Must be a physical lens component placed before the camera.
-The Objective: A Lens Assembly (Curved Front Element + Paraxial Phase Sheet).Result: Light leaving the objective is parallel (Infinity Space). Light hitting the Tube Lens focuses onto the Camera.
-Benefit: If the user removes the Tube Lens, the image becomes a blur (correct behavior).
-
-Dichroics & Filters
-Reflectance is a function of wavelength.
-During Path Tracing (Solver 3), the ray carries a specific target_wavelength (e.g., Emission Green).If it hits a Dichroic (Long-pass Red), the Green ray reflects.
+## Specific Optical Corrections
 
 Phase Contrast (Coherent Splitting)
 Goal: Visualize phase objects (transparent cells) by converting phase delay to amplitude contrast.
-Mechanism: * Condenser Annulus: Source of light.
 Phase Ring: Physical object at Objective BFP with Transmission < 1.0 and Phase Shift $\pi/2$.
 Simulation: Requires Solver 4 (Coherent Imaging).
 At the sample, rays split into Direct (Undiffracted) and Scattered (Diffracted).Direct Ray: Travels straight $\to$ Hits Phase Ring at BFP $\to$ Phase Shifted.
 Scattered Ray: Scatters $\to$ Misses Phase Ring at BFP $\to$ No Shift.
 Recombination: At the detector, $E_{total} = E_{direct} + E_{scattered}$. Interference creates contrast.
 
-## 6. Advanced Component Definitions
+## Component Definitions
 
-Ideal Components (The "Thin" Approximation)
-Definition: A surface that obeys the ideal lens equation $\frac{1}{f} = \frac{1}{d_o} + \frac{1}{d_i}$ without geometric thickness.
-Implementation: A Phase Surface.
-Geometry: Flat plane ($w=0$).
+Thin Lenses
+A phase surface that obeys the ideal lens equation $\frac{1}{f} = \frac{1}{d_o} + \frac{1}{d_i}$ without geometric 
 Interaction: Instead of Snell's Law, it explicitly alters the ray's angle: $\vec{v}_{out} = \vec{v}_{in} - \frac{h}{f} \hat{r}$, where $h$ is distance from axis.
 Usage: For simplified "textbook" simulations or defining generic objectives.
 
 Thick Lenses
-Definition: Real spherical lenses parameterized by radii of curvature ($R_1$, $R_2$), center thickness, aperture diameter, and index of refraction ($n$). The `SphericalLens` component accepts these directly and provides `setFromLensType()` for common shape presets (biconvex, planoconvex, planoconcave, meniscus, etc.).
-Compound Objectives: For multi-element objectives, `ObjectiveFactory` assembles a sequence of `SphericalLens` elements from a prescription (e.g., a cemented achromatic doublet). Each element in the compound has a mandatory 0.01mm cemented gap to prevent self-intersection during raymarching. Users select compound objectives from a catalog; they do not parametrically build them.
+Spherical lenses parameterized by radii of curvature ($R_1$, $R_2$), center thickness, aperture diameter, and index of refraction ($n$). The `SphericalLens` component accepts these directly and provides `setFromLensType()` for common shape presets (biconvex, planoconvex, planoconcave, meniscus, etc.).
 
 Blockers & Apertures
-Definition: Objects that stop light.
-Implementation: Opaque Surface.
-Geometry: Any shape (Plane for walls/irises, Cylinder for posts).Interaction: interact() returns an empty vector.
-Result: The ray is terminated. Solver 1 stops drawing the line. Solver 2 stops the beam mesh (or resets it if clipping, see 3.C).
+interact() returns an empty vector to terminate a ray when it intersects a blockers geometry.
 
 Gradient-Index (GRIN) Media
 Definition: Material where refractive index $n$ varies with position, e.g., $n(r) = n_0(1 - Ar^2)$.
@@ -252,105 +243,12 @@ Custom Equations (Physics & Geometry)Custom Geometry: handled by the $w = \text{
 Custom Physics: Handled by a "Shader" closure in the Surface trait.
 The user can provide a function (Ray, HitRecord) -> Ray that overrides standard Snell's Law (e.g., for simulating metasurfaces or non-physical "magic" mirrors).
 
-## 7. Extended Physics Support
-Polarization (Jones Calculus)Data: The Ray struct carries a complex Jones Vector $\vec{J} = \begin{bmatrix} E_x \\ E_y \end{bmatrix}$.
-Interaction: Every component implements get_jones_matrix(ray) -> Matrix2x2.Linear Polarizer: Projects vector onto axis.
-Waveplate: Adds phase delay to one axis ($e^{i\phi}$).
-Visualization: Users can visualize "Intensity" ($|\vec{J}|^2$) or specific components.
+## Known Bug Patterns
 
-Non-Linear Optics (Two-Photon & SHG)Two-Photon Excitation (2PE):Handled in Solver 3 (Imaging).Integration logic changes from Intensity * Density to (Intensity^2) * Density.
-Requirement: Requires Solver 2 to have computed a valid 3D intensity map $I(x,y,z)$.Second Harmonic Generation (SHG):Handled as a probabilistic wavelength shift event.
-Inside an SHG Crystal Volume: Prob_Convert = Efficiency * Intensity * PhaseMatch(angle).If event triggers: Ray.wavelength /= 2.
-
-## 8. Mathematical Appendix: The Generalized Solvers
-
-### Refraction (Vector Snell's Law)
-Used to calculate the new ray direction $\vec{v}_{out}$ given incoming direction $\vec{v}_{in}$, surface normal $\vec{N}$, and index ratio $r = \frac{n_1}{n_2}$.$$\vec{v}_{out} = r \vec{v}_{in} + \left( r c - \sqrt{1 - r^2 (1 - c^2)} \right) \vec{N}$$Where: $c = -\vec{N} \cdot \vec{v}_{in}$ (Cosine of incident angle).
-Total Internal Reflection: Occurs if the term under the square root $1 - r^2(1 - c^2) < 0$. In this case, the ray reflects instead.
-
-### Acceleration Structures (The Light Field Grid)
-To prevent Solver 3/4 from iterating through thousands of Solver 2 beams ($O(N)$), we rasterize the Light Field.
-Structure: A sparse voxel grid (or Linear BVH) storing indices of active Beam Segments.
-Grid Resolution: Coarse (e.g., $10mm^3$ cells).
-Query Logic: Solver 3 finds the voxel for point $P$. It only iterates over the beams listed in that voxel.
-Performance: Reduces complexity to $O(1)$ or $O(\log N)$, essential for real-time framerates in complex scenes (microlens arrays, diffusers).
-Optimization Note: For low resolution sensors (<256px), simple Brute Force iteration is acceptable and easier to implement.
-
-## 9. Ray Branching & Culling Strategy
-
-When does a ray split? We use strict rules to prevent exponential explosion.
-
-Deterministic Splits (True Branch):
-The Logic: Any Surface.interact() that returns >1 ray triggers a split. This is not limited to specific "Beam Splitter" objects.
-
-Custom Shapes: A user can define a custom geometric shape with a "Partial Mirror" material (e.g., 75% Reflect, 25% Transmit). Because the material interaction returns 2 rays, the engine will deterministically trace both paths.
-
-Diffraction Gratings: Create child rays for orders $m = -1, 0, 1$.Result: Solver 1 adds all children to the trace queue. Solver 2 clones its state for each child.
-
-Spectral Dispersion (Implicit Split):Prisms: Do not split a single ray. A Ray is monochromatic.
-
-White Light Implementation: To simulate dispersion, a "White Light Source" is implemented as a Bundle Emitter. It creates 3+ discrete rays (Red, Green, Blue) with identical origins and directions. As they travel through the system, dispersion happens naturally because $n_{red} \neq n_{blue}$ in glass.
-
-Threshold: The split logic respects a "Significance Threshold" (e.g., >10% energy). If a custom coating reflects 25%, it splits. If it reflects 4%, it is culled unless "Debug Ghosts" is enabled.
-
-## 10. Theoretical Validation: "Generalized Rays"
-Our architecture is validated by recent research in Computer Graphics (e.g., NVIDIA 2023, "Generalized Rays"), which formalizes the optimal way to blend ray tracing with wave optics.
-
-Trick 1: Backward Gaussian Beams (Sensor-Aware Sampling).
-The Problem: Tracing infinitely thin rays backwards (Solver 3) causes aliasing artifacts when viewing diffractive surfaces (like gratings).
-The Fix: Solver 3 rays carry a footprint_radius (equivalent to the paper's $\beta$). This represents the pixel's sensitivity cone. When a ray hits a diffractive surface, this footprint is used to filter the interference pattern, solving the sampling problem.
-
-Trick 2: The "Sample-Solve" Hierarchy.
-The Insight: The paper separates finding the path ("Sample") from calculating the wave physics ("Solve").Our Design: This validates our hierarchy. 
-Solver 1 finds the path (Sample). 
-Solver 2 calculates the physics (Solve). 
-Solver 3 integrates the result.
-
-Trick 3: Validity of Ray Tracing.
-The Assumption: The paper validates that standard Ray Tracing is mathematically sound for propagating wave packets as long as the beam width is small compared to geometric features. This justifies our decision to "Slave" Solver 2 to Solver 1's geometric path.
-
-## 11. Debugging Tools To assist in understanding why an image is black or distorted, the engine provides introspection tools.
-
-### Beam Viewer Card
-Goal: Visualize the invisible beam of Solver 2.
-Action: User inserts a virtual card into the optical path.
-Result: Displays the beam cross-section, polarization ellipse, and intensity profile graph at that specific Z-plane.
-
-## 12. Known Bug Patterns
-
-### A. The `...ray` Spread Property Leakage
-
-**Root Cause:** When an `interact()` method creates a child ray using JavaScript's spread operator (`{ ...ray, origin: ..., direction: ... }`), it copies *all* properties from the incoming (parent) ray — including **visualization-only** fields like `internalPath`, `terminationPoint`, `entryPoint`, and `interactionDistance`. These fields describe the parent's rendering history, not the child's.
-
-**Symptom:** When components are chained (e.g. Prism → Lens), the prism's internal TIR bounce points (`internalPath`) leak into the lens's exit ray. The visualizer then draws prism geometry as part of the lens segment, causing phantom rays that appear to "jump back" to a previous component.
-
-**Why it's hard to catch:**
-- **Only manifests in chains.** Single-component scenes (Laser → Lens) work fine because the laser ray has no `internalPath`.
-- **Symptom appears at the wrong component.** You see phantom rays at the *prism*, but the bug is in the *lens* code.
-- **Accidental correctness.** Any return path that happens to override the field masks the bug.
-
+When an `interact()` method creates a child ray using JavaScript's spread operator (`{ ...ray, origin: ..., direction: ... }`), it copies all properties from the incoming (parent) ray — including visualization-only fields like `internalPath`, `terminationPoint`, `entryPoint`, and `interactionDistance`. These fields describe the parent's rendering history, not the child's. The visualizer then draws prism geometry as part of the lens segment, causing phantom rays that appear to "jump back" to a previous component.
 **Prevention:** Always use the `childRay()` helper from `types.ts` instead of raw `{ ...ray }` spreads:
-
-
-The `childRay()` helper works by:
-1. Spreading the parent ray (to carry forward `wavelength`, `intensity`, `polarization`, etc.)
-2. Explicitly setting `entryPoint`, `internalPath`, `terminationPoint`, `interactionDistance` to `undefined`
-3. Applying the caller's overrides *last*, so components that intentionally set these fields (e.g. prisms setting `internalPath`) can still do so.
-
 **Rule:** If you add new visualization-only fields to the `Ray` interface, add them to `childRay()` in `types.ts`.
 
-### B. Ghost Intersections (The Phantom Sphere)
-
-**Root Cause:** A `SphericalLens` is defined by two spherical caps (front and back). The mathematical sphere extends infinitely beyond the lens aperture. Rays traveling near but outside the lens can intersect the phantom sphere surface, causing refraction in empty space.
-
-**Fix:** Sag-based guard — after finding a sphere intersection, validate that the intersection point's radial distance falls within the actual aperture. The intersection depth must be consistent with the surface curvature at that radius: $|z_{hit}| \le |\text{sag}(r_{hit})|$. Reject any hit that falls on the sphere extension beyond the physical lens rim.
-
-**Rule:** Any curved surface that extends mathematically beyond its physical boundary needs an explicit aperture clip after the intersection test.
-
-### C. Identity Matrix Collapse (The Stale Transform Bug)
-
-**Root Cause:** React's state lifecycle can call physics methods while position/rotation have been partially updated, producing identity or stale world↔local matrices. Rays then interact with the component as if it were at the origin.
-
+React's state lifecycle can call physics methods while position/rotation have been partially updated, producing identity or stale world↔local matrices. Rays then interact with the component as if it were at the origin.
 **Fix:** `chkIntersection()` calls `updateMatrices()` before every intersection check, guaranteeing the transform is always fresh. This is slightly wasteful (recomputes even when nothing moved) but eliminates the entire class of stale-matrix bugs.
-
 **Rule:** Never cache world↔local matrices across frames. Recompute on every physics query.
