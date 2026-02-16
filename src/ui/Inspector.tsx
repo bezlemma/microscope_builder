@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom } from '../state/store';
+import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
+import { Camera } from '../physics/components/Camera';
 
 import { Laser } from '../physics/components/Laser';
 import { IdealLens } from '../physics/components/IdealLens';
@@ -18,6 +19,7 @@ import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
+import { CameraViewer } from './CameraViewer';
 
 // Wavelength to visible spectrum color (approximation)
 function wavelengthToColor(wavelength: number): string {
@@ -107,6 +109,8 @@ export const Inspector: React.FC = () => {
     const [selection, setSelection] = useAtom(selectionAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
+    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [isRendering] = useAtom(solver3RenderingAtom);
 
     // Derived state — only show single-component properties when exactly 1 is selected
     const selectedComponent = selection.length === 1
@@ -469,10 +473,33 @@ export const Inspector: React.FC = () => {
                     )}
                 </div>
 
-                {/* Solver 3: Wave (Placeholder) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.5, marginTop: 4 }}>
-                    <input type="checkbox" disabled />
-                    <span>Wave (WIP)</span>
+                {/* Solver 3: Incoherent Imaging — Trace Image button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
+                    <div style={{ 
+                        width: '8px', 
+                        height: '8px', 
+                        borderRadius: '50%', 
+                        backgroundColor: isRendering ? '#fa4' : '#555',
+                        transition: 'background-color 0.2s'
+                    }}></div>
+                    <button
+                        onClick={() => setSolver3Trigger((prev: number) => prev + 1)}
+                        disabled={isRendering || !rayConfig.solver2Enabled}
+                        title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : 'Backward-trace rays from camera through optics to sample'}
+                        style={{
+                            padding: '3px 10px',
+                            background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
+                            cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            transition: 'background 0.2s',
+                        }}
+                    >
+                        {isRendering ? '⏳ Tracing...' : '▶ Reverse Trace'}
+                    </button>
                 </div>
             </div>
         );
@@ -1510,6 +1537,40 @@ export const Inspector: React.FC = () => {
                         pinnedIds={pinnedIds}
                         setPinnedIds={setPinnedIds}
                     />
+                )}
+
+                {/* Camera Viewer: Solver 3 render output */}
+                {selectedComponent instanceof Camera && (
+                    <div style={{ marginTop: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '11px', color: '#aaa' }}>Camera Image</span>
+                            <button
+                                onClick={() => {
+                                    const next = new Set(pinnedIds);
+                                    if (pinnedIds.has(selectedComponent.id)) next.delete(selectedComponent.id);
+                                    else next.add(selectedComponent.id);
+                                    setPinnedIds(next);
+                                }}
+                                title={pinnedIds.has(selectedComponent.id) ? 'Unpin viewer' : 'Pin viewer'}
+                                style={{
+                                    background: pinnedIds.has(selectedComponent.id) ? '#333' : 'none',
+                                    border: pinnedIds.has(selectedComponent.id) ? '1px solid #555' : '1px solid #444',
+                                    borderRadius: '3px',
+                                    color: pinnedIds.has(selectedComponent.id) ? '#fff' : '#888',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    padding: '1px 5px',
+                                    lineHeight: 1.2,
+                                }}
+                            >
+                                📌
+                            </button>
+                        </div>
+                        <CameraViewer
+                            camera={selectedComponent as Camera}
+                            isRendering={isRendering}
+                        />
+                    </div>
                 )}
 
                 <div style={{ fontSize: '11px', color: '#666', marginTop: 5 }}>

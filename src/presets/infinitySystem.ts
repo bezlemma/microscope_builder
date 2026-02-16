@@ -2,42 +2,42 @@ import { OpticalComponent } from '../physics/Component';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Camera } from '../physics/components/Camera';
 import { Laser } from '../physics/components/Laser';
+import { Filter } from '../physics/components/Filter';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
+import { SpectralProfile } from '../physics/SpectralProfile';
 
 /**
- * Transmission Microscope — Nikon-style infinity-corrected brightfield setup.
+ * Transmission Fluorescence Microscope — GFP imaging in transmission geometry.
  *
- * Light path (Köhler-style illumination):
- *   Laser → Condenser → Sample → Objective → [ Infinity Space ] → Tube Lens → Camera
+ * Light path:
+ *   Laser (488 nm) → Condenser → Sample → Objective → [ Em Filter ] → Tube Lens → Camera
  *
  * Nikon standard: tube lens focal length = 200 mm.
  * Objective: 10×/0.25 → f_obj = 200/10 = 20 mm.
  *
- * The condenser focuses the collimated laser beam to a point at the sample plane.
- * The sample (transmissive) sits at the front focal plane of the objective.
- * Diverging light from the sample is collimated by the objective into parallel
- * rays in the infinity space, then focused by the tube lens onto the camera.
+ * The laser excites fluorophores in the sample. Emission is collected
+ * in the forward (transmission) direction through the objective.
  */
-export const createTransmissionMicroscopeScene = (): OpticalComponent[] => {
+export const createTransFluorescenceScene = (): OpticalComponent[] => {
     const scene: OpticalComponent[] = [];
 
     // --- Geometry ---
     //
     // Condenser:  plano-convex, f = 25 mm
-    //   Plano-convex: R1 = ∞ (flat front), R2 = -(n-1)*f = -12.5 mm (convex back)
+    //   Plano-convex: R1 = ∞ (flat front), R2 = -12.5 mm (convex back)
     //   1/f = (n-1)/|R2| = 0.5/12.5 = 0.04 → f = 25 mm  ✓
     //
     // Objective:  10×/0.25, f = tubeLensFocal/mag = 200/10 = 20 mm
     //   (uses thin-lens deflection formula internally)
     //
     // Tube Lens:  plano-convex, f = 200 mm  (Nikon standard)
-    //   Plano-convex: R1 = ∞ (flat front), R2 = -(n-1)*f = -100 mm (convex back)
+    //   Plano-convex: R1 = ∞ (flat front), R2 = -100 mm (convex back)
     //   1/f = (n-1)/|R2| = 0.5/100 = 0.005 → f = 200 mm  ✓
     //
     //  X: -80       -25          0       20                   220          420
-    //      Laser     Condenser   Sample  Objective            TubeLens     Camera
-    //      ═══▶      (|)         |██|    [OBJ]  ────────────  (|)          ▐██▌
+    //      Laser     Condenser   Sample  Objective   EmFilter     TubeLens     Camera
+    //      ═══▶      (|)         |██|    [OBJ]  ──── |F| ────────  (|)          ▐██▌
     //                                            parallel rays
     //                                           (infinity space = 200mm)
     //
@@ -45,12 +45,12 @@ export const createTransmissionMicroscopeScene = (): OpticalComponent[] => {
     //  Objective FFP:   X_obj  - f =  20 - 20 = X=0  (sample)  ✓
     //  Tube lens BFP:   X_tube + f = 220 + 200 = X=420 (camera) ✓
 
-    // 1. Laser — collimated illumination beam
-    const laser = new Laser("Illumination Source");
+    // 1. Laser — 488 nm excitation for GFP fluorescence
+    const laser = new Laser("488 nm Laser");
     laser.setPosition(-80, 0, 0);
     laser.setRotation(0, 0, 0);
     laser.beamRadius = 3;
-    laser.wavelength = 550;
+    laser.wavelength = 488;
     scene.push(laser);
 
     // 2. Condenser — plano-convex, f = 25 mm
@@ -61,8 +61,11 @@ export const createTransmissionMicroscopeScene = (): OpticalComponent[] => {
     condenser.setRotation(0, Math.PI / 2, 0);
     scene.push(condenser);
 
-    // 3. Sample — transmissive brightfield; at condenser focus = objective FFP
-    const sample = new Sample("Specimen");
+    // 3. Sample — GFP fluorescence; at condenser focus = objective FFP
+    const sample = new Sample("Specimen (GFP)");
+    sample.excitationNm = 488;
+    sample.emissionNm = 520;
+    sample.excitationBandwidth = 30;
     sample.setPosition(0, 0, 0);
     sample.setRotation(0, Math.PI / 2, 0);
     scene.push(sample);
@@ -88,8 +91,20 @@ export const createTransmissionMicroscopeScene = (): OpticalComponent[] => {
     tubeLens.setRotation(0, Math.PI / 2, 0);
     scene.push(tubeLens);
 
+    // 6. Emission Filter — longpass 505 nm in infinity space
+    //    Blocks 488 nm excitation laser, passes 520 nm GFP emission
+    const emFilter = new Filter(
+        25,     // diameter mm
+        3,      // thickness mm
+        new SpectralProfile('longpass', 505, [], 5),  // sharp 5nm edge
+        "Em Filter (LP 505)"
+    );
+    emFilter.setPosition(120, 0, 0);
+    emFilter.setRotation(0, 0, 0);  // local X already along +X (faces beam)
+    scene.push(emFilter);
+
     // 6. Camera — at tube lens BFP  (220 + 200 = 420)
-    const camera = new Camera(50, 25, "CMOS Sensor");
+    const camera = new Camera(13, 13, "CMOS Sensor");
     camera.setPosition(420, 0, 0);
     camera.setRotation(0, -Math.PI / 2, 0);
     scene.push(camera);

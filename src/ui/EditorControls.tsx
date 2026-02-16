@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { OrbitControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera } from 'three';
-import { useAtom, useSetAtom } from 'jotai';
-import { componentsAtom, selectionAtom } from '../state/store';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { activePresetAtom, componentsAtom, selectionAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -12,6 +13,51 @@ export const EditorControls: React.FC = () => {
     const setSelection = useSetAtom(selectionAtom);
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection] = useAtom(selectionAtom);
+    const activePreset = useAtomValue(activePresetAtom);
+    const { size } = useThree();
+
+    // ─── Auto-zoom to fit when preset changes ───
+    useEffect(() => {
+        const controls = controlsRef.current;
+        if (!controls || components.length === 0) return;
+
+        const camera = controls.object;
+        if (!(camera instanceof OrthographicCamera)) return;
+
+        // Compute bounding box of all component positions
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        for (const comp of components) {
+            const p = comp.position;
+            // Use a fixed half-size estimate for component extent (most are ~25mm)
+            const half = 25;
+            minX = Math.min(minX, p.x - half);
+            maxX = Math.max(maxX, p.x + half);
+            minY = Math.min(minY, p.y - half);
+            maxY = Math.max(maxY, p.y + half);
+        }
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+
+        // Orthographic camera: visible width = canvasWidth / zoom
+        // We want: spanX * (1 + padding) ≤ canvasWidth / zoom
+        //          spanY * (1 + padding) ≤ canvasHeight / zoom
+        const padding = 0.25; // 25% margin
+        const zoomX = spanX > 0 ? size.width / (spanX * (1 + padding)) : 2;
+        const zoomY = spanY > 0 ? size.height / (spanY * (1 + padding)) : 2;
+        const newZoom = Math.min(zoomX, zoomY);
+
+        // Set camera position (keep Z the same)
+        camera.position.set(centerX, centerY, camera.position.z);
+        controls.target.set(centerX, centerY, 0);
+        camera.zoom = Math.max(0.2, Math.min(newZoom, 10)); // clamp to reasonable range
+        camera.updateProjectionMatrix();
+        controls.update();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activePreset]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {

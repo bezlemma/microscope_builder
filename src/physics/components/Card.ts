@@ -20,6 +20,7 @@ export class Card extends OpticalComponent {
     height: number;
     hits: { localPoint: Vector3, ray: Ray }[] = [];
     beamProfiles: BeamProfile[] = [];
+    emissionPowerRef: number = 0;   // Estimated total fluorescence emission power (W)
 
     constructor(width: number, height: number, name: string) {
         super(name);

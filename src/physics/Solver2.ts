@@ -534,6 +534,12 @@ export class Solver2 {
 
         if (wx <= 0 || wy <= 0) return null;
 
+        // Distance guard: if the query point is far from the nearest
+        // segment (e.g., past an absorbing filter), don't extrapolate.
+        // The beam only exists within its segment boundaries.
+        const maxBeamRadius = Math.max(wx, wy);
+        if (bestDist > maxBeamRadius * 5) return null;
+
         // Decompose displacement into transverse coordinates
         const toPoint = point.clone().sub(seg.start);
         const along = toPoint.dot(segDir);

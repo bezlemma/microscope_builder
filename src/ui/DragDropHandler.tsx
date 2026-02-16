@@ -78,7 +78,7 @@ export const DragDropHandler: React.FC = () => {
             } else if (type === 'objective') {
                 newComp = new Objective({ magnification: 10, NA: 0.25, name: "New Objective" });
             } else if (type === 'camera') {
-                newComp = new Camera(50, 25, "New Camera");
+                newComp = new Camera(13, 13, "New Camera");
             } else if (type === 'cylindricalLens') {
                 newComp = new CylindricalLens(40, 1e9, 12, 24, 3, "Cylindrical Lens");
             } else if (type === 'prism') {

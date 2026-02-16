@@ -158,6 +158,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                     points.push(r.origin);
                 }
 
+                const isMain = path.length > 0 && path[0].isMainRay === true;
+                const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
+
                 // Add an "infinite" end to the last ray for visualization
                 // (only if the last ray in the built points list has nonzero intensity)
                 if (points.length > 0 && path.length > 0) {
@@ -170,9 +173,6 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                         points.push(endPoint);
                     }
                 }
-
-                const isMain = path.length > 0 && path[0].isMainRay === true;
-                const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
 
                 if (isMain) {
                     const wc = wavelengthToRGB(wavelength);

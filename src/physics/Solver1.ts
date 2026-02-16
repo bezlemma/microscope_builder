@@ -1,5 +1,6 @@
 import { Ray, InteractionResult } from './types';
 import { OpticalComponent } from './Component';
+import { Laser } from './components/Laser';
 
 export class Solver1 {
     maxDepth: number = 20; // Maximum number of bounces to prevent infinite loops
@@ -64,6 +65,13 @@ export class Solver1 {
         // 3. Interact
         // Store where the ray ended its segment.
         currentRay.interactionDistance = nearestT;
+
+        // Terminate rays that re-enter a Laser (backward-refracted fan rays
+        // shouldn't pass through the light source housing)
+        if (nearestComponent instanceof Laser) {
+            allPaths.push([...currentPath]);
+            return;
+        }
 
         // component.interact() calculates the physics (reflection, refraction, etc.)
         const result: InteractionResult = nearestComponent.interact(currentRay, nearestHit);

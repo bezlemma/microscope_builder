@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
-import { componentsAtom, rayConfigAtom, selectionAtom } from '../state/store';
+import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
@@ -27,6 +27,7 @@ import { RayVisualizer } from './RayVisualizer';
 // BeamEnvelopeVisualizer import removed — Gaussian tubes disabled
 import { EFieldVisualizer } from './EFieldVisualizer';
 import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
+import { Solver3 } from '../physics/Solver3';
 import { Draggable } from './Draggable';
 
 
@@ -808,6 +809,9 @@ export const OpticalTable: React.FC = () => {
     const [rayConfig] = useAtom(rayConfigAtom);
     const [rays, setRays] = useState<Ray[][]>([]);
     const [beamSegments, setBeamSegments] = useState<GaussianBeamSegment[][]>([]);
+    const [solver3Paths, setSolver3Paths] = useState<Ray[][]>([]);
+    const [solver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
 
     // ─── Optics fingerprint: changes only when non-Card components change ───
     // Cards are passive detectors and don't affect the optical path, so moving
@@ -1202,8 +1206,49 @@ export const OpticalTable: React.FC = () => {
         setBeamSegments(beamSegs);
         beamSegsRef.current = beamSegs;
 
+        // Mark all cameras as stale (scene changed since last Solver 3 render)
+        for (const comp of components) {
+            if (comp instanceof Camera) {
+                comp.markSolver3Stale();
+            }
+        }
+        setSolver3Paths([]);
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, rayConfig]);
+
+    // ─── Effect 1b: Solver 3 — backward trace from camera (on-demand) ───
+    useEffect(() => {
+        if (solver3Trigger === 0) return; // Skip initial mount
+        if (!components) return;
+
+        // Find the first Camera in the scene
+        const camera = components.find(c => c instanceof Camera) as Camera | undefined;
+        if (!camera) return;
+
+        const beamSegs = beamSegsRef.current;
+        setSolver3Rendering(true);
+
+        // Use setTimeout to allow the UI to update before blocking render
+        setTimeout(() => {
+            try {
+                const solver3 = new Solver3(components, beamSegs);
+                const result = solver3.render(camera);
+
+                camera.solver3Image = result.emissionImage;
+                camera.forwardImage = result.excitationImage;
+                camera.solver3Paths = result.paths;
+                camera.solver3Stale = false;
+
+                setSolver3Paths(result.paths);
+            } catch (e) {
+                console.warn('Solver 3 error:', e);
+            }
+            setSolver3Rendering(false);
+        }, 50);
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [solver3Trigger]);
 
     // ─── Effect 2: Cheap card beam profile sampling ───
     // Runs whenever ANY component changes (including card drags).
@@ -1338,6 +1383,20 @@ export const OpticalTable: React.FC = () => {
                     tiltV
                 });
             }
+
+            // Compute fluorescence emission power reference:
+            // total excitation power at the sample × fluorescence efficiency
+            const sample = components.find(c => c instanceof Sample) as Sample | undefined;
+            if (sample && beamSegs.length > 0) {
+                // Get total excitation power from the laser (sum first segment powers)
+                let totalLaserPower = 0;
+                for (const branch of beamSegs) {
+                    if (branch.length > 0) totalLaserPower += branch[0].power;
+                }
+                card.emissionPowerRef = totalLaserPower * sample.fluorescenceEfficiency;
+            } else {
+                card.emissionPowerRef = 0;
+            }
         }
 
     }, [components, rayConfig]);
@@ -1378,7 +1437,7 @@ export const OpticalTable: React.FC = () => {
             })}
             {/* BeamEnvelopeVisualizer removed — Gaussian tubes not useful in normal E&M view */}
             {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
-            <RayVisualizer paths={rays} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
+            <RayVisualizer paths={[...rays, ...solver3Paths]} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
         </group>
     );
 };

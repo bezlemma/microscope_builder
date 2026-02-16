@@ -372,15 +372,21 @@ export const Sidebar: React.FC = () => {
                     onToggle={() => setOpenPresetCat(prev => prev === 'Microscopes' ? null : 'Microscopes')}
                 >
                     <PresetButton
-                        label="Transmission Microscope"
-                        active={activePreset === PresetName.TransmissionMicroscope}
-                        onClick={() => loadPreset(PresetName.TransmissionMicroscope)}
-                    />
-                    <PresetButton
-                        label="Epi-Fluorescence"
+                        label="Reflection (Epi) Fluorescence "
                         active={activePreset === PresetName.EpiFluorescence}
                         onClick={() => loadPreset(PresetName.EpiFluorescence)}
                     />
+                    <PresetButton
+                        label="Transmission Fluorescence"
+                        active={activePreset === PresetName.TransFluorescence}
+                        onClick={() => loadPreset(PresetName.TransFluorescence)}
+                    />
+                    <PresetButton
+                        label="Brightfield"
+                        active={activePreset === PresetName.Brightfield}
+                        onClick={() => loadPreset(PresetName.Brightfield)}
+                    />
+
                 </PresetCategory>
 
                 <PresetCategory
@@ -401,7 +407,7 @@ export const Sidebar: React.FC = () => {
                     onToggle={() => setOpenPresetCat(prev => prev === 'Physics' ? null : 'Physics')}
                 >
                     <PresetButton
-                        label="MZ Interferometer"
+                        label="Interferometer"
                         active={activePreset === PresetName.MZInterferometer}
                         onClick={() => loadPreset(PresetName.MZInterferometer)}
                     />
@@ -418,15 +424,16 @@ export const Sidebar: React.FC = () => {
                         onClick={() => loadPreset(PresetName.LensZoo)}
                     />
                     <PresetButton
-                        label="Prism Debug"
-                        active={activePreset === PresetName.PrismDebug}
-                        onClick={() => loadPreset(PresetName.PrismDebug)}
-                    />
-                    <PresetButton
                         label="Polarization Zoo"
                         active={activePreset === PresetName.PolarizationZoo}
                         onClick={() => loadPreset(PresetName.PolarizationZoo)}
                     />
+                    <PresetButton
+                        label="Prism Debug"
+                        active={activePreset === PresetName.PrismDebug}
+                        onClick={() => loadPreset(PresetName.PrismDebug)}
+                    />
+
                 </PresetCategory>
             </div>
         </div>

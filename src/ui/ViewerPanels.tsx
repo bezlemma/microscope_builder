@@ -1,27 +1,31 @@
 /**
- * ViewerPanels — floating card viewer panels that can be toggled on independently
- * of the Inspector selection. These appear at the bottom-left of the viewport
- * (where the Physics Solvers box used to be). Multiple panels stack horizontally.
+ * ViewerPanels — floating viewer panels that can be toggled on independently
+ * of the Inspector selection. These appear at the bottom-left of the viewport.
+ * Multiple panels stack horizontally.
  * Each shows only the canvas — no properties, no delete, no readout text.
  *
- * Future: will also support Camera view panels for Solver 3.
+ * Supports both Card beam profile viewers and Camera Solver 3 image viewers.
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
+import { Camera } from '../physics/components/Camera';
 import { CardViewer } from './CardViewer';
+import { CameraViewer } from './CameraViewer';
+import { OpticalComponent } from '../physics/Component';
 
 export const ViewerPanels: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
+    const [isRendering] = useAtom(solver3RenderingAtom);
 
-    // Resolve pinned IDs to actual Card instances (filter stale IDs)
-    const pinnedCards = Array.from(pinnedIds)
+    // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
+    const pinnedComponents = Array.from(pinnedIds)
         .map(id => components.find(c => c.id === id))
-        .filter((c): c is Card => c instanceof Card);
+        .filter((c): c is OpticalComponent => c instanceof Card || c instanceof Camera);
 
-    if (pinnedCards.length === 0) return null;
+    if (pinnedComponents.length === 0) return null;
 
     return (
         <div style={{
@@ -34,9 +38,9 @@ export const ViewerPanels: React.FC = () => {
             zIndex: 10,
             pointerEvents: 'none',
         }}>
-            {pinnedCards.map(card => (
+            {pinnedComponents.map(comp => (
                 <div
-                    key={card.id}
+                    key={comp.id}
                     style={{
                         backgroundColor: '#222',
                         border: '1px solid #444',
@@ -46,7 +50,7 @@ export const ViewerPanels: React.FC = () => {
                         pointerEvents: 'auto',
                     }}
                 >
-                    {/* Header: card name + close button */}
+                    {/* Header: name + close button */}
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -59,12 +63,12 @@ export const ViewerPanels: React.FC = () => {
                             fontWeight: 600,
                             color: '#999',
                         }}>
-                            {card.name}
+                            {comp.name}
                         </span>
                         <button
                             onClick={() => {
                                 const next = new Set(pinnedIds);
-                                next.delete(card.id);
+                                next.delete(comp.id);
                                 setPinnedIds(next);
                             }}
                             style={{
@@ -82,8 +86,16 @@ export const ViewerPanels: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Card viewer — compact: just the animated canvas, no readout text */}
-                    <CardViewer card={card} compact />
+                    {/* Viewer content */}
+                    {comp instanceof Card && (
+                        <CardViewer card={comp} compact />
+                    )}
+                    {comp instanceof Camera && (
+                        <CameraViewer
+                            camera={comp}
+                            isRendering={isRendering}
+                        />
+                    )}
                 </div>
             ))}
         </div>

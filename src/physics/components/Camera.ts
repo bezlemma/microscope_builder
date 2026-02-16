@@ -5,14 +5,29 @@ import { Ray, HitRecord, InteractionResult } from '../types';
 export class Camera extends OpticalComponent {
     width: number;
     height: number;
+    sensorResX: number;
+    sensorResY: number;
 
-    constructor(width: number = 20, height: number = 15, name: string = "Camera Sensor") {
+    // Solver 3 render results (stored on the camera that produced them)
+    solver3Image: Float32Array | null = null;
+    forwardImage: Float32Array | null = null;  // Forward excitation signal (Solver 2 beam at sensor)
+    solver3Paths: Ray[][] | null = null;
+    solver3Stale: boolean = true;
+
+    constructor(width: number = 13, height: number = 13, name: string = "Camera Sensor") {
         super(name);
         this.width = width;
         this.height = height;
-        // Default orientation: Facing -Z (standard for cameras in this setup? or along Optical Axis?)
-        // Standard in this engine: Light travels +X. So Camera should face -X.
-        // We'll set rotation in the scene, geometry assumes XY plane, centered.
+        this.sensorResX = 64;
+        this.sensorResY = 64;
+    }
+
+    /** Clear Solver 3 results (called when scene changes) */
+    markSolver3Stale(): void {
+        this.solver3Stale = true;
+        this.solver3Image = null;
+        this.forwardImage = null;
+        this.solver3Paths = null;
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

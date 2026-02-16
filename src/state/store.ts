@@ -2,7 +2,8 @@ import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
 
 // Presets
-import { createTransmissionMicroscopeScene } from '../presets/infinitySystem';
+import { createTransFluorescenceScene } from '../presets/infinitySystem';
+import { createBrightfieldScene } from '../presets/brightfield';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
 import { createPrismDebugScene } from '../presets/prismDebug';
@@ -23,7 +24,8 @@ export interface RayConfig {
 // Preset Management
 export enum PresetName {
     BeamExpander = "Beam Expander",
-    TransmissionMicroscope = "Transmission Microscope",
+    TransFluorescence = "Trans. Fluorescence",
+    Brightfield = "Brightfield",
     LensZoo = "Lens Zoo",
     PrismDebug = "Prism Debug",
     PolarizationZoo = "Polarization Zoo",
@@ -45,8 +47,10 @@ export const loadPresetAtom = atom(
         set(activePresetAtom, presetName);
         if (presetName === PresetName.BeamExpander) {
             set(componentsAtom, createBeamExpanderScene());
-        } else if (presetName === PresetName.TransmissionMicroscope) {
-            set(componentsAtom, createTransmissionMicroscopeScene());
+        } else if (presetName === PresetName.TransFluorescence) {
+            set(componentsAtom, createTransFluorescenceScene());
+        } else if (presetName === PresetName.Brightfield) {
+            set(componentsAtom, createBrightfieldScene());
         } else if (presetName === PresetName.LensZoo) {
             set(componentsAtom, createLensZooScene());
         } else if (presetName === PresetName.PrismDebug) {
@@ -80,3 +84,9 @@ export const handleDraggingAtom = atom<boolean>(false);
 
 // 6. Pinned Viewer Panels — card IDs whose viewer panels are toggled on
 export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
+
+// 7. Solver 3 render trigger — incrementing this value triggers a Solver 3 render
+export const solver3RenderTriggerAtom = atom<number>(0);
+
+// 8. Solver 3 rendering status — true while render is in progress
+export const solver3RenderingAtom = atom<boolean>(false);

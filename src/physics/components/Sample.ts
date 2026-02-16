@@ -17,12 +17,14 @@ export class Sample extends OpticalComponent {
     excitationNm: number;           // Excitation center wavelength (nm)
     emissionNm: number;             // Emission center wavelength (nm)
     excitationBandwidth: number;    // Excitation band FWHM (nm)
+    fluorescenceEfficiency: number; // Quantum yield × absorption (dimensionless)
 
     constructor(name: string = "Sample (Mickey)") {
         super(name);
         this.excitationNm = 488;       // Default: GFP excitation
         this.emissionNm = 520;         // Default: GFP emission
         this.excitationBandwidth = 30; // ±15 nm acceptance
+        this.fluorescenceEfficiency = 1e-4; // Fluorescence ~10,000× weaker than excitation
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

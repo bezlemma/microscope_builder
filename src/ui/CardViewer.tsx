@@ -463,14 +463,29 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
     }, [profiles, hasBeams, card.width, card.height, canvasSize]);
 
     const primary = hasBeams ? profiles[0] : null;
-    const wavelengthNm = primary ? (primary.wavelength * 1e9).toFixed(0) : '—';
-    const powerMw = primary ? (primary.power * 1000).toFixed(1) : '—';
     const beamStr = primary
         ? `${(primary.wx * 2).toFixed(2)} × ${(primary.wy * 2).toFixed(2)} mm`
         : '—';
 
+    // Per-wavelength power breakdown
+    const wavelengthPowers = new Map<number, number>();
+    let totalPower = 0;
+    for (const p of profiles) {
+        const key = Math.round(p.wavelength * 1e12); // round to avoid float key issues
+        wavelengthPowers.set(key, (wavelengthPowers.get(key) ?? 0) + p.power);
+        totalPower += p.power;
+    }
+
     const labelStyle: React.CSSProperties = { color: '#777', fontSize: '10px' };
     const valueStyle: React.CSSProperties = { color: '#ddd', fontSize: '11px', fontFamily: 'monospace' };
+
+    // Format power with appropriate unit
+    const fmtPower = (w: number) => {
+        if (w >= 1e-3) return `${(w * 1e3).toFixed(2)} mW`;
+        if (w >= 1e-6) return `${(w * 1e6).toFixed(2)} µW`;
+        if (w >= 1e-9) return `${(w * 1e9).toFixed(2)} nW`;
+        return `${w.toExponential(2)} W`;
+    };
 
     return (
         <div style={{ marginTop: '4px' }}>
@@ -490,33 +505,98 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
             {/* Readout panel — hidden in compact mode */}
             {!compact && (
                 <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '4px 12px',
                     marginTop: '8px',
                     padding: '6px 8px',
                     backgroundColor: '#111',
                     borderRadius: '4px',
                     border: '1px solid #282828'
                 }}>
-                    <div>
-                        <div style={labelStyle}>Wavelength</div>
-                        <div style={{ ...valueStyle, color: primary ? wavelengthToCSS(primary.wavelength) : '#ddd' }}>
-                            {wavelengthNm} nm{profiles.length > 1 ? ` (+${profiles.length - 1})` : ''}
+                    {/* Per-wavelength power breakdown */}
+                    <div style={labelStyle}>Power at card</div>
+                    {hasBeams ? (
+                        <div style={{ marginTop: '2px' }}>
+                            {Array.from(wavelengthPowers.entries()).map(([key, power]) => {
+                                const wlM = key * 1e-12;
+                                const wlNm = Math.round(wlM * 1e9);
+                                return (
+                                    <div key={key} style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: '1px'
+                                    }}>
+                                        <span style={{
+                                            ...valueStyle,
+                                            color: wavelengthToCSS(wlM),
+                                            fontSize: '10px'
+                                        }}>
+                                            ● {wlNm} nm
+                                        </span>
+                                        <span style={valueStyle}>{fmtPower(power)}</span>
+                                    </div>
+                                );
+                            })}
+                            {wavelengthPowers.size > 1 && (
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    borderTop: '1px solid #282828',
+                                    marginTop: '2px',
+                                    paddingTop: '2px'
+                                }}>
+                                    <span style={{ ...labelStyle }}>Total</span>
+                                    <span style={valueStyle}>{fmtPower(totalPower)}</span>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                    <div>
-                        <div style={labelStyle}>Power</div>
-                        <div style={valueStyle}>{powerMw} mW</div>
-                    </div>
-                    <div>
-                        <div style={labelStyle}>Beam ⌀ (1/e²)</div>
-                        <div style={valueStyle}>{beamStr}</div>
-                    </div>
-                    <div>
-                        <div style={labelStyle}>Jones Vector</div>
-                        <div style={{ ...valueStyle, fontSize: '9px' }}>
-                            {primary ? formatJones(primary.polarization) : '—'}
+                    ) : (
+                        <div style={valueStyle}>—</div>
+                    )}
+
+                    {/* Fluorescence emission reference */}
+                    {card.emissionPowerRef > 0 && (
+                        <div style={{
+                            marginTop: '6px',
+                            paddingTop: '4px',
+                            borderTop: '1px solid #282828'
+                        }}>
+                            <div style={labelStyle}>Fluorescence (estimated)</div>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginTop: '2px'
+                            }}>
+                                <span style={{ ...valueStyle, color: 'rgb(0,200,0)', fontSize: '10px' }}>
+                                    ● 520 nm
+                                </span>
+                                <span style={valueStyle}>{fmtPower(card.emissionPowerRef)}</span>
+                            </div>
+                            {totalPower > 0 && (
+                                <div style={{ ...labelStyle, marginTop: '2px', color: '#ff8844' }}>
+                                    Excitation {(totalPower / card.emissionPowerRef).toFixed(0)}× stronger
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Beam diameter and Jones vector */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '4px 12px',
+                        marginTop: '6px',
+                        paddingTop: '4px',
+                        borderTop: '1px solid #282828'
+                    }}>
+                        <div>
+                            <div style={labelStyle}>Beam ⌀ (1/e²)</div>
+                            <div style={valueStyle}>{beamStr}</div>
+                        </div>
+                        <div>
+                            <div style={labelStyle}>Jones Vector</div>
+                            <div style={{ ...valueStyle, fontSize: '9px' }}>
+                                {primary ? formatJones(primary.polarization) : '—'}
+                            </div>
                         </div>
                     </div>
                 </div>
