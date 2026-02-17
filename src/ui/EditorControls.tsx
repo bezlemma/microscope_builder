@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -14,6 +14,8 @@ export const EditorControls: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection] = useAtom(selectionAtom);
     const activePreset = useAtomValue(activePresetAtom);
+    const [, undo] = useAtom(undoAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
     const { size } = useThree();
 
     // ─── Auto-zoom to fit when preset changes ───
@@ -64,6 +66,13 @@ export const EditorControls: React.FC = () => {
             if (e.altKey) setAltHeld(true);
             if (e.shiftKey) setShiftHeld(true);
             if (e.key === 'Escape') setSelection([]);
+
+            // Ctrl+Z: Undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undo();
+                return;
+            }
 
             // Zoom shortcuts: [ = zoom out, ] = zoom in (orthographic camera)
             if (e.key === '[' || e.key === ']') {
@@ -121,6 +130,8 @@ export const EditorControls: React.FC = () => {
                 const rotationStep = 15 * (Math.PI / 180); // 15 degrees
                 const direction = (e.key === 'q' || e.key === 'Q') ? 1 : -1;
 
+                pushUndo();  // snapshot before rotation
+
                 const newComponents = components.map(c => {
                     if (selection.includes(c.id)) {
                         const qStep = new Quaternion().setFromAxisAngle(
@@ -149,7 +160,7 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [setSelection, selection, components, setComponents]);
+    }, [setSelection, selection, components, setComponents, undo, pushUndo]);
 
     return (
         <OrbitControls

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
+import { SampleChamber } from '../physics/components/SampleChamber';
 
 interface DraggableProps {
     component: OpticalComponent;
@@ -12,6 +13,7 @@ interface DraggableProps {
 
 export const Draggable: React.FC<DraggableProps> = ({ component, children }) => {
     const [components, setComponents] = useAtom(componentsAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
     const { controls } = useThree();
     const [isDragging, setIsDragging] = useState(false);
@@ -55,6 +57,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         }
 
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        pushUndo();  // snapshot before drag
         setIsDragging(true);
         setGlobalDragging(true);
 
@@ -94,12 +97,86 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         let finalX = targetX;
         let finalY = targetY;
 
+
         // Snapping (Only if ALT key is held)
         if (e.altKey) {
-            // Holes are visually at 12.5, 37.5 (Offset by 12.5 from 0, 25)
-            const offset = 12.5;
-            finalX = Math.round((targetX - offset) / gridSize) * gridSize + offset;
-            finalY = Math.round((targetY - offset) / gridSize) * gridSize + offset;
+            const AXIS_SNAP_THRESHOLD = 15;  // mm — perpendicular distance to trigger snap
+            const AXIS_RANGE_LIMIT = 12.5;   // mm — max distance from box face along axis
+            let bestAxisDist = Infinity;
+            let snappedEuler: [number, number, number] | null = null;
+
+            // Check SampleChamber snap port axes (higher priority than grid)
+            for (const c of components) {
+                if (c instanceof SampleChamber && c.id !== component.id) {
+
+
+                    for (const port of c.snapPorts) {
+                        // Port world position (center of the bore opening)
+                        const px = c.position.x + port.x;
+                        const py = c.position.y + port.y;
+
+                        if (port.axisDir === 'x') {
+                            // Axis runs along X — snap Y, limit X range
+                            const perpDist = Math.abs(targetY - py);
+                            // Check axis range: target must be within AXIS_RANGE_LIMIT of the face edge
+                            const faceX = c.position.x + port.x; // port.x is ±half
+                            const sign = port.x > 0 ? 1 : -1;    // outward direction
+                            const axisDistFromFace = (targetX - faceX) * sign;
+                            const half = c.cubeSize / 2;
+                            if (perpDist < AXIS_SNAP_THRESHOLD && perpDist < bestAxisDist
+                                && axisDistFromFace >= -half && axisDistFromFace <= AXIS_RANGE_LIMIT) {
+                                bestAxisDist = perpDist;
+                                finalX = targetX; // free along X
+                                finalY = py;      // snap Y to axis
+                                snappedEuler = [port.rx, port.ry, port.rz];
+                            }
+                        } else {
+                            // Axis runs along Y — snap X, limit Y range
+                            const perpDist = Math.abs(targetX - px);
+                            const faceY = c.position.y + port.y;
+                            const sign = port.y > 0 ? 1 : -1;
+                            const axisDistFromFace = (targetY - faceY) * sign;
+                            const half = c.cubeSize / 2;
+                            if (perpDist < AXIS_SNAP_THRESHOLD && perpDist < bestAxisDist
+                                && axisDistFromFace >= -half && axisDistFromFace <= AXIS_RANGE_LIMIT) {
+                                bestAxisDist = perpDist;
+                                finalX = px;      // snap X to axis
+                                finalY = targetY; // free along Y
+                                snappedEuler = [port.rx, port.ry, port.rz];
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fall back to grid snapping if no axis snap was triggered
+            if (bestAxisDist >= AXIS_SNAP_THRESHOLD) {
+                const offset = 12.5;
+                finalX = Math.round((targetX - offset) / gridSize) * gridSize + offset;
+                finalY = Math.round((targetY - offset) / gridSize) * gridSize + offset;
+            }
+
+            // Compute delta from current dragged component position
+            const deltaX = finalX - component.position.x;
+            const deltaY = finalY - component.position.y;
+
+            // Get the set of IDs to move (all selected, including this one)
+            const idsToMove = new Set(selection.includes(component.id) ? selection : [component.id]);
+
+            const newComponents = components.map(c => {
+                if (idsToMove.has(c.id)) {
+                    c.setPosition(c.position.x + deltaX, c.position.y + deltaY, 0);
+                    // Apply 3D rotation if component was snapped to a port axis
+                    if (snappedEuler && idsToMove.size === 1) {
+                        c.setRotation(snappedEuler[0], snappedEuler[1], snappedEuler[2]);
+                    }
+                    return c;
+                }
+                return c;
+            });
+
+            setComponents(newComponents);
+            return; // early return — alt path handles its own setComponents
         }
 
         // Compute delta from current dragged component position

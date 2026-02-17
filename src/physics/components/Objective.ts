@@ -54,11 +54,12 @@ export class Objective extends OpticalComponent {
     immersionIndex: number;
     workingDistance: number;
     tubeLensFocal: number;
+    diameter: number;           // Physical barrel diameter (mm) — for visual sizing, independent of NA
 
     // Derived (recomputed on parameter change)
     focalLength: number;
     maxAngle: number;
-    apertureRadius: number;
+    apertureRadius: number;     // Optical clear aperture from NA — used for ray clipping
 
     constructor({
         NA = 0.25,
@@ -66,6 +67,7 @@ export class Objective extends OpticalComponent {
         immersionIndex = 1.0,
         workingDistance = 10.0,
         tubeLensFocal = 200,
+        diameter = 20,
         name = 'Objective',
     }: {
         NA?: number;
@@ -73,6 +75,7 @@ export class Objective extends OpticalComponent {
         immersionIndex?: number;
         workingDistance?: number;
         tubeLensFocal?: number;
+        diameter?: number;
         name?: string;
     } = {}) {
         super(name);
@@ -81,6 +84,7 @@ export class Objective extends OpticalComponent {
         this.immersionIndex = immersionIndex;
         this.workingDistance = workingDistance;
         this.tubeLensFocal = tubeLensFocal;
+        this.diameter = diameter;
 
         // Derive
         this.focalLength = tubeLensFocal / magnification;

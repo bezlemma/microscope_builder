@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom } from '../state/store';
+import { componentsAtom, pushUndoAtom } from '../state/store';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
 import { Laser } from '../physics/components/Laser';
@@ -17,9 +17,12 @@ import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Aperture } from '../physics/components/Aperture';
+import { SlitAperture } from '../physics/components/SlitAperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { PolygonScanner } from '../physics/components/PolygonScanner';
+import { SampleChamber } from '../physics/components/SampleChamber';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { OpticalComponent } from '../physics/Component';
@@ -43,9 +46,12 @@ function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'polarizer') return new Waveplate('polarizer', 12.5, 0, 'Linear Polarizer');
     if (type === 'beamSplitter') return new BeamSplitter(25, 2, 0.5, 'Beam Splitter');
     if (type === 'aperture') return new Aperture(10, 25, 'Aperture');
+    if (type === 'slitAperture') return new SlitAperture(5, 20, 25, 'Slit Aperture');
     if (type === 'filter') return new Filter(25, 3, new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]), 'Filter');
     if (type === 'dichroic') return new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
     if (type === 'curvedMirror') return new CurvedMirror(25, 100, 3, 'Curved Mirror');
+    if (type === 'polygonScanner') return new PolygonScanner({ numFaces: 6, inscribedRadius: 10, faceHeight: 10, name: 'Polygon Scanner' });
+    if (type === 'lChamber') return new SampleChamber(40, 3, 21, 'L/X Sample Holder');
     return null;
 }
 
@@ -53,10 +59,14 @@ function createComponentForType(type: string): OpticalComponent | null {
 function applyDefaultRotation(comp: OpticalComponent, type: string): void {
     if (type === 'mirror' || type === 'beamSplitter' || type === 'dichroic' || type === 'curvedMirror') {
         comp.setRotation(0, 0, 3 * Math.PI / 4);
-    } else if (['blocker', 'halfWavePlate', 'quarterWavePlate', 'polarizer', 'aperture', 'filter'].includes(type)) {
+    } else if (type === 'polygonScanner') {
+        comp.setRotation(0, 0, 0);  // spin axis along Z, no default tilt
+    } else if (['blocker', 'halfWavePlate', 'quarterWavePlate', 'polarizer', 'aperture', 'slitAperture', 'filter'].includes(type)) {
         comp.setRotation(0, 0, 0);
     } else if (type === 'laser' || type === 'lamp') {
         comp.setRotation(0, 0, 0);
+    } else if (type === 'lChamber' || type === 'sample') {
+        comp.setRotation(0, 0, 0);  // open top faces +Z
     } else {
         comp.setRotation(0, Math.PI / 2, 0);
     }
@@ -65,6 +75,7 @@ function applyDefaultRotation(comp: OpticalComponent, type: string): void {
 export const DragDropHandler: React.FC = () => {
     const { camera, gl } = useThree();
     const [, setComponents] = useAtom(componentsAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
 
     useEffect(() => {
         const handleDragOver = (e: DragEvent) => {
@@ -90,6 +101,7 @@ export const DragDropHandler: React.FC = () => {
 
             const newComp = createComponentForType(type);
             if (newComp) {
+                pushUndo();  // snapshot before add
                 newComp.setPosition(target.x, target.y, 0);
                 applyDefaultRotation(newComp, type);
                 setComponents(prev => [...prev, newComp]);
@@ -104,7 +116,7 @@ export const DragDropHandler: React.FC = () => {
             canvas.removeEventListener('dragover', handleDragOver);
             canvas.removeEventListener('drop', handleDrop);
         };
-    }, [camera, gl, setComponents]);
+    }, [camera, gl, setComponents, pushUndo]);
 
     return null;
 };

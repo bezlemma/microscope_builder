@@ -243,6 +243,63 @@ Custom Equations (Physics & Geometry)Custom Geometry: handled by the $w = \text{
 Custom Physics: Handled by a "Shader" closure in the Surface trait.
 The user can provide a function (Ray, HitRecord) -> Ray that overrides standard Snell's Law (e.g., for simulating metasurfaces or non-physical "magic" mirrors).
 
+## 4. Dynamic Components & Time
+
+### Core Principle: Time Is a Scene Graph Mutation, Not Physics
+
+The solvers compute physics for a **single, frozen snapshot** of the scene graph. A spinning polygon scanner at $\theta = 17°$ is indistinguishable from a static polygon rotated to $17°$. The solvers never see "motion" — they see geometry.
+
+This preserves all three tenets:
+1. **Scene Graph is Truth** — The component's current `scanAngle` (or `position`, `rotation`) is the only truth. There is no "velocity" or "time" in the physics layer.
+2. **UI is a viewport** — Animation is the UI mutating a property at 60fps, with the solver re-evaluating each frame. The UI is still showing the truth — just the truth at a new moment.
+3. **Components don't know they're in a microscope** — A `PolygonScanner` is just a reflective polygon with an angle parameter. It doesn't know it's "scanning." Something external changes its angle.
+
+### Architecture: The Property Animator
+
+A generic system that can animate **any numeric property** on **any component**:
+
+```
+PropertyAnimator.animate({
+    target: component,           // any OpticalComponent
+    property: 'scanAngle',       // any numeric property name
+    from: 0,  to: 360,           // range
+    easing: 'linear',            // or 'sinusoidal' for resonant scanners
+    period: 1000,                // ms per cycle
+    repeat: true                 // continuous or one-shot
+})
+```
+
+The animator lives **outside** the physics layer. On each frame:
+1. Compute the new property value from the clock.
+2. Mutate the scene graph (set `component.scanAngle = newValue`).
+3. Trigger solver re-evaluation.
+
+### Moving Component Examples
+
+All moving parts reduce to animated properties on standard components:
+
+| Component | Animated Property | Easing | Notes |
+|---|---|---|---|
+| Polygon Scanner | `scanAngle` | linear | N-faceted reflective polygon |
+| Galvo Mirror | `rotation.z` | linear / step | Single-axis tilt mirror |
+| Resonant Scanner | `rotation.z` | sinusoidal | Fixed frequency, $\theta(t) = A\sin(\omega t)$ |
+| Filter Wheel | `rotation.z` | discrete step | Snaps between N filter positions |
+| Linear Actuator / Z-Stage | `position.y` (or any axis) | linear | Translates a component or sample |
+| Spinning Disc (Nipkow) | `rotation.z` | linear | Pinhole array, requires Solver 3 integration |
+
+### Solver 3 Integration: Scan Accumulation
+
+For scanning microscopy (confocal, spinning disk), the camera must integrate signal across the full scan cycle. The process:
+
+1. The animator advances the scan position through $N$ discrete steps.
+2. At each step, Solver 1 re-traces rays (fast) and Solver 2 re-evaluates the excitation beam (expensive but cacheable for rigid-body motion).
+3. Solver 3 runs a **partial render** at each step — each scan position illuminates a different region of the sample.
+4. The camera **accumulates** partial renders into a final image: $I_{pixel} = \sum_{k=1}^{N} I_{pixel}^{(k)}$.
+
+This is physically correct: a real scanning microscope's detector integrates photons across the full scan cycle. The $N$ parameter trades off speed vs. quality (fewer steps = faster but spatial aliasing; more steps = smoother coverage).
+
+For Solver 1 visualization, only the **current frame** is shown — the beam sweeps visually as the animation plays.
+
 ## Known Bug Patterns
 
 When an `interact()` method creates a child ray using JavaScript's spread operator (`{ ...ray, origin: ..., direction: ... }`), it copies all properties from the incoming (parent) ray — including visualization-only fields like `internalPath`, `terminationPoint`, `entryPoint`, and `interactionDistance`. These fields describe the parent's rendering history, not the child's. The visualizer then draws prism geometry as part of the lens segment, causing phantom rays that appear to "jump back" to a previous component.

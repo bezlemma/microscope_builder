@@ -7,6 +7,8 @@ export class Camera extends OpticalComponent {
     height: number;
     sensorResX: number;
     sensorResY: number;
+    sensorNA: number;           // Pixel acceptance cone NA (determines angular sampling spread)
+    samplesPerPixel: number;    // Monte Carlo samples per pixel for Solver 3
 
     // Solver 3 render results (stored on the camera that produced them)
     solver3Image: Float32Array | null = null;
@@ -20,6 +22,8 @@ export class Camera extends OpticalComponent {
         this.height = height;
         this.sensorResX = 64;
         this.sensorResY = 64;
+        this.sensorNA = 0;          // Angular sampling disabled (0 = deterministic single ray)
+        this.samplesPerPixel = 1;   // Single ray per pixel
     }
 
     /** Clear Solver 3 results (called when scene changes) */

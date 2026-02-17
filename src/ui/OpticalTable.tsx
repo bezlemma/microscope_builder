@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry } from 'three';
 import { useAtom } from 'jotai';
 import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
 import { Ray, Coherence } from '../physics/types';
@@ -21,9 +21,12 @@ import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Aperture } from '../physics/components/Aperture';
+import { SlitAperture } from '../physics/components/SlitAperture';
+import { SampleChamber } from '../physics/components/SampleChamber';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { PolygonScanner } from '../physics/components/PolygonScanner';
 
 import { RayVisualizer } from './RayVisualizer';
 
@@ -92,43 +95,46 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Detailed Hollow Frame */}
-            <group>
-                {/* Top Bar */}
-                <mesh position={[0, offset, 0]}>
-                    <boxGeometry args={[outerSize, frameWidth, thickness]} />
-                    <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                </mesh>
-                {/* Bottom Bar */}
-                <mesh position={[0, -offset, 0]}>
-                    <boxGeometry args={[outerSize, frameWidth, thickness]} />
-                    <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                </mesh>
-                {/* Left Bar */}
-                <mesh position={[-offset, 0, 0]}>
-                    <boxGeometry args={[frameWidth, innerSize, thickness]} />
-                    <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                </mesh>
-                {/* Right Bar */}
-                <mesh position={[offset, 0, 0]}>
-                    <boxGeometry args={[frameWidth, innerSize, thickness]} />
-                    <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+            {/* Frame + Glass rotated to stand upright (XZ plane) so beams pass through */}
+            <group rotation={[Math.PI / 2, 0, 0]}>
+                {/* Detailed Hollow Frame */}
+                <group>
+                    {/* Top Bar */}
+                    <mesh position={[0, offset, 0]}>
+                        <boxGeometry args={[outerSize, frameWidth, thickness]} />
+                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                    </mesh>
+                    {/* Bottom Bar */}
+                    <mesh position={[0, -offset, 0]}>
+                        <boxGeometry args={[outerSize, frameWidth, thickness]} />
+                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                    </mesh>
+                    {/* Left Bar */}
+                    <mesh position={[-offset, 0, 0]}>
+                        <boxGeometry args={[frameWidth, innerSize, thickness]} />
+                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                    </mesh>
+                    {/* Right Bar */}
+                    <mesh position={[offset, 0, 0]}>
+                        <boxGeometry args={[frameWidth, innerSize, thickness]} />
+                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                    </mesh>
+                </group>
+
+                {/* Glass Pane */}
+                <mesh position={[0, 0, 0]}>
+                    <boxGeometry args={[innerSize, innerSize, 0.5]} />
+                    <meshPhysicalMaterial
+                        color="#ffffff"
+                        transmission={0.99}
+                        opacity={0.1}
+                        transparent
+                        roughness={0}
+                        metalness={0.0}
+                        depthWrite={false}
+                    />
                 </mesh>
             </group>
-
-            {/* Glass Pane - Hollow effect */}
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[innerSize, innerSize, 0.5]} />
-                <meshPhysicalMaterial
-                    color="#ffffff"
-                    transmission={0.99}
-                    opacity={0.1}
-                    transparent
-                    roughness={0}
-                    metalness={0.0}
-                    depthWrite={false}
-                />
-            </mesh>
 
             {/* Mickey Mouse Geometry inside the window */}
             <group position={[0, 0, 0]}>
@@ -138,11 +144,11 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     <meshStandardMaterial color="#ffccaa" roughness={0.3} />
                 </mesh>
                 {/* Ears */}
-                <mesh position={[-0.5, 0.5, 0]}>
+                <mesh position={[-0.5, 0, 0.5]}>
                     <sphereGeometry args={[0.25, 32, 32]} />
                     <meshStandardMaterial color="black" roughness={0.3} />
                 </mesh>
-                <mesh position={[0.5, 0.5, 0]}>
+                <mesh position={[0.5, 0, 0.5]}>
                     <sphereGeometry args={[0.25, 32, 32]} />
                     <meshStandardMaterial color="black" roughness={0.3} />
                 </mesh>
@@ -154,7 +160,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
-    const a = component.apertureRadius;
+    const a = component.diameter / 2;   // Physical barrel radius for visual sizing
     const wd = component.workingDistance;
 
     const mainLine = useMemo(() =>
@@ -247,6 +253,63 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
     );
 };
 
+export const PolygonScannerVisualizer = ({ component }: { component: PolygonScanner }) => {
+    const N = component.numFaces;
+    const R = component.circumRadius;
+
+    // Build polygon shape in local XY plane
+    const shape = useMemo(() => {
+        const s = new Shape();
+        for (let k = 0; k <= N; k++) {
+            const angle = component.scanAngle + k * (2 * Math.PI / N);
+            const x = R * Math.cos(angle);
+            const y = R * Math.sin(angle);
+            if (k === 0) s.moveTo(x, y);
+            else s.lineTo(x, y);
+        }
+        return s;
+    }, [N, R, component.scanAngle]);
+
+    // Outline vertices for the polygon edges
+    const outlineVerts = useMemo(() => {
+        const verts: number[] = [];
+        for (let k = 0; k <= N; k++) {
+            const angle = component.scanAngle + k * (2 * Math.PI / N);
+            verts.push(R * Math.cos(angle), R * Math.sin(angle), 0);
+        }
+        return new Float32Array(verts);
+    }, [N, R, component.scanAngle]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Extruded polygon body — centered on Z=0 */}
+            <mesh position={[0, 0, -component.faceHeight / 2]}>
+                <extrudeGeometry args={[shape, { depth: component.faceHeight, bevelEnabled: false }]} />
+                <meshPhysicalMaterial
+                    color="#c0c0c0"
+                    metalness={0.9}
+                    roughness={0.1}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.05}
+                />
+            </mesh>
+
+            {/* Polygon outline at z=0 (table plane) */}
+            <line>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" args={[outlineVerts, 3]} />
+                </bufferGeometry>
+                <lineBasicMaterial color="#888" linewidth={2} />
+            </line>
+
+        </group>
+    );
+};
+
 export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
     const geom = useMemo(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
     return (
@@ -325,6 +388,58 @@ export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
     );
 };
 
+// Slit Aperture Visualizer — two rectangular bars with a gap
+export const SlitApertureVisualizer = ({ component }: { component: SlitAperture }) => {
+    const outerR = component.housingDiameter / 2;
+    const halfW = component.slitWidth / 2;
+    const halfH = component.slitHeight / 2;
+    const halfT = 0.5; // 1mm total thickness
+
+    // Top bar: from halfH to outerR
+    const topBarHeight = outerR - halfH;
+    // Bottom bar: from -outerR to -halfH
+    const bottomBarHeight = outerR - halfH;
+    // Side bars: from -halfH to halfH, outerR wide on each side of the slit
+    const sideBarWidth = outerR - halfW;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Top bar */}
+            {topBarHeight > 0.1 && (
+                <mesh position={[0, 0, halfH + topBarHeight / 2]}>
+                    <boxGeometry args={[halfT * 2, outerR * 2, topBarHeight]} />
+                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
+                </mesh>
+            )}
+            {/* Bottom bar */}
+            {bottomBarHeight > 0.1 && (
+                <mesh position={[0, 0, -(halfH + bottomBarHeight / 2)]}>
+                    <boxGeometry args={[halfT * 2, outerR * 2, bottomBarHeight]} />
+                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
+                </mesh>
+            )}
+            {/* Left side bar */}
+            {sideBarWidth > 0.1 && (
+                <mesh position={[0, -(halfW + sideBarWidth / 2), 0]}>
+                    <boxGeometry args={[halfT * 2, sideBarWidth, halfH * 2]} />
+                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
+                </mesh>
+            )}
+            {/* Right side bar */}
+            {sideBarWidth > 0.1 && (
+                <mesh position={[0, halfW + sideBarWidth / 2, 0]}>
+                    <boxGeometry args={[halfT * 2, sideBarWidth, halfH * 2]} />
+                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
+                </mesh>
+            )}
+        </group>
+    );
+};
+
 // Filter Visualizer — colored semi-transparent disc
 export const FilterVisualizer = ({ component }: { component: Filter }) => {
     const radius = component.diameter / 2;
@@ -395,17 +510,119 @@ function wavelengthToHex(nm: number): string {
 }
 
 export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
-
     const radius = component.diameter / 2;
+    return (
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+            <meshStandardMaterial color="#222" roughness={0.8} />
+        </mesh>
+    );
+};
+
+// Helper: wall panel with a real circular hole (using Shape + ExtrudeGeometry)
+const WallWithHole = ({ wallSize, holeRadius, thickness, position, rotation, color }: {
+    wallSize: number;
+    holeRadius: number;
+    thickness: number;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    color: string;
+}) => {
+    const geometry = useMemo(() => {
+        const hs = wallSize / 2;
+        const shape = new Shape();
+        shape.moveTo(-hs, -hs);
+        shape.lineTo(hs, -hs);
+        shape.lineTo(hs, hs);
+        shape.lineTo(-hs, hs);
+        shape.closePath();
+
+        const hole = new ThreePath();
+        hole.absarc(0, 0, holeRadius, 0, Math.PI * 2, false);
+        shape.holes.push(hole);
+
+        return new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+    }, [wallSize, holeRadius, thickness]);
+
+    return (
+        <mesh position={position} rotation={rotation} geometry={geometry}>
+            <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+    );
+};
+
+// SampleChamber Visualizer — hollow open-top cube with real circular holes on all 4 side faces
+export const SampleChamberVisualizer = ({ component }: { component: SampleChamber }) => {
+    const s = component.cubeSize;
+    const wt = component.wallThickness;
+    const boreR = component.boreDiameter / 2;
+    const half = s / 2;
+
+    const bodyColor = '#778899';  // light steel gray
+
+    // ExtrudeGeometry extrudes the shape (in local XY) along local +Z from 0 to depth.
+    // Wall rotations place each wall on the correct face of the cube:
+    //   +X wall: Ry(π/2)  → local Z extrudes along world +X
+    //   -X wall: Ry(-π/2) → local Z extrudes along world -X
+    //   +Y wall: Rx(-π/2) → local Z extrudes along world +Y
+    //   -Y wall: Rx(π/2)  → local Z extrudes along world -Y
+
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshStandardMaterial color="#222" roughness={0.8} />
+            {/* ── Bottom wall (solid, no hole, dark for contrast from above) ── */}
+            <mesh position={[0, 0, -half]}>
+                <boxGeometry args={[s, s, wt]} />
+                <meshStandardMaterial color="#1a1a1a" roughness={0.8} metalness={0.1} />
+            </mesh>
+
+            {/* ── +X wall (real hole) ── */}
+            <WallWithHole
+                wallSize={s} holeRadius={boreR} thickness={wt}
+                position={[half - wt, 0, 0]}
+                rotation={[0, Math.PI / 2, 0]}
+                color={bodyColor}
+            />
+            {/* ── -X wall (real hole) ── */}
+            <WallWithHole
+                wallSize={s} holeRadius={boreR} thickness={wt}
+                position={[-half + wt, 0, 0]}
+                rotation={[0, -Math.PI / 2, 0]}
+                color={bodyColor}
+            />
+            {/* ── +Y wall (real hole) ── */}
+            <WallWithHole
+                wallSize={s} holeRadius={boreR} thickness={wt}
+                position={[0, half - wt, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                color={bodyColor}
+            />
+            {/* ── -Y wall (real hole) ── */}
+            <WallWithHole
+                wallSize={s} holeRadius={boreR} thickness={wt}
+                position={[0, -half + wt, 0]}
+                rotation={[Math.PI / 2, 0, 0]}
+                color={bodyColor}
+            />
+
+            {/* ── 3D Mickey specimen at center of cube, ears facing +Z ── */}
+            {/* Head sphere */}
+            <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[2.5, 24, 24]} />
+                <meshStandardMaterial color="#ffccaa" roughness={0.6} />
+            </mesh>
+            {/* Left ear (+Z direction, offset -X) */}
+            <mesh position={[-2.0, 0, 2.0]}>
+                <sphereGeometry args={[1.2, 16, 16]} />
+                <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
+            </mesh>
+            {/* Right ear (+Z direction, offset +X) */}
+            <mesh position={[2.0, 0, 2.0]}>
+                <sphereGeometry args={[1.2, 16, 16]} />
+                <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
             </mesh>
         </group>
     );
@@ -561,7 +778,7 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
                 <meshStandardMaterial color="#666" />
             </mesh>
             {/* Emission Point */}
-            <mesh position={[29, 0, 0]}>
+            <mesh position={[1, 0, 0]}>
                 <sphereGeometry args={[1, 16, 16]} />
                 <meshBasicMaterial color="lime" />
             </mesh>
@@ -888,6 +1105,11 @@ export const OpticalTable: React.FC = () => {
                     const sp = (c as any).spectralProfile;
                     props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
                 }
+                // PolygonScanner properties
+                if ('numFaces' in c) props.push(`nf=${(c as any).numFaces}`);
+                if ('inscribedRadius' in c) props.push(`ir=${(c as any).inscribedRadius}`);
+                if ('faceHeight' in c) props.push(`fh=${(c as any).faceHeight}`);
+                if ('scanAngle' in c) props.push(`sa=${(c as any).scanAngle}`);
 
                 return props.length > 0 ? `${base}:${props.join(',')}` : base;
             })
@@ -1525,44 +1747,52 @@ export const OpticalTable: React.FC = () => {
 
     return (
         <group>
-            {components.map(c => {
-                let visual = null;
-                if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
-                else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
-                else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
-                else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
-                else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
-                else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
-                else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
-                else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
-
-                else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
-                else if (c instanceof Card) visual = <CardVisualizer component={c} />;
-                else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
-                else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
-                else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
-                else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
-                else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
-                else if (c instanceof BeamSplitter) visual = <BeamSplitterVisualizer component={c} />;
-                else if (c instanceof Aperture) visual = <ApertureVisualizer component={c} />;
-                else if (c instanceof Filter) visual = <FilterVisualizer component={c} />;
-                else if (c instanceof DichroicMirror) visual = <DichroicVisualizer component={c} />;
-
-                if (visual) {
-                    return (
-                        <group key={c.id}>
-                            <Draggable component={c}>
-                                {visual}
-                            </Draggable>
-                        </group>
-                    );
-                }
-                return null;
-            })}
-
-            {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
+            {/* Beams render at z=0 (default), components at z=2.
+                In the top-down view the Z offset is invisible, but the depth buffer
+                ensures components appear in front of beam lines. */}
             <RayVisualizer paths={rays} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
             {solver3Paths.length > 0 && <RayVisualizer paths={solver3Paths} glowEnabled={false} hideAll={false} />}
+            {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
+
+            <group>
+                {components.map(c => {
+                    let visual = null;
+                    if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
+                    else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
+                    else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
+                    else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
+                    else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
+                    else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
+                    else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
+                    else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
+
+                    else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
+                    else if (c instanceof Card) visual = <CardVisualizer component={c} />;
+                    else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
+                    else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
+                    else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
+                    else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
+                    else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
+                    else if (c instanceof BeamSplitter) visual = <BeamSplitterVisualizer component={c} />;
+                    else if (c instanceof SlitAperture) visual = <SlitApertureVisualizer component={c} />;
+                    else if (c instanceof Aperture) visual = <ApertureVisualizer component={c} />;
+                    else if (c instanceof Filter) visual = <FilterVisualizer component={c} />;
+                    else if (c instanceof DichroicMirror) visual = <DichroicVisualizer component={c} />;
+                    else if (c instanceof PolygonScanner) visual = <PolygonScannerVisualizer component={c} />;
+                    else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;
+
+                    if (visual) {
+                        return (
+                            <group key={c.id}>
+                                <Draggable component={c}>
+                                    {visual}
+                                </Draggable>
+                            </group>
+                        );
+                    }
+                    return null;
+                })}
+            </group>
         </group>
     );
 };

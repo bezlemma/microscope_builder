@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { CardViewer } from './CardViewer';
@@ -19,6 +19,8 @@ export const ViewerPanels: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
+    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
 
     // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
@@ -94,6 +96,13 @@ export const ViewerPanels: React.FC = () => {
                         <CameraViewer
                             camera={comp}
                             isRendering={isRendering}
+                            onRefresh={() => {
+                                // Auto-enable E&M if not already on
+                                if (!rayConfig.solver2Enabled) {
+                                    setRayConfig({ ...rayConfig, solver2Enabled: true });
+                                }
+                                setSolver3Trigger(n => n + 1);
+                            }}
                         />
                     )}
                 </div>

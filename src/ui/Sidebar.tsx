@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName } from '../state/store';
+import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom } from '../state/store';
+import { downloadUbz, openUbzFilePicker } from '../state/ubzSerializer';
 import { useIsMobile } from './useIsMobile';
 
 // ─── Draggable component item ─────────────────────────────────────────
@@ -103,6 +104,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'curvedMirror', label: 'Curved Mirror', icon: Square },
             { type: 'beamSplitter', label: 'Beam Splitter', icon: Square },
             { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
+            { type: 'polygonScanner', label: 'Polygon Scanner', icon: Square },
         ]
     },
     {
@@ -130,6 +132,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#fd79a8',
         items: [
             { type: 'sample', label: 'Sample (Mickey)', icon: Box },
+            { type: 'lChamber', label: 'L/X Sample Holder', icon: Box },
         ]
     },
     {
@@ -139,6 +142,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         items: [
             { type: 'blocker', label: 'Blocker', icon: Box },
             { type: 'aperture', label: 'Aperture / Iris', icon: Circle },
+            { type: 'slitAperture', label: 'Slit Aperture', icon: Box },
         ]
     },
     {
@@ -249,6 +253,8 @@ const ComponentGroupSection = ({
 export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
+    const [components] = useAtom(componentsAtom);
+    const [, loadScene] = useAtom(loadSceneAtom);
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
 
@@ -466,6 +472,58 @@ export const Sidebar: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Save / Load buttons */}
+                <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
+                    <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Scene</h4>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                        <button
+                            onClick={() => downloadUbz(components)}
+                            style={{
+                                flex: 1,
+                                padding: '8px 0',
+                                background: '#2a2a2a',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#363636'; e.currentTarget.style.borderColor = '#666'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
+                        >
+                            Save
+                        </button>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const loaded = await openUbzFilePicker();
+                                    loadScene(loaded);
+                                } catch (e) {
+                                    console.warn('Load cancelled or failed:', e);
+                                }
+                            }}
+                            style={{
+                                flex: 1,
+                                padding: '8px 0',
+                                background: '#2a2a2a',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#363636'; e.currentTarget.style.borderColor = '#666'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
+                        >
+                            Load
+                        </button>
+                    </div>
+                </div>
+
                 {/* Presets Section — categorized dropdowns */}
                 <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
@@ -489,6 +547,11 @@ export const Sidebar: React.FC = () => {
                             label="Brightfield"
                             active={activePreset === PresetName.Brightfield}
                             onClick={() => handlePresetClick(PresetName.Brightfield)}
+                        />
+                        <PresetButton
+                            label="Light Sheet (OpenSPIM)"
+                            active={activePreset === PresetName.OpenSPIM}
+                            onClick={() => handlePresetClick(PresetName.OpenSPIM)}
                         />
 
                     </PresetCategory>

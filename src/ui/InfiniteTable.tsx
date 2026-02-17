@@ -68,6 +68,25 @@ function TableHoleMaterial({ size }: { size: number }) {
     float spacing = 25.0;
     float holeRadius = 3.5;
     float totalSize = ${size.toFixed(1)};
+
+    // Procedural noise for brushed-metal grain
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    
+    float brushedNoise(vec2 pos) {
+      // Stretch along X to create directional brushing grain
+      vec2 grain = vec2(pos.x * 0.3, pos.y * 2.0);
+      vec2 i = floor(grain);
+      vec2 f = fract(grain);
+      // Smooth interpolation
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
     
     void main() {
       // Calculate coordinates in mm
@@ -83,9 +102,18 @@ function TableHoleMaterial({ size }: { size: number }) {
       float edge = 1.0; // Softness
       float circle = smoothstep(holeRadius, holeRadius - edge, dist);
       
-      // Background color #333 (0.2), Hole color #000 (0.0)
-      vec3 bgColor = vec3(0.2);
-      vec3 holeColor = vec3(0.0);
+      // Optical table surface — anodized aluminum with brushed-metal grain
+      vec3 bgColor = vec3(0.38, 0.40, 0.42);
+      
+      // Subtle brushed-metal grain (±3% brightness variation)
+      float grain = brushedNoise(pos) * 0.06 - 0.03;
+      bgColor += grain;
+      
+      // Faint specular highlight shimmer along brush direction
+      float shimmer = brushedNoise(pos * 0.08) * 0.02;
+      bgColor += shimmer;
+      
+      vec3 holeColor = vec3(0.05);
       
       vec3 finalColor = mix(bgColor, holeColor, circle);
       

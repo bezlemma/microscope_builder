@@ -47,6 +47,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         camera.setRotation(Math.PI / 2, 0, 0);
         camera.sensorResX = 4;
         camera.sensorResY = 4;
+        camera.sensorNA = 0.01;      // Near-zero NA for deterministic test
+        camera.samplesPerPixel = 1;  // Single sample for deterministic test
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);
@@ -83,6 +85,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         camera.setRotation(Math.PI / 2, 0, 0);
         camera.sensorResX = 4;
         camera.sensorResY = 4;
+        camera.sensorNA = 0.01;
+        camera.samplesPerPixel = 1;
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);
@@ -120,6 +124,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         camera.setRotation(-Math.PI / 2, 0, 0);
         camera.sensorResX = 4;
         camera.sensorResY = 4;
+        camera.sensorNA = 0.01;
+        camera.samplesPerPixel = 1;
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);

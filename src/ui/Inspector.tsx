@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
+import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, pushUndoAtom } from '../state/store';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
@@ -14,9 +14,11 @@ import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
+import { PolygonScanner } from '../physics/components/PolygonScanner';
 import { PrismLens } from '../physics/components/PrismLens';
 import { Waveplate } from '../physics/components/Waveplate';
 import { Aperture } from '../physics/components/Aperture';
+import { SlitAperture } from '../physics/components/SlitAperture';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
@@ -303,6 +305,7 @@ export const Inspector: React.FC = () => {
     const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
 
 
     const selectedComponent = selection.length === 1
@@ -342,6 +345,12 @@ export const Inspector: React.FC = () => {
     const [localObjMag, setLocalObjMag] = useState<string>('10');
     const [localObjImmersion, setLocalObjImmersion] = useState<string>('1.0');
     const [localObjWD, setLocalObjWD] = useState<string>('10');
+    const [localObjDiameter, setLocalObjDiameter] = useState<string>('20');
+
+    const [localPolyFaces, setLocalPolyFaces] = useState<string>('6');
+    const [localPolyRadius, setLocalPolyRadius] = useState<string>('10');
+    const [localPolyHeight, setLocalPolyHeight] = useState<string>('10');
+    const [localPolyScanAngle, setLocalPolyScanAngle] = useState<string>('0');
 
 
     const [localWavelength, setLocalWavelength] = useState<number>(532);
@@ -369,6 +378,9 @@ export const Inspector: React.FC = () => {
 
 
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
+    const [localSlitWidth, setLocalSlitWidth] = useState<string>('5');
+    const [localSlitRotation, setLocalSlitRotation] = useState<string>('0');
+    const [localCylClocking, setLocalCylClocking] = useState<string>('0');
 
 
 
@@ -442,6 +454,13 @@ export const Inspector: React.FC = () => {
                     setLocalObjMag(String(selectedComponent.magnification));
                     setLocalObjImmersion(String(selectedComponent.immersionIndex));
                     setLocalObjWD(String(Math.round(selectedComponent.workingDistance * 100) / 100));
+                    setLocalObjDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                }
+                if (selectedComponent instanceof PolygonScanner) {
+                    setLocalPolyFaces(String(selectedComponent.numFaces));
+                    setLocalPolyRadius(String(selectedComponent.inscribedRadius));
+                    setLocalPolyHeight(String(selectedComponent.faceHeight));
+                    setLocalPolyScanAngle(String(Math.round(selectedComponent.scanAngle * 180 / Math.PI * 100) / 100));
                 }
                 if (selectedComponent instanceof Laser) {
                     setLocalWavelength(selectedComponent.wavelength);
@@ -472,6 +491,17 @@ export const Inspector: React.FC = () => {
                 }
                 if (selectedComponent instanceof Aperture) {
                     setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
+                }
+                if (selectedComponent instanceof SlitAperture) {
+                    setLocalSlitWidth(String(Math.round(selectedComponent.slitWidth * 100) / 100));
+                    // Extract rotation around local X (optical axis) from Euler
+                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                    setLocalSlitRotation(String(Math.round(euler.x * 180 / Math.PI * 100) / 100));
+                }
+                if (selectedComponent instanceof CylindricalLens) {
+                    // Extract clocking angle: rotation around local Z (optical axis)
+                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                    setLocalCylClocking(String(Math.round(euler.x * 180 / Math.PI * 100) / 100));
                 }
 
                 if (selectedComponent instanceof Filter) {
@@ -635,10 +665,12 @@ export const Inspector: React.FC = () => {
     const isPrism = selectedComponent instanceof PrismLens;
     const isWaveplate = selectedComponent instanceof Waveplate;
     const isAperture = selectedComponent instanceof Aperture;
+    const isSlitAperture = selectedComponent instanceof SlitAperture;
     const isFilter = selectedComponent instanceof Filter;
     const isDichroic = selectedComponent instanceof DichroicMirror;
     const isCylindrical = selectedComponent instanceof CylindricalLens;
     const isCurvedMirror = selectedComponent instanceof CurvedMirror;
+    const isPolygonScanner = selectedComponent instanceof PolygonScanner;
 
     const hasSpectralProfile = isFilter || isDichroic;
 
@@ -730,6 +762,7 @@ export const Inspector: React.FC = () => {
                 />
                 <button
                     onClick={() => {
+                        pushUndo();  // snapshot before delete
                         setComponents(components.filter(c => c.id !== selection[0]));
                         setSelection([]);
                     }}
@@ -1001,6 +1034,108 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
+                {isPolygonScanner && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Polygon Scan Mirror</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Faces"
+                                suffix=""
+                                value={localPolyFaces}
+                                onChange={setLocalPolyFaces}
+                                onCommit={(v: string) => {
+                                    const val = Math.max(3, Math.round(parseFloat(v)));
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
+                                            c.numFaces = val;
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.2}
+                                min={3}
+                                max={12}
+                            />
+                            <ScrubInput
+                                label="Radius"
+                                suffix="mm"
+                                value={localPolyRadius}
+                                onChange={setLocalPolyRadius}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
+                                            c.inscribedRadius = val;
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={50}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput
+                                label="Height"
+                                suffix="mm"
+                                value={localPolyHeight}
+                                onChange={setLocalPolyHeight}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
+                                            c.faceHeight = val;
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={30}
+                            />
+                            <ScrubInput
+                                label="Scan ∠"
+                                suffix="°"
+                                value={localPolyScanAngle}
+                                onChange={setLocalPolyScanAngle}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
+                                            c.scanAngle = val * Math.PI / 180;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                min={0}
+                                max={360}
+                            />
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: '10px', color: '#555' }}>
+                            Scan per facet = {selectedComponent instanceof PolygonScanner ? Math.round(4 * 180 / selectedComponent.numFaces * 100) / 100 : '—'}°
+                            {' · '}
+                            R = {selectedComponent instanceof PolygonScanner ? Math.round(selectedComponent.circumRadius * 100) / 100 : '—'} mm
+                        </div>
+                    </div>
+                )}
+
                 {isCylindrical && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Cylindrical Lens</label>
@@ -1160,6 +1295,35 @@ export const Inspector: React.FC = () => {
                                 min={1.0}
                                 max={3.0}
                                 step={0.001}
+                            />
+                        </div>
+                        {/* Clocking (rotation around optical axis W) */}
+                        <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 8 }}>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Lens Clocking (W-axis rotation)</label>
+                            <ScrubInput
+                                label="Clock"
+                                suffix="°"
+                                value={localCylClocking}
+                                onChange={setLocalCylClocking}
+                                onCommit={(v: string) => {
+                                    const deg = parseFloat(v);
+                                    if (isNaN(deg)) return;
+                                    const rad = deg * Math.PI / 180;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            // Get current Euler, modify the X rotation (maps to W/optical axis after π/2 Y rotation)
+                                            const euler = new Euler().setFromQuaternion(c.rotation);
+                                            euler.x = rad;
+                                            c.rotation.setFromEuler(euler);
+                                            c.updateMatrices();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                title="Rotation of the cylindrical axis around the optical axis (W)"
                             />
                         </div>
                     </div>
@@ -1504,10 +1668,33 @@ export const Inspector: React.FC = () => {
                                 max={50}
                             />
                         </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput
+                                label="Barrel ∅"
+                                suffix="mm"
+                                value={localObjDiameter}
+                                onChange={setLocalObjDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Objective) {
+                                            c.diameter = val;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={50}
+                            />
+                        </div>
                         <div style={{ marginTop: 6, fontSize: '10px', color: '#555' }}>
                             f = {selectedComponent instanceof Objective ? Math.round(selectedComponent.focalLength * 100) / 100 : '—'} mm
                             {' · '}
-                            ∅ = {selectedComponent instanceof Objective ? Math.round(selectedComponent.apertureRadius * 2 * 100) / 100 : '—'} mm
+                            optical ∅ = {selectedComponent instanceof Objective ? Math.round(selectedComponent.apertureRadius * 2 * 100) / 100 : '—'} mm
                         </div>
                     </div>
                 )}
@@ -1663,6 +1850,63 @@ export const Inspector: React.FC = () => {
                                 min={0.5}
                                 max={24}
                                 title="Opening diameter of the iris aperture"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isSlitAperture && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Slit Aperture</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Slit Width"
+                                suffix="mm"
+                                value={localSlitWidth}
+                                onChange={setLocalSlitWidth}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof SlitAperture) {
+                                            c.slitWidth = Math.min(val, c.housingDiameter - 1);
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.3}
+                                min={0.1}
+                                max={24}
+                                title="Width of the slit opening"
+                            />
+                            <ScrubInput
+                                label="Rotation"
+                                suffix="°"
+                                value={localSlitRotation}
+                                onChange={setLocalSlitRotation}
+                                onCommit={(v: string) => {
+                                    const deg = parseFloat(v);
+                                    if (isNaN(deg)) return;
+                                    const rad = deg * Math.PI / 180;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof SlitAperture) {
+                                            // Rotate around the optical axis (local X)
+                                            const euler = new Euler().setFromQuaternion(c.rotation);
+                                            euler.x = rad;
+                                            c.rotation.setFromEuler(euler);
+                                            c.updateMatrices();
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                title="Rotation of the slit around the optical axis"
                             />
                         </div>
                     </div>
@@ -1999,6 +2243,12 @@ export const Inspector: React.FC = () => {
                         <CameraViewer
                             camera={selectedComponent as Camera}
                             isRendering={isRendering}
+                            onRefresh={() => {
+                                if (!rayConfig.solver2Enabled) {
+                                    setRayConfig({ ...rayConfig, solver2Enabled: true });
+                                }
+                                setSolver3Trigger(n => n + 1);
+                            }}
                         />
                     </div>
                 )}

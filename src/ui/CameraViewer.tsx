@@ -31,9 +31,10 @@ function wavelengthToRGB(wavelengthNm: number): [number, number, number] {
 interface CameraViewerProps {
     camera: Camera;
     isRendering: boolean;
+    onRefresh?: () => void;
 }
 
-export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering }) => {
+export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering, onRefresh }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [hasImage, setHasImage] = useState(false);
 
@@ -133,13 +134,35 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering 
                 <span style={{ fontSize: '11px', color: '#aaa' }}>
                     🎥 {camera.sensorResX}×{camera.sensorResY}
                 </span>
-                <span style={{
-                    fontSize: '10px',
-                    color: isStale ? '#ff8844' : '#44ff88',
-                    fontFamily: 'monospace'
-                }}>
-                    {isRendering ? '⏳' : isStale ? '⚠ Stale' : hasImage ? '✓' : ''}
-                </span>
+                {isRendering ? (
+                    <span style={{ fontSize: '10px', color: '#ff8844', fontFamily: 'monospace' }}>⏳</span>
+                ) : isStale && onRefresh ? (
+                    <button
+                        onClick={onRefresh}
+                        title="Re-render camera image"
+                        style={{
+                            background: 'none',
+                            border: '1px solid #664422',
+                            borderRadius: '3px',
+                            color: '#ff8844',
+                            cursor: 'pointer',
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            padding: '1px 6px',
+                            lineHeight: 1.4,
+                        }}
+                    >
+                        🔄 Refresh
+                    </button>
+                ) : (
+                    <span style={{
+                        fontSize: '10px',
+                        color: isStale ? '#ff8844' : '#44ff88',
+                        fontFamily: 'monospace'
+                    }}>
+                        {isStale ? '⚠ Stale' : hasImage ? '✓' : ''}
+                    </span>
+                )}
             </div>
 
             {/* Canvas */}

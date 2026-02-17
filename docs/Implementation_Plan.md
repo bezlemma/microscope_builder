@@ -20,10 +20,9 @@
 [DONE] Implement Solver 2
 [DONE] Tests for Solver 1 and Solver 2
 
-[] Implement Solver 3 using CPU
-[] Tests for Solver 3, final test using browser, confirm image generation.
-[]  Upgrade Solver 3 to WebGPU
+[DONE] Implement Solver 3 using CPU
+[DONE] Tests for Solver 3, final test using browser, confirm image generation.
 [] Create a brightfield transmission microscope, confirm sample looks correct in camera view
-[] Create epifluorescence microscope, confirm rays look correct, confirm sample looks correct in camera view
-[] Pause for user feedback
+[] Create epifluorescence microscope, confirm sample looks correct in camera view
+[]  Upgrade Solver 3 to WebGPU
 

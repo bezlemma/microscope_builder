@@ -112,7 +112,7 @@ const PulsatingRayLine: React.FC<{
             dashed={dashed}
             dashSize={dashed ? 3 : undefined}
             gapSize={dashed ? 2 : undefined}
-            depthTest={false}
+            depthTest={true}
             renderOrder={1}
             blending={NormalBlending}
         />
@@ -203,8 +203,8 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                             points={points}
                             color={color}
                             lineWidth={isMain ? 4 : 2}
-                            depthTest={false}
-                            renderOrder={0}
+                            depthTest={true}
+                            renderOrder={1}
                             transparent
                             opacity={rayOpacity}
                             dashed={!rgb.isVisible}
@@ -245,7 +245,7 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                             dashed={!wc.isVisible}
                             dashSize={!wc.isVisible ? 3 : undefined}
                             gapSize={!wc.isVisible ? 2 : undefined}
-                            depthTest={false}
+                            depthTest={true}
                             renderOrder={1}
                             toneMapped={false}
                             blending={NormalBlending}
@@ -266,8 +266,8 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                         dashed={!wc.isVisible}
                         dashSize={!wc.isVisible ? 3 : undefined}
                         gapSize={!wc.isVisible ? 2 : undefined}
-                        depthTest={false}
-                        renderOrder={0}
+                        depthTest={true}
+                        renderOrder={1}
                         toneMapped={false}
                         blending={NormalBlending}
                     />
