@@ -1,21 +1,17 @@
-import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
-import { intersectAABB } from '../math_solvers';
+import { Sample } from './Sample';
 import { Vector3, Box3 } from 'three';
 
 /**
  * SampleChamber — L/X Sample Holder.
  *
- * A hollow open-top cube with circular holes cut in all 4 side faces (±X, ±Y).
- * Objectives can snap into the side holes via Alt+drag.
- * The Mickey specimen sits inside at the center with ears facing +Z.
- *
- * Physics: transmits all rays unchanged (no refraction modeled).
+ * Extends Sample to inherit fluorescence spectral properties AND Mickey Mouse
+ * intersection geometry (SPHERES). The chamber walls are transparent with
+ * holes for objectives; rays interact only with the Mickey specimen inside.
  *
  * Snap ports: 4 positions at the center of each face, with rotation so that
  * an objective placed there faces inward toward the sample.
  */
-export class SampleChamber extends OpticalComponent {
+export class SampleChamber extends Sample {
     /** Cube side length (mm). */
     cubeSize: number;
     /** Wall thickness (mm). */
@@ -63,49 +59,9 @@ export class SampleChamber extends OpticalComponent {
         );
     }
 
-    intersect(rayLocal: Ray): HitRecord | null {
-        const half = this.cubeSize / 2;
-
-        const box = new Box3(
-            new Vector3(-half, -half, -half),
-            new Vector3(half, half, half)
-        );
-
-        const { hit, tMin, tMax } = intersectAABB(rayLocal.origin, rayLocal.direction, box);
-        if (!hit) return null;
-
-        const t = tMin > 0.001 ? tMin : tMax;
-        if (t < 0.001) return null;
-
-        const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-
-        const eps = 0.01;
-        let normal = new Vector3(0, 0, 1);
-        if (Math.abs(point.x - half) < eps) normal = new Vector3(1, 0, 0);
-        else if (Math.abs(point.x + half) < eps) normal = new Vector3(-1, 0, 0);
-        else if (Math.abs(point.y - half) < eps) normal = new Vector3(0, 1, 0);
-        else if (Math.abs(point.y + half) < eps) normal = new Vector3(0, -1, 0);
-        else if (Math.abs(point.z - half) < eps) normal = new Vector3(0, 0, 1);
-        else if (Math.abs(point.z + half) < eps) normal = new Vector3(0, 0, -1);
-
-        return {
-            t,
-            point,
-            normal,
-            localPoint: point.clone()
-        };
-    }
-
-    interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Fully transparent — pass ray straight through
-        return {
-            rays: [childRay(ray, {
-                origin: hit.point,
-                direction: ray.direction.clone(),
-                opticalPathLength: ray.opticalPathLength + hit.t
-            })]
-        };
-    }
+    // intersect() and computeChordLength() are inherited from Sample
+    // (Mickey SPHERE-based), so Solver3 backward rays interact with
+    // the specimen geometry, not the transparent chamber walls.
 
     getABCD(): [number, number, number, number] {
         return [1, 0, 0, 1];

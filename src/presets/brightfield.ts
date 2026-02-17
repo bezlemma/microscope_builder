@@ -53,7 +53,7 @@ export const createBrightfieldScene = (): OpticalComponent[] => {
     const sample = new Sample("Specimen");
     // No excitationNm/emissionNm set — this triggers brightfield mode in Solver 3
     sample.setPosition(0, 0, 0);
-    sample.setRotation(0, Math.PI / 2, 0);
+    sample.setRotation(0, 0, 0);  // default: holder faces +X (beam), ears +Z (up)
     scene.push(sample);
 
     // 4. Objective — 10×/0.25, infinity-corrected (Nikon 200mm standard)

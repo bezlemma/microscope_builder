@@ -21,11 +21,10 @@ export const createTransFluorescenceScene = (): OpticalComponent[] => {
 
     // 3. Sample — GFP fluorescence; at condenser focus = objective FFP
     const sample = new Sample("Specimen (GFP)");
-    sample.excitationNm = 488;
-    sample.emissionNm = 520;
-    sample.excitationBandwidth = 30;
+    sample.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
+    sample.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
     sample.setPosition(0, 0, 0);
-    sample.setRotation(0, Math.PI / 2, 0);
+    sample.setRotation(0, 0, 0);  // default: holder faces +X (beam), ears +Z (up)
     scene.push(sample);
 
     // 4. Objective — 10×/0.25, infinity-corrected (200mm standard)

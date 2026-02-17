@@ -22,7 +22,7 @@
 
 [DONE] Implement Solver 3 using CPU
 [DONE] Tests for Solver 3, final test using browser, confirm image generation.
-[] Create a brightfield transmission microscope, confirm sample looks correct in camera view
-[] Create epifluorescence microscope, confirm sample looks correct in camera view
+[DONE] Create a brightfield transmission microscope, confirm sample looks correct in camera view
+[DONE] Create epifluorescence microscope, confirm sample looks correct in camera view
 []  Upgrade Solver 3 to WebGPU
 

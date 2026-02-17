@@ -61,15 +61,16 @@ export class Solver3 {
         camera.updateMatrices();
         const camPos = camera.position.clone();
         const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
-        const camU = new Vector3(1, 0, 0).applyQuaternion(camera.rotation).normalize();
-        const camV = new Vector3(0, 1, 0).applyQuaternion(camera.rotation).normalize();
+        // Sensor rotated 90° CCW around W so world +Z (ears up) → image +V (up)
+        const camU = new Vector3(0, -1, 0).applyQuaternion(camera.rotation).normalize();
+        const camV = new Vector3(1, 0, 0).applyQuaternion(camera.rotation).normalize();
 
         // Find the sample in the scene (for fluorescence metadata)
         const sample = this.scene.find(c => c instanceof Sample) as Sample | undefined;
 
         // Emission wavelength for backward rays (fluorescence mode)
-        const emissionWavelength = sample ? sample.emissionNm * 1e-9 : 532e-9;
-        const excitationWavelength = sample ? sample.excitationNm * 1e-9 : 488e-9;
+        const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
+        const excitationWavelength = sample ? (sample.excitationSpectrum.getDominantPassWavelength() ?? 488) * 1e-9 : 488e-9;
 
         // Pixel acceptance cone: half-angle from sensor NA
         const sinThetaMax = Math.min(camera.sensorNA, 1.0);

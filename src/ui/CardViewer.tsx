@@ -97,6 +97,11 @@ function drawMultiBeam(
     // Detect broadband white light: 3+ distinct wavelength groups → render as white
     const isBroadband = wavelengthGroups.size >= 3;
 
+    // Normalize brightness: scale so the brightest beam's peak reaches full RGB
+    let maxPower = 0;
+    for (const p of profiles) maxPower = Math.max(maxPower, p.power);
+    const powerScale = maxPower > 0 ? 1.0 / maxPower : 1.0;
+
     for (let py = 0; py < height; py++) {
         for (let px = 0; px < width; px++) {
             const x = (px - width / 2) * scaleX;
@@ -114,7 +119,7 @@ function drawMultiBeam(
                     const dy = y - (p.centerV ?? 0);
                     const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
                     if (gauss < 0.001) continue;
-                    const intensity = Math.sqrt(gauss) * p.power;
+                    const intensity = Math.sqrt(gauss) * p.power * powerScale;
                     totalR += R * intensity;
                     totalG += G * intensity;
                     totalB += B * intensity;
@@ -132,7 +137,7 @@ function drawMultiBeam(
                         const dy = y - (p.centerV ?? 0);
                         const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
                         if (gauss < 0.0001) continue;
-                        const amp = Math.sqrt(Math.sqrt(gauss) * p.power);
+                        const amp = Math.sqrt(Math.sqrt(gauss) * p.power * powerScale);
 
                         // Phase: real OPL-based phase + spatial tilt phase
                         // tiltU/V create spatial fringes when beams arrive at different angles
@@ -556,31 +561,6 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
                         <div style={valueStyle}>—</div>
                     )}
 
-                    {/* Fluorescence emission reference */}
-                    {card.emissionPowerRef > 0 && (
-                        <div style={{
-                            marginTop: '6px',
-                            paddingTop: '4px',
-                            borderTop: '1px solid #282828'
-                        }}>
-                            <div style={labelStyle}>Fluorescence (estimated)</div>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                marginTop: '2px'
-                            }}>
-                                <span style={{ ...valueStyle, color: 'rgb(0,200,0)', fontSize: '10px' }}>
-                                    ● 520 nm
-                                </span>
-                                <span style={valueStyle}>{fmtPower(card.emissionPowerRef)}</span>
-                            </div>
-                            {totalPower > 0 && (
-                                <div style={{ ...labelStyle, marginTop: '2px', color: '#ff8844' }}>
-                                    Excitation {(totalPower / card.emissionPowerRef).toFixed(0)}× stronger
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     {/* Beam diameter and Jones vector */}
                     <div style={{

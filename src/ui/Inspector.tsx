@@ -23,6 +23,7 @@ import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { Sample } from '../physics/components/Sample';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
@@ -392,6 +393,12 @@ export const Inspector: React.FC = () => {
     const [localSpectralSteepness, setLocalSpectralSteepness] = useState<string>('15');
     const [localBands, setLocalBands] = useState<{ center: string; width: string }[]>([{ center: '525', width: '50' }]);
 
+    // Sample fluorescence spectral state — peaks list
+    const [localExBands, setLocalExBands] = useState<{ center: string; width: string }[]>([{ center: '488', width: '30' }]);
+    const [localEmBands, setLocalEmBands] = useState<{ center: string; width: string }[]>([{ center: '520', width: '40' }]);
+    const [localFluorEff, setLocalFluorEff] = useState<string>('0.0001');
+    const [localAbsorption, setLocalAbsorption] = useState<string>('3');
+
 
     useEffect(() => {
         if (selectedComponent) {
@@ -525,6 +532,12 @@ export const Inspector: React.FC = () => {
                         setLocalSpectralWidth(String(sp.bands[0].width));
                     }
                     setLocalBands(sp.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
+                }
+                if (selectedComponent instanceof Sample) {
+                    setLocalExBands(selectedComponent.excitationSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
+                    setLocalEmBands(selectedComponent.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
+                    setLocalFluorEff(selectedComponent.fluorescenceEfficiency.toPrecision(3));
+                    setLocalAbsorption(String(selectedComponent.absorption));
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -671,6 +684,7 @@ export const Inspector: React.FC = () => {
     const isCylindrical = selectedComponent instanceof CylindricalLens;
     const isCurvedMirror = selectedComponent instanceof CurvedMirror;
     const isPolygonScanner = selectedComponent instanceof PolygonScanner;
+    const isSample = selectedComponent instanceof Sample;
 
     const hasSpectralProfile = isFilter || isDichroic;
 
@@ -702,7 +716,6 @@ export const Inspector: React.FC = () => {
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Lamp) {
                 c.beamRadius = radius;
-                c.beamWaist = radius;
                 if (!isNaN(power) && power > 0) c.power = power;
                 c.version++;
                 return c;
@@ -2198,6 +2211,236 @@ export const Inspector: React.FC = () => {
                                     max={50}
                                     title="Edge steepness — smaller = sharper transition"
                                 />
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* ── Sample Fluorescence Spectral Profiles ── */}
+                {isSample && (() => {
+                    const comp = selectedComponent as Sample;
+                    const exCurve = comp.excitationSpectrum.getSampleCurve(180);
+                    const emCurve = comp.emissionSpectrum.getSampleCurve(180);
+                    const chartW = 250;
+                    const chartH = 100;
+
+                    const buildPath = (curve: { nm: number; t: number }[]) =>
+                        curve.map((pt, i) => {
+                            const x = (i / (curve.length - 1)) * chartW;
+                            const y = chartH - pt.t * chartH;
+                            return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+                        }).join(' ');
+
+                    const exPath = buildPath(exCurve);
+                    const emPath = buildPath(emCurve.map(pt => ({ nm: pt.nm, t: pt.t * comp.fluorescenceEfficiency })));
+
+                    const spectrumStops = [
+                        { nm: 350, color: '#1a0020' }, { nm: 380, color: '#2a0040' },
+                        { nm: 420, color: '#4400aa' }, { nm: 450, color: '#0000ff' },
+                        { nm: 480, color: '#0066ff' }, { nm: 500, color: '#00cccc' },
+                        { nm: 520, color: '#00ff00' }, { nm: 560, color: '#aaff00' },
+                        { nm: 580, color: '#ffff00' }, { nm: 600, color: '#ff8800' },
+                        { nm: 640, color: '#ff0000' }, { nm: 700, color: '#aa0000' },
+                        { nm: 780, color: '#400000' }, { nm: 850, color: '#1a0000' },
+                    ];
+
+                    /** Commit bands → SpectralProfile on the Sample component */
+                    const commitBands = (which: 'excitation' | 'emission', updatedBands: { center: string; width: string }[]) => {
+                        const bands = updatedBands.map(b => ({
+                            center: parseFloat(b.center) || 500,
+                            width: parseFloat(b.width) || 40,
+                        }));
+                        const preset = bands.length > 1 ? 'multiband' : 'bandpass';
+                        const newProfile = new SpectralProfile(preset as ProfilePreset, bands[0]?.center ?? 500, bands);
+                        const newComponents = components.map(c => {
+                            if (c.id === selection[0] && c instanceof Sample) {
+                                if (which === 'excitation') c.excitationSpectrum = newProfile;
+                                else c.emissionSpectrum = newProfile;
+                                c.version++;
+                            }
+                            return c;
+                        });
+                        setComponents([...newComponents]);
+                    };
+
+                    /** Render a peak list with add/delete */
+                    const renderPeakList = (which: 'excitation' | 'emission') => {
+                        const isEx = which === 'excitation';
+                        const bands = isEx ? localExBands : localEmBands;
+                        const setBands = isEx ? setLocalExBands : setLocalEmBands;
+                        const color = isEx ? '#66aaff' : '#66ff88';
+                        const dimColor = isEx ? '#3366aa' : '#338855';
+
+                        return (
+                            <div style={{ marginTop: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <label style={{ fontSize: '10px', color, fontWeight: 600 }}>
+                                        {isEx ? '⬇ Excitation' : '⬆ Emission'} ({bands.length})
+                                    </label>
+                                    <button
+                                        onClick={() => {
+                                            const newBands = [...bands, { center: isEx ? '488' : '520', width: isEx ? '30' : '40' }];
+                                            setBands(newBands);
+                                            commitBands(which, newBands);
+                                        }}
+                                        style={{
+                                            background: 'none', border: `1px solid ${dimColor}`, borderRadius: 3,
+                                            color, cursor: 'pointer', fontSize: '10px', padding: '1px 6px',
+                                            lineHeight: '14px',
+                                        }}
+                                        title={`Add ${which} peak`}
+                                    >+ Peak</button>
+                                </div>
+                                {bands.map((band, idx) => (
+                                    <div key={idx} style={{
+                                        display: 'flex', alignItems: 'center', gap: 4,
+                                        marginBottom: 4, padding: '3px 5px',
+                                        background: '#222', borderRadius: 4, border: `1px solid ${dimColor}33`,
+                                    }}>
+                                        <ScrubInput
+                                            label="λ"
+                                            suffix="nm"
+                                            value={band.center}
+                                            onChange={(v: string) => {
+                                                const updated = [...bands];
+                                                updated[idx] = { ...updated[idx], center: v };
+                                                setBands(updated);
+                                            }}
+                                            onCommit={(v: string) => {
+                                                const updated = [...bands];
+                                                updated[idx] = { ...updated[idx], center: v };
+                                                setBands(updated);
+                                                commitBands(which, updated);
+                                            }}
+                                            speed={2}
+                                            min={350}
+                                            max={850}
+                                        />
+                                        <ScrubInput
+                                            label="W"
+                                            suffix="nm"
+                                            value={band.width}
+                                            onChange={(v: string) => {
+                                                const updated = [...bands];
+                                                updated[idx] = { ...updated[idx], width: v };
+                                                setBands(updated);
+                                            }}
+                                            onCommit={(v: string) => {
+                                                const updated = [...bands];
+                                                updated[idx] = { ...updated[idx], width: v };
+                                                setBands(updated);
+                                                commitBands(which, updated);
+                                            }}
+                                            speed={1}
+                                            min={5}
+                                            max={300}
+                                        />
+                                        {bands.length > 1 && (
+                                            <button
+                                                onClick={() => {
+                                                    const updated = bands.filter((_, i) => i !== idx);
+                                                    setBands(updated);
+                                                    commitBands(which, updated);
+                                                }}
+                                                style={{
+                                                    background: 'none', border: 'none', color: '#f55',
+                                                    cursor: 'pointer', fontSize: '13px', padding: '0 2px',
+                                                    lineHeight: 1, flexShrink: 0,
+                                                }}
+                                                title="Remove peak"
+                                            >🗑</button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    };
+
+                    return (
+                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <label style={{ fontSize: '11px', color: '#999', display: 'block', marginBottom: 8, letterSpacing: '0.5px' }}>
+                                Fluorescence Spectra
+                            </label>
+
+                            {/* Dual-curve chart */}
+                            <div style={{ marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '1px solid #333' }}>
+                                <svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: 'block' }}>
+                                    <defs>
+                                        <linearGradient id="sampleSpecGrad" x1="0" x2="1" y1="0" y2="0">
+                                            {spectrumStops.map((s, i) => (
+                                                <stop key={i} offset={`${((s.nm - 350) / 500) * 100}%`} stopColor={s.color} />
+                                            ))}
+                                        </linearGradient>
+                                    </defs>
+                                    <rect x="0" y="0" width={chartW} height={chartH} fill="url(#sampleSpecGrad)" opacity="0.3" />
+                                    {[0.25, 0.5, 0.75].map(t => (
+                                        <line key={t} x1={0} x2={chartW} y1={chartH - t * chartH} y2={chartH - t * chartH} stroke="#555" strokeWidth="0.5" strokeDasharray="2,2" />
+                                    ))}
+                                    <path d={`${exPath} L${chartW},${chartH} L0,${chartH} Z`} fill="#4488ff" fillOpacity="0.15" />
+                                    <path d={exPath} fill="none" stroke="#66aaff" strokeWidth="2" />
+                                    <path d={`${emPath} L${chartW},${chartH} L0,${chartH} Z`} fill="#44ff88" fillOpacity="0.15" />
+                                    <path d={emPath} fill="none" stroke="#66ff88" strokeWidth="2" />
+                                    <text x={2} y={chartH - 2} fill="#888" fontSize="8">350</text>
+                                    <text x={chartW - 28} y={chartH - 2} fill="#888" fontSize="8">850nm</text>
+                                    <text x={2} y={10} fill="#888" fontSize="8">100%</text>
+                                    <rect x={chartW - 80} y={4} width={8} height={3} fill="#66aaff" />
+                                    <text x={chartW - 69} y={9} fill="#99bbff" fontSize="7">Excitation</text>
+                                    <rect x={chartW - 80} y={12} width={8} height={3} fill="#66ff88" />
+                                    <text x={chartW - 69} y={17} fill="#88ffaa" fontSize="7">Emission</text>
+                                </svg>
+                            </div>
+
+                            {/* Peak lists */}
+                            {renderPeakList('excitation')}
+                            {renderPeakList('emission')}
+
+                            {/* Fluorescence efficiency & absorption */}
+                            <div style={{ marginTop: 10, borderTop: '1px solid #333', paddingTop: 8 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <ScrubInput
+                                        label="Efficiency"
+                                        value={localFluorEff}
+                                        onChange={setLocalFluorEff}
+                                        onCommit={(v: string) => {
+                                            const val = parseFloat(v);
+                                            if (isNaN(val)) return;
+                                            const newComponents = components.map(c => {
+                                                if (c.id === selection[0] && c instanceof Sample) {
+                                                    c.fluorescenceEfficiency = val;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            });
+                                            setComponents([...newComponents]);
+                                        }}
+                                        speed={0.001}
+                                        min={0}
+                                        max={1}
+                                        title="Fluorescence quantum efficiency"
+                                    />
+                                    <ScrubInput
+                                        label="Absorption"
+                                        suffix="/mm"
+                                        value={localAbsorption}
+                                        onChange={setLocalAbsorption}
+                                        onCommit={(v: string) => {
+                                            const val = parseFloat(v);
+                                            if (isNaN(val)) return;
+                                            const newComponents = components.map(c => {
+                                                if (c.id === selection[0] && c instanceof Sample) {
+                                                    c.absorption = val;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            });
+                                            setComponents([...newComponents]);
+                                        }}
+                                        speed={0.1}
+                                        min={0}
+                                        max={50}
+                                        title="Beer-Lambert absorption coefficient (mm⁻¹)"
+                                    />
+                                </div>
                             </div>
                         </div>
                     );

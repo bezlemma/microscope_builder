@@ -66,7 +66,7 @@ function applyDefaultRotation(comp: OpticalComponent, type: string): void {
     } else if (type === 'laser' || type === 'lamp') {
         comp.setRotation(0, 0, 0);
     } else if (type === 'lChamber' || type === 'sample') {
-        comp.setRotation(0, 0, 0);  // open top faces +Z
+        comp.setRotation(0, 0, 0);  // geometry defined to stand upright at default
     } else {
         comp.setRotation(0, Math.PI / 2, 0);
     }

@@ -54,11 +54,10 @@ export const createEpiFluorescenceScene = (): OpticalComponent[] => {
     scene.push(objective);
 
     const sample = new Sample("Specimen (GFP)");
-    sample.excitationNm = 488;       // Blue laser excitation
-    sample.emissionNm = 520;         // GFP green emission
-    sample.excitationBandwidth = 30; // ±15 nm acceptance
+    sample.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
+    sample.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
     sample.setPosition(0, -160, 0);  // f = 5mm from objective at y=-155
-    sample.setRotation(Math.PI / 2, 0, 0);  // match objective orientation
+    sample.setRotation(0, 0, -Math.PI / 2);  // holder faces -Y (beam), ears +Z (up)
     scene.push(sample);
 
     const tubeLens = new SphericalLens(1 / 200, 25, 6, "Tube Lens", 1e9, -100, 1.5);

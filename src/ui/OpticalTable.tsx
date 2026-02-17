@@ -95,35 +95,36 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Frame + Glass rotated to stand upright (XZ plane) so beams pass through */}
-            <group rotation={[Math.PI / 2, 0, 0]}>
+            {/* Frame + Glass in YZ plane (standing upright at default rotation).
+                Frame normal = local X. Thickness along X. */}
+            <group>
                 {/* Detailed Hollow Frame */}
                 <group>
-                    {/* Top Bar */}
-                    <mesh position={[0, offset, 0]}>
-                        <boxGeometry args={[outerSize, frameWidth, thickness]} />
+                    {/* Top Bar (+Z) */}
+                    <mesh position={[0, 0, offset]}>
+                        <boxGeometry args={[thickness, outerSize, frameWidth]} />
                         <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                     </mesh>
-                    {/* Bottom Bar */}
+                    {/* Bottom Bar (-Z) */}
+                    <mesh position={[0, 0, -offset]}>
+                        <boxGeometry args={[thickness, outerSize, frameWidth]} />
+                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                    </mesh>
+                    {/* Left Bar (-Y) */}
                     <mesh position={[0, -offset, 0]}>
-                        <boxGeometry args={[outerSize, frameWidth, thickness]} />
+                        <boxGeometry args={[thickness, frameWidth, innerSize]} />
                         <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                     </mesh>
-                    {/* Left Bar */}
-                    <mesh position={[-offset, 0, 0]}>
-                        <boxGeometry args={[frameWidth, innerSize, thickness]} />
-                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                    </mesh>
-                    {/* Right Bar */}
-                    <mesh position={[offset, 0, 0]}>
-                        <boxGeometry args={[frameWidth, innerSize, thickness]} />
+                    {/* Right Bar (+Y) */}
+                    <mesh position={[0, offset, 0]}>
+                        <boxGeometry args={[thickness, frameWidth, innerSize]} />
                         <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
                     </mesh>
                 </group>
 
                 {/* Glass Pane */}
                 <mesh position={[0, 0, 0]}>
-                    <boxGeometry args={[innerSize, innerSize, 0.5]} />
+                    <boxGeometry args={[0.5, innerSize, innerSize]} />
                     <meshPhysicalMaterial
                         color="#ffffff"
                         transmission={0.99}
@@ -136,19 +137,20 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                 </mesh>
             </group>
 
-            {/* Mickey Mouse Geometry inside the window */}
+            {/* Mickey Mouse Geometry — ears in +Z (up), spread in ±Y */}
             <group position={[0, 0, 0]}>
                 {/* Head */}
                 <mesh position={[0, 0, 0]}>
                     <sphereGeometry args={[0.5, 32, 32]} />
                     <meshStandardMaterial color="#ffccaa" roughness={0.3} />
                 </mesh>
-                {/* Ears */}
-                <mesh position={[-0.5, 0, 0.5]}>
+                {/* Left Ear (-Y, +Z) */}
+                <mesh position={[0, -0.5, 0.5]}>
                     <sphereGeometry args={[0.25, 32, 32]} />
                     <meshStandardMaterial color="black" roughness={0.3} />
                 </mesh>
-                <mesh position={[0.5, 0, 0.5]}>
+                {/* Right Ear (+Y, +Z) */}
+                <mesh position={[0, 0.5, 0.5]}>
                     <sphereGeometry args={[0.25, 32, 32]} />
                     <meshStandardMaterial color="black" roughness={0.3} />
                 </mesh>
@@ -512,10 +514,16 @@ function wavelengthToHex(nm: number): string {
 export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
     const radius = component.diameter / 2;
     return (
-        <mesh rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-            <meshStandardMaterial color="#222" roughness={0.8} />
-        </mesh>
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                <meshStandardMaterial color="#222" roughness={0.8} />
+            </mesh>
+        </group>
     );
 };
 
@@ -608,20 +616,20 @@ export const SampleChamberVisualizer = ({ component }: { component: SampleChambe
                 color={bodyColor}
             />
 
-            {/* ── 3D Mickey specimen at center of cube, ears facing +Z ── */}
+            {/* ── 3D Mickey specimen at center — same size as Sample physics ── */}
             {/* Head sphere */}
             <mesh position={[0, 0, 0]}>
-                <sphereGeometry args={[2.5, 24, 24]} />
+                <sphereGeometry args={[0.5, 24, 24]} />
                 <meshStandardMaterial color="#ffccaa" roughness={0.6} />
             </mesh>
-            {/* Left ear (+Z direction, offset -X) */}
-            <mesh position={[-2.0, 0, 2.0]}>
-                <sphereGeometry args={[1.2, 16, 16]} />
+            {/* Left ear (-Y, +Z) */}
+            <mesh position={[0, -0.5, 0.5]}>
+                <sphereGeometry args={[0.25, 16, 16]} />
                 <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
             </mesh>
-            {/* Right ear (+Z direction, offset +X) */}
-            <mesh position={[2.0, 0, 2.0]}>
-                <sphereGeometry args={[1.2, 16, 16]} />
+            {/* Right ear (+Y, +Z) */}
+            <mesh position={[0, 0.5, 0.5]}>
+                <sphereGeometry args={[0.25, 16, 16]} />
                 <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
             </mesh>
         </group>
@@ -815,24 +823,28 @@ const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
     const converging = component.focalLength > 0;
     const color = converging ? '#64ffda' : '#ff6b9d';
 
-    const mainLine = useMemo(() =>
-        new Float32Array([0, -a, 0, 0, a, 0]), [a]);
-
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={[component.rotation.x, component.rotation.y, component.rotation.z, component.rotation.w]}
+            onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Main vertical line */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute attach="attributes-position" args={[mainLine, 3]} />
-                </bufferGeometry>
-                <lineBasicMaterial color={color} linewidth={2} />
-            </line>
-            {/* Invisible hitbox for selection */}
-            <mesh>
-                <planeGeometry args={[2, a * 2]} />
+            {/* Thin disc representing the ideal lens */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[a, a, 0.5, 32]} />
+                <meshStandardMaterial
+                    color={color}
+                    transparent
+                    opacity={0.4}
+                    roughness={0.2}
+                    metalness={0.1}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+            </mesh>
+            {/* Invisible thicker hitbox for easier selection */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[a, a, 4, 32]} />
                 <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
             </mesh>
         </group>
@@ -1085,7 +1097,7 @@ export const OpticalTable: React.FC = () => {
                 const props: string[] = [];
                 if ('wavelength' in c) props.push(`wl=${(c as any).wavelength}`);
                 if ('beamRadius' in c) props.push(`br=${(c as any).beamRadius}`);
-                if ('beamWaist' in c) props.push(`bw=${(c as any).beamWaist}`);
+                
                 if ('power' in c) props.push(`pw=${(c as any).power}`);
                 if ('ior' in c) props.push(`ior=${(c as any).ior}`);
                 if ('curvature' in c) props.push(`cv=${(c as any).curvature}`);
@@ -1110,6 +1122,17 @@ export const OpticalTable: React.FC = () => {
                 if ('inscribedRadius' in c) props.push(`ir=${(c as any).inscribedRadius}`);
                 if ('faceHeight' in c) props.push(`fh=${(c as any).faceHeight}`);
                 if ('scanAngle' in c) props.push(`sa=${(c as any).scanAngle}`);
+                // Sample fluorescence spectral profiles
+                if ('excitationSpectrum' in c) {
+                    const sp = (c as any).excitationSpectrum;
+                    props.push(`exsp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
+                }
+                if ('emissionSpectrum' in c) {
+                    const sp = (c as any).emissionSpectrum;
+                    props.push(`emsp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
+                }
+                if ('fluorescenceEfficiency' in c) props.push(`fe=${(c as any).fluorescenceEfficiency}`);
+                if ('absorption' in c) props.push(`abs=${(c as any).absorption}`);
 
                 return props.length > 0 ? `${base}:${props.join(',')}` : base;
             })
@@ -1768,6 +1791,7 @@ export const OpticalTable: React.FC = () => {
 
                     else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                     else if (c instanceof Card) visual = <CardVisualizer component={c} />;
+                    else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;
                     else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                     else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
                     else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
@@ -1779,7 +1803,6 @@ export const OpticalTable: React.FC = () => {
                     else if (c instanceof Filter) visual = <FilterVisualizer component={c} />;
                     else if (c instanceof DichroicMirror) visual = <DichroicVisualizer component={c} />;
                     else if (c instanceof PolygonScanner) visual = <PolygonScannerVisualizer component={c} />;
-                    else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;
 
                     if (visual) {
                         return (

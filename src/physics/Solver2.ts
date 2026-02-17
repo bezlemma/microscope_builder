@@ -170,7 +170,7 @@ export class Solver2 {
             // Find source laser by sourceId
             const sourceId = path[0].sourceId;
             const sourceLaser = laserComponents.find(l => l.id === sourceId);
-            const waist = sourceLaser ? sourceLaser.beamWaist : 2; // mm default
+            const waist = sourceLaser ? sourceLaser.beamRadius : 2; // mm default
 
             // Initialize q-parameter (symmetric beam: qx = qy)
             let qx = initialQ(waist, wavelengthMm);

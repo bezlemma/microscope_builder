@@ -82,6 +82,7 @@ function getTypeName(comp: OpticalComponent): string | null {
     if (comp instanceof Blocker) return 'Blocker';
     if (comp instanceof BeamSplitter) return 'BeamSplitter';
     if (comp instanceof DichroicMirror) return 'DichroicMirror';
+    if (comp instanceof SampleChamber) return 'SampleChamber';
     if (comp instanceof Filter) return 'Filter';
     if (comp instanceof Camera) return 'Camera';
     if (comp instanceof Sample) return 'Sample';
@@ -92,7 +93,6 @@ function getTypeName(comp: OpticalComponent): string | null {
     if (comp instanceof CylindricalLens) return 'CylindricalLens';
     if (comp instanceof IdealLens) return 'IdealLens';
     if (comp instanceof Card) return 'Card';
-    if (comp instanceof SampleChamber) return 'SampleChamber';
     return null;
 }
 
@@ -100,11 +100,9 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     if (comp instanceof Laser) {
         lines.push(`wavelength = ${fmt(comp.wavelength)}`);
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
-        lines.push(`beamWaist = ${fmt(comp.beamWaist)}`);
         lines.push(`power = ${fmt(comp.power)}`);
     } else if (comp instanceof Lamp) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
-        lines.push(`beamWaist = ${fmt(comp.beamWaist)}`);
         lines.push(`power = ${fmt(comp.power)}`);
         lines.push(`spectralWavelengths = ${comp.spectralWavelengths.map(w => fmt(w)).join(', ')}`);
     } else if (comp instanceof SphericalLens) {
@@ -141,10 +139,17 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`height = ${fmt(comp.height)}`);
         lines.push(`sensorNA = ${fmt(comp.sensorNA)}`);
         lines.push(`samplesPerPixel = ${fmt(comp.samplesPerPixel)}`);
+    } else if (comp instanceof SampleChamber) {
+        lines.push(`cubeSize = ${fmt(comp.cubeSize)}`);
+        lines.push(`wallThickness = ${fmt(comp.wallThickness)}`);
+        lines.push(`boreDiameter = ${fmt(comp.boreDiameter)}`);
+        writeSpectralProfile(comp.excitationSpectrum, lines, 'excitation');
+        writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
+        lines.push(`fluorescenceEfficiency = ${fmt(comp.fluorescenceEfficiency)}`);
+        lines.push(`absorption = ${fmt(comp.absorption)}`);
     } else if (comp instanceof Sample) {
-        lines.push(`excitationNm = ${fmt(comp.excitationNm)}`);
-        lines.push(`emissionNm = ${fmt(comp.emissionNm)}`);
-        lines.push(`excitationBandwidth = ${fmt(comp.excitationBandwidth)}`);
+        writeSpectralProfile(comp.excitationSpectrum, lines, 'excitation');
+        writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
         lines.push(`fluorescenceEfficiency = ${fmt(comp.fluorescenceEfficiency)}`);
         lines.push(`absorption = ${fmt(comp.absorption)}`);
     } else if (comp instanceof Objective) {
@@ -179,10 +184,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof Card) {
         lines.push(`width = ${fmt(comp.width)}`);
         lines.push(`height = ${fmt(comp.height)}`);
-    } else if (comp instanceof SampleChamber) {
-        lines.push(`cubeSize = ${fmt(comp.cubeSize)}`);
-        lines.push(`wallThickness = ${fmt(comp.wallThickness)}`);
-        lines.push(`boreDiameter = ${fmt(comp.boreDiameter)}`);
+
     } else if (comp instanceof PolygonScanner) {
         lines.push(`numFaces = ${fmt(comp.numFaces)}`);
         lines.push(`inscribedRadius = ${fmt(comp.inscribedRadius)}`);
@@ -191,12 +193,12 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     }
 }
 
-function writeSpectralProfile(sp: SpectralProfile, lines: string[]) {
-    lines.push(`spectral.preset = ${sp.preset}`);
-    lines.push(`spectral.cutoffNm = ${fmt(sp.cutoffNm)}`);
-    lines.push(`spectral.edgeSteepness = ${fmt(sp.edgeSteepness)}`);
+function writeSpectralProfile(sp: SpectralProfile, lines: string[], prefix: string = 'spectral') {
+    lines.push(`${prefix}.preset = ${sp.preset}`);
+    lines.push(`${prefix}.cutoffNm = ${fmt(sp.cutoffNm)}`);
+    lines.push(`${prefix}.edgeSteepness = ${fmt(sp.edgeSteepness)}`);
     if (sp.bands.length > 0) {
-        lines.push(`spectral.bands = ${sp.bands.map(b => `${fmt(b.center)}:${fmt(b.width)}`).join('; ')}`);
+        lines.push(`${prefix}.bands = ${sp.bands.map(b => `${fmt(b.center)}:${fmt(b.width)}`).join('; ')}`);
     }
 }
 
@@ -296,14 +298,14 @@ function str(props: PropMap, key: string, fallback: string): string {
     return props[key] ?? fallback;
 }
 
-function parseSpectralProfile(props: PropMap): SpectralProfile {
-    const preset = str(props, 'spectral.preset', 'longpass') as ProfilePreset;
-    const cutoffNm = num(props, 'spectral.cutoffNm', 500);
-    const edgeSteepness = num(props, 'spectral.edgeSteepness', 15);
+function parseSpectralProfile(props: PropMap, prefix: string = 'spectral'): SpectralProfile {
+    const preset = str(props, `${prefix}.preset`, 'longpass') as ProfilePreset;
+    const cutoffNm = num(props, `${prefix}.cutoffNm`, 500);
+    const edgeSteepness = num(props, `${prefix}.edgeSteepness`, 15);
     const bands: ProfileBand[] = [];
 
-    if (props['spectral.bands']) {
-        for (const part of props['spectral.bands'].split(';')) {
+    if (props[`${prefix}.bands`]) {
+        for (const part of props[`${prefix}.bands`].split(';')) {
             const [center, width] = part.trim().split(':').map(s => parseFloat(s.trim()));
             if (!isNaN(center) && !isNaN(width)) {
                 bands.push({ center, width });
@@ -319,15 +321,13 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
         case 'Laser': {
             const c = new Laser(str(props, 'name', 'Laser'));
             c.wavelength = num(props, 'wavelength', 532);
-            c.beamRadius = num(props, 'beamRadius', 2);
-            c.beamWaist = num(props, 'beamWaist', 2);
+            c.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 2));  // backward compat
             c.power = num(props, 'power', 1);
             return c;
         }
         case 'Lamp': {
             const c = new Lamp(str(props, 'name', 'Lamp'));
-            c.beamRadius = num(props, 'beamRadius', 3);
-            c.beamWaist = num(props, 'beamWaist', 3);
+            c.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 3));  // backward compat
             c.power = num(props, 'power', 1);
             if (props['spectralWavelengths']) {
                 c.spectralWavelengths = props['spectralWavelengths'].split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
@@ -410,9 +410,8 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
         }
         case 'Sample': {
             const c = new Sample(str(props, 'name', 'Sample'));
-            c.excitationNm = num(props, 'excitationNm', 488);
-            c.emissionNm = num(props, 'emissionNm', 520);
-            c.excitationBandwidth = num(props, 'excitationBandwidth', 30);
+            c.excitationSpectrum = parseSpectralProfile(props, 'excitation');
+            c.emissionSpectrum = parseSpectralProfile(props, 'emission');
             c.fluorescenceEfficiency = num(props, 'fluorescenceEfficiency', 1e-4);
             c.absorption = num(props, 'absorption', 3.0);
             return c;
@@ -487,12 +486,17 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             );
         }
         case 'SampleChamber': {
-            return new SampleChamber(
+            const sc = new SampleChamber(
                 num(props, 'cubeSize', 40),
                 num(props, 'wallThickness', 3),
                 num(props, 'boreDiameter', 21),
                 str(props, 'name', 'L/X Sample Holder')
             );
+            sc.excitationSpectrum = parseSpectralProfile(props, 'excitation') ?? sc.excitationSpectrum;
+            sc.emissionSpectrum = parseSpectralProfile(props, 'emission') ?? sc.emissionSpectrum;
+            sc.fluorescenceEfficiency = num(props, 'fluorescenceEfficiency', 1e-4);
+            sc.absorption = num(props, 'absorption', 3.0);
+            return sc;
         }
         default:
             return null;

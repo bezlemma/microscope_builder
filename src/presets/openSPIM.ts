@@ -63,8 +63,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     // 1. Laser at H4 — fires -X (left)
     const laser = new Laser("488nm Laser");
     laser.wavelength = 488;
-    laser.beamRadius = 1;
-    laser.beamWaist = 1;
+    laser.beamRadius = 0.5;
     laser.power = 0.05;
     laser.setPosition(hole(C.H, 4).x, hole(C.H, 4).y, 0);
     laser.setRotation(0, 0, Math.PI);  // fires -X

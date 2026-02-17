@@ -58,8 +58,7 @@ function computeAdditiveOpacity(wavelengthsNm: number[]): number {
  * Incoherent — no interference between wavelengths.
  */
 export class Lamp extends OpticalComponent {
-    beamRadius: number = 3;       // mm (half-width of collimated beam)
-    beamWaist: number = 3;        // mm (1/e² waist radius for Solver 2)
+    beamRadius: number = 3;       // mm (1/e² beam half-width)
     power: number = 1.0;          // Watts (total optical output power)
 
     // Discrete wavelengths to emit, in nm. 
