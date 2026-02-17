@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry } from 'three';
 import { useAtom } from 'jotai';
-import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom } from '../state/store';
+import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
+import { setProperty, getProperty } from '../physics/PropertyAnimator';
+import { useFrame } from '@react-three/fiber';
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
@@ -1084,6 +1086,36 @@ export const OpticalTable: React.FC = () => {
     const [solver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
 
+    // ─── Animation System ───
+    const [animator] = useAtom(animatorAtom);
+    const [animPlaying] = useAtom(animationPlayingAtom);
+    const [animSpeed] = useAtom(animationSpeedAtom);
+    const animStateRef = useRef({ playing: false, speed: 1.0 });
+    animStateRef.current.playing = animPlaying;
+    animStateRef.current.speed = animSpeed;
+    const componentsRef = useRef(components);
+    componentsRef.current = components;
+
+    // Animation counter — increments force React re-render for fingerprint
+    const [animTick, setAnimTick] = useState(0);
+    const setAnimTickRef = useRef(setAnimTick);
+    setAnimTickRef.current = setAnimTick;
+
+    // Guard ref: when true, scan accumulation is running — skip useFrame and Solver 1
+    const scanAccumActiveRef = useRef(false);
+
+    useFrame((_, delta) => {
+        if (scanAccumActiveRef.current) return; // Skip during scan accumulation
+        const { playing, speed } = animStateRef.current;
+        if (!playing) return;
+        animator.playing = true;
+        const mutated = animator.tick(delta * 1000 * speed, componentsRef.current);
+        if (mutated) {
+            // Force fingerprint recalculation by triggering a React re-render
+            setAnimTickRef.current(t => t + 1);
+        }
+    });
+
     // ─── Optics fingerprint: changes only when non-Card components change ───
     // Cards are passive detectors and don't affect the optical path, so moving
     // them should NOT trigger the expensive Solver1/Solver2 re-computation.
@@ -1137,7 +1169,7 @@ export const OpticalTable: React.FC = () => {
                 return props.length > 0 ? `${base}:${props.join(',')}` : base;
             })
             .join('|');
-    }, [components]);
+    }, [components, animTick]);
 
     // Refs to hold expensive solver results for card sampling effect
     const solverPathsRef = useRef<Ray[][]>([]);
@@ -1146,6 +1178,7 @@ export const OpticalTable: React.FC = () => {
 
     useEffect(() => {
         if (!components) return;
+        if (scanAccumActiveRef.current) return; // Skip during scan accumulation
 
 
         const cardsToReset = components.filter(c => c instanceof Card) as Card[];
@@ -1584,8 +1617,37 @@ export const OpticalTable: React.FC = () => {
                 comp.markSolver3Stale();
             }
         }
-        setSolver3Paths([]);
-        solver3PathsRef.current = [];
+        // Check if scan results should be invalidated:
+        // Only clear if a NON-ANIMATED component changed since scan completed
+        const animatedIds = new Set(animator.channels.map(ch => ch.targetId));
+        let shouldClearScan = false;
+        for (const comp of components) {
+            if (comp instanceof Camera && (comp as Camera).scanFrames) {
+                const cam = comp as Camera;
+                const snapshot = cam.scanVersionSnapshot;
+                if (snapshot) {
+                    // Check if any non-animated component version changed
+                    for (const c of components) {
+                        if (animatedIds.has(c.id)) continue; // skip animated components
+                        const savedVersion = snapshot.get(c.id);
+                        if (savedVersion === undefined || c.version !== savedVersion) {
+                            shouldClearScan = true;
+                            break;
+                        }
+                    }
+                    if (shouldClearScan) {
+                        cam.clearScanFrames();
+                        cam.solver3Image = null;
+                        cam.forwardImage = null;
+                        cam.solver3Paths = null;
+                    }
+                }
+            }
+        }
+        if (shouldClearScan || !components.some(c => c instanceof Camera && (c as Camera).scanFrames)) {
+            setSolver3Paths([]);
+            solver3PathsRef.current = [];
+        }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, rayConfig]);
@@ -1622,6 +1684,222 @@ export const OpticalTable: React.FC = () => {
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [solver3Trigger]);
+
+    // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
+    const [scanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
+    const [, setAnimPlaying] = useAtom(animationPlayingAtom);
+
+    useEffect(() => {
+        if (scanAccumConfig.trigger === 0) return; // Skip initial mount
+        if (!components) return;
+
+        const camera = components.find(c => c instanceof Camera) as Camera | undefined;
+        if (!camera) return;
+        if (animator.channels.length === 0) return;
+
+        // Gather all animation channels and their targets
+        const byId = new Map<string, OpticalComponent>();
+        for (const c of components) byId.set(c.id, c);
+
+        const activeChannels = animator.channels.filter(ch => {
+            return byId.has(ch.targetId);
+        });
+        if (activeChannels.length === 0) return;
+
+        const steps = scanAccumConfig.steps;
+        const pixelCount = camera.sensorResX * camera.sensorResY;
+
+        // Save the original property values for all animated channels
+        const savedValues = activeChannels.map(ch => ({
+            channel: ch,
+            target: byId.get(ch.targetId)!,
+            originalValue: getProperty(byId.get(ch.targetId)!, ch.property),
+        }));
+
+        console.log(`[ScanAccum] Starting ${steps}-step sweep (${activeChannels.length} channels, from→to linear)`);
+
+        // Lock out the animation loop and Solver 1 re-trace
+        scanAccumActiveRef.current = true;
+        setAnimPlaying(false);
+        animator.playing = false;
+        setSolver3Rendering(true);
+        setScanAccumProgress(0);
+
+        const savedPlaying = animStateRef.current.playing;
+
+        // Clear previous scan frames and prepare fresh storage
+        camera.clearScanFrames();
+        const frameEmissions: Float32Array[] = [];
+        const frameExcitations: Float32Array[] = [];
+        const accumulatedEmission = new Float32Array(pixelCount);
+        const accumulatedExcitation = new Float32Array(pixelCount);
+        let lastPaths: Ray[][] = [];
+
+        /** Restore all animated properties to their original values. */
+        const restoreProperties = () => {
+            for (const sv of savedValues) {
+                setProperty(sv.target, sv.channel.property, sv.originalValue);
+            }
+        };
+
+        const runStep = (step: number) => {
+            if (step >= steps) {
+                // All steps done — normalize the accumulated average
+                const N = steps;
+                for (let i = 0; i < pixelCount; i++) {
+                    accumulatedEmission[i] /= N;
+                    accumulatedExcitation[i] /= N;
+                }
+
+                let totalEmission = 0, totalExcitation = 0;
+                for (let i = 0; i < pixelCount; i++) totalEmission += accumulatedEmission[i];
+                for (let i = 0; i < pixelCount; i++) totalExcitation += accumulatedExcitation[i];
+                console.log(`[ScanAccum] Done. ${steps} frames stored. Total emission: ${totalEmission.toFixed(6)}, excitation: ${totalExcitation.toFixed(6)}`);
+
+                // Store per-frame images for scrubbing
+                camera.scanFrames = frameEmissions;
+                camera.scanExFrames = frameExcitations;
+                camera.scanFrameCount = steps;
+
+                // Store averaged image as the default display
+                camera.solver3Image = accumulatedEmission;
+                camera.forwardImage = accumulatedExcitation;
+                camera.solver3Paths = lastPaths;
+                camera.solver3Stale = false;
+
+                // Snapshot component versions for smart invalidation
+                camera.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+
+                // Restore properties to original state (so rays stay put)
+                restoreProperties();
+
+                setSolver3Paths(lastPaths);
+                solver3PathsRef.current = lastPaths;
+                setSolver3Rendering(false);
+                setScanAccumProgress(1);
+
+                // Unlock animation loop and Solver 1
+                scanAccumActiveRef.current = false;
+                if (savedPlaying) {
+                    setAnimPlaying(true);
+                }
+                return;
+            }
+
+            // Linear sweep: interpolate each channel from→to
+            const fraction = steps > 1 ? step / (steps - 1) : 0.5;
+            for (const sv of savedValues) {
+                const value = sv.channel.from + (sv.channel.to - sv.channel.from) * fraction;
+                setProperty(sv.target, sv.channel.property, value);
+            }
+
+            try {
+                // ── Solver 1: Forward trace ──
+                const solver1 = new Solver1(components);
+                const laserComps = components.filter(c => c instanceof Laser) as Laser[];
+                const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
+                const sourceRays: Ray[] = [];
+
+                for (const laserComp of laserComps) {
+                    let origin = laserComp.position.clone();
+                    const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
+                    origin.add(direction.clone().multiplyScalar(5));
+                    const laserWavelength = laserComp.wavelength * 1e-9;
+
+                    sourceRays.push({
+                        origin: origin.clone(),
+                        direction: direction.clone(),
+                        wavelength: laserWavelength,
+                        intensity: laserComp.power,
+                        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                        opticalPathLength: 0,
+                        footprintRadius: 0,
+                        coherenceMode: Coherence.Coherent,
+                        isMainRay: true,
+                        sourceId: laserComp.id
+                    });
+                }
+
+                for (const lampComp of lampComps) {
+                    let origin = lampComp.position.clone();
+                    const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
+                    origin.add(direction.clone().multiplyScalar(5));
+                    for (const wavelengthNm of lampComp.spectralWavelengths) {
+                        sourceRays.push({
+                            origin: origin.clone(),
+                            direction: direction.clone(),
+                            wavelength: wavelengthNm * 1e-9,
+                            intensity: lampComp.additiveOpacity,
+                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                            opticalPathLength: 0,
+                            footprintRadius: 0,
+                            coherenceMode: Coherence.Incoherent,
+                            isMainRay: true,
+                            sourceId: `${lampComp.id}_${wavelengthNm}nm`
+                        });
+                    }
+                }
+
+                const paths = solver1.trace(sourceRays);
+
+                // ── Solver 2: Gaussian beam propagation ──
+                let beamSegs: GaussianBeamSegment[][] = [];
+                try {
+                    const solver2 = new Solver2();
+                    beamSegs = solver2.propagate(paths, components);
+                } catch (e) {
+                    console.warn('Scan accum Solver 2 error:', e);
+                }
+
+                // ── Solver 3: Backward render ──
+                const solver3 = new Solver3(components, beamSegs);
+                const result = solver3.render(camera, 8);
+
+                if (step === 0 || step === steps - 1) {
+                    let stepEmission = 0;
+                    for (let i = 0; i < result.emissionImage.length; i++) stepEmission += result.emissionImage[i];
+                    console.log(`[ScanAccum] Step ${step}/${steps}: frac=${fraction.toFixed(3)}, beamSegs=${beamSegs.length}, paths=${result.paths.length}, emission=${stepEmission.toFixed(6)}`);
+                }
+
+                // Store this frame's individual images
+                const frameEm = new Float32Array(pixelCount);
+                const frameEx = new Float32Array(pixelCount);
+                frameEm.set(result.emissionImage.subarray(0, pixelCount));
+                if (result.excitationImage.length >= pixelCount) {
+                    frameEx.set(result.excitationImage.subarray(0, pixelCount));
+                }
+                frameEmissions.push(frameEm);
+                frameExcitations.push(frameEx);
+
+                // Accumulate for the averaged display
+                for (let i = 0; i < pixelCount; i++) {
+                    accumulatedEmission[i] += result.emissionImage[i];
+                }
+                for (let i = 0; i < result.excitationImage.length && i < pixelCount; i++) {
+                    accumulatedExcitation[i] += result.excitationImage[i];
+                }
+                lastPaths = result.paths;
+            } catch (e) {
+                console.warn(`Scan accum step ${step} error:`, e);
+                frameEmissions.push(new Float32Array(pixelCount));
+                frameExcitations.push(new Float32Array(pixelCount));
+            }
+
+            // Restore properties before yielding — keeps rays stable on the optical table
+            restoreProperties();
+
+            setScanAccumProgress((step + 1) / steps);
+
+            // Schedule next step (yield to UI for progress update)
+            setTimeout(() => runStep(step + 1), 0);
+        };
+
+        // Start step 0 after a brief delay (let UI update)
+        setTimeout(() => runStep(0), 50);
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scanAccumConfig.trigger]);
 
     // ─── Effect 2: Cheap card beam profile sampling ───
     // Runs whenever ANY component changes (including card drags).

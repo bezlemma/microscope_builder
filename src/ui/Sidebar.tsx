@@ -258,6 +258,8 @@ export const Sidebar: React.FC = () => {
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
 
+
+
     // Mobile collapse state
     const [mobileOpen, setMobileOpen] = useState(false);
     const isMobile = useIsMobile();
@@ -523,6 +525,7 @@ export const Sidebar: React.FC = () => {
                         </button>
                     </div>
                 </div>
+
 
                 {/* Presets Section — categorized dropdowns */}
                 <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>

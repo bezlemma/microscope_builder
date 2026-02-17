@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
 import { serializeScene, deserializeScene } from './ubzSerializer';
+import { PropertyAnimator } from '../physics/PropertyAnimator';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/infinitySystem';
@@ -141,3 +142,20 @@ export const undoAtom = atom(
         set(selectionAtom, []);
     }
 );
+
+// ════════════════════════════════════════════════════════════
+//  11. ANIMATION SYSTEM — PropertyAnimator
+//  Animates numeric properties on components at 60fps.
+//  Per PhysicsPlan §4: "Time Is a Scene Graph Mutation."
+// ════════════════════════════════════════════════════════════
+export const animatorAtom = atom<PropertyAnimator>(new PropertyAnimator());
+export const animationPlayingAtom = atom<boolean>(false);
+export const animationSpeedAtom = atom<number>(1.0);
+
+// ════════════════════════════════════════════════════════════
+//  12. SCAN ACCUMULATION — Solver 3 multi-step batch render
+//  Steps through N scan positions, runs Solver 1→2→3 at each,
+//  and accumulates the resulting images on the Camera.
+// ════════════════════════════════════════════════════════════
+export const scanAccumTriggerAtom = atom<{ steps: number; trigger: number }>({ steps: 16, trigger: 0 });
+export const scanAccumProgressAtom = atom<number>(0);  // 0..1 progress

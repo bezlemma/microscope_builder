@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { CardViewer } from './CardViewer';
@@ -21,6 +21,8 @@ export const ViewerPanels: React.FC = () => {
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
+    const [animator] = useAtom(animatorAtom);
+    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
 
     // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
@@ -101,7 +103,12 @@ export const ViewerPanels: React.FC = () => {
                                 if (!rayConfig.solver2Enabled) {
                                     setRayConfig({ ...rayConfig, solver2Enabled: true });
                                 }
-                                setSolver3Trigger(n => n + 1);
+                                if (animator.channels.length > 0) {
+                                    // Animation channels present — auto scan accumulation
+                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
+                                } else {
+                                    setSolver3Trigger(n => n + 1);
+                                }
                             }}
                         />
                     )}

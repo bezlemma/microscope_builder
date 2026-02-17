@@ -16,6 +16,13 @@ export class Camera extends OpticalComponent {
     solver3Paths: Ray[][] | null = null;
     solver3Stale: boolean = true;
 
+    // Scan accumulation results — per-frame images for scrubbing
+    scanFrames: Float32Array[] | null = null;       // Each frame's emission image
+    scanExFrames: Float32Array[] | null = null;      // Each frame's excitation image
+    scanFrameCount: number = 0;
+    /** Component version snapshot at scan completion (used to detect non-animation edits) */
+    scanVersionSnapshot: Map<string, number> | null = null;
+
     constructor(width: number = 13, height: number = 13, name: string = "Camera Sensor") {
         super(name);
         this.width = width;
@@ -26,12 +33,24 @@ export class Camera extends OpticalComponent {
         this.samplesPerPixel = 1;   // Single ray per pixel
     }
 
-    /** Clear Solver 3 results (called when scene changes) */
+    /** Clear single-shot Solver 3 results (called when scene changes).
+     *  Scan frame data is preserved — only cleared when a new scan starts. */
     markSolver3Stale(): void {
         this.solver3Stale = true;
-        this.solver3Image = null;
-        this.forwardImage = null;
-        this.solver3Paths = null;
+        // If we have scan frames, keep the averaged image visible
+        if (!this.scanFrames) {
+            this.solver3Image = null;
+            this.forwardImage = null;
+            this.solver3Paths = null;
+        }
+    }
+
+    /** Clear scan frame data (called at the start of a new scan). */
+    clearScanFrames(): void {
+        this.scanFrames = null;
+        this.scanExFrames = null;
+        this.scanFrameCount = 0;
+        this.scanVersionSnapshot = null;
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, pushUndoAtom } from '../state/store';
+import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, pushUndoAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
+import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
@@ -112,16 +113,21 @@ const CardViewerWithPin: React.FC<{
     );
 };
 
-// ─── Solver Panel (mobile-collapsible) ────────────────────────────────
 const SolverPanel: React.FC<{
     rayConfig: any;
     setRayConfig: (v: any) => void;
     isRendering: boolean;
     setSolver3Trigger: (fn: (prev: number) => number) => void;
-}> = ({ rayConfig, setRayConfig, isRendering, setSolver3Trigger }) => {
+    animator: PropertyAnimator;
+    animPlaying: boolean;
+    setAnimPlaying: (v: boolean) => void;
+}> = ({ rayConfig, setRayConfig, isRendering, setSolver3Trigger, animator, animPlaying, setAnimPlaying }) => {
     const isMobile = useIsMobile();
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
+    const hasChannels = animator.channels.length > 0;
+    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    const [scanProgress] = useAtom(scanAccumProgressAtom);
 
     return (
         <>
@@ -186,114 +192,168 @@ const SolverPanel: React.FC<{
                 transform: isVisible ? 'translateX(0)' : 'translateX(calc(100% + 40px))',
                 transition: 'transform 0.25s ease',
             }}>
-                {isMobile && (
-                    <button
-                        onClick={() => setMobileOpen(false)}
-                        style={{
-                            position: 'absolute',
-                            top: 8,
-                            right: 10,
-                            background: 'none',
-                            border: 'none',
-                            color: '#888',
-                            fontSize: '18px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        ✕
-                    </button>
-                )}
-                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Physics Solvers</div>
-
-                {/* Ray Tracer (always on) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
-                    <span>Ray Tracer</span>
-                </div>
-                <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                    <input
-                        type="range"
-                        min="4"
-                        max="128"
-                        step="1"
-                        value={Math.max(4, rayConfig.rayCount)}
-                        onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
-                        style={{ width: '80px' }}
-                    />
-                    <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
-                </div>
-
-                {/* E&M (toggleable) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}>
-                    <div style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
-                        transition: 'background-color 0.2s'
-                    }}></div>
-                    <input
-                        type="checkbox"
-                        checked={rayConfig.solver2Enabled}
-                        onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <span
-                        style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
-                        onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                    >E&M</span>
-
-                    {/* E-field visualization toggle */}
-                    {rayConfig.solver2Enabled && (
+                    {isMobile && (
                         <button
-                            onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
-                            title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
+                            onClick={() => setMobileOpen(false)}
                             style={{
-                                background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
-                                border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
-                                borderRadius: '3px',
-                                color: rayConfig.emFieldVisible ? '#4af' : '#666',
+                                position: 'absolute',
+                                top: 8,
+                                right: 10,
+                                background: 'none',
+                                border: 'none',
+                                color: '#888',
+                                fontSize: '18px',
                                 cursor: 'pointer',
-                                fontSize: '13px',
-                                padding: '1px 4px',
-                                lineHeight: 1,
-                                marginLeft: '4px',
-                                transition: 'all 0.2s',
                             }}
                         >
-                            👁
+                            ✕
+                        </button>
+                    )}
+                {/* Header row — title + play/pause inline */}
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 'bold', flex: 1 }}>Physics Solvers</span>
+                    {hasChannels && (
+                        <button
+                            onClick={() => setAnimPlaying(!animPlaying)}
+                            style={{
+                                width: '22px',
+                                height: '22px',
+                                background: animPlaying ? '#1a3a2a' : '#333',
+                                border: `1px solid ${animPlaying ? '#64ffda' : '#555'}`,
+                                borderRadius: '4px',
+                                color: animPlaying ? '#64ffda' : '#aaa',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                transition: 'all 0.15s',
+                            }}
+                            title={animPlaying ? 'Pause animation' : 'Play animation'}
+                        >
+                            {animPlaying ? '⏸' : '▶'}
                         </button>
                     )}
                 </div>
 
-                {/* Solver 3: Incoherent Imaging */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                    <div style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: isRendering ? '#fa4' : '#555',
-                        transition: 'background-color 0.2s'
-                    }}></div>
-                    <button
-                        onClick={() => setSolver3Trigger((prev: number) => prev + 1)}
-                        disabled={isRendering || !rayConfig.solver2Enabled}
-                        title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : 'Backward-trace rays from camera through optics to sample'}
-                        style={{
-                            padding: '3px 10px',
-                            background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
-                            border: '1px solid #444',
-                            borderRadius: '4px',
-                            color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
-                            cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
-                            fontSize: '11px',
-                            fontFamily: 'monospace',
-                            transition: 'background 0.2s',
-                        }}
-                    >
-                        {isRendering ? '⏳ Tracing...' : '▶ Reverse Trace'}
-                    </button>
-                </div>
+                    {/* Ray Tracer (always on) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
+                        <span>Ray Tracer</span>
+                    </div>
+                    <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
+                        <input
+                            type="range"
+                            min="4"
+                            max="128"
+                            step="1"
+                            value={Math.max(4, rayConfig.rayCount)}
+                            onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
+                            style={{ width: '80px' }}
+                        />
+                        <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
+                    </div>
+
+                    {/* E&M (toggleable) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}>
+                        <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
+                            transition: 'background-color 0.2s'
+                        }}></div>
+                        <input
+                            type="checkbox"
+                            checked={rayConfig.solver2Enabled}
+                            onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        <span
+                            style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
+                            onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
+                        >E&M</span>
+
+                        {/* E-field visualization toggle */}
+                        {rayConfig.solver2Enabled && (
+                            <button
+                                onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
+                                title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
+                                style={{
+                                    background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
+                                    border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
+                                    borderRadius: '3px',
+                                    color: rayConfig.emFieldVisible ? '#4af' : '#666',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    padding: '1px 4px',
+                                    lineHeight: 1,
+                                    marginLeft: '4px',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                👁
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Solver 3: Calculate Emission and Image */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: isRendering ? '#fa4' : '#555',
+                                transition: 'background-color 0.2s'
+                            }}></div>
+                            <button
+                                onClick={() => {
+                                    if (hasChannels) {
+                                        // Animation channels present — auto scan accumulation
+                                        setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
+                                    } else {
+                                        // No animation — single Solver 3 render
+                                        setSolver3Trigger((prev: number) => prev + 1);
+                                    }
+                                }}
+                                disabled={isRendering || !rayConfig.solver2Enabled}
+                                title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
+                                style={{
+                                    padding: '3px 10px',
+                                    background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
+                                    cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
+                                    fontSize: '11px',
+                                    fontFamily: 'monospace',
+                                    transition: 'background 0.2s',
+                                }}
+                            >
+                                {isRendering && scanProgress > 0 && scanProgress < 1
+                                    ? `⏳ ${Math.round(scanProgress * 100)}%`
+                                    : isRendering ? '⏳ Calculating...' : 'Calculate Emission and Image'}
+                            </button>
+                        </div>
+                        {isRendering && scanProgress > 0 && scanProgress < 1 && (
+                            <div style={{
+                                height: '3px',
+                                background: '#333',
+                                borderRadius: '2px',
+                                overflow: 'hidden',
+                                marginLeft: '16px',
+                            }}>
+                                <div style={{
+                                    width: `${scanProgress * 100}%`,
+                                    height: '100%',
+                                    background: 'linear-gradient(90deg, #2a8a4a, #4af088)',
+                                    transition: 'width 0.1s',
+                                }} />
+                            </div>
+                        )}
+                    </div>
             </div>
         </>
     );
@@ -307,6 +367,10 @@ export const Inspector: React.FC = () => {
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
+    const [animator] = useAtom(animatorAtom);
+    const [, setAnimPlaying] = useAtom(animationPlayingAtom);
+    const [animPlaying] = useAtom(animationPlayingAtom);
+    const [animSpeed, setAnimSpeed] = useAtom(animationSpeedAtom);
 
 
     const selectedComponent = selection.length === 1
@@ -664,7 +728,7 @@ export const Inspector: React.FC = () => {
     useEffect(() => { setLocalName(selectedComponent?.name ?? ''); }, [selectedComponent?.id]);
 
     if (!selectedComponent) {
-        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} />;
+        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />;
     }
 
     const isCard = selectedComponent instanceof Card;
@@ -683,8 +747,10 @@ export const Inspector: React.FC = () => {
     const isDichroic = selectedComponent instanceof DichroicMirror;
     const isCylindrical = selectedComponent instanceof CylindricalLens;
     const isCurvedMirror = selectedComponent instanceof CurvedMirror;
+    const isFlatMirror = selectedComponent instanceof Mirror && !(selectedComponent instanceof CurvedMirror) && !(selectedComponent instanceof DichroicMirror) && !(selectedComponent instanceof PolygonScanner);
     const isPolygonScanner = selectedComponent instanceof PolygonScanner;
     const isSample = selectedComponent instanceof Sample;
+    const isGalvoCapable = isFlatMirror || isCurvedMirror;
 
     const hasSpectralProfile = isFilter || isDichroic;
 
@@ -1047,6 +1113,172 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
+                {/* Galvo Scan — for Mirror and CurvedMirror */}
+                {isGalvoCapable && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Galvo Scan</label>
+                        {(() => {
+                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'rotation.y' || ch.property === 'rotation.z'));
+                            const isScanning = !!activeChannel;
+                            const currentAxis = activeChannel?.property === 'rotation.y' ? 'U' : 'V';
+                            const currentHalfDeg = isScanning ? Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10 : 1;
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                                        <span style={{ fontSize: '10px', color: '#888', minWidth: '30px' }}>Axis</span>
+                                        <select
+                                            id={'galvo-axis-' + selectedComponent.id}
+                                            value={isScanning ? currentAxis : undefined}
+                                            defaultValue={isScanning ? undefined : 'V'}
+                                            onChange={e => {
+                                                if (isScanning) {
+                                                    // Restore old axis then restart on new axis
+                                                    animator.removeChannel(activeChannel!.id, components);
+                                                    const axis = e.target.value === 'U' ? 'rotation.y' : 'rotation.z';
+                                                    const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
+                                                    const halfAngleDeg = parseFloat(rangeEl?.value || String(currentHalfDeg));
+                                                    const halfAngleRad = halfAngleDeg * Math.PI / 180;
+                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                                                    const center = axis === 'rotation.y' ? euler.y : euler.z;
+                                                    animator.addChannel({
+                                                        id: generateChannelId(),
+                                                        targetId: selectedComponent.id,
+                                                        property: axis,
+                                                        from: center - halfAngleRad,
+                                                        to: center + halfAngleRad,
+                                                        easing: 'sinusoidal',
+                                                        periodMs: 2000,
+                                                        repeat: true,
+                                                        restoreValue: center,
+                                                    });
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#222',
+                                                color: '#ccc',
+                                                border: '1px solid #555',
+                                                borderRadius: '3px',
+                                                fontSize: '10px',
+                                                padding: '2px 4px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            <option value="U">U (tilt)</option>
+                                            <option value="V">V (pan)</option>
+                                        </select>
+                                        <span style={{ fontSize: '10px', color: '#888', marginLeft: '6px', minWidth: '24px' }}>±</span>
+                                        <input
+                                            id={'galvo-range-' + selectedComponent.id}
+                                            type="number"
+                                            defaultValue={currentHalfDeg}
+                                            key={isScanning ? 'scanning' : 'idle'}
+                                            min={0.1}
+                                            max={45}
+                                            step={0.5}
+                                            onChange={e => {
+                                                if (isScanning) {
+                                                    // Dynamically update the channel range
+                                                    const halfAngleDeg = parseFloat(e.target.value);
+                                                    if (isNaN(halfAngleDeg) || halfAngleDeg <= 0) return;
+                                                    const halfAngleRad = halfAngleDeg * Math.PI / 180;
+                                                    const center = (activeChannel!.from + activeChannel!.to) / 2;
+                                                    activeChannel!.from = center - halfAngleRad;
+                                                    activeChannel!.to = center + halfAngleRad;
+                                                }
+                                            }}
+                                            style={{
+                                                width: '40px',
+                                                background: '#222',
+                                                color: '#ccc',
+                                                border: '1px solid #555',
+                                                borderRadius: '3px',
+                                                fontSize: '10px',
+                                                padding: '2px 4px',
+                                                textAlign: 'center',
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '10px', color: '#888' }}>°</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <button
+                                            onClick={() => {
+                                                if (isScanning) {
+                                                    animator.removeChannel(activeChannel!.id, components);
+                                                    if (animator.channels.length === 0) setAnimPlaying(false);
+                                                } else {
+                                                    const axisEl = document.getElementById('galvo-axis-' + selectedComponent.id) as HTMLSelectElement;
+                                                    const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
+                                                    const axis = axisEl?.value === 'U' ? 'rotation.y' : 'rotation.z';
+                                                    const halfAngleDeg = parseFloat(rangeEl?.value || '5');
+                                                    const halfAngleRad = halfAngleDeg * Math.PI / 180;
+                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                                                    const center = axis === 'rotation.y' ? euler.y : euler.z;
+                                                    const ch: AnimationChannel = {
+                                                        id: generateChannelId(),
+                                                        targetId: selectedComponent.id,
+                                                        property: axis,
+                                                        from: center - halfAngleRad,
+                                                        to: center + halfAngleRad,
+                                                        easing: 'sinusoidal',
+                                                        periodMs: 2000,
+                                                        repeat: true,
+                                                        restoreValue: center,
+                                                    };
+                                                    animator.addChannel(ch);
+                                                    setAnimPlaying(true);
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '6px 0',
+                                                background: isScanning ? '#3a1a1a' : '#1a2a3a',
+                                                border: `1px solid ${isScanning ? '#8a3a3a' : '#3a6a8a'}`,
+                                                borderRadius: '5px',
+                                                color: isScanning ? '#ff7b7b' : '#74b9ff',
+                                                cursor: 'pointer',
+                                                fontSize: '11px',
+                                                fontWeight: 600,
+                                                letterSpacing: '0.3px',
+                                                transition: 'all 0.15s',
+                                            }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.background = isScanning ? '#4a2a2a' : '#253a4a';
+                                                e.currentTarget.style.borderColor = isScanning ? '#f44' : '#64b5f6';
+                                            }}
+                                            onMouseOut={e => {
+                                                e.currentTarget.style.background = isScanning ? '#3a1a1a' : '#1a2a3a';
+                                                e.currentTarget.style.borderColor = isScanning ? '#8a3a3a' : '#3a6a8a';
+                                            }}
+                                        >
+                                            {isScanning ? `⏹ Stop (${currentAxis})` : '⏵ Scan Galvo'}
+                                        </button>
+                                        {isScanning && (
+                                            <>
+                                                <input
+                                                    type="range"
+                                                    min={-1}
+                                                    max={1}
+                                                    step={0.01}
+                                                    value={Math.log10(animSpeed)}
+                                                    onChange={e => setAnimSpeed(Math.pow(10, parseFloat(e.target.value)))}
+                                                    style={{ width: '50px', accentColor: '#74b9ff' }}
+                                                    title={`Speed: ${animSpeed.toFixed(1)}×`}
+                                                />
+                                                <span style={{ fontSize: '9px', color: '#74b9ff', minWidth: '22px' }}>{animSpeed.toFixed(1)}×</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    {isScanning && (
+                                        <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>
+                                            {Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI)}° sweep · {currentAxis === 'U' ? 'tilt' : 'pan'}
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </div>
+                )}
+
                 {isPolygonScanner && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Polygon Scan Mirror</label>
@@ -1146,6 +1378,75 @@ export const Inspector: React.FC = () => {
                             {' · '}
                             R = {selectedComponent instanceof PolygonScanner ? Math.round(selectedComponent.circumRadius * 100) / 100 : '—'} mm
                         </div>
+                        {/* Animate Scan button + speed */}
+                        {(() => {
+                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && ch.property === 'scanAngle');
+                            const isAnimating = !!activeChannel;
+                            return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                                    <button
+                                        onClick={() => {
+                                            if (isAnimating) {
+                                                animator.removeChannel(activeChannel!.id);
+                                                // If no channels left, stop playing
+                                                if (animator.channels.length === 0) setAnimPlaying(false);
+                                            } else {
+                                                const ch: AnimationChannel = {
+                                                    id: generateChannelId(),
+                                                    targetId: selectedComponent.id,
+                                                    property: 'scanAngle',
+                                                    from: 0,
+                                                    to: 2 * Math.PI,
+                                                    easing: 'linear',
+                                                    periodMs: 2000,
+                                                    repeat: true,
+                                                };
+                                                animator.addChannel(ch);
+                                                setAnimPlaying(true);
+                                            }
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: isAnimating ? '#3a1a1a' : '#1a2a3a',
+                                            border: `1px solid ${isAnimating ? '#8a3a3a' : '#3a6a8a'}`,
+                                            borderRadius: '5px',
+                                            color: isAnimating ? '#ff7b7b' : '#74b9ff',
+                                            cursor: 'pointer',
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            letterSpacing: '0.3px',
+                                            transition: 'all 0.15s',
+                                        }}
+                                        onMouseOver={e => {
+                                            e.currentTarget.style.background = isAnimating ? '#4a2a2a' : '#253a4a';
+                                            e.currentTarget.style.borderColor = isAnimating ? '#f44' : '#64b5f6';
+                                        }}
+                                        onMouseOut={e => {
+                                            e.currentTarget.style.background = isAnimating ? '#3a1a1a' : '#1a2a3a';
+                                            e.currentTarget.style.borderColor = isAnimating ? '#8a3a3a' : '#3a6a8a';
+                                        }}
+                                    >
+                                        {isAnimating ? '⏹ Stop Scan' : '⏵ Animate Scan'}
+                                    </button>
+                                    {isAnimating && (
+                                        <>
+                                            <input
+                                                type="range"
+                                                min={-1}
+                                                max={1}
+                                                step={0.01}
+                                                value={Math.log10(animSpeed)}
+                                                onChange={e => setAnimSpeed(Math.pow(10, parseFloat(e.target.value)))}
+                                                style={{ width: '50px', accentColor: '#74b9ff' }}
+                                                title={`Speed: ${animSpeed.toFixed(1)}×`}
+                                            />
+                                            <span style={{ fontSize: '9px', color: '#74b9ff', minWidth: '22px' }}>{animSpeed.toFixed(1)}×</span>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 

@@ -26,6 +26,75 @@ function wavelengthToRGB(wavelengthNm: number): [number, number, number] {
     return [r, g, b];
 }
 
+/**
+ * Paint an emission + excitation image pair onto a canvas.
+ */
+function paintImage(
+    ctx: CanvasRenderingContext2D,
+    emImg: Float32Array | null,
+    exImg: Float32Array | null,
+    resX: number,
+    resY: number,
+    displayWidth: number,
+    displayHeight: number
+): boolean {
+    const hasEmission = emImg && emImg.length > 0;
+    const hasExcitation = exImg && exImg.length > 0;
+
+    if (!hasEmission && !hasExcitation) {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, displayWidth, displayHeight);
+        ctx.fillStyle = '#555';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('No render yet', displayWidth / 2, displayHeight / 2);
+        return false;
+    }
+
+    // Find global max across both images for normalization
+    let maxVal = 0;
+    if (hasEmission) for (let i = 0; i < emImg.length; i++) if (emImg[i] > maxVal) maxVal = emImg[i];
+    if (hasExcitation) for (let i = 0; i < exImg.length; i++) if (exImg[i] > maxVal) maxVal = exImg[i];
+    if (maxVal < 1e-12) maxVal = 1;
+
+    const emNm = 520;
+    const exNm = 488;
+    const [emR, emG, emB] = wavelengthToRGB(emNm);
+    const [exR, exG, exB] = wavelengthToRGB(exNm);
+
+    const imageData = ctx.createImageData(displayWidth, displayHeight);
+    const scaleX = resX / displayWidth;
+    const scaleY = resY / displayHeight;
+
+    for (let dy = 0; dy < displayHeight; dy++) {
+        for (let dx = 0; dx < displayWidth; dx++) {
+            const sx = Math.min(Math.floor(dx * scaleX), resX - 1);
+            const sy = Math.min(Math.floor((displayHeight - 1 - dy) * scaleY), resY - 1);
+            const pixelIdx = sy * resX + sx;
+
+            const emVal = hasEmission ? emImg[pixelIdx] / maxVal : 0;
+            const exVal = hasExcitation ? exImg[pixelIdx] / maxVal : 0;
+
+            const gamma = 0.45;
+            const em = Math.pow(Math.max(0, Math.min(1, emVal)), gamma);
+            const ex = Math.pow(Math.max(0, Math.min(1, exVal)), gamma);
+
+            const r = Math.min(1, ex * exR + em * emR);
+            const g = Math.min(1, ex * exG + em * emG);
+            const b = Math.min(1, ex * exB + em * emB);
+
+            const idx = (dy * displayWidth + dx) * 4;
+            imageData.data[idx + 0] = Math.round(r * 255);
+            imageData.data[idx + 1] = Math.round(g * 255);
+            imageData.data[idx + 2] = Math.round(b * 255);
+            imageData.data[idx + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return true;
+}
+
 // ─── CameraViewer Component ─────────────────────────────────────────
 
 interface CameraViewerProps {
@@ -37,88 +106,40 @@ interface CameraViewerProps {
 export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering, onRefresh }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [hasImage, setHasImage] = useState(false);
+    // Frame scrubbing: -1 = show averaged image, 0..N-1 = show individual frame
+    const [frameIndex, setFrameIndex] = useState(-1);
 
     // Display size (upscaled from 64×64)
     const displayWidth = 256;
     const displayHeight = Math.round(displayWidth * (camera.sensorResY / camera.sensorResX));
 
-    // Paint the image whenever solver3Image or forwardImage changes
+    const hasScanFrames = camera.scanFrames && camera.scanFrameCount > 0;
+
+    // Paint the image whenever the source data or selected frame changes
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const emImg = camera.solver3Image;   // Backward emission (fluorescence)
-        const exImg = camera.forwardImage;   // Forward excitation (laser beam)
-        const resX = camera.sensorResX;
-        const resY = camera.sensorResY;
+        let emImg: Float32Array | null;
+        let exImg: Float32Array | null;
 
-        const hasEmission = emImg && emImg.length > 0;
-        const hasExcitation = exImg && exImg.length > 0;
-
-        if (!hasEmission && !hasExcitation) {
-            // Clear to black
-            ctx.fillStyle = '#111';
-            ctx.fillRect(0, 0, displayWidth, displayHeight);
-            ctx.fillStyle = '#555';
-            ctx.font = '12px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('No render yet', displayWidth / 2, displayHeight / 2);
-            setHasImage(false);
-            return;
+        if (hasScanFrames && frameIndex >= 0 && frameIndex < camera.scanFrameCount) {
+            // Show a specific scan frame
+            emImg = camera.scanFrames![frameIndex];
+            exImg = camera.scanExFrames?.[frameIndex] ?? null;
+        } else {
+            // Show the averaged / single-shot image
+            emImg = camera.solver3Image;
+            exImg = camera.forwardImage;
         }
 
-        // Find global max across both images for normalization
-        let maxVal = 0;
-        if (hasEmission) for (let i = 0; i < emImg.length; i++) if (emImg[i] > maxVal) maxVal = emImg[i];
-        if (hasExcitation) for (let i = 0; i < exImg.length; i++) if (exImg[i] > maxVal) maxVal = exImg[i];
-        if (maxVal < 1e-12) maxVal = 1; // prevent division by zero
-
-        // Wavelength → RGB for each channel
-        const emNm = 520;  // GFP green emission
-        const exNm = 488;  // Excitation laser (blue)
-        const [emR, emG, emB] = wavelengthToRGB(emNm);
-        const [exR, exG, exB] = wavelengthToRGB(exNm);
-
-        // Create ImageData at display resolution
-        const imageData = ctx.createImageData(displayWidth, displayHeight);
-        const scaleX = resX / displayWidth;
-        const scaleY = resY / displayHeight;
-
-        for (let dy = 0; dy < displayHeight; dy++) {
-            for (let dx = 0; dx < displayWidth; dx++) {
-                // Nearest-neighbor sampling from the 64×64 images
-                const sx = Math.min(Math.floor(dx * scaleX), resX - 1);
-                // Flip Y: canvas (0,0) = top-left, image (0,0) = bottom-left
-                const sy = Math.min(Math.floor((displayHeight - 1 - dy) * scaleY), resY - 1);
-                const pixelIdx = sy * resX + sx;
-
-                // Normalize both signals against the global max
-                const emVal = hasEmission ? emImg[pixelIdx] / maxVal : 0;
-                const exVal = hasExcitation ? exImg[pixelIdx] / maxVal : 0;
-
-                // Apply gamma for better visible range
-                const gamma = 0.45;
-                const em = Math.pow(Math.max(0, Math.min(1, emVal)), gamma);
-                const ex = Math.pow(Math.max(0, Math.min(1, exVal)), gamma);
-
-                // Combine: wavelength-colored excitation + emission
-                const r = Math.min(1, ex * exR + em * emR);
-                const g = Math.min(1, ex * exG + em * emG);
-                const b = Math.min(1, ex * exB + em * emB);
-
-                const idx = (dy * displayWidth + dx) * 4;
-                imageData.data[idx + 0] = Math.round(r * 255);
-                imageData.data[idx + 1] = Math.round(g * 255);
-                imageData.data[idx + 2] = Math.round(b * 255);
-                imageData.data[idx + 3] = 255;
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-        setHasImage(true);
-    }, [camera.solver3Image, camera.forwardImage, camera.sensorResX, camera.sensorResY, displayWidth, displayHeight]);
+        const painted = paintImage(ctx, emImg, exImg, camera.sensorResX, camera.sensorResY, displayWidth, displayHeight);
+        setHasImage(painted);
+    }, [camera.solver3Image, camera.forwardImage, camera.sensorResX, camera.sensorResY,
+        displayWidth, displayHeight, frameIndex, hasScanFrames, camera.scanFrameCount,
+        camera.scanFrames, camera.scanExFrames]);
 
     const isStale = camera.solver3Stale;
 
@@ -179,6 +200,42 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                     imageRendering: 'pixelated',
                 }}
             />
+
+            {/* Frame scrubbing slider — only when scan frames exist */}
+            {hasScanFrames && (
+                <div style={{
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                }}>
+                    <span style={{
+                        fontSize: '9px',
+                        color: '#888',
+                        fontFamily: 'monospace',
+                        minWidth: '28px',
+                    }}>
+                        {frameIndex < 0 ? 'Avg' : `${frameIndex + 1}/${camera.scanFrameCount}`}
+                    </span>
+                    <input
+                        type="range"
+                        min={-1}
+                        max={camera.scanFrameCount - 1}
+                        value={frameIndex}
+                        onChange={e => setFrameIndex(parseInt(e.target.value))}
+                        style={{
+                            flex: 1,
+                            height: '12px',
+                            accentColor: '#4af088',
+                            cursor: 'pointer',
+                        }}
+                        title={frameIndex < 0
+                            ? 'Showing averaged image (drag right to scrub frames)'
+                            : `Frame ${frameIndex + 1} of ${camera.scanFrameCount}`
+                        }
+                    />
+                </div>
+            )}
         </div>
     );
 };
