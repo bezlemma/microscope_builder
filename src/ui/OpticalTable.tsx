@@ -1142,6 +1142,7 @@ export const OpticalTable: React.FC = () => {
     // Refs to hold expensive solver results for card sampling effect
     const solverPathsRef = useRef<Ray[][]>([]);
     const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
+    const solver3PathsRef = useRef<Ray[][]>([]);
 
     useEffect(() => {
         if (!components) return;
@@ -1584,6 +1585,7 @@ export const OpticalTable: React.FC = () => {
             }
         }
         setSolver3Paths([]);
+        solver3PathsRef.current = [];
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, rayConfig]);
@@ -1603,7 +1605,7 @@ export const OpticalTable: React.FC = () => {
         setTimeout(() => {
             try {
                 const solver3 = new Solver3(components, beamSegs);
-                const result = solver3.render(camera);
+                const result = solver3.render(camera, rayConfig.rayCount);
 
                 camera.solver3Image = result.emissionImage;
                 camera.forwardImage = result.excitationImage;
@@ -1611,6 +1613,7 @@ export const OpticalTable: React.FC = () => {
                 camera.solver3Stale = false;
 
                 setSolver3Paths(result.paths);
+                solver3PathsRef.current = result.paths;
             } catch (e) {
                 console.warn('Solver 3 error:', e);
             }
@@ -1628,6 +1631,10 @@ export const OpticalTable: React.FC = () => {
 
         const beamSegs = beamSegsRef.current;
         const solverPaths = solverPathsRef.current;
+        const s3Paths = solver3PathsRef.current;
+
+        // Combine forward and reverse ray paths for card intersection
+        const allPaths = s3Paths.length > 0 ? [...solverPaths, ...s3Paths] : solverPaths;
 
         const cardComps = components.filter(c => c instanceof Card) as Card[];
         for (const card of cardComps) {
@@ -1637,9 +1644,9 @@ export const OpticalTable: React.FC = () => {
 
             const hitRays: { ray: Ray; hitLocalPoint: Vector3; t: number }[] = [];
 
-            for (const path of solverPaths) {
+            for (const path of allPaths) {
                 for (const ray of path) {
-                    if (!ray.isMainRay) continue;
+                    if (!ray.isMainRay && !ray.sourceId?.startsWith('solver3_')) continue;
 
 
                     const localOrigin = ray.origin.clone().sub(card.position).applyQuaternion(invQ);
@@ -1662,10 +1669,16 @@ export const OpticalTable: React.FC = () => {
                 }
             }
 
-            if (hitRays.length === 0 || beamSegs.length === 0) continue;
+            if (hitRays.length === 0) continue;
 
+            const fallbackHits: { ray: Ray; hitLocalPoint: Vector3 }[] = [];
 
             for (const { ray: mainHitRay, hitLocalPoint } of hitRays) {
+                // Skip Gaussian beam matching if no beam segments available
+                if (beamSegs.length === 0) {
+                    fallbackHits.push({ ray: mainHitRay, hitLocalPoint });
+                    continue;
+                }
                 let bestSeg: GaussianBeamSegment | null = null;
                 let bestDist = Infinity;
                 let bestZ = 0;
@@ -1696,7 +1709,11 @@ export const OpticalTable: React.FC = () => {
                     }
                 }
 
-                if (!bestSeg || bestDist >= 50) continue;
+                if (!bestSeg || bestDist >= 50) {
+                    // Collect for merging below (common for Solver 3 backward-traced rays)
+                    fallbackHits.push({ ray: mainHitRay, hitLocalPoint });
+                    continue;
+                }
 
                 const wavelengthMm = bestSeg.wavelength * 1e3;
                 const qx = { re: bestSeg.qx_start.re + bestZ, im: bestSeg.qx_start.im };
@@ -1755,18 +1772,83 @@ export const OpticalTable: React.FC = () => {
             // Compute fluorescence emission power reference:
             // total excitation power at the sample × fluorescence efficiency
             const sample = components.find(c => c instanceof Sample) as Sample | undefined;
+            let emissionPower = 0;
             if (sample && beamSegs.length > 0) {
                 let totalLaserPower = 0;
                 for (const branch of beamSegs) {
                     if (branch.length > 0) totalLaserPower += branch[0].power;
                 }
-                card.emissionPowerRef = totalLaserPower * sample.fluorescenceEfficiency;
-            } else {
-                card.emissionPowerRef = 0;
+                emissionPower = totalLaserPower * sample.fluorescenceEfficiency;
+            }
+            card.emissionPowerRef = emissionPower;
+
+            // Merge fallback hits (Solver 3 backward rays) into ONE averaged profile
+            if (fallbackHits.length > 0) {
+                const n = fallbackHits.length;
+                let meanU = 0, meanV = 0, meanPhase = 0;
+                let polXre = 0, polXim = 0, polYre = 0, polYim = 0;
+                const wavelength = fallbackHits[0].ray.wavelength;
+
+                for (const { ray, hitLocalPoint: hp } of fallbackHits) {
+                    meanU += hp.x;
+                    meanV += hp.y;
+                    meanPhase += ray.opticalPathLength ?? 0;
+                    polXre += ray.polarization.x.re;
+                    polXim += ray.polarization.x.im;
+                    polYre += ray.polarization.y.re;
+                    polYim += ray.polarization.y.im;
+                }
+                meanU /= n;
+                meanV /= n;
+                meanPhase /= n;
+
+                // RMS spread of hit positions → beam width
+                let varU = 0, varV = 0;
+                for (const { hitLocalPoint: hp } of fallbackHits) {
+                    varU += (hp.x - meanU) ** 2;
+                    varV += (hp.y - meanV) ** 2;
+                }
+                const rmsU = Math.sqrt(varU / n);
+                const rmsV = Math.sqrt(varV / n);
+                // Use RMS spread, with a minimum of 0.5mm so single rays still render
+                const wx = Math.max(rmsU, 0.5);
+                const wy = Math.max(rmsV, 0.5);
+
+                // Average direction for tilt
+                const avgDir = fallbackHits[0].ray.direction.clone();
+                for (let i = 1; i < n; i++) avgDir.add(fallbackHits[i].ray.direction);
+                avgDir.normalize();
+                const localDir2 = avgDir.applyQuaternion(invQ);
+                const tiltU = Math.abs(localDir2.z) > 1e-6 ? localDir2.x / Math.abs(localDir2.z) : 0;
+                const tiltV = Math.abs(localDir2.z) > 1e-6 ? localDir2.y / Math.abs(localDir2.z) : 0;
+
+                // Normalize polarization vector
+                const polMag = Math.sqrt(polXre**2 + polXim**2 + polYre**2 + polYim**2) || 1;
+
+                // Average throughput of backward rays × fluorescence emission power
+                let avgThroughput = 0;
+                for (const { ray } of fallbackHits) avgThroughput += (ray.intensity ?? 0);
+                avgThroughput /= n;
+                const power = emissionPower > 0 ? emissionPower * avgThroughput : 0.001;
+
+                card.beamProfiles.push({
+                    wx, wy,
+                    wavelength,
+                    power,
+                    polarization: {
+                        x: { re: polXre / polMag, im: polXim / polMag },
+                        y: { re: polYre / polMag, im: polYim / polMag }
+                    },
+                    phase: meanPhase,
+                    centerU: meanU,
+                    centerV: meanV,
+                    tiltU,
+                    tiltV
+                });
             }
         }
 
-    }, [components, rayConfig]);
+    }, [components, rayConfig, solver3Paths]);
 
     return (
         <group>

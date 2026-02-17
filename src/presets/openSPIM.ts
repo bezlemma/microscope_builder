@@ -134,19 +134,23 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // ── Vertical arm (col N, beam going +Y, up) ──
 
-    // 9. BFP Relay lens 1 (f=50mm) at N4
+    // 9. BFP Relay lens 1 (f=50mm)
+    //    Afocal relay: L1-L2 separated by f1+f2 = 75mm.
+    //    L2 one focal length (25mm) before objective BFP (~207.5mm).
+    //    → L2 at Y=182.5, L1 at Y=107.5.
     const relayL1 = new SphericalLens(1 / 50, 10, 4, "BFP Relay 1 (f50)");
     relayL1.r1 = undefined;
     relayL1.r2 = -(1.5168 - 1) * 50;
-    relayL1.setPosition(hole(C.N, 3).x, hole(C.N, 3).y, 0);
+    relayL1.setPosition(hole(C.N, 0).x, 107.5, 0);
     relayL1.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
     components.push(relayL1);
 
-    // 10. BFP Relay lens 2 (f=25mm) at N6
+    // 10. BFP Relay lens 2 (f=25mm)
+    //    25mm before objective BFP → fills BFP with collimated beam
     const relayL2 = new SphericalLens(1 / 25, 8, 3, "BFP Relay 2 (f25)");
     relayL2.r1 = (1.5168 - 1) * 25;
     relayL2.r2 = undefined;
-    relayL2.setPosition(hole(C.N, 5).x, hole(C.N, 5).y, 0);
+    relayL2.setPosition(hole(C.N, 0).x, 182.5, 0);
     relayL2.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
     components.push(relayL2);
 

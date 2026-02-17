@@ -50,12 +50,13 @@ export class Solver3 {
      * With correct optics, all rays converge to the same conjugate point → sharp.
      * Without optics, rays diverge → blurred/washed out.
      */
-    render(camera: Camera): Solver3Result {
+    render(camera: Camera, maxVisPaths: number = 32): Solver3Result {
         const resX = camera.sensorResX;
         const resY = camera.sensorResY;
         const emissionImage = new Float32Array(resX * resY);
         const excitationImage = new Float32Array(resX * resY);
         const allPaths: Ray[][] = [];
+        const candidatePaths: Ray[][] = [];
 
         // Camera world-space transform
         camera.updateMatrices();
@@ -110,12 +111,14 @@ export class Solver3 {
                         .add(camV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
                         .normalize();
 
+                    // Random polarization angle — fluorescence emission is unpolarized
+                    const polAngle = Math.random() * Math.PI;
                     const backwardRay: Ray = {
                         origin: sensorPoint,
                         direction: backwardDir,
                         wavelength: emissionWavelength,
                         intensity: 1.0,
-                        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                        polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
                         opticalPathLength: 0,
                         footprintRadius: 0.1,
                         coherenceMode: Coherence.Incoherent,
@@ -135,26 +138,27 @@ export class Solver3 {
                 // Average radiance across all samples
                 emissionImage[py * resX + px] = radianceSum / N;
 
-                // Store a subset of paths for visualization (use brightest sample)
-                if (bestPath && this.shouldVisualizePath(px, py, resX, resY)) {
-                    allPaths.push(bestPath);
+                // Collect all successful paths, subsample later
+                if (bestPath) {
+                    candidatePaths.push(bestPath);
                 }
+            }
+        }
+
+        // Uniformly subsample to maxVisPaths for visualization
+        if (candidatePaths.length <= maxVisPaths) {
+            allPaths.push(...candidatePaths);
+        } else {
+            const stride = candidatePaths.length / maxVisPaths;
+            for (let i = 0; i < maxVisPaths; i++) {
+                allPaths.push(candidatePaths[Math.floor(i * stride)]);
             }
         }
 
         return { emissionImage, excitationImage, paths: allPaths, resX, resY };
     }
 
-    /**
-     * Decide which pixel paths to visualize to avoid clutter.
-     * Show a sparse grid of paths, plus the center pixel.
-     */
-    private shouldVisualizePath(px: number, py: number, resX: number, resY: number): boolean {
 
-        if (px === Math.floor(resX / 2) && py === Math.floor(resY / 2)) return true;
-        const step = Math.max(Math.floor(resX / 6), 1);
-        return (px % step === Math.floor(step / 2)) && (py % step === Math.floor(step / 2));
-    }
 
     /**
      * Trace a single backward ray through the optical system.
@@ -194,6 +198,8 @@ export class Solver3 {
             }
 
             if (!nearestHit || !nearestComponent) {
+                // Cap the final segment so it doesn't draw to infinity
+                currentRay.interactionDistance = 50;
                 break;
             }
 
@@ -314,6 +320,14 @@ export class Solver3 {
             currentRay = bestChild;
 
             if (throughput < 1e-6) break;
+        }
+
+        // Cap final ray segment so visualizer doesn't draw to infinity
+        if (path.length > 0) {
+            const last = path[path.length - 1];
+            if (last.interactionDistance === undefined || last.interactionDistance > 50) {
+                last.interactionDistance = 50;
+            }
         }
 
         // Ray escaped without hitting a light source.
