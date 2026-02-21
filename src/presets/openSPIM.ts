@@ -119,7 +119,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
         "Cylindrical Lens (f50)"
     );
     cylLens.setPosition(hole(C.K, 1).x, hole(C.K, 1).y, 0);
-    cylLens.setRotation(0, Math.PI / 2, 0);
+    cylLens.setRotation(0, Math.PI / 2, 0); // Don't mess with this rotation
     components.push(cylLens);
 
     // 8. 1" Turn Mirror at N2 — redirects +X → +Y (up)
@@ -135,22 +135,18 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     // ── Vertical arm (col N, beam going +Y, up) ──
 
     // 9. BFP Relay lens 1 (f=50mm)
-    //    Afocal relay: L1-L2 separated by f1+f2 = 75mm.
-    //    L2 one focal length (25mm) before objective BFP (~207.5mm).
-    //    → L2 at Y=182.5, L1 at Y=107.5.
     const relayL1 = new SphericalLens(1 / 50, 12.7, 4, "BFP Relay 1 (f50)");
     relayL1.r1 = undefined;
     relayL1.r2 = -(1.5168 - 1) * 50;
-    relayL1.setPosition(hole(C.N, 0).x, 107.5, 0);
+    relayL1.setPosition(hole(C.N, 0).x, 97.5, 0);
     relayL1.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
     components.push(relayL1);
 
     // 10. BFP Relay lens 2 (f=25mm)
-    //    25mm before objective BFP → fills BFP with collimated beam
     const relayL2 = new SphericalLens(1 / 25, 24, 3.5, "BFP Relay 2 (f25)");
     relayL2.r1 = (1.5168 - 1) * 25;
     relayL2.r2 = undefined;
-    relayL2.setPosition(hole(C.N, 0).x, 182.5, 0);
+    relayL2.setPosition(hole(C.N, 0).x, 172.5, 0);
     relayL2.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
     components.push(relayL2);
 
@@ -172,20 +168,12 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // ═══════════════════════════════════════
     //  SAMPLE HOLDER at N10
-    //  Hollow open-top cube with bore holes on all 4 faces.
-    //  Objectives can snap into the side holes via Alt+drag.
-    //  Mickey specimen sits inside at center with ears facing +Z.
     // ═══════════════════════════════════════
     const chamber = new SampleChamber(75, 3, 30, "L/X Sample Holder");
     chamber.setPosition(hole(C.N, 9).x, hole(C.N, 9).y, 0);
     components.push(chamber);
 
-    // ═══════════════════════════════════════
-    //  DETECTION ARM — goes -X from sample, row 10
-    //  Detection from -X face of chamber, objective faces +X (inward).
-    // ═══════════════════════════════════════
-
-    // 12. Detection Objective (Nikon 10×/0.3W)
+    // Detection Objective (Nikon 10×/0.3W)
     //     Faces +X (into the sample chamber bore hole)
     const detObj = new Objective({
         NA: 0.3,
