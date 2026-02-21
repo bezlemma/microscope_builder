@@ -83,10 +83,10 @@ describe("Solver 3: Backward Ray Direction", () => {
         const camera = new Camera(4, 4, "Test Camera");
         camera.setPosition(0, 50, 0);
         camera.setRotation(Math.PI / 2, 0, 0);
-        camera.sensorResX = 4;
-        camera.sensorResY = 4;
-        camera.sensorNA = 0.01;
-        camera.samplesPerPixel = 1;
+        camera.sensorResX = 8;
+        camera.sensorResY = 8;
+        camera.sensorNA = 0.05;
+        camera.samplesPerPixel = 5;
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);

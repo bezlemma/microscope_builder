@@ -18,7 +18,7 @@ export class Filter extends OpticalComponent {
     spectralProfile: SpectralProfile;
 
     constructor(
-        diameter: number = 25,
+        diameter: number = 25.4,
         thickness: number = 3,
         spectralProfile?: SpectralProfile,
         name: string = "Filter"

@@ -17,7 +17,7 @@ export const InfiniteTable: React.FC = () => {
 
   return (
     <mesh
-      position={[0, 0, -25]}
+      position={[0, 0, -42]} // Shifted down so components at Z=0 are 42mm above table (ORCA height)
       receiveShadow
       onClick={() => setSelection([])}
     >

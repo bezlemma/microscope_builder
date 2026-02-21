@@ -22,7 +22,7 @@ export class CurvedMirror extends OpticalComponent {
     private _geometry: BufferGeometry | null = null;
 
     constructor(
-        diameter: number = 25,
+        diameter: number = 25.4,
         radiusOfCurvature: number = 100,
         thickness: number = 3,
         name: string = "Curved Mirror"

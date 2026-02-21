@@ -4,6 +4,7 @@ import { useAtom } from 'jotai';
 import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
 import { setProperty, getProperty } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
@@ -29,6 +30,7 @@ import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { PolygonScanner } from '../physics/components/PolygonScanner';
+import { PMT } from '../physics/components/PMT';
 
 import { RayVisualizer } from './RayVisualizer';
 
@@ -164,11 +166,56 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
-    const a = component.diameter / 2;   // Physical barrel radius for visual sizing
-    const wd = component.workingDistance;
 
-    const mainLine = useMemo(() =>
-        new Float32Array([0, -a, 0, 0, a, 0]), [a]);
+    const f = component.focalLength;
+    const a = component.apertureRadius;
+    const wd = component.workingDistance;
+    const bodyR = Math.max(a + 1, component.diameter / 2); // Use physical diameter, but ensure it covers aperture
+
+    // Local Z coordinates:
+    // Sample plane is strictly at z = -f
+    // Parfocal shoulder (back thread) is at z = -f + 35mm
+    const parfocalDistance = 35;
+    const zFront = -f + wd;
+    const zBack = Math.max(-f + parfocalDistance, zFront + 20);
+    const zTaperEnd = zFront + Math.min(15, (zBack - zFront) * 0.6);
+
+    const immersionIdx = component.immersionIndex || 1;
+    const maxSin = component.NA / immersionIdx;
+    const maxTan = maxSin / Math.sqrt(1 - maxSin * maxSin);
+    const opticalFrontRadius = wd * maxTan; 
+    const frontRadius = Math.max(opticalFrontRadius + 0.5, 2); // steep dipping cone down to the exact optical clear aperture
+    const barrelLength = zBack - zFront;
+
+    // Helper to color-code based on objective magnification standard
+    const getObjectiveBandColor = (mag: number) => {
+        if (mag <= 4) return '#ff0000'; // Red
+        if (mag <= 10) return '#ffd700'; // Yellow
+        if (mag <= 20) return '#00ff00'; // Green
+        if (mag <= 40) return '#00bfff'; // Light Blue
+        if (mag <= 60) return '#0000ff'; // Dark Blue
+        return '#ffffff'; // White for 100x/oil
+    };
+
+    const lathePoints = React.useMemo(() => {
+        const pts = [];
+        // Note: Lathe spins around Y. We map Z to Y.
+        // Start front-inner edge
+        pts.push(new Vector2(opticalFrontRadius, zFront));
+        // Go out to front-outer edge
+        pts.push(new Vector2(frontRadius, zFront));
+        // Go up outer taper
+        if (zTaperEnd > zFront) pts.push(new Vector2(bodyR, zTaperEnd));
+        // Go up outer barrel
+        if (zBack > zTaperEnd) pts.push(new Vector2(bodyR, zBack));
+        // Go in to back inner edge
+        pts.push(new Vector2(a, zBack));
+        // Go down inner bore to principal plane
+        if (zBack > 0 && zFront < 0) pts.push(new Vector2(a, 0));
+        // Back down inner cone to front-inner edge
+        pts.push(new Vector2(opticalFrontRadius, zFront));
+        return pts;
+    }, [opticalFrontRadius, zFront, frontRadius, bodyR, zTaperEnd, zBack, a]);
 
     return (
         <group
@@ -176,31 +223,52 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Vertical line at principal plane */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute attach="attributes-position" args={[mainLine, 3]} />
-                </bufferGeometry>
-                <lineBasicMaterial color="#b388ff" linewidth={2} />
-            </line>
-
-            {/* Working Distance cylinder */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -wd / 2]}>
-                <cylinderGeometry args={[a * 0.8, a * 1.2, wd, 16, 1, true]} />
-                <meshBasicMaterial color="#b388ff" transparent opacity={isSelected ? 0.25 : 0.08} side={DoubleSide} />
+            {/* Visualizing the Abstract Abbe Reference Plane at z=0 */}
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                <cylinderGeometry args={[a, a, 0.5, 32]} />
+                <meshBasicMaterial color="#b388ff" transparent opacity={0.3} side={DoubleSide} depthWrite={false}/>
             </mesh>
 
-            {/* Invisible hitbox for selection */}
-            <mesh>
-                <planeGeometry args={[wd, a * 2]} />
-                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
+            {/* Inner Clear Optical Path (Glass Core to visualize PhysicsPlan active area) */}
+            <mesh position={[0, 0, (zFront + 0.01) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                {/* From the front clear aperture up to the principal plane at z=0.01 */}
+                <cylinderGeometry args={[a, opticalFrontRadius, Math.abs(zFront - 0.01), 32, 1, true]} />
+                <meshStandardMaterial color="#88ccff" transparent opacity={0.15} depthWrite={false} roughness={0.1} side={DoubleSide} />
+            </mesh>
+            
+            {/* Working Distance Indicator (Sample Plane Visual Cone) */}
+            {/* Faint cone indicating where the sample should be placed relative to the physical front */}
+            {wd > 0.1 && (
+                <mesh position={[0, 0, (-f + zFront) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                    <cylinderGeometry args={[frontRadius, 0.1, wd, 32]} />
+                    <meshBasicMaterial color="#00ffcc" transparent opacity={0.15} wireframe={false} depthWrite={false} />
+                </mesh>
+            )}
+
+            {/* Solid Objective Barrel with true physical bounds */}
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <latheGeometry args={[lathePoints, 32]} />
+                {/* Semi-transparent dark grey material representing the metal casing that blocks rays */}
+                <meshStandardMaterial color="#222222" roughness={0.8} metalness={0.2} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
+            </mesh>
+
+            {/* Magnification Color Band */}
+            <mesh position={[0, 0, zTaperEnd + 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                <cylinderGeometry args={[bodyR + 0.1, bodyR + 0.1, 3, 32, 1, true]} />
+                <meshStandardMaterial color={getObjectiveBandColor(component.magnification)} transparent opacity={0.8} depthWrite={false} roughness={0.3} side={DoubleSide} />
+            </mesh>
+
+            {/* Invisible hitbox for selection (covers the barrel) */}
+            <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[bodyR * 1.5, bodyR * 1.5, barrelLength + 10, 8]} />
+                <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} colorWrite={false} />
             </mesh>
 
             {/* Selection highlight */}
             {isSelected && (
-                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -wd / 2]}>
-                    <cylinderGeometry args={[a * 1.3, a * 1.3, wd + 2, 16]} />
-                    <meshBasicMaterial color="#b388ff" transparent opacity={0.15} wireframe />
+                <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[bodyR * 1.15, bodyR * 1.15, barrelLength + 2, 32]} />
+                    <meshBasicMaterial color="#b388ff" transparent opacity={0.3} wireframe />
                 </mesh>
             )}
         </group>
@@ -209,9 +277,9 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
 
 export const CameraVisualizer = ({ component }: { component: Camera }) => {
 
-    const width = 25;
-    const height = 25;
-    const depth = 50;
+    const width = 84;
+    const height = 84;
+    const depth = 122;
 
     return (
         <group
@@ -219,16 +287,54 @@ export const CameraVisualizer = ({ component }: { component: Camera }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Camera Body (Box) - centered */}
-            <mesh position={[0, 0, 0]}>
+            {/* Camera Body (Box) - extending behind the sensor */}
+            <mesh position={[0, 0, -depth / 2]}>
                 <boxGeometry args={[width, height, depth]} />
                 <meshStandardMaterial color="#333" metalness={0.6} roughness={0.4} />
             </mesh>
 
-            {/* Sensor Face (Blue) - at front of centered body */}
+            {/* Sensor Face (Blue) - flush at local Z=0 */}
+            <mesh position={[0, 0, 0.1]}>
+                <planeGeometry args={[component.width, component.height]} />
+                <meshStandardMaterial color="rgba(104, 65, 131, 1)" metalness={0.9} roughness={0.1} />
+            </mesh>
+
+            {/* Cam text placed on top of camera box */}
+            <Text
+                position={[0, height / 2 + 0.1, -depth/4]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                fontSize={16}
+                color="#ffffff"
+                anchorX="center"
+                anchorY="top"
+            >
+                Camera
+            </Text>
+        </group>
+    );
+};
+
+export const PMTVisualizer = ({ component }: { component: PMT }) => {
+    const width = 20;
+    const height = 20;
+    const depth = 30;  // shorter than camera
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* PMT Body — compact, lighter gray */}
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[width, height, depth]} />
+                <meshStandardMaterial color="#555" metalness={0.5} roughness={0.5} />
+            </mesh>
+
+            {/* Detector window — small tinted circle at front */}
             <mesh position={[0, 0, depth / 2 + 0.1]}>
-                <planeGeometry args={[width * 0.8, height * 0.8]} />
-                <meshStandardMaterial color="#224" metalness={0.9} roughness={0.1} />
+                <circleGeometry args={[width * 0.3, 32]} />
+                <meshStandardMaterial color="rgba(134, 45, 175, 1)" metalness={0.8} roughness={0.15} />
             </mesh>
         </group>
     );
@@ -771,26 +877,43 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
 
 export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
 
+    const isLaser = component instanceof Laser || component.constructor.name === 'Laser';
+    // Map wavelength to approximate hex color code (very rough visible spectrum mapping)
+    let beamColor = "#222";
+    if (isLaser) {
+        const wl = (component as Laser).wavelength;
+        if (wl < 430) beamColor = "#8a2be2"; // Violet/Blue
+        else if (wl < 490) beamColor = "#00bfff"; // Cyan/Blue
+        else if (wl < 550) beamColor = "#00ff00"; // Green
+        else if (wl < 590) beamColor = "#ffd700"; // Yellow
+        else if (wl < 630) beamColor = "#ff8c00"; // Orange
+        else beamColor = "#ff0000"; // Red
+    }
+
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Laser Box Body - centered */}
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[50, 25, 25]} />
+            {/* Laser Box*/}
+            <mesh position={[-33, 0, 0]}>
+                <boxGeometry args={[70, 40, 38]} />
                 <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
             </mesh>
-            {/* Aperture Ring - at emission end (+X) */}
-            <mesh position={[27, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[4, 4, 4, 16]} />
+            
+            {/* Wavelength Patch */}
+            {isLaser && (
+                <mesh position={[-45, 0, 19.1]}>
+                    <planeGeometry args={[20, 40]} />
+                    <meshBasicMaterial color={beamColor} />
+                </mesh>
+            )}
+
+            {/* Aperture Ring*/}
+            <mesh position={[2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[10, 5, 6, 16]} />
                 <meshStandardMaterial color="#666" />
-            </mesh>
-            {/* Emission Point */}
-            <mesh position={[1, 0, 0]}>
-                <sphereGeometry args={[1, 16, 16]} />
-                <meshBasicMaterial color="lime" />
             </mesh>
         </group>
     );
@@ -1355,6 +1478,27 @@ export const OpticalTable: React.FC = () => {
             }
         }
 
+        // ── PMT preview ray: single dashed line showing where PMT looks ──
+        const pmtComps = components.filter(c => c instanceof PMT) as PMT[];
+        for (const pmtComp of pmtComps) {
+            pmtComp.updateMatrices();
+            const pmtDir = new Vector3(0, 0, 1).applyQuaternion(pmtComp.rotation).normalize();
+            const pmtOrigin = pmtComp.position.clone().add(pmtDir.clone().multiplyScalar(1));
+            // Use emission wavelength from sample if available
+            const sampleComp = components.find(c => c instanceof Sample) as Sample | undefined;
+            const emWl = sampleComp ? sampleComp.getEmissionWavelength() * 1e-9 : 520e-9;
+            sourceRays.push({
+                origin: pmtOrigin,
+                direction: pmtDir,
+                wavelength: emWl,
+                intensity: 0.3,
+                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                opticalPathLength: 0,
+                footprintRadius: 0,
+                coherenceMode: Coherence.Coherent,
+                sourceId: `pmt_preview_${pmtComp.id}`,
+            });
+        }
 
         const calculatedPaths = solver.trace(sourceRays);
 
@@ -1644,7 +1788,9 @@ export const OpticalTable: React.FC = () => {
                 }
             }
         }
-        if (shouldClearScan || !components.some(c => c instanceof Camera && (c as Camera).scanFrames)) {
+        const hasAnyScanResults = components.some(c => c instanceof Camera && (c as Camera).scanFrames)
+            || components.some(c => c instanceof PMT && (c as PMT).scanImage);
+        if (shouldClearScan || !hasAnyScanResults) {
             setSolver3Paths([]);
             solver3PathsRef.current = [];
         }
@@ -1652,30 +1798,82 @@ export const OpticalTable: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, rayConfig]);
 
-    // ─── Effect 1b: Solver 3 — backward trace from camera (on-demand) ───
+    // ─── Effect 1b: Solver 3 — backward trace from ALL detectors (on-demand) ───
     useEffect(() => {
         if (solver3Trigger === 0) return; // Skip initial mount
         if (!components) return;
 
-        const camera = components.find(c => c instanceof Camera) as Camera | undefined;
-        if (!camera) return;
+        const cameras = components.filter(c => c instanceof Camera) as Camera[];
+        const pmts = components.filter(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT[];
+        if (cameras.length === 0 && pmts.length === 0) return;
 
         const beamSegs = beamSegsRef.current;
         setSolver3Rendering(true);
 
-
         setTimeout(() => {
             try {
                 const solver3 = new Solver3(components, beamSegs);
-                const result = solver3.render(camera, rayConfig.rayCount);
+                const allPaths: Ray[][] = [];
 
-                camera.solver3Image = result.emissionImage;
-                camera.forwardImage = result.excitationImage;
-                camera.solver3Paths = result.paths;
-                camera.solver3Stale = false;
+                // Backward trace from every Camera
+                for (const camera of cameras) {
+                    const result = solver3.render(camera, rayConfig.rayCount);
+                    camera.solver3Image = result.emissionImage;
+                    camera.forwardImage = result.excitationImage;
+                    camera.solver3Paths = result.paths;
+                    camera.solver3Stale = false;
+                    allPaths.push(...result.paths);
+                }
 
-                setSolver3Paths(result.paths);
-                solver3PathsRef.current = result.paths;
+                // Backward trace from every PMT
+                if (pmts.length > 0) {
+                    const sample = components.find(c => c instanceof Sample) as Sample | undefined;
+                    const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
+
+                    for (const pmt of pmts) {
+                        pmt.updateMatrices();
+                        const pmtPos = pmt.position.clone();
+                        const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
+                        const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
+                        const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
+
+                        const numRays = Math.min(rayConfig.rayCount, 32);
+                        const sinThetaMax = 0.3;
+
+                        for (let i = 0; i < numRays; i++) {
+                            const phi = Math.random() * 2 * Math.PI;
+                            const sinTheta = sinThetaMax * Math.sqrt(Math.random());
+                            const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+
+                            const dir = pmtW.clone().multiplyScalar(cosTheta)
+                                .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
+                                .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
+                                .normalize();
+
+                            const polAngle = Math.random() * Math.PI;
+                            const backwardRay: Ray = {
+                                origin: pmtPos.clone(),
+                                direction: dir,
+                                wavelength: emissionWavelength,
+                                intensity: 1.0,
+                                polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
+                                opticalPathLength: 0,
+                                footprintRadius: 0.1,
+                                coherenceMode: Coherence.Incoherent,
+                                sourceId: `pmt_backward_${pmt.id}_${i}`,
+                            };
+
+                            const result = solver3.traceBackward(backwardRay, sample);
+                            if (result.path.length > 1) {
+                                allPaths.push(result.path);
+                            }
+                        }
+                    }
+                }
+
+                console.log(`[Solver3] Backward traced ${cameras.length} cameras + ${pmts.length} PMTs → ${allPaths.length} paths`);
+                setSolver3Paths(allPaths);
+                solver3PathsRef.current = allPaths;
             } catch (e) {
                 console.warn('Solver 3 error:', e);
             }
@@ -1897,6 +2095,209 @@ export const OpticalTable: React.FC = () => {
 
         // Start step 0 after a brief delay (let UI update)
         setTimeout(() => runStep(0), 50);
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scanAccumConfig.trigger]);
+
+    // ─── Effect 1d: PMT Raster Scan ───────────────────────────────────────
+    useEffect(() => {
+        if (scanAccumConfig.trigger === 0) return;
+        if (!components) return;
+
+        const pmt = components.find(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT | undefined;
+        if (!pmt) return;
+
+        // Find the X and Y animation channels
+        const xCh = animator.channels.find(ch => ch.targetId === pmt.xAxisComponentId && ch.property === pmt.xAxisProperty);
+        const yCh = animator.channels.find(ch => ch.targetId === pmt.yAxisComponentId && ch.property === pmt.yAxisProperty);
+        if (!xCh || !yCh) {
+            console.warn('[PMT Raster] X or Y axis channel not found in animator');
+            return;
+        }
+
+        const byId = new Map<string, OpticalComponent>();
+        for (const c of components) byId.set(c.id, c);
+
+        const xTarget = byId.get(xCh.targetId);
+        const yTarget = byId.get(yCh.targetId);
+        if (!xTarget || !yTarget) return;
+
+        const resX = pmt.scanResX;
+        const resY = pmt.scanResY;
+        const totalPixels = resX * resY;
+
+        // Save all animated channel values for restoration
+        const allSaved = animator.channels.map(ch => ({
+            channel: ch,
+            target: byId.get(ch.targetId)!,
+            originalValue: getProperty(byId.get(ch.targetId)!, ch.property),
+        })).filter(sv => sv.target);
+
+        console.log(`[PMT Raster] Starting ${resX}×${resY} raster scan (${totalPixels} pixels)`);
+        (globalThis as any).__pmtDebugCounter = 0; // Reset debug counter for traceBackward logs
+        (globalThis as any).__pmtPathLogDone = false; // Reset backward path log
+
+        // Lock animation loop
+        scanAccumActiveRef.current = true;
+        setAnimPlaying(false);
+        animator.playing = false;
+        setSolver3Rendering(true);
+        setScanAccumProgress(0);
+
+        const savedPlaying = animStateRef.current.playing;
+
+        // Clear previous scan
+        pmt.clearScan();
+        const scanImage = new Float32Array(totalPixels);
+
+        const restoreAll = () => {
+            for (const sv of allSaved) {
+                setProperty(sv.target, sv.channel.property, sv.originalValue);
+            }
+        };
+
+        // Raster scan: Y slow (outer), X fast (inner)
+        // Backward rays accumulate throughout the scan for visualization
+        let pixelsDone = 0;
+        const accumulatedPaths: Ray[][] = [];
+        const maxVisPaths = 128; // Cap total visualization paths
+
+
+        const runRow = (yIdx: number) => {
+            if (yIdx >= resY) {
+                // Done — store results
+                console.log(`[PMT Raster] Done. ${totalPixels} pixels scanned, ${accumulatedPaths.length} backward paths.`);
+                pmt.scanImage = scanImage;
+                pmt.scanStale = false;
+                pmt.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+
+                restoreAll();
+
+                // Final update of visualization paths
+                setSolver3Paths([...accumulatedPaths]);
+                solver3PathsRef.current = accumulatedPaths;
+
+                setSolver3Rendering(false);
+                setScanAccumProgress(1);
+                scanAccumActiveRef.current = false;
+                if (savedPlaying) setAnimPlaying(true);
+                return;
+            }
+
+            const yFrac = resY > 1 ? yIdx / (resY - 1) : 0.5;
+            const yVal = yCh.from + (yCh.to - yCh.from) * yFrac;
+            setProperty(yTarget, yCh.property, yVal);
+
+            const runPixel = (xIdx: number) => {
+                if (xIdx >= resX) {
+                    // Row done, schedule next row
+                    setScanAccumProgress(pixelsDone / totalPixels);
+                    setTimeout(() => runRow(yIdx + 1), 0);
+                    return;
+                }
+
+                const xFrac = resX > 1 ? xIdx / (resX - 1) : 0.5;
+                const xVal = xCh.from + (xCh.to - xCh.from) * xFrac;
+                setProperty(xTarget, xCh.property, xVal);
+
+                try {
+                    // Solver 1: Forward trace
+                    const solver1 = new Solver1(components);
+                    const sourceRays: Ray[] = [];
+                    const laserComps = components.filter(c => c instanceof Laser) as Laser[];
+                    const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
+
+                    for (const laserComp of laserComps) {
+                        let origin = laserComp.position.clone();
+                        const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
+                        origin.add(direction.clone().multiplyScalar(5));
+                        sourceRays.push({
+                            origin, direction,
+                            wavelength: laserComp.wavelength * 1e-9,
+                            intensity: laserComp.power,
+                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                            opticalPathLength: 0,
+                            footprintRadius: laserComp.beamRadius || 0,
+                            coherenceMode: Coherence.Coherent,
+                            isMainRay: true,
+                            sourceId: laserComp.id
+                        });
+                    }
+
+                    for (const lampComp of lampComps) {
+                        let origin = lampComp.position.clone();
+                        const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
+                        origin.add(direction.clone().multiplyScalar(5));
+                        for (const wavelengthNm of lampComp.spectralWavelengths) {
+                            sourceRays.push({
+                                origin: origin.clone(),
+                                direction: direction.clone(),
+                                wavelength: wavelengthNm * 1e-9,
+                                intensity: lampComp.additiveOpacity,
+                                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                                opticalPathLength: 0,
+                                footprintRadius: 0,
+                                coherenceMode: Coherence.Incoherent,
+                                isMainRay: true,
+                                sourceId: `${lampComp.id}_${wavelengthNm}nm`
+                            });
+                        }
+                    }
+
+                    const paths = solver1.trace(sourceRays);
+
+                    // Solver 2: Gaussian beam propagation
+                    let beamSegs: GaussianBeamSegment[][] = [];
+                    try {
+                        const solver2 = new Solver2();
+                        beamSegs = solver2.propagate(paths, components);
+                    } catch (e) {
+                        if ((globalThis as any).__pmtDebugCounter < 25) {
+                            console.warn('[PMT Raster] Solver2 FAILED:', e);
+                        }
+                    }
+
+                    // Debug: log beam focus position at corner/center pixels
+                    const isCornerOrCenter = (xIdx === 0 && yIdx === 0) ||
+                        (xIdx === resX - 1 && yIdx === 0) ||
+                        (xIdx === 0 && yIdx === resY - 1) ||
+                        (xIdx === resX - 1 && yIdx === resY - 1) ||
+                        (xIdx === Math.floor(resX / 2) && yIdx === Math.floor(resY / 2));
+                    if (isCornerOrCenter && beamSegs.length > 0) {
+                        const lastBranch = beamSegs[0];
+                        const lastSeg = lastBranch[lastBranch.length - 1];
+                        console.log(`[PMT Focus] pixel(${xIdx},${yIdx}) beam_end=(${lastSeg.end.x.toFixed(2)},${lastSeg.end.y.toFixed(2)},${lastSeg.end.z.toFixed(2)}) segs=${lastBranch.length}`);
+                    }
+
+                    // Solver 3: backward trace — PMT as 1-pixel camera
+                    // Uses the beamSegs from Solver 2 (excitation field) to query
+                    // fluorescence at the sample via the same traceBackward() as Camera
+                    const solver3 = new Solver3(components, beamSegs);
+                    const { radiance, bestPath } = solver3.renderPMTPixel(pmt);
+                    scanImage[yIdx * resX + xIdx] = radiance;
+
+                    // Accumulate surviving backward paths for visualization
+                    if (bestPath && accumulatedPaths.length < maxVisPaths) {
+                        accumulatedPaths.push(bestPath);
+                    }
+                } catch (e) {
+                    console.warn(`[PMT Raster] Pixel (${xIdx},${yIdx}) error:`, e);
+                    scanImage[yIdx * resX + xIdx] = 0;
+                }
+
+                pixelsDone++;
+
+                // Restore properties between pixels to keep rays stable visually
+                restoreAll();
+
+                // Schedule next pixel (yield to UI every pixel for responsiveness)
+                setTimeout(() => runPixel(xIdx + 1), 0);
+            };
+
+            runPixel(0);
+        };
+
+        setTimeout(() => runRow(0), 50);
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scanAccumConfig.trigger]);
@@ -2154,6 +2555,7 @@ export const OpticalTable: React.FC = () => {
                     else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;
                     else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                     else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
+                    else if (c instanceof PMT) visual = <PMTVisualizer component={c} />;
                     else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
                     else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
                     else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;

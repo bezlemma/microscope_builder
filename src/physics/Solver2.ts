@@ -582,13 +582,26 @@ export class Solver2 {
      */
     static queryIntensityMultiBeam(
         point: Vector3,
-        allSegments: GaussianBeamSegment[][]
+        allSegments: GaussianBeamSegment[][],
+        targetWavelength?: number
     ): number {
         // Collect contributions from each branch
         let ex_re = 0, ex_im = 0;
         let ey_re = 0, ey_im = 0;
+        let totalIntensity = 0;
 
         for (const branch of allSegments) {
+            if (branch.length === 0) continue;
+            
+            // Filter by wavelength if requested (e.g., evaluating broadband brightfield at specific wl)
+            if (targetWavelength !== undefined) {
+                const branchWl = branch[0].wavelength;
+                // Allow ±2nm tolerance
+                if (Math.abs(branchWl - targetWavelength) > 2e-9) {
+                    continue;
+                }
+            }
+
             const result = Solver2.queryIntensity(point, branch);
             if (!result || result.intensity < 1e-12) continue;
 
@@ -609,11 +622,13 @@ export class Solver2 {
             const jy = result.polarization.y;
             ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
             ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+            
+            // For incoherent sources like Lamp, simply sum scalar intensities.
+            totalIntensity += result.intensity;
         }
 
-        // I = |Ex|² + |Ey|²
-        return (ex_re * ex_re + ex_im * ex_im) +
-            (ey_re * ey_re + ey_im * ey_im);
+        // Return scalar intensity sum to support incoherent lamp brightfield rendering.
+        return totalIntensity;
     }
 }
 

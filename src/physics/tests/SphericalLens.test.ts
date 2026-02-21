@@ -107,7 +107,7 @@ describe("SphericalLens", () => {
     test("Condenser lens from Transmission Microscope: rays must refract, not stop or pass straight", () => {
         const { Solver1 } = require("../Solver1");
 
-        // Exact condenser from infinitySystem.ts
+        // Exact condenser from TransmissionFluorescence.ts
         const condenser = new SphericalLens(1/25, 10, 4, "Condenser", 1e9, -12.5, 1.5);
         condenser.setPosition(-25, 0, 0);
         condenser.setRotation(0, Math.PI / 2, 0); // Optical axis → world +X

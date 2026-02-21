@@ -19,7 +19,7 @@ export class BeamSplitter extends OpticalComponent {
     splitRatio: number;   // fraction reflected (0–1), default 0.5
 
     constructor(
-        diameter: number = 25,
+        diameter: number = 25.4,
         thickness: number = 2,
         splitRatio: number = 0.5,
         name: string = "Beam Splitter"

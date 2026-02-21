@@ -1,12 +1,11 @@
-import { Vector3 } from 'three';
+import { Vector3, Box3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { SpectralProfile } from '../SpectralProfile';
+import { intersectAABB } from '../math_solvers';
 
 /**
- * Sample — specimen on the optical table.
- *
- * Geometry: Mickey Mouse (3 spheres) in local space.
+ * Sample — Mickey Mouse, roughly 1mm in diameter similar to my normal samples.
  *
  * Physics:
  *   - Brightfield: Beer-Lambert absorption based on ray path length through material.
@@ -30,9 +29,14 @@ export class Sample extends OpticalComponent {
         { center: new Vector3(0, 0.5, 0.5), radius: 0.25 },   // Right ear (+Z up, +Y right)
     ];
 
+    private static readonly BOUNDS = new Box3(
+        new Vector3(-0.5, -10, -10),
+        new Vector3(0.5, 10, 10)
+    );
+
     constructor(name: string = "Sample (Mickey)") {
         super(name);
-        // Default: GFP-like fluorophore
+        // GFP-like
         this.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
         this.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
         this.fluorescenceEfficiency = 0.5; // Fluorescence quantum yield (0–1)
@@ -56,46 +60,35 @@ export class Sample extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        let closestT = Infinity;
-        let bestHit: HitRecord | null = null;
+        const { hit, tMin, tMax } = intersectAABB(rayLocal.origin, rayLocal.direction, Sample.BOUNDS);
+        if (!hit || tMax < 0.001) return null;
 
-        for (const sphere of Sample.SPHERES) {
-            const oc = rayLocal.origin.clone().sub(sphere.center);
-            const b = oc.dot(rayLocal.direction);
-            const c = oc.dot(oc) - sphere.radius * sphere.radius;
-            const h = b * b - c;
+        const t = tMin > 0.001 ? tMin : tMax;
+        const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
 
-            if (h >= 0) {
-                const sqrtH = Math.sqrt(h);
-                const t1 = -b - sqrtH;
-                const t2 = -b + sqrtH;
+        return {
+            t: t,
+            point: point,
+            normal: new Vector3(1, 0, 0), // Generic normal for bounding box
+            localPoint: point
+        };
+    }
 
-                // Check t1
-                if (t1 > 0.001 && t1 < closestT) {
-                    closestT = t1;
-                    const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t1));
-                    bestHit = {
-                        t: t1,
-                        point: point,
-                        normal: point.clone().sub(sphere.center).normalize(),
-                        localPoint: point
-                    };
-                }
-                 // Check t2 (only if inside)
-                 else if (t2 > 0.001 && t2 < closestT) {
-                    closestT = t2;
-                    const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t2));
-                    bestHit = {
-                        t: t2,
-                        point: point,
-                        normal: point.clone().sub(sphere.center).normalize(),
-                        localPoint: point
-                    };
-                }
-            }
-        }
+    /**
+     * Get the near and far planes of the sample volume for a world ray.
+     * Used by Solver 3 strictly to evaluate the internal E&M field integral.
+     */
+    getVolumeIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
+        this.updateMatrices();
+        const localOrigin = worldRay.origin.clone().applyMatrix4(this.worldToLocal);
+        const localDir = worldRay.direction.clone().transformDirection(this.worldToLocal).normalize();
+        
+        const { hit, tMin, tMax } = intersectAABB(localOrigin, localDir, Sample.BOUNDS);
+        if (!hit || tMax <= 0) return null;
 
-        return bestHit;
+        // Return distances along the WORLD ray, which match LOCAL distances because the
+        // transform is purely rotational/translational (scale = 1).
+        return { tNear: Math.max(0, tMin), tFar: tMax };
     }
 
     /**

@@ -63,6 +63,7 @@ export interface HitRecord {
     localNormal?: Vector3;    // Local Normal (avoids world↔local round-trip errors)
     localDirection?: Vector3; // Local ray direction (avoids world↔local round-trip errors)
     surfaceIndex?: number; // Which surface was hit (for multi-surface components like lenses)
+    isBlocked?: boolean; // If true, the ray hit an opaque physical bound (like a metal lens barrel)
 }
 
 export interface InteractionResult {

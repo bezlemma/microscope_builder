@@ -25,6 +25,7 @@ import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Sample } from '../physics/components/Sample';
+import { PMT } from '../physics/components/PMT';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
@@ -126,6 +127,7 @@ const SolverPanel: React.FC<{
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
     const hasChannels = animator.channels.length > 0;
+    const [components] = useAtom(componentsAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
 
@@ -214,7 +216,13 @@ const SolverPanel: React.FC<{
                     <span style={{ fontWeight: 'bold', flex: 1 }}>Physics Solvers</span>
                     {hasChannels && (
                         <button
-                            onClick={() => setAnimPlaying(!animPlaying)}
+                            onClick={() => {
+                                if (animPlaying) {
+                                    // Pausing — snap all animated components back to rest position
+                                    animator.restoreAll(components);
+                                }
+                                setAnimPlaying(!animPlaying);
+                            }}
                             style={{
                                 width: '22px',
                                 height: '22px',
@@ -371,6 +379,11 @@ export const Inspector: React.FC = () => {
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
     const [animPlaying] = useAtom(animationPlayingAtom);
     const [animSpeed, setAnimSpeed] = useAtom(animationSpeedAtom);
+    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    // Bumped on channel add/remove to force re-render of galvo scan UI
+    const [_channelVersion, setChannelVersion] = useState(0);
+    // Remembers the last-used galvo settings per component, persists across stop/start
+    const [galvoAngles, setGalvoAngles] = useState<Map<string, { halfDeg: number; periodMs: number; axis: string }>>(new Map());
 
 
     const selectedComponent = selection.length === 1
@@ -576,6 +589,8 @@ export const Inspector: React.FC = () => {
                 }
 
                 if (selectedComponent instanceof Filter) {
+                    setLocalMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                     const sp = selectedComponent.spectralProfile;
                     setLocalSpectralPreset(sp.preset);
                     setLocalSpectralCutoff(String(sp.cutoffNm));
@@ -751,6 +766,7 @@ export const Inspector: React.FC = () => {
     const isPolygonScanner = selectedComponent instanceof PolygonScanner;
     const isSample = selectedComponent instanceof Sample;
     const isGalvoCapable = isFlatMirror || isCurvedMirror;
+    const isPMT = selectedComponent instanceof PMT;
 
     const hasSpectralProfile = isFilter || isDichroic;
 
@@ -1120,36 +1136,61 @@ export const Inspector: React.FC = () => {
                         {(() => {
                             const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'rotation.y' || ch.property === 'rotation.z'));
                             const isScanning = !!activeChannel;
-                            const currentAxis = activeChannel?.property === 'rotation.y' ? 'U' : 'V';
-                            const currentHalfDeg = isScanning ? Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10 : 1;
+                            const savedSettings = galvoAngles.get(selectedComponent.id);
+                            const currentAxis = activeChannel
+                                ? (activeChannel.property === 'rotation.y' ? 'U' : 'V')
+                                : (savedSettings?.axis ?? 'V');
+                            const currentHalfDeg = isScanning
+                                ? Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10
+                                : (savedSettings?.halfDeg ?? 1);
+
+                            // Compute center from restoreValue or midpoint — NOT live rotation (which animation mutates)
+                            const channelCenter = activeChannel ? (activeChannel.restoreValue ?? (activeChannel.from + activeChannel.to) / 2) : 0;
                             return (
                                 <>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                                         <span style={{ fontSize: '10px', color: '#888', minWidth: '30px' }}>Axis</span>
                                         <select
                                             id={'galvo-axis-' + selectedComponent.id}
-                                            value={isScanning ? currentAxis : undefined}
-                                            defaultValue={isScanning ? undefined : 'V'}
+                                            value={currentAxis}
+                                            key={`galvo-axis-${selectedComponent.id}-${activeChannel?.id ?? 'idle'}`}
                                             onChange={e => {
+                                                const newAxisLabel = e.target.value;
+                                                const newAxisProp = newAxisLabel === 'U' ? 'rotation.y' : 'rotation.z';
                                                 if (isScanning) {
-                                                    // Restore old axis then restart on new axis
+                                                    // Switching axis while animating: remove old channel, create new on the new axis
+                                                    const oldPeriodMs = activeChannel!.periodMs;
                                                     animator.removeChannel(activeChannel!.id, components);
-                                                    const axis = e.target.value === 'U' ? 'rotation.y' : 'rotation.z';
+                                                    // Compute center from the NEW axis's current rotation (not the old axis!)
+                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                                                    const newCenter = newAxisProp === 'rotation.y' ? euler.y : euler.z;
                                                     const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || String(currentHalfDeg));
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
-                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
-                                                    const center = axis === 'rotation.y' ? euler.y : euler.z;
                                                     animator.addChannel({
                                                         id: generateChannelId(),
                                                         targetId: selectedComponent.id,
-                                                        property: axis,
-                                                        from: center - halfAngleRad,
-                                                        to: center + halfAngleRad,
+                                                        property: newAxisProp,
+                                                        from: newCenter - halfAngleRad,
+                                                        to: newCenter + halfAngleRad,
                                                         easing: 'sinusoidal',
-                                                        periodMs: 2000,
+                                                        periodMs: oldPeriodMs,
                                                         repeat: true,
-                                                        restoreValue: center,
+                                                        restoreValue: newCenter,
+                                                    });
+                                                    setAnimPlaying(true);
+                                                    setChannelVersion(v => v + 1);
+                                                } else {
+                                                    // Not scanning — just remember the new axis for when Scan is clicked
+                                                    setGalvoAngles(prev => {
+                                                        const old = prev.get(selectedComponent.id);
+                                                        const next = new Map(prev);
+                                                        next.set(selectedComponent.id, {
+                                                            halfDeg: old?.halfDeg ?? currentHalfDeg,
+                                                            periodMs: old?.periodMs ?? 2000,
+                                                            axis: newAxisLabel,
+                                                        });
+                                                        return next;
                                                     });
                                                 }
                                             }}
@@ -1171,7 +1212,7 @@ export const Inspector: React.FC = () => {
                                             id={'galvo-range-' + selectedComponent.id}
                                             type="number"
                                             defaultValue={currentHalfDeg}
-                                            key={isScanning ? 'scanning' : 'idle'}
+                                            key={activeChannel?.id ?? `galvo-idle-${selectedComponent.id}`}
                                             min={0.1}
                                             max={45}
                                             step={0.5}
@@ -1181,7 +1222,7 @@ export const Inspector: React.FC = () => {
                                                     const halfAngleDeg = parseFloat(e.target.value);
                                                     if (isNaN(halfAngleDeg) || halfAngleDeg <= 0) return;
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
-                                                    const center = (activeChannel!.from + activeChannel!.to) / 2;
+                                                    const center = activeChannel!.restoreValue ?? (activeChannel!.from + activeChannel!.to) / 2;
                                                     activeChannel!.from = center - halfAngleRad;
                                                     activeChannel!.to = center + halfAngleRad;
                                                 }
@@ -1203,16 +1244,24 @@ export const Inspector: React.FC = () => {
                                         <button
                                             onClick={() => {
                                                 if (isScanning) {
+                                                    // Remember angle, Hz, and axis before removing
+                                                    const halfDeg = Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10;
+                                                    const periodMs = activeChannel!.periodMs;
+                                                    const axis = currentAxis;
+                                                    setGalvoAngles(prev => new Map(prev).set(selectedComponent.id, { halfDeg, periodMs, axis }));
                                                     animator.removeChannel(activeChannel!.id, components);
                                                     if (animator.channels.length === 0) setAnimPlaying(false);
+                                                    setChannelVersion(v => v + 1);  // force re-render
                                                 } else {
                                                     const axisEl = document.getElementById('galvo-axis-' + selectedComponent.id) as HTMLSelectElement;
                                                     const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
                                                     const axis = axisEl?.value === 'U' ? 'rotation.y' : 'rotation.z';
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || '5');
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
+                                                    // Use restoreValue if coming from an existing channel, else current rotation
                                                     const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
-                                                    const center = axis === 'rotation.y' ? euler.y : euler.z;
+                                                    const currentRotVal = axis === 'rotation.y' ? euler.y : euler.z;
+                                                    const center = channelCenter || currentRotVal;
                                                     const ch: AnimationChannel = {
                                                         id: generateChannelId(),
                                                         targetId: selectedComponent.id,
@@ -1220,12 +1269,13 @@ export const Inspector: React.FC = () => {
                                                         from: center - halfAngleRad,
                                                         to: center + halfAngleRad,
                                                         easing: 'sinusoidal',
-                                                        periodMs: 2000,
+                                                        periodMs: savedSettings?.periodMs ?? 2000,
                                                         repeat: true,
                                                         restoreValue: center,
                                                     };
                                                     animator.addChannel(ch);
                                                     setAnimPlaying(true);
+                                                    setChannelVersion(v => v + 1);  // force re-render
                                                 }
                                             }}
                                             style={{
@@ -1254,23 +1304,36 @@ export const Inspector: React.FC = () => {
                                         </button>
                                         {isScanning && (
                                             <>
+                                                <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
                                                 <input
-                                                    type="range"
-                                                    min={-1}
-                                                    max={1}
-                                                    step={0.01}
-                                                    value={Math.log10(animSpeed)}
-                                                    onChange={e => setAnimSpeed(Math.pow(10, parseFloat(e.target.value)))}
-                                                    style={{ width: '50px', accentColor: '#74b9ff' }}
-                                                    title={`Speed: ${animSpeed.toFixed(1)}×`}
+                                                    type="number"
+                                                    defaultValue={Math.round(1000 / activeChannel!.periodMs * 10) / 10}
+                                                    key={activeChannel!.id}
+                                                    min={0.1}
+                                                    max={10000}
+                                                    step={0.1}
+                                                    onChange={e => {
+                                                        const hz = parseFloat(e.target.value);
+                                                        if (isNaN(hz) || hz <= 0) return;
+                                                        activeChannel!.periodMs = 1000 / hz;
+                                                    }}
+                                                    style={{
+                                                        width: '48px',
+                                                        background: '#222',
+                                                        color: '#ccc',
+                                                        border: '1px solid #555',
+                                                        borderRadius: '3px',
+                                                        fontSize: '10px',
+                                                        padding: '2px 4px',
+                                                        textAlign: 'center',
+                                                    }}
                                                 />
-                                                <span style={{ fontSize: '9px', color: '#74b9ff', minWidth: '22px' }}>{animSpeed.toFixed(1)}×</span>
                                             </>
                                         )}
                                     </div>
                                     {isScanning && (
                                         <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>
-                                            {Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI)}° sweep · {currentAxis === 'U' ? 'tilt' : 'pan'}
+                                            {Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI)}° sweep · {currentAxis === 'U' ? 'tilt' : 'pan'} · {Math.round(1000 / activeChannel!.periodMs * 10) / 10} Hz
                                         </div>
                                     )}
                                 </>
@@ -1971,6 +2034,8 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Objective) {
                                             c.workingDistance = val;
+                                            c.recalculate();
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -1994,6 +2059,8 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Objective) {
                                             c.diameter = val;
+                                            c.recalculate();
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -2301,6 +2368,33 @@ export const Inspector: React.FC = () => {
 
                     return (
                         <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                                <ScrubInput
+                                    label="Diameter"
+                                    suffix="mm"
+                                    value={localMirrorDiameter}
+                                    onChange={setLocalMirrorDiameter}
+                                    onCommit={(v: string) => {
+                                        const val = parseFloat(v);
+                                        if (isNaN(val) || val <= 0) return;
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0]) {
+                                                if (c instanceof Filter || c instanceof DichroicMirror) {
+                                                    c.diameter = val;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    speed={0.5}
+                                    min={5}
+                                    max={200}
+                                />
+                            </div>
+
                             <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>
                                 {isDichroic ? 'Dichroic Spectrum' : 'Filter Spectrum'}: {profile.getLabel()}
                             </label>
@@ -2796,6 +2890,285 @@ export const Inspector: React.FC = () => {
                         />
                     </div>
                 )}
+
+                {/* PMT Detector: axis binding + raster scan */}
+                {isPMT && (() => {
+                    const pmt = selectedComponent as PMT;
+                    // Find all components with active galvo animation channels
+                    const galvoOptions: { compId: string; compName: string; property: string; label: string }[] = [];
+                    for (const ch of animator.channels) {
+                        if (ch.property === 'rotation.y' || ch.property === 'rotation.z') {
+                            const comp = components.find(c => c.id === ch.targetId);
+                            if (comp) {
+                                const axisLabel = ch.property === 'rotation.y' ? 'U' : 'V';
+                                galvoOptions.push({
+                                    compId: comp.id,
+                                    compName: comp.name,
+                                    property: ch.property,
+                                    label: `${comp.name} · ${axisLabel}`,
+                                });
+                            }
+                        }
+                    }
+                    const xKey = pmt.xAxisComponentId && pmt.xAxisProperty ? `${pmt.xAxisComponentId}:${pmt.xAxisProperty}` : '';
+                    const yKey = pmt.yAxisComponentId && pmt.yAxisProperty ? `${pmt.yAxisComponentId}:${pmt.yAxisProperty}` : '';
+
+                    const updatePMTAxis = (axis: 'x' | 'y', value: string) => {
+                        const [compId, prop] = value ? value.split(':') : ['', ''];
+                        const newComponents = components.map(c => {
+                            if (c.id === pmt.id && c instanceof PMT) {
+                                if (axis === 'x') { c.xAxisComponentId = compId || null; c.xAxisProperty = prop || null; }
+                                else { c.yAxisComponentId = compId || null; c.yAxisProperty = prop || null; }
+                                c.version++;
+                            }
+                            return c;
+                        });
+                        setComponents([...newComponents]);
+                    };
+
+                    const hasAxes = pmt.hasValidAxes();
+                    const hasScanImage = !!pmt.scanImage;
+
+                    return (
+                        <div style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <label style={{ fontSize: '11px', color: '#666' }}>PMT Raster Scan</label>
+                            </div>
+
+                            {galvoOptions.length === 0 && (
+                                <div style={{ fontSize: '10px', color: '#666', marginBottom: 8, fontStyle: 'italic' }}>
+                                    No galvo channels active. Enable galvo scan on mirrors first.
+                                </div>
+                            )}
+
+                            {galvoOptions.length > 0 && (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                        <span style={{ fontSize: '10px', color: '#888', minWidth: 30 }}>X Axis</span>
+                                        <select
+                                            value={xKey}
+                                            onChange={e => updatePMTAxis('x', e.target.value)}
+                                            style={{ flex: 1, background: '#222', color: '#ccc', border: '1px solid #555', borderRadius: 3, fontSize: '11px', padding: '3px 4px' }}
+                                        >
+                                            <option value="">— none —</option>
+                                            {galvoOptions.filter(o => `${o.compId}:${o.property}` !== yKey).map(o => (
+                                                <option key={`${o.compId}:${o.property}`} value={`${o.compId}:${o.property}`}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                        <span style={{ fontSize: '10px', color: '#888', minWidth: 30 }}>Y Axis</span>
+                                        <select
+                                            value={yKey}
+                                            onChange={e => updatePMTAxis('y', e.target.value)}
+                                            style={{ flex: 1, background: '#222', color: '#ccc', border: '1px solid #555', borderRadius: 3, fontSize: '11px', padding: '3px 4px' }}
+                                        >
+                                            <option value="">— none —</option>
+                                            {galvoOptions.filter(o => `${o.compId}:${o.property}` !== xKey).map(o => (
+                                                <option key={`${o.compId}:${o.property}`} value={`${o.compId}:${o.property}`}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Hz convenience controls */}
+                            {hasAxes && (() => {
+                                const xCh = animator.channels.find(ch => ch.targetId === pmt.xAxisComponentId && ch.property === pmt.xAxisProperty);
+                                const yCh = animator.channels.find(ch => ch.targetId === pmt.yAxisComponentId && ch.property === pmt.yAxisProperty);
+                                const xHz = xCh ? Math.round(1000 / xCh.periodMs * 10) / 10 : 0;
+                                const yHz = yCh ? Math.round(1000 / yCh.periodMs * 10) / 10 : 0;
+                                const derivedResX = xHz > 0 ? Math.round(pmt.pmtSampleHz / xHz) : '—';
+                                const derivedResY = yHz > 0 && xHz > 0 ? Math.round(xHz / yHz) : '—';
+
+                                const hzInputStyle: React.CSSProperties = {
+                                    width: '56px', background: '#222', color: '#ccc',
+                                    border: '1px solid #555', borderRadius: 3,
+                                    fontSize: '10px', padding: '2px 4px', textAlign: 'center',
+                                };
+
+                                return (
+                                    <div style={{ marginBottom: 8, padding: '6px', background: '#1a1a1a', borderRadius: 4, border: '1px solid #333' }}>
+                                        <div style={{ fontSize: '10px', color: '#777', marginBottom: 6, fontWeight: 600 }}>Scan Frequencies</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <span style={{ fontSize: '10px', color: '#888', minWidth: 54 }}>X (fast)</span>
+                                            <input
+                                                type="number"
+                                                defaultValue={xHz}
+                                                key={`xhz-${xCh?.id ?? 'none'}`}
+                                                min={0.1} max={10000} step={0.1}
+                                                onBlur={e => {
+                                                    const hz = parseFloat(e.target.value);
+                                                    if (isNaN(hz) || hz <= 0 || !xCh) return;
+                                                    xCh.periodMs = 1000 / hz;
+                                                    const yHzNow = yCh ? 1000 / yCh.periodMs : 1;
+                                                    pmt.scanResX = Math.max(2, Math.round(pmt.pmtSampleHz / hz));
+                                                    pmt.scanResY = Math.max(2, Math.round(hz / yHzNow));
+                                                    pmt.markScanStale();
+                                                    pmt.version++;
+                                                    setComponents([...components]);
+                                                }}
+                                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                style={hzInputStyle}
+                                            />
+                                            <span style={{ fontSize: '9px', color: '#666' }}>Hz</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <span style={{ fontSize: '10px', color: '#888', minWidth: 54 }}>Y (slow)</span>
+                                            <input
+                                                type="number"
+                                                defaultValue={yHz}
+                                                key={`yhz-${yCh?.id ?? 'none'}`}
+                                                min={0.01} max={10000} step={0.01}
+                                                onBlur={e => {
+                                                    const hz = parseFloat(e.target.value);
+                                                    if (isNaN(hz) || hz <= 0 || !yCh) return;
+                                                    yCh.periodMs = 1000 / hz;
+                                                    const xHzNow = xCh ? 1000 / xCh.periodMs : 64;
+                                                    pmt.scanResY = Math.max(2, Math.round(xHzNow / hz));
+                                                    pmt.markScanStale();
+                                                    pmt.version++;
+                                                    setComponents([...components]);
+                                                }}
+                                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                style={hzInputStyle}
+                                            />
+                                            <span style={{ fontSize: '9px', color: '#666' }}>Hz</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <span style={{ fontSize: '10px', color: '#888', minWidth: 54 }}>PMT</span>
+                                            <input
+                                                type="number"
+                                                defaultValue={pmt.pmtSampleHz}
+                                                key={`pmthz-${pmt.version}`}
+                                                min={1} max={100000} step={1}
+                                                onBlur={e => {
+                                                    const hz = parseFloat(e.target.value);
+                                                    if (isNaN(hz) || hz <= 0) return;
+                                                    pmt.pmtSampleHz = hz;
+                                                    const xHzNow = xCh ? 1000 / xCh.periodMs : 64;
+                                                    pmt.scanResX = Math.max(2, Math.round(hz / xHzNow));
+                                                    pmt.markScanStale();
+                                                    pmt.version++;
+                                                    setComponents([...components]);
+                                                }}
+                                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                style={hzInputStyle}
+                                            />
+                                            <span style={{ fontSize: '9px', color: '#666' }}>Hz</span>
+                                        </div>
+                                        <div style={{ fontSize: '9px', color: '#555', marginTop: 4 }}>
+                                            Resolution: {derivedResX} × {derivedResY} px
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                            {hasAxes && (
+                                <div style={{ marginBottom: 8, position: 'relative' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '11px', color: '#aaa' }}>Scan Image</span>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button
+                                                onClick={() => {
+                                                    if (!rayConfig.solver2Enabled) {
+                                                        setRayConfig({ ...rayConfig, solver2Enabled: true });
+                                                    }
+                                                    // Trigger the PMT raster scan effect
+                                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
+                                                }}
+                                                disabled={isRendering}
+                                                title="Re-run raster scan"
+                                                style={{
+                                                    background: isRendering ? '#333' : '#1a5a2a',
+                                                    border: '1px solid #444',
+                                                    borderRadius: '3px',
+                                                    color: isRendering ? '#666' : '#8f8',
+                                                    cursor: isRendering ? 'not-allowed' : 'pointer',
+                                                    fontSize: '11px',
+                                                    padding: '1px 5px',
+                                                    lineHeight: 1.2,
+                                                }}
+                                            >
+                                                🔄
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const next = new Set(pinnedIds);
+                                                    if (pinnedIds.has(pmt.id)) next.delete(pmt.id);
+                                                    else next.add(pmt.id);
+                                                    setPinnedIds(next);
+                                                }}
+                                                title={pinnedIds.has(pmt.id) ? 'Unpin viewer' : 'Pin viewer'}
+                                                style={{
+                                                    background: pinnedIds.has(pmt.id) ? '#333' : 'none',
+                                                    border: pinnedIds.has(pmt.id) ? '1px solid #555' : '1px solid #444',
+                                                    borderRadius: '3px',
+                                                    color: pinnedIds.has(pmt.id) ? '#fff' : '#888',
+                                                    cursor: 'pointer',
+                                                    fontSize: '11px',
+                                                    padding: '1px 5px',
+                                                    lineHeight: 1.2,
+                                                }}
+                                            >
+                                                📌
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <canvas
+                                        ref={el => {
+                                            if (!el) return;
+                                            const ctx = el.getContext('2d');
+                                            if (!ctx) return;
+                                            const w = pmt.scanResX;
+                                            const h = pmt.scanResY;
+                                            if (pmt.scanImage) {
+                                                const img = pmt.scanImage;
+                                                let maxVal = 0;
+                                                for (let i = 0; i < img.length; i++) if (img[i] > maxVal) maxVal = img[i];
+                                                if (maxVal < 1e-12) maxVal = 1;
+                                                const imageData = ctx.createImageData(w, h);
+                                                for (let y = 0; y < h; y++) {
+                                                    for (let x = 0; x < w; x++) {
+                                                        const srcIdx = (h - 1 - y) * w + x;
+                                                        const v = Math.pow(Math.max(0, Math.min(1, img[srcIdx] / maxVal)), 0.45);
+                                                        const dstIdx = (y * w + x) * 4;
+                                                        imageData.data[dstIdx + 0] = Math.round(v * 80);
+                                                        imageData.data[dstIdx + 1] = Math.round(v * 255);
+                                                        imageData.data[dstIdx + 2] = Math.round(v * 80);
+                                                        imageData.data[dstIdx + 3] = 255;
+                                                    }
+                                                }
+                                                ctx.putImageData(imageData, 0, 0);
+                                            } else {
+                                                // Blank black canvas
+                                                ctx.fillStyle = '#000';
+                                                ctx.fillRect(0, 0, w, h);
+                                            }
+                                        }}
+                                        width={pmt.scanResX}
+                                        height={pmt.scanResY}
+                                        style={{ width: '100%', imageRendering: 'pixelated', borderRadius: 4, border: '1px solid #333' }}
+                                    />
+                                    {!hasScanImage && !isRendering && (
+                                        <div style={{
+                                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            borderRadius: 4,
+                                            pointerEvents: 'none',
+                                        }}>
+                                            <span style={{ fontSize: '10px', color: '#555', fontStyle: 'italic' }}>
+                                                No scan data yet
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: '9px', color: '#555', marginTop: 2 }}>
+                                        {pmt.scanResX}×{pmt.scanResY} raster scan
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
 
 
             </div>

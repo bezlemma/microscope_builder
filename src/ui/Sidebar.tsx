@@ -79,8 +79,8 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         icon: Zap,
         color: '#ff6b6b',
         items: [
-            { type: 'laser', label: 'Laser Source', icon: Zap },
-            { type: 'lamp', label: 'Lamp Source', icon: Zap },
+            { type: 'laser', label: 'Laser', icon: Zap },
+            { type: 'lamp', label: 'Lamp', icon: Zap },
         ]
     },
     {
@@ -124,6 +124,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         items: [
             { type: 'card', label: 'Viewing Card', icon: Search },
             { type: 'camera', label: 'Camera', icon: Box },
+            { type: 'pmt', label: 'PMT Detector', icon: Search },
         ]
     },
     {
@@ -555,6 +556,11 @@ export const Sidebar: React.FC = () => {
                             label="Light Sheet (OpenSPIM)"
                             active={activePreset === PresetName.OpenSPIM}
                             onClick={() => handlePresetClick(PresetName.OpenSPIM)}
+                        />
+                        <PresetButton
+                            label="Confocal Scanning"
+                            active={activePreset === PresetName.Confocal}
+                            onClick={() => handlePresetClick(PresetName.Confocal)}
                         />
 
                     </PresetCategory>

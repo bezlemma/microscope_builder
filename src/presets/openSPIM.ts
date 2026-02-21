@@ -71,36 +71,36 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // 2. Steering Mirror 1 at B4 — redirects -X → -Y
     //    Normal at -π/4: n̂ = (1/√2, -1/√2). Beam (-1,0)·n̂ = -1/√2 ✓
-    const t1 = 2;
+    const t1 = 6; // Standard 1" mirror thickness
     const r1 = -Math.PI / 4;
     const [m1x, m1y] = mirrorAtHole(hole(C.B, 4).x, hole(C.B, 4).y, t1, r1);
-    const m1 = new Mirror(12, t1, "Steering Mirror 1");
+    const m1 = new Mirror(25.4, t1, "Steering Mirror 1");
     m1.setPosition(m1x, m1y, 0);
     m1.setRotation(0, 0, r1);
     components.push(m1);
 
     // 3. Steering Mirror 2 at B2 — redirects -Y → +X
     //    Normal at π/4: n̂ = (1/√2, 1/√2). Beam (0,-1)·n̂ = -1/√2 ✓
-    const t2 = 2;
+    const t2 = 6;
     const r2 = Math.PI / 4;
     const [m2x, m2y] = mirrorAtHole(hole(C.B, 1).x, hole(C.B, 1).y, t2, r2);
-    const m2 = new Mirror(12, t2, "Steering Mirror 2");
+    const m2 = new Mirror(25.4, t2, "Steering Mirror 2");
     m2.setPosition(m2x, m2y, 0);
     m2.setRotation(0, 0, r2);
     components.push(m2);
 
     // ── Bottom rail optics (row 2, beam going +X) ──
 
-    // 4. Beam Expander lens 1 (f=25mm) at D2
-    const beL1 = new SphericalLens(1 / 25, 6, 3, "BE Lens 1 (f25)");
+    // 4. Beam Expander lens 1 (f=25mm) at D2 (1/2" diameter)
+    const beL1 = new SphericalLens(1 / 25, 25, 3.5, "BE Lens 1 (f25)");
     beL1.r1 = undefined;
     beL1.r2 = -(1.5168 - 1) * 25;
     beL1.setPosition(hole(C.D, 1).x, hole(C.D, 1).y, 0);
     beL1.setRotation(0, Math.PI / 2, 0);
     components.push(beL1);
 
-    // 5. Beam Expander lens 2 (f=50mm) at G2
-    const beL2 = new SphericalLens(1 / 50, 10, 4, "BE Lens 2 (f50)");
+    // 5. Beam Expander lens 2 (f=50mm) at G2 (1" diameter)
+    const beL2 = new SphericalLens(1 / 50, 12.7, 4, "BE Lens 2 (f50)");
     beL2.r1 = (1.5168 - 1) * 50;
     beL2.r2 = undefined;
     beL2.setPosition(hole(C.G, 1).x, hole(C.G, 1).y, 0);
@@ -108,14 +108,14 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     components.push(beL2);
 
     // 6. Vertical Slit at I2
-    const slit = new SlitAperture(5, 20, 25, "Vertical Slit");
+    const slit = new SlitAperture(0.25, 20, 25, "Vertical Slit");
     slit.setPosition(hole(C.I, 1).x, hole(C.I, 1).y, 0);
     slit.setRotation(0, 0, 0);
     components.push(slit);
 
-    // 7. Cylindrical Lens (f=50mm) at K2 — creates light sheet
+    // 7. Cylindrical Lens (f=50mm) at K2 — creates light sheet (1" diameter)
     const cylLens = new CylindricalLens(
-        25.84, 1e9, 10, 20, 4,
+        25.84, 1e9, 12.7, 25.4, 4,
         "Cylindrical Lens (f50)"
     );
     cylLens.setPosition(hole(C.K, 1).x, hole(C.K, 1).y, 0);
@@ -124,10 +124,10 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // 8. 1" Turn Mirror at N2 — redirects +X → +Y (up)
     //    Normal at 3π/4: n̂ = (-1/√2, 1/√2). Beam (1,0)·n̂ = -1/√2 ✓
-    const t3 = 2;
+    const t3 = 6;
     const r3 = 3 * Math.PI / 4;
     const [m3x, m3y] = mirrorAtHole(hole(C.N, 1).x, hole(C.N, 1).y, t3, r3);
-    const bigMirror = new Mirror(25, t3, "1\" Turn Mirror");
+    const bigMirror = new Mirror(25.4, t3, "1\" Turn Mirror");
     bigMirror.setPosition(m3x, m3y, 0);
     bigMirror.setRotation(0, 0, r3);
     components.push(bigMirror);
@@ -138,7 +138,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     //    Afocal relay: L1-L2 separated by f1+f2 = 75mm.
     //    L2 one focal length (25mm) before objective BFP (~207.5mm).
     //    → L2 at Y=182.5, L1 at Y=107.5.
-    const relayL1 = new SphericalLens(1 / 50, 10, 4, "BFP Relay 1 (f50)");
+    const relayL1 = new SphericalLens(1 / 50, 12.7, 4, "BFP Relay 1 (f50)");
     relayL1.r1 = undefined;
     relayL1.r2 = -(1.5168 - 1) * 50;
     relayL1.setPosition(hole(C.N, 0).x, 107.5, 0);
@@ -147,28 +147,27 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // 10. BFP Relay lens 2 (f=25mm)
     //    25mm before objective BFP → fills BFP with collimated beam
-    const relayL2 = new SphericalLens(1 / 25, 8, 3, "BFP Relay 2 (f25)");
+    const relayL2 = new SphericalLens(1 / 25, 24, 3.5, "BFP Relay 2 (f25)");
     relayL2.r1 = (1.5168 - 1) * 25;
     relayL2.r2 = undefined;
     relayL2.setPosition(hole(C.N, 0).x, 182.5, 0);
     relayL2.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
     components.push(relayL2);
 
-    // 11. Illumination Objective (Nikon 20×/0.5W) at N8
+    // 11. Illumination Objective (Nikon 10×/0.3W) at N8
     //     Faces +Y (light enters from -Y, passes through sample)
-    //     WD = 2.0mm, positioned so front element is at WD from sample center
     const illumObj = new Objective({
-        NA: 0.5,
-        magnification: 20,
+        NA: 0.3,
+        magnification: 10,
         immersionIndex: 1.33,
-        workingDistance: 2.0,
+        workingDistance: 3.5,
         tubeLensFocal: 200,
-        name: "Nikon 20×/0.5W Illum",
+        name: "Nikon 10×/0.3W Illum",
     });
     // Position along Y axis: chamber center is at hole(C.N,9).y = 237.5
-    // Objective front at sample center - WD along -Y approach
+    // Objective principal plane at sample center - (200/10) = 20mm
     illumObj.setPosition(hole(C.N, 9).x, hole(C.N, 9).y - 20, 0);
-    illumObj.setRotation(-Math.PI / 2, 0, 0);  // local Z → +Y
+    illumObj.setRotation(Math.PI / 2, 0, 0);  // local -Z → +Y (faces sample)
     components.push(illumObj);
 
     // ═══════════════════════════════════════
@@ -177,7 +176,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     //  Objectives can snap into the side holes via Alt+drag.
     //  Mickey specimen sits inside at center with ears facing +Z.
     // ═══════════════════════════════════════
-    const chamber = new SampleChamber(40, 3, 21, "L/X Sample Holder");
+    const chamber = new SampleChamber(75, 3, 30, "L/X Sample Holder");
     chamber.setPosition(hole(C.N, 9).x, hole(C.N, 9).y, 0);
     components.push(chamber);
 
@@ -186,48 +185,51 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     //  Detection from -X face of chamber, objective faces +X (inward).
     // ═══════════════════════════════════════
 
-    // 12. Detection Objective (Nikon 20×/0.5W)
+    // 12. Detection Objective (Nikon 10×/0.3W)
     //     Faces +X (into the sample chamber bore hole)
-    //     WD = 2.0mm from sample center
     const detObj = new Objective({
-        NA: 0.5,
-        magnification: 20,
+        NA: 0.3,
+        magnification: 10,
         immersionIndex: 1.33,
-        workingDistance: 2.0,
+        workingDistance: 3.5,
         tubeLensFocal: 200,
-        name: "Nikon 20×/0.5W Det",
+        name: "Nikon 10×/0.3W Det",
     });
     // Position along X axis: chamber center is at hole(C.N,9).x = 337.5
-    // Place at chamber -X face (chamber center - half cube size)
+    // Place 20mm from center (f=200/10)
     detObj.setPosition(hole(C.N, 9).x - 20, hole(C.N, 9).y, 0);
-    detObj.setRotation(0, Math.PI / 2, 0);  // local Z → +X (faces into sample)
+    detObj.setRotation(0, -Math.PI / 2, 0);  // local -Z → +X (faces sample)
     components.push(detObj);
 
-
     // 13. Emission Filter (LP 500nm) at J10
-    const emFilter = new Filter(
-        25, 3,
-        new SpectralProfile('longpass', 500),
-        "Em Filter (LP 500)"
-    );
+    const emFilter = new Filter(30, 2, new SpectralProfile('longpass', 510),"Em Filter (LP 500)");
     emFilter.setPosition(hole(C.J, 9).x, hole(C.J, 9).y, 0);
     emFilter.setRotation(0, 0, 0);
     components.push(emFilter);
 
     // 14. Tube Lens (Nikon f=200mm) at F10
     //     Placed ~150mm from objective back aperture for infinity-corrected imaging
-    const tubeLens = new SphericalLens(1 / 200, 12, 4, "Nikon Tube Lens (f200)");
+    const tubeLens = new SphericalLens(1 / 200, 12.7, 4, "Nikon Tube Lens (f200)");
     tubeLens.r1 = undefined;
     tubeLens.r2 = -(1.5168 - 1) * 200;
     tubeLens.setPosition(hole(C.F, 9).x, hole(C.F, 9).y, 0);
     tubeLens.setRotation(0, Math.PI / 2, 0);  // local Z → +X
     components.push(tubeLens);
 
-    // 15. sCMOS Camera — placed at tube lens focal distance (200mm from tube lens)
-    //     At column B, row 9
+    // Tube Lens — Achromatic Doublet 
+    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
+    tubeLensCrown.setPosition(hole(C.F, 9).x, hole(C.F, 9).y, 0); 
+    tubeLensCrown.setRotation(0, Math.PI / 2, 0);
+    components.push(tubeLensCrown);
+    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
+    tubeLensFlint.setPosition(hole(C.F, 9).x+3.26, hole(C.F, 9).y, 0); 
+    tubeLensFlint.setRotation(0, Math.PI / 2, 0); 
+    components.push(tubeLensFlint);
+
+    // sCMOS Camera
     const cam = new Camera(13, 13, "sCMOS Camera");
     cam.setPosition(hole(C.B, 9).x, hole(C.B, 9).y, 0);
-    cam.setRotation(0, Math.PI / 2, 0);  // local Z → +X, sensor faces +X
+    cam.setRotation(Math.PI / 2, Math.PI / 2, 0);  // local Z → +X, sensor faces +X
     components.push(cam);
 
     return components;

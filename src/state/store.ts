@@ -4,7 +4,7 @@ import { serializeScene, deserializeScene } from './ubzSerializer';
 import { PropertyAnimator } from '../physics/PropertyAnimator';
 
 // Presets
-import { createTransFluorescenceScene } from '../presets/infinitySystem';
+import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
 import { createBrightfieldScene } from '../presets/brightfield';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
@@ -13,6 +13,7 @@ import { createPolarizationZooScene } from '../presets/polarizationZoo';
 import { createMZInterferometerScene } from '../presets/mzInterferometer';
 import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
+import { createConfocalScene } from '../presets/confocal';
 
 // --- State Types ---
 export interface RayConfig {
@@ -34,7 +35,8 @@ export enum PresetName {
     PolarizationZoo = "Polarization Zoo",
     MZInterferometer = "MZ Interferometer",
     EpiFluorescence = "Epi-Fluorescence",
-    OpenSPIM = "OpenSPIM Lightsheet"
+    OpenSPIM = "OpenSPIM Lightsheet",
+    Confocal = "Confocal Scanning"
 }
 
 export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
@@ -44,7 +46,7 @@ export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene()
 // Action to load a preset
 export const loadPresetAtom = atom(
     null,
-    (_get, set, presetName: PresetName) => {
+    (get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
         // Reset E&M state for fresh preset
         set(rayConfigAtom, { rayCount: 32, showFootprint: false, solver2Enabled: false, emFieldVisible: false });
@@ -67,7 +69,27 @@ export const loadPresetAtom = atom(
             set(componentsAtom, createEpiFluorescenceScene());
         } else if (presetName === PresetName.OpenSPIM) {
             set(componentsAtom, createOpenSPIMScene());
+        } else if (presetName === PresetName.Confocal) {
+            const preset = createConfocalScene();
+            set(componentsAtom, preset.scene);
+
+            // Apply animation channels from the preset
+            const animator = get(animatorAtom);
+            animator.clearAll();
+            animator.reset();
+            for (const ch of preset.channels) {
+                animator.addChannel(ch);
+            }
+
+            set(animationPlayingAtom, preset.animationPlaying);
+            set(animationSpeedAtom, preset.animationSpeed);
+            return;  // Already set componentsAtom above
         }
+
+        // Clear animator for all other presets
+        const animator = get(animatorAtom);
+        animator.clearAll();
+        animator.reset();
     }
 );
 
@@ -112,7 +134,7 @@ export const loadSceneAtom = atom(
 //  10. UNDO SYSTEM — Ctrl+Z support
 //  Stores serialized scene snapshots. Max 20 entries.
 // ════════════════════════════════════════════════════════════
-const MAX_UNDO = 20;
+const MAX_UNDO = 20; // How much RAM does this cost us? Seems like not a lot.
 export const undoStackAtom = atom<string[]>([]);
 
 /** Push current scene state onto the undo stack (call BEFORE mutation). */

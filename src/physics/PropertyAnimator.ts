@@ -220,6 +220,23 @@ export class PropertyAnimator {
         this.playing = false;
     }
 
+    /**
+     * Snap all channels to their restoreValue without removing them.
+     * Used on global pause to return mirrors to rest position.
+     */
+    restoreAll(components: OpticalComponent[]): void {
+        const byId = new Map<string, OpticalComponent>();
+        for (const c of components) byId.set(c.id, c);
+        for (const ch of this.channels) {
+            if (ch.restoreValue !== undefined) {
+                const target = byId.get(ch.targetId);
+                if (target) {
+                    setProperty(target, ch.property, ch.restoreValue);
+                }
+            }
+        }
+    }
+
     toggle(): void {
         this.playing = !this.playing;
     }

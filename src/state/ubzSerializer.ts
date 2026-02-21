@@ -93,6 +93,8 @@ function getTypeName(comp: OpticalComponent): string | null {
     if (comp instanceof CylindricalLens) return 'CylindricalLens';
     if (comp instanceof IdealLens) return 'IdealLens';
     if (comp instanceof Card) return 'Card';
+    if (comp instanceof SlitAperture) return 'SlitAperture';
+    if (comp instanceof PolygonScanner) return 'PolygonScanner';
     return null;
 }
 
@@ -487,9 +489,9 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
         }
         case 'SampleChamber': {
             const sc = new SampleChamber(
-                num(props, 'cubeSize', 40),
+                num(props, 'cubeSize', 75),
                 num(props, 'wallThickness', 3),
-                num(props, 'boreDiameter', 21),
+                num(props, 'boreDiameter', 30),
                 str(props, 'name', 'L/X Sample Holder')
             );
             sc.excitationSpectrum = parseSpectralProfile(props, 'excitation') ?? sc.excitationSpectrum;

@@ -7,7 +7,7 @@ export class Mirror extends OpticalComponent {
     diameter: number;   // mm — circular aperture diameter
     thickness: number;  // mm — mirror body thickness
 
-    constructor(diameter: number = 20, thickness: number = 2, name: string = "Mirror") {
+    constructor(diameter: number = 25.4, thickness: number = 6, name: string = "Mirror") {
         super(name);
         this.diameter = diameter;
         this.thickness = thickness;

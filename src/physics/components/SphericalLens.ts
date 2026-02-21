@@ -15,7 +15,7 @@ import { OpticMesh, NormalFn } from '../OpticMesh';
  */
 export class SphericalLens extends OpticalComponent {
     public curvature: number = 0.02; // Default f=50
-    public apertureRadius: number = 10.0; 
+    public apertureRadius: number = 12.7; 
     public thickness: number = 5.0; 
     public ior: number = 1.5168;
     

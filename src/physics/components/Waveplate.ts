@@ -151,9 +151,8 @@ export class Waveplate extends OpticalComponent {
     /**
      * ABCD matrix: identity (waveplates don't affect beam width).
      */
-    getABCD(): { tangential: number[][]; sagittal: number[][] } {
-        const I = [[1, 0], [0, 1]];
-        return { tangential: I, sagittal: I };
+    getABCD(): [number, number, number, number] {
+        return [1, 0, 0, 1];
     }
 
     getApertureRadius(): number {

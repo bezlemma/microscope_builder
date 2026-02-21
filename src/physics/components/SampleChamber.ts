@@ -24,9 +24,9 @@ export class SampleChamber extends Sample {
     snapPorts: { x: number; y: number; rx: number; ry: number; rz: number; axisDir: 'x' | 'y' }[];
 
     constructor(
-        cubeSize: number = 40,
+        cubeSize: number = 100,
         wallThickness: number = 3,
-        boreDiameter: number = 21,
+        boreDiameter: number = 30, // wide enough to fit water dipping objectives
         name: string = "L/X Sample Holder"
     ) {
         super(name);
@@ -38,14 +38,14 @@ export class SampleChamber extends Sample {
         // Euler rotation orients objective W (local Z) to face inward.
         const half = cubeSize / 2;
         this.snapPorts = [
-            // +X face: objective W → -X (inward),  Ry(-π/2)
-            { x: half, y: 0, rx: 0, ry: -Math.PI / 2, rz: 0, axisDir: 'x' },
-            // -X face: objective W → +X (inward),  Ry(+π/2)
-            { x: -half, y: 0, rx: 0, ry: Math.PI / 2, rz: 0, axisDir: 'x' },
-            // +Y face: objective W → -Y (inward),  Rx(+π/2)
-            { x: 0, y: half, rx: Math.PI / 2, ry: 0, rz: 0, axisDir: 'y' },
-            // -Y face: objective W → +Y (inward),  Rx(-π/2)
-            { x: 0, y: -half, rx: -Math.PI / 2, ry: 0, rz: 0, axisDir: 'y' },
+            // +X face: objective local -Z → -X (inward). local Z → +X. Ry(+π/2)
+            { x: half, y: 0, rx: 0, ry: Math.PI / 2, rz: 0, axisDir: 'x' },
+            // -X face: objective local -Z → +X (inward). local Z → -X. Ry(-π/2)
+            { x: -half, y: 0, rx: 0, ry: -Math.PI / 2, rz: 0, axisDir: 'x' },
+            // +Y face: objective local -Z → -Y (inward). local Z → +Y. Rx(-π/2)
+            { x: 0, y: half, rx: -Math.PI / 2, ry: 0, rz: 0, axisDir: 'y' },
+            // -Y face: objective local -Z → +Y (inward). local Z → -Y. Rx(+π/2)
+            { x: 0, y: -half, rx: Math.PI / 2, ry: 0, rz: 0, axisDir: 'y' },
         ];
 
         this._updateBounds();

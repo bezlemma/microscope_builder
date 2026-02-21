@@ -23,6 +23,7 @@ import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { PolygonScanner } from '../physics/components/PolygonScanner';
 import { SampleChamber } from '../physics/components/SampleChamber';
+import { PMT } from '../physics/components/PMT';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { OpticalComponent } from '../physics/Component';
@@ -51,7 +52,8 @@ function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'dichroic') return new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
     if (type === 'curvedMirror') return new CurvedMirror(25, 100, 3, 'Curved Mirror');
     if (type === 'polygonScanner') return new PolygonScanner({ numFaces: 6, inscribedRadius: 10, faceHeight: 10, name: 'Polygon Scanner' });
-    if (type === 'lChamber') return new SampleChamber(40, 3, 21, 'L/X Sample Holder');
+    if (type === 'lChamber') return new SampleChamber(75, 3, 30, 'L/X Sample Holder');
+    if (type === 'pmt') return new PMT(10, 10, 'PMT Detector');
     return null;
 }
 

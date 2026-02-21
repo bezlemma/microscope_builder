@@ -11,6 +11,7 @@ import { useAtom } from 'jotai';
 import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
+import { PMT } from '../physics/components/PMT';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { OpticalComponent } from '../physics/Component';
@@ -27,7 +28,7 @@ export const ViewerPanels: React.FC = () => {
     // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
         .map(id => components.find(c => c.id === id))
-        .filter((c): c is OpticalComponent => c instanceof Card || c instanceof Camera);
+        .filter((c): c is OpticalComponent => c instanceof Card || c instanceof Camera || (c instanceof PMT && (c as PMT).hasValidAxes()));
 
     if (pinnedComponents.length === 0) return null;
 
@@ -112,6 +113,86 @@ export const ViewerPanels: React.FC = () => {
                             }}
                         />
                     )}
+                    {comp instanceof PMT && (() => {
+                        const pmt = comp as PMT;
+                        const hasScanImage = !!pmt.scanImage;
+                        return (
+                            <div style={{ position: 'relative' }}>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2px' }}>
+                                    <button
+                                        onClick={() => {
+                                            if (!rayConfig.solver2Enabled) {
+                                                setRayConfig({ ...rayConfig, solver2Enabled: true });
+                                            }
+                                            pmt.markScanStale();
+                                            pmt.version++;
+                                            // Force re-render by bumping components
+                                            // (ViewerPanels reads from componentsAtom)
+                                        }}
+                                        disabled={isRendering}
+                                        title="Re-run raster scan"
+                                        style={{
+                                            background: isRendering ? '#333' : '#1a5a2a',
+                                            border: '1px solid #444',
+                                            borderRadius: '3px',
+                                            color: isRendering ? '#666' : '#8f8',
+                                            cursor: isRendering ? 'not-allowed' : 'pointer',
+                                            fontSize: '11px',
+                                            padding: '1px 5px',
+                                            lineHeight: 1.2,
+                                        }}
+                                    >
+                                        🔄
+                                    </button>
+                                </div>
+                                <canvas
+                                    ref={el => {
+                                        if (!el) return;
+                                        const ctx = el.getContext('2d');
+                                        if (!ctx) return;
+                                        const w = pmt.scanResX;
+                                        const h = pmt.scanResY;
+                                        if (pmt.scanImage) {
+                                            const img = pmt.scanImage;
+                                            let maxVal = 0;
+                                            for (let i = 0; i < img.length; i++) if (img[i] > maxVal) maxVal = img[i];
+                                            if (maxVal < 1e-12) maxVal = 1;
+                                            const imageData = ctx.createImageData(w, h);
+                                            for (let y = 0; y < h; y++) {
+                                                for (let x = 0; x < w; x++) {
+                                                    const srcIdx = (h - 1 - y) * w + x;
+                                                    const v = Math.pow(Math.max(0, Math.min(1, img[srcIdx] / maxVal)), 0.45);
+                                                    const dstIdx = (y * w + x) * 4;
+                                                    imageData.data[dstIdx + 0] = Math.round(v * 80);
+                                                    imageData.data[dstIdx + 1] = Math.round(v * 255);
+                                                    imageData.data[dstIdx + 2] = Math.round(v * 80);
+                                                    imageData.data[dstIdx + 3] = 255;
+                                                }
+                                            }
+                                            ctx.putImageData(imageData, 0, 0);
+                                        } else {
+                                            ctx.fillStyle = '#000';
+                                            ctx.fillRect(0, 0, w, h);
+                                        }
+                                    }}
+                                    width={pmt.scanResX}
+                                    height={pmt.scanResY}
+                                    style={{ width: '160px', height: '160px', imageRendering: 'pixelated', borderRadius: 4, border: '1px solid #333' }}
+                                />
+                                {!hasScanImage && (
+                                    <div style={{
+                                        position: 'absolute', top: 24, left: 0, width: '160px', height: '160px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        borderRadius: 4,
+                                    }}>
+                                        <span style={{ fontSize: '10px', color: '#555', fontStyle: 'italic' }}>
+                                            No scan data yet
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             ))}
         </div>

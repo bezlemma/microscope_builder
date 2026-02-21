@@ -6,7 +6,7 @@ export class Blocker extends OpticalComponent {
     diameter: number;   // mm — circular aperture diameter
     thickness: number;  // mm — body thickness along optical axis
 
-    constructor(diameter: number = 20, thickness: number = 5, name: string = "Blocker") {
+    constructor(diameter: number = 25.4, thickness: number = 5, name: string = "Blocker") {
         super(name);
         this.diameter = diameter;
         this.thickness = thickness;
