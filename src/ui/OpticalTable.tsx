@@ -9,6 +9,7 @@ import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
 import { Mirror } from '../physics/components/Mirror';
+import { GalvoScanHead } from '../physics/components/GalvoScanHead';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
@@ -64,6 +65,7 @@ import {
     IdealLensVisualizer,
     CylindricalLensVisualizer,
     PrismVisualizer,
+    GalvoScanHeadVisualizer,
 } from './visualizers/ComponentVisualizers';
 
 
@@ -1127,7 +1129,8 @@ export const OpticalTable: React.FC = () => {
             <group>
                 {components.map(c => {
                     let visual = null;
-                    if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
+                    if (c instanceof GalvoScanHead) visual = <GalvoScanHeadVisualizer component={c} />;
+                    else if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
                     else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
                     else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
                     else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;

@@ -1,0 +1,43 @@
+=== COMPONENT POSITIONS ===
+  488 nm Laser              pos=(0.0, -50.0)  fwd=(0.000, 1.000, 0.000)
+  Dichroic (LP 505)         pos=(0.0, 0.0)  fwd=(0.707, -0.707, -0.000)
+  Galvo M1 (X)              pos=(35.0, 0.0)  fwd=(-0.383, -0.924, 0.000)
+  Galvo M2 (Y)              pos=(50.0, -15.0)  fwd=(-0.924, -0.383, 0.000)
+  Scan Lens                 pos=(50.0, -65.0)  fwd=(0.000, -1.000, 0.000)
+  Fold Mirror 1             pos=(50.0, -190.0)  fwd=(-0.707, 0.707, 0.000)
+  Tube Lens                 pos=(-75.0, -190.0)  fwd=(-1.000, 0.000, 0.000)
+  Fold Mirror 2             pos=(-175.0, -190.0)  fwd=(0.707, 0.707, 0.000)
+  10×/0.5W Objective        pos=(-175.0, -90.0)  fwd=(0.000, -1.000, 0.000)
+  Specimen (Fluo)           pos=(-175.0, -70.0)  fwd=(0.000, -1.000, 0.000)
+  Beam Stop                 pos=(-175.0, -40.0)  fwd=(0.000, 1.000, 0.000)
+  Relay Lens                pos=(-50.0, 0.0)  fwd=(-1.000, 0.000, 0.000)
+  Em Filter (BP520/40)      pos=(-100.0, 0.0)  fwd=(-1.000, 0.000, 0.000)
+  Confocal Pinhole          pos=(-150.0, 0.0)  fwd=(-1.000, 0.000, 0.000)
+  PMT                       pos=(-200.0, 0.0)  fwd=(1.000, 0.000, 0.000)
+
+=== BEAM TRACE ===
+Laser at (0, -50), fires (0.000, 1.000)
+  → Dichroic (LP 505)         beam_at=(0.0, -47.0)  beam_dir=(0.000, 1.000)
+  → Galvo M1 (X)              beam_at=(0.0, 0.0)  beam_dir=(1.000, -0.000)
+  → Galvo M2 (Y)              beam_at=(32.4, -0.0)  beam_dir=(0.707, -0.707)
+  → Scan Lens                 beam_at=(50.0, -17.6)  beam_dir=(0.000, -1.000)
+  → Fold Mirror 1             beam_at=(50.0, -65.0)  beam_dir=(0.000, -1.000)
+  → Tube Lens                 beam_at=(50.0, -188.6)  beam_dir=(-1.000, 0.000)
+  → Fold Mirror 2             beam_at=(-75.0, -188.6)  beam_dir=(-1.000, -0.007)
+  → 10×/0.5W Objective        beam_at=(-174.3, -189.3)  beam_dir=(0.007, 1.000)
+  → Specimen (Fluo)           beam_at=(-173.6, -90.0)  beam_dir=(-0.063, 0.998)
+  → Specimen (Fluo)           beam_at=(-174.2, -80.0)  beam_dir=(-0.063, 0.998)
+  → Beam Stop                 beam_at=(-175.5, -60.0)  beam_dir=(-0.063, 0.998)
+
+Hit sequence: Dichroic (LP 505) → Galvo M1 (X) → Galvo M2 (Y) → Scan Lens → Fold Mirror 1 → Tube Lens → Fold Mirror 2 → 10×/0.5W Objective → Specimen (Fluo) → Specimen (Fluo) → Beam Stop
+  ✓ Dichroic
+  ✗ Scan Head
+  ✓ Scan Lens
+  ✓ Fold Mirror 1
+  ✓ Tube Lens
+  ✓ Fold Mirror 2
+  ✓ Objective
+  ✓ Specimen
+
+Layout: x=[-200, 50]  y=[-190, 0]
+Size: 250 × 190 mm

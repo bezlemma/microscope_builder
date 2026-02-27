@@ -32,6 +32,7 @@ import { DichroicMirror } from '../../physics/components/DichroicMirror';
 import { CurvedMirror } from '../../physics/components/CurvedMirror';
 import { PolygonScanner } from '../../physics/components/PolygonScanner';
 import { PMT } from '../../physics/components/PMT';
+import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
@@ -327,6 +328,40 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
                     clearcoat={1.0}
                     clearcoatRoughness={0.05}
                 />
+            </mesh>
+        </group>
+    );
+};
+
+export const GalvoScanHeadVisualizer = ({ component }: { component: GalvoScanHead }) => {
+    const radius = component.diameter / 2;
+    const boxW = component.diameter * 0.8;
+    const boxD = component.thickness * 1.5;
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Dark housing body */}
+            <mesh>
+                <boxGeometry args={[boxW, boxW, boxD]} />
+                <meshStandardMaterial color="#111118" roughness={0.7} metalness={0.3} transparent opacity={0.7} />
+            </mesh>
+            {/* Reflective pivot mirror at z=0 (matches physics intersect plane) */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[radius * 0.85, radius * 0.85, 0.3, 32]} />
+                <meshPhysicalMaterial color="#c0d8ff" metalness={0.95} roughness={0.03} clearcoat={1.0} />
+            </mesh>
+            {/* X-scan axis indicator (red bar) */}
+            <mesh position={[0, radius * 0.6, boxD * 0.35]}>
+                <boxGeometry args={[radius * 0.8, 0.5, 0.5]} />
+                <meshStandardMaterial color="#ff4444" emissive="#661111" />
+            </mesh>
+            {/* Y-scan axis indicator (blue bar) */}
+            <mesh position={[0, -radius * 0.6, -boxD * 0.35]}>
+                <boxGeometry args={[0.5, radius * 0.8, 0.5]} />
+                <meshStandardMaterial color="#4488ff" emissive="#112266" />
             </mesh>
         </group>
     );

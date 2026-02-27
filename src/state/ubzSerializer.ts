@@ -32,6 +32,8 @@ import { Card } from '../physics/components/Card';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { SlitAperture } from '../physics/components/SlitAperture';
 import { PolygonScanner } from '../physics/components/PolygonScanner';
+import { GalvoScanHead } from '../physics/components/GalvoScanHead';
+import { PMT } from '../physics/components/PMT';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
 
 // ════════════════════════════════════════════════════════════
@@ -180,6 +182,21 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`inscribedRadius = ${fmt(comp.inscribedRadius)}`);
         lines.push(`faceHeight = ${fmt(comp.faceHeight)}`);
         lines.push(`scanAngle = ${fmt(comp.scanAngle)}`);
+    } else if (comp instanceof GalvoScanHead) {
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`scanX = ${fmt(comp.scanX)}`);
+        lines.push(`scanY = ${fmt(comp.scanY)}`);
+    } else if (comp instanceof PMT) {
+        lines.push(`width = ${fmt(comp.width)}`);
+        lines.push(`height = ${fmt(comp.height)}`);
+        if (comp.xAxisComponentId) lines.push(`xAxisComponentId = ${comp.xAxisComponentId}`);
+        if (comp.xAxisProperty) lines.push(`xAxisProperty = ${comp.xAxisProperty}`);
+        if (comp.yAxisComponentId) lines.push(`yAxisComponentId = ${comp.yAxisComponentId}`);
+        if (comp.yAxisProperty) lines.push(`yAxisProperty = ${comp.yAxisProperty}`);
+        lines.push(`pmtSampleHz = ${fmt(comp.pmtSampleHz)}`);
+        lines.push(`scanResX = ${fmt(comp.scanResX)}`);
+        lines.push(`scanResY = ${fmt(comp.scanResY)}`);
     }
 }
 
@@ -357,6 +374,16 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 name: str(props, 'name', 'Polygon Scanner'),
             });
         }
+        case 'GalvoScanHead': {
+            const c = new GalvoScanHead(
+                num(props, 'diameter', 15),
+                num(props, 'thickness', 2),
+                str(props, 'name', 'Galvo Scan Head')
+            );
+            c.scanX = num(props, 'scanX', 0);
+            c.scanY = num(props, 'scanY', 0);
+            return c;
+        }
         case 'Blocker': {
             return new Blocker(
                 num(props, 'diameter', 20),
@@ -482,6 +509,21 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 num(props, 'height', 20),
                 str(props, 'name', 'Card')
             );
+        }
+        case 'PMT': {
+            const c = new PMT(
+                num(props, 'width', 10),
+                num(props, 'height', 10),
+                str(props, 'name', 'PMT Detector')
+            );
+            c.xAxisComponentId = props['xAxisComponentId'] || null;
+            c.xAxisProperty = props['xAxisProperty'] || null;
+            c.yAxisComponentId = props['yAxisComponentId'] || null;
+            c.yAxisProperty = props['yAxisProperty'] || null;
+            c.pmtSampleHz = num(props, 'pmtSampleHz', 4096);
+            c.scanResX = num(props, 'scanResX', 64);
+            c.scanResY = num(props, 'scanResY', 64);
+            return c;
         }
         case 'SampleChamber': {
             const sc = new SampleChamber(

@@ -7,6 +7,7 @@ import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physic
 import { Euler, Quaternion, Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Mirror } from '../physics/components/Mirror';
+import { GalvoScanHead } from '../physics/components/GalvoScanHead';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
@@ -743,6 +744,8 @@ export const Inspector: React.FC = () => {
     const isPolygonScanner = selectedComponent instanceof PolygonScanner;
     const isSample = selectedComponent instanceof Sample;
     const isGalvoCapable = isFlatMirror || isCurvedMirror;
+    const isScanHead = selectedComponent instanceof GalvoScanHead;
+    const isGalvoOrScanHead = isGalvoCapable || isScanHead;
     const isPMT = selectedComponent instanceof PMT;
 
     const hasSpectralProfile = isFilter || isDichroic;
@@ -1107,15 +1110,15 @@ export const Inspector: React.FC = () => {
                 )}
 
                 {/* Galvo Scan — for Mirror and CurvedMirror */}
-                {isGalvoCapable && (
+                {isGalvoOrScanHead && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Galvo Scan</label>
                         {(() => {
-                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'rotation.y' || ch.property === 'rotation.z'));
+                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'tiltAngle' || ch.property === 'panAngle' || ch.property === 'scanX' || ch.property === 'scanY'));
                             const isScanning = !!activeChannel;
                             const savedSettings = galvoAngles.get(selectedComponent.id);
                             const currentAxis = activeChannel
-                                ? (activeChannel.property === 'rotation.y' ? 'U' : 'V')
+                                ? (activeChannel.property === 'tiltAngle' || activeChannel.property === 'scanY' ? 'U' : 'V')
                                 : (savedSettings?.axis ?? 'V');
                             const currentHalfDeg = isScanning
                                 ? Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10
@@ -1133,14 +1136,17 @@ export const Inspector: React.FC = () => {
                                             key={`galvo-axis-${selectedComponent.id}-${activeChannel?.id ?? 'idle'}`}
                                             onChange={e => {
                                                 const newAxisLabel = e.target.value;
-                                                const newAxisProp = newAxisLabel === 'U' ? 'rotation.y' : 'rotation.z';
+                                                const newAxisProp = isScanHead
+                                                    ? (newAxisLabel === 'U' ? 'scanY' : 'scanX')
+                                                    : (newAxisLabel === 'U' ? 'tiltAngle' : 'panAngle');
                                                 if (isScanning) {
                                                     // Switching axis while animating: remove old channel, create new on the new axis
                                                     const oldPeriodMs = activeChannel!.periodMs;
                                                     animator.removeChannel(activeChannel!.id, components);
                                                     // Compute center from the NEW axis's current rotation (not the old axis!)
-                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
-                                                    const newCenter = newAxisProp === 'rotation.y' ? euler.y : euler.z;
+                                                    const newCenter = isScanHead
+                                                        ? ((selectedComponent as GalvoScanHead)[newAxisProp === 'scanY' ? 'scanY' : 'scanX'])
+                                                        : (newAxisProp === 'tiltAngle' ? selectedComponent.tiltAngle : selectedComponent.panAngle);
                                                     const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || String(currentHalfDeg));
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
@@ -1232,12 +1238,15 @@ export const Inspector: React.FC = () => {
                                                 } else {
                                                     const axisEl = document.getElementById('galvo-axis-' + selectedComponent.id) as HTMLSelectElement;
                                                     const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
-                                                    const axis = axisEl?.value === 'U' ? 'rotation.y' : 'rotation.z';
+                                                    const axis = isScanHead
+                                                        ? (axisEl?.value === 'U' ? 'scanY' : 'scanX')
+                                                        : (axisEl?.value === 'U' ? 'tiltAngle' : 'panAngle');
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || '5');
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
                                                     // Use restoreValue if coming from an existing channel, else current rotation
-                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
-                                                    const currentRotVal = axis === 'rotation.y' ? euler.y : euler.z;
+                                                    const currentRotVal = isScanHead
+                                                        ? ((selectedComponent as GalvoScanHead)[axis === 'scanY' ? 'scanY' : 'scanX'])
+                                                        : (axis === 'tiltAngle' ? selectedComponent.tiltAngle : selectedComponent.panAngle);
                                                     const center = channelCenter || currentRotVal;
                                                     const ch: AnimationChannel = {
                                                         id: generateChannelId(),
@@ -3100,10 +3109,10 @@ export const Inspector: React.FC = () => {
                     // Find all components with active galvo/piezo animation channels
                     const galvoOptions: { compId: string; compName: string; property: string; label: string }[] = [];
                     for (const ch of animator.channels) {
-                        if (ch.property === 'rotation.y' || ch.property === 'rotation.z') {
+                        if (ch.property === 'tiltAngle' || ch.property === 'panAngle' || ch.property === 'scanX' || ch.property === 'scanY') {
                             const comp = components.find(c => c.id === ch.targetId);
                             if (comp) {
-                                const axisLabel = ch.property === 'rotation.y' ? 'U' : 'V';
+                                const axisLabel = (ch.property === 'tiltAngle' || ch.property === 'scanY') ? 'U' : 'V';
                                 galvoOptions.push({
                                     compId: comp.id,
                                     compName: comp.name,

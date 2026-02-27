@@ -20,7 +20,7 @@ export type EasingType = 'linear' | 'sinusoidal' | 'discrete';
 export interface AnimationChannel {
     id: string;
     targetId: string;           // component.id
-    property: string;           // e.g. 'scanAngle', 'position.y', 'rotation.z'
+    property: string;           // e.g. 'panAngle', 'tiltAngle', 'scanX', 'position.y'
     from: number;
     to: number;
     easing: EasingType;
@@ -76,25 +76,32 @@ function evaluateEasing(
 }
 
 /**
- * Resolve a dot-notation property path and set the value on a component.
+ * Resolve a property path and set the value on a component.
  *
- * Supported patterns:
- *   - 'scanAngle'          → component.scanAngle = value
- *   - 'position.x'         → component.position.x = value; updateMatrices()
- *   - 'position.y'         → component.position.y = value; updateMatrices()
- *   - 'rotation.z'         → decompose quaternion, set euler Z, recompose
- *   - any scalar property  → (component as any)[property] = value
+ * Rotation support:
+ *   - 'panAngle'  → sets component.panAngle, calls recomputeRotation()
+ *   - 'tiltAngle' → sets component.tiltAngle, calls recomputeRotation()
+ *   These are the preferred way to animate rotation — no Euler decomposition.
+ *
+ *   - 'rotation.x/y/z' → legacy Euler-based (retained for backward compat)
  */
 export function setProperty(
     component: OpticalComponent,
     property: string,
     value: number
 ): void {
-    if (property.startsWith('position.')) {
+    if (property === 'panAngle') {
+        component.panAngle = value;
+        component.recomputeRotation();
+    } else if (property === 'tiltAngle') {
+        component.tiltAngle = value;
+        component.recomputeRotation();
+    } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         component.position[axis] = value;
         component.updateMatrices();
     } else if (property.startsWith('rotation.')) {
+        // Legacy Euler-based rotation (kept for backward compatibility)
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
         euler[axis] = value;
@@ -122,7 +129,11 @@ export function setProperty(
  * Read the current value of a property from a component.
  */
 export function getProperty(component: OpticalComponent, property: string): number {
-    if (property.startsWith('position.')) {
+    if (property === 'panAngle') {
+        return component.panAngle;
+    } else if (property === 'tiltAngle') {
+        return component.tiltAngle;
+    } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         return component.position[axis];
     } else if (property.startsWith('rotation.')) {

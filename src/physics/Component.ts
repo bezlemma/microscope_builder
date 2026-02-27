@@ -19,6 +19,16 @@ export abstract class OpticalComponent implements Surface {
     version: number = 0; // Increments on every mutation — used by React to detect changes on mutable objects
     absorptionCoeff: number = 0; // Beer-Lambert absorption coefficient [mm⁻¹], 0 = transparent
 
+    /**
+     * Pan angle (radians) — direction the component faces in the XY plane.
+     * Tilt angle (radians) — tip out of the XY plane (0 = vertical on table).
+     *
+     * The quaternion is always: q = Ry(tilt) · Rz(pan) · Rx(π/2)
+     * Animation just sets these scalars — no Euler decomposition needed.
+     */
+    panAngle: number = 0;
+    tiltAngle: number = 0;
+
     /** Tracks last version for which matrices were computed (dirty-flag). */
     private _matrixVersion: number = -1;
     private static readonly UNIT_SCALE = new Vector3(1, 1, 1);
@@ -39,8 +49,31 @@ export abstract class OpticalComponent implements Surface {
         this.version++;
     }
 
+    /**
+     * Recompute the quaternion from panAngle and tiltAngle.
+     * q = Ry(tilt) · Rz(pan) · Rx(π/2)
+     *
+     * This is the ONLY place the quaternion is derived from pan/tilt.
+     * All animation and galvo scan code sets panAngle/tiltAngle then calls this.
+     */
+    recomputeRotation(): void {
+        const qx = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
+        const qz = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), this.panAngle);
+        const qy = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), this.tiltAngle);
+        // q = Ry · Rz · Rx
+        this.rotation.copy(qy.multiply(qz).multiply(qx));
+        this.version++;
+    }
+
     setRotation(x: number, y: number, z: number) {
+        // Build quaternion from Euler (preserves exact backward compat)
         this.rotation.setFromEuler(new Euler(x, y, z));
+        // Extract panAngle/tiltAngle from the resulting forward direction
+        // (same logic as pointAlong — works for all orientations)
+        const forward = new Vector3(0, 0, 1).applyQuaternion(this.rotation);
+        this.panAngle = Math.atan2(forward.y, forward.x);
+        const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
+        this.tiltAngle = Math.atan2(forward.z, xyLen);
         this.version++;
     }
 
@@ -76,6 +109,12 @@ export abstract class OpticalComponent implements Surface {
         // Build rotation matrix: columns = [right, up, forward]
         const m = new Matrix4().makeBasis(right, up, forward);
         this.rotation.setFromRotationMatrix(m);
+
+        // Extract panAngle from the forward direction projected to XY plane
+        this.panAngle = Math.atan2(forward.y, forward.x);
+        // tiltAngle = how much the forward direction is out of the XY plane
+        const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
+        this.tiltAngle = Math.atan2(forward.z, xyLen);
         this.version++;
     }
 

@@ -33,6 +33,7 @@ import { Card } from './components/Card';
 import { SlitAperture } from './components/SlitAperture';
 import { PolygonScanner } from './components/PolygonScanner';
 import { PMT } from './components/PMT';
+import { GalvoScanHead } from './components/GalvoScanHead';
 
 /** Registry entry for a component type. */
 export interface ComponentEntry {
@@ -68,6 +69,7 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['SlitAperture',    { ctor: SlitAperture }],
     ['PolygonScanner',  { ctor: PolygonScanner }],
     ['PMT',             { ctor: PMT }],
+    ['GalvoScanHead',  { ctor: GalvoScanHead }],
 ];
 
 /** Map from type name → entry. */
