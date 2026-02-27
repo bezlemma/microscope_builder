@@ -1,6 +1,5 @@
 ## 1. Core Philosophy: 
 
-Three tenants:
 1. The "Source of Truth" - The Scene Graph is the only Truth. 
 2. The UI is faithful viewport to this truth.
 3. Physics over Heuristics. Components do not "know" they are part of a microscope.
@@ -31,8 +30,7 @@ Position: Millimeters (mm).
 Wavelength: Meters (SI) (e.g., $532 \times 10^{-9}$).
 Angles: Radians.
 
-## 3. Architecture: Data vs. Systems
-The engine is structured like a game engine (ECS pattern). Data is passive; Systems are active.
+## 3. Architecture
 
 ### A. The Data
 

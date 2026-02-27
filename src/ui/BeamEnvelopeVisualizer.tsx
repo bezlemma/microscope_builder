@@ -2,30 +2,14 @@ import React, { useMemo } from 'react';
 import { Vector3, BufferGeometry, Float32BufferAttribute, DoubleSide, Color } from 'three';
 import { GaussianBeamSegment, sampleBeamProfile } from '../physics/Solver2';
 
+import { wavelengthToRGB as wavelengthToRGBnm } from '../physics/spectral';
+
 /**
  * Wavelength (meters) to RGB color for beam envelope.
  */
 function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number } {
-    const wl = wavelengthMeters * 1e9;
-    let r = 0, g = 0, b = 0;
-    
-    if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60; b = 1.0; }
-    else if (wl >= 440 && wl < 490) { g = (wl - 440) / 50; b = 1.0; }
-    else if (wl >= 490 && wl < 510) { g = 1.0; b = -(wl - 510) / 20; }
-    else if (wl >= 510 && wl < 580) { r = (wl - 510) / 70; g = 1.0; }
-    else if (wl >= 580 && wl < 645) { r = 1.0; g = -(wl - 645) / 65; }
-    else if (wl >= 645 && wl <= 780) { r = 1.0; }
-    else { return { r: 0.5, g: 0.5, b: 0.5 }; }
-    
-    let factor = 1.0;
-    if (wl >= 380 && wl < 420) factor = 0.3 + 0.7 * (wl - 380) / 40;
-    else if (wl >= 645 && wl <= 780) factor = 0.3 + 0.7 * (780 - wl) / 135;
-    
-    return {
-        r: Math.pow(r * factor, 0.8),
-        g: Math.pow(g * factor, 0.8),
-        b: Math.pow(b * factor, 0.8)
-    };
+    const { r, g, b } = wavelengthToRGBnm(wavelengthMeters * 1e9);
+    return { r, g, b };
 }
 
 const TUBE_RADIAL_SEGMENTS = 12;

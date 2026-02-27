@@ -1,7 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
-import { transverseRadius } from '../lightSpace';
 
 /**
  * IdealLens — A thin-lens Phase Surface per PhysicsPlan.md §6.
@@ -52,7 +51,7 @@ export class IdealLens extends OpticalComponent {
         );
 
         // Aperture clip
-        const h = transverseRadius(point);
+        const h = Math.sqrt(point.x * point.x + point.y * point.y);
         if (h > this.apertureRadius) return null;
 
         // Normal: along ±w, facing the incoming ray

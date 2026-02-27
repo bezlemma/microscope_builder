@@ -11,6 +11,7 @@ import { Euler } from 'three';
 
 // Component imports
 import { Laser } from '../physics/components/Laser';
+import { getComponentTypeName } from '../physics/ComponentRegistry';
 import { Lamp } from '../physics/components/Lamp';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
@@ -74,28 +75,7 @@ function fmt(n: number): string {
 }
 
 function getTypeName(comp: OpticalComponent): string | null {
-    if (comp instanceof Laser) return 'Laser';
-    if (comp instanceof Lamp) return 'Lamp';
-    if (comp instanceof SphericalLens) return 'SphericalLens';
-    if (comp instanceof CurvedMirror) return 'CurvedMirror';
-    if (comp instanceof Mirror) return 'Mirror';
-    if (comp instanceof Blocker) return 'Blocker';
-    if (comp instanceof BeamSplitter) return 'BeamSplitter';
-    if (comp instanceof DichroicMirror) return 'DichroicMirror';
-    if (comp instanceof SampleChamber) return 'SampleChamber';
-    if (comp instanceof Filter) return 'Filter';
-    if (comp instanceof Camera) return 'Camera';
-    if (comp instanceof Sample) return 'Sample';
-    if (comp instanceof Objective) return 'Objective';
-    if (comp instanceof PrismLens) return 'PrismLens';
-    if (comp instanceof Waveplate) return 'Waveplate';
-    if (comp instanceof Aperture) return 'Aperture';
-    if (comp instanceof CylindricalLens) return 'CylindricalLens';
-    if (comp instanceof IdealLens) return 'IdealLens';
-    if (comp instanceof Card) return 'Card';
-    if (comp instanceof SlitAperture) return 'SlitAperture';
-    if (comp instanceof PolygonScanner) return 'PolygonScanner';
-    return null;
+    return getComponentTypeName(comp);
 }
 
 function writeComponentProps(comp: OpticalComponent, lines: string[]) {
@@ -149,11 +129,15 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
         lines.push(`fluorescenceEfficiency = ${fmt(comp.fluorescenceEfficiency)}`);
         lines.push(`absorption = ${fmt(comp.absorption)}`);
+        lines.push(`specimenRotation = ${fmt(comp.specimenRotation.x)}, ${fmt(comp.specimenRotation.y)}, ${fmt(comp.specimenRotation.z)}`);
+        lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
     } else if (comp instanceof Sample) {
         writeSpectralProfile(comp.excitationSpectrum, lines, 'excitation');
         writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
         lines.push(`fluorescenceEfficiency = ${fmt(comp.fluorescenceEfficiency)}`);
         lines.push(`absorption = ${fmt(comp.absorption)}`);
+        lines.push(`specimenRotation = ${fmt(comp.specimenRotation.x)}, ${fmt(comp.specimenRotation.y)}, ${fmt(comp.specimenRotation.z)}`);
+        lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
     } else if (comp instanceof Objective) {
         lines.push(`NA = ${fmt(comp.NA)}`);
         lines.push(`magnification = ${fmt(comp.magnification)}`);
@@ -172,6 +156,10 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`fastAxisAngle = ${fmt(comp.fastAxisAngle)}`);
     } else if (comp instanceof Aperture) {
         lines.push(`openingDiameter = ${fmt(comp.openingDiameter)}`);
+        lines.push(`housingDiameter = ${fmt(comp.housingDiameter)}`);
+    } else if (comp instanceof SlitAperture) {
+        lines.push(`slitWidth = ${fmt(comp.slitWidth)}`);
+        lines.push(`slitHeight = ${fmt(comp.slitHeight)}`);
         lines.push(`housingDiameter = ${fmt(comp.housingDiameter)}`);
     } else if (comp instanceof CylindricalLens) {
         lines.push(`r1 = ${fmt(comp.r1)}`);
@@ -416,6 +404,14 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c.emissionSpectrum = parseSpectralProfile(props, 'emission');
             c.fluorescenceEfficiency = num(props, 'fluorescenceEfficiency', 1e-4);
             c.absorption = num(props, 'absorption', 3.0);
+            if (props['specimenRotation']) {
+                const [rx, ry, rz] = props['specimenRotation'].split(',').map(s => parseFloat(s.trim()));
+                c.specimenRotation.set(rx, ry, rz);
+            }
+            if (props['specimenOffset']) {
+                const [ox, oy, oz] = props['specimenOffset'].split(',').map(s => parseFloat(s.trim()));
+                c.specimenOffset.set(ox, oy, oz);
+            }
             return c;
         }
         case 'Objective': {
@@ -498,6 +494,14 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             sc.emissionSpectrum = parseSpectralProfile(props, 'emission') ?? sc.emissionSpectrum;
             sc.fluorescenceEfficiency = num(props, 'fluorescenceEfficiency', 1e-4);
             sc.absorption = num(props, 'absorption', 3.0);
+            if (props['specimenRotation']) {
+                const [rx, ry, rz] = props['specimenRotation'].split(',').map(s => parseFloat(s.trim()));
+                sc.specimenRotation.set(rx, ry, rz);
+            }
+            if (props['specimenOffset']) {
+                const [ox, oy, oz] = props['specimenOffset'].split(',').map(s => parseFloat(s.trim()));
+                sc.specimenOffset.set(ox, oy, oz);
+            }
             return sc;
         }
         default:

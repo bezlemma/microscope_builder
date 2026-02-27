@@ -27,10 +27,10 @@ export class Aperture extends OpticalComponent {
 
     intersect(rayLocal: Ray): HitRecord | null {
 
-        const dw = rayLocal.direction.x;
+        const dw = rayLocal.direction.z;
         if (Math.abs(dw) < 1e-6) return null;
 
-        const t = -rayLocal.origin.x / dw;
+        const t = -rayLocal.origin.z / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(
@@ -38,8 +38,8 @@ export class Aperture extends OpticalComponent {
         );
 
         // Annular ring check in uv transverse plane
-        const hu = hitPoint.y;
-        const hv = hitPoint.z;
+        const hu = hitPoint.x;
+        const hv = hitPoint.y;
         const rSq = hu * hu + hv * hv;
         const innerR = this.openingDiameter / 2;
         const outerR = this.housingDiameter / 2;
@@ -49,7 +49,7 @@ export class Aperture extends OpticalComponent {
             return null;  // Passes through the opening or misses entirely
         }
 
-        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);  // ±w normal
+        const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);  // ±w normal
         return {
             t,
             point: hitPoint,

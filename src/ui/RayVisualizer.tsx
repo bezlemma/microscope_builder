@@ -3,54 +3,13 @@ import { Line } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Color, NormalBlending, AdditiveBlending } from 'three';
 import { Ray, Coherence } from '../physics/types';
+import { wavelengthToRGB, wavelengthToCSS } from '../physics/spectral';
 
-// Wavelength (in meters) to visible spectrum RGB values (0-1 range)
-function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number; isVisible: boolean } {
-    const wavelength = wavelengthMeters * 1e9; // Convert to nm
-    let r = 0, g = 0, b = 0;
-
-    if (wavelength >= 380 && wavelength < 440) {
-        r = -(wavelength - 440) / (440 - 380);
-        b = 1.0;
-    } else if (wavelength >= 440 && wavelength < 490) {
-        g = (wavelength - 440) / (490 - 440);
-        b = 1.0;
-    } else if (wavelength >= 490 && wavelength < 510) {
-        g = 1.0;
-        b = -(wavelength - 510) / (510 - 490);
-    } else if (wavelength >= 510 && wavelength < 580) {
-        r = (wavelength - 510) / (580 - 510);
-        g = 1.0;
-    } else if (wavelength >= 580 && wavelength < 645) {
-        r = 1.0;
-        g = -(wavelength - 645) / (645 - 580);
-    } else if (wavelength >= 645 && wavelength <= 780) {
-        r = 1.0;
-    }
-
-    // Apply intensity correction for edge wavelengths
-    let factor = 1.0;
-    if (wavelength >= 380 && wavelength < 420) {
-        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
-    } else if (wavelength >= 645 && wavelength <= 780) {
-        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 645);
-    } else if (wavelength < 380 || wavelength > 780) {
-        return { r: 0.53, g: 0.53, b: 0.53, isVisible: false };
-    }
-
-    r = Math.pow(r * factor, 0.8);
-    g = Math.pow(g * factor, 0.8);
-    b = Math.pow(b * factor, 0.8);
-
-    return { r, g, b, isVisible: true };
-}
-
+/** Thin wrapper: takes wavelength in meters, returns CSS color + visibility flag. */
 function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
-    const rgb = wavelengthToRGB(wavelengthMeters);
-    const ri = Math.round(rgb.r * 255);
-    const gi = Math.round(rgb.g * 255);
-    const bi = Math.round(rgb.b * 255);
-    return { color: `rgb(${ri}, ${gi}, ${bi})`, isVisible: rgb.isVisible };
+    const nm = wavelengthMeters * 1e9;
+    const { isVisible } = wavelengthToRGB(nm);
+    return { color: wavelengthToCSS(nm), isVisible };
 }
 
 /**
@@ -64,7 +23,7 @@ const PulsatingRayLine: React.FC<{
     dashed: boolean;
 }> = ({ points, wavelengthMeters, dashed }) => {
     const lineRef = useRef<any>(null);
-    const rgb = wavelengthToRGB(wavelengthMeters);
+    const rgb = wavelengthToRGB(wavelengthMeters * 1e9);
 
     // Base color at the wavelength's natural brightness
     const baseColor = new Color(rgb.r, rgb.g, rgb.b);
@@ -190,7 +149,7 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 // Opacity from Lamp's additiveOpacity ensures balanced RGB white.
                 // (Coherent rays have explicit NormalBlending/transparent=false/opacity=1 to prevent state leaks.)
                 if (isIncoherent) {
-                    const rgb = wavelengthToRGB(wavelength);
+                    const rgb = wavelengthToRGB(wavelength * 1e9);
                     const color = rgb.isVisible
                         ? `rgb(${Math.round(rgb.r * 255)}, ${Math.round(rgb.g * 255)}, ${Math.round(rgb.b * 255)})`
                         : 'rgb(135, 135, 135)'; // Gray for UV/IR
@@ -218,7 +177,7 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
                 // Coherent (laser) rays: wavelength-colored rendering
                 if (isMain) {
-                    const wc = wavelengthToRGB(wavelength);
+                    const wc = wavelengthToRGB(wavelength * 1e9);
 
                     // Pulsating glow only when E&M solver is enabled
                     if (glowEnabled) {

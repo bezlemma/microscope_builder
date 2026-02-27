@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry } from 'three';
+import { Vector3 } from 'three';
 import { useAtom } from 'jotai';
-import { componentsAtom, rayConfigAtom, selectionAtom, solver3RenderTriggerAtom, solver3RenderingAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
+import { componentsAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
 import { setProperty, getProperty } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
-import { Text } from '@react-three/drei';
+
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
@@ -37,1168 +37,35 @@ import { RayVisualizer } from './RayVisualizer';
 import { EFieldVisualizer } from './EFieldVisualizer';
 import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
+import { createSourceRays } from '../physics/SourceRayFactory';
 import { Draggable } from './Draggable';
+// ─── Visualizers (extracted) ─────────────────────────────────────────
+import {
+    CasingVisualizer,
+    SampleVisualizer,
+    ObjectiveVisualizer,
+    CameraVisualizer,
+    PMTVisualizer,
+    MirrorVisualizer,
+    PolygonScannerVisualizer,
+    CurvedMirrorVisualizer,
+    BeamSplitterVisualizer,
+    ApertureVisualizer,
+    SlitApertureVisualizer,
+    FilterVisualizer,
+    DichroicVisualizer,
+    BlockerVisualizer,
+    SampleChamberVisualizer,
+    WaveplateVisualizer,
+    CardVisualizer,
+    LensVisualizer,
+    SourceVisualizer,
+    LampVisualizer,
+    IdealLensVisualizer,
+    CylindricalLensVisualizer,
+    PrismVisualizer,
+} from './visualizers/ComponentVisualizers';
 
-
-
-export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) => {
-    const [selection] = useAtom(selectionAtom);
-    const isSelected = selection.includes(component.id);
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Transparent Housing - Glassy */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[8, 8, 20, 32]} />
-                <meshPhysicalMaterial
-                    color="#ffffff"
-                    transmission={0.99}
-                    opacity={0.15}
-                    transparent
-                    depthWrite={false}
-                    roughness={0}
-                    metalness={0.05}
-                    side={DoubleSide}
-                />
-            </mesh>
-            {/* Grip Ring - Centered or towards rear */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -5, 0]}>
-                <cylinderGeometry args={[8.2, 8.2, 5, 32]} />
-                <meshStandardMaterial color="#444" metalness={0.5} roughness={0.7} />
-            </mesh>
-
-            {isSelected && (
-                <mesh rotation={[Math.PI / 2, 0, 0]}>
-                    <cylinderGeometry args={[8.5, 8.5, 20.5, 32]} />
-                    <meshBasicMaterial color="#64ffda" transparent opacity={0.3} wireframe />
-                </mesh>
-            )}
-        </group>
-    );
-};
-
-
-export const SampleVisualizer = ({ component }: { component: Sample }) => {
-
-
-    // Frame Dimensions
-    const outerSize = 40;
-    const innerSize = 30;
-    const thickness = 2;
-    const frameWidth = (outerSize - innerSize) / 2; // 5mm
-
-    // Helpers
-    const offset = outerSize / 2 - frameWidth / 2; // 17.5
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Frame + Glass in YZ plane (standing upright at default rotation).
-                Frame normal = local X. Thickness along X. */}
-            <group>
-                {/* Detailed Hollow Frame */}
-                <group>
-                    {/* Top Bar (+Z) */}
-                    <mesh position={[0, 0, offset]}>
-                        <boxGeometry args={[thickness, outerSize, frameWidth]} />
-                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                    </mesh>
-                    {/* Bottom Bar (-Z) */}
-                    <mesh position={[0, 0, -offset]}>
-                        <boxGeometry args={[thickness, outerSize, frameWidth]} />
-                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                    </mesh>
-                    {/* Left Bar (-Y) */}
-                    <mesh position={[0, -offset, 0]}>
-                        <boxGeometry args={[thickness, frameWidth, innerSize]} />
-                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                    </mesh>
-                    {/* Right Bar (+Y) */}
-                    <mesh position={[0, offset, 0]}>
-                        <boxGeometry args={[thickness, frameWidth, innerSize]} />
-                        <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
-                    </mesh>
-                </group>
-
-                {/* Glass Pane */}
-                <mesh position={[0, 0, 0]}>
-                    <boxGeometry args={[0.5, innerSize, innerSize]} />
-                    <meshPhysicalMaterial
-                        color="#ffffff"
-                        transmission={0.99}
-                        opacity={0.1}
-                        transparent
-                        roughness={0}
-                        metalness={0.0}
-                        depthWrite={false}
-                    />
-                </mesh>
-            </group>
-
-            {/* Mickey Mouse Geometry — ears in +Z (up), spread in ±Y */}
-            <group position={[0, 0, 0]}>
-                {/* Head */}
-                <mesh position={[0, 0, 0]}>
-                    <sphereGeometry args={[0.5, 32, 32]} />
-                    <meshStandardMaterial color="#ffccaa" roughness={0.3} />
-                </mesh>
-                {/* Left Ear (-Y, +Z) */}
-                <mesh position={[0, -0.5, 0.5]}>
-                    <sphereGeometry args={[0.25, 32, 32]} />
-                    <meshStandardMaterial color="black" roughness={0.3} />
-                </mesh>
-                {/* Right Ear (+Y, +Z) */}
-                <mesh position={[0, 0.5, 0.5]}>
-                    <sphereGeometry args={[0.25, 32, 32]} />
-                    <meshStandardMaterial color="black" roughness={0.3} />
-                </mesh>
-            </group>
-        </group>
-    );
-};
-
-export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
-    const [selection] = useAtom(selectionAtom);
-    const isSelected = selection.includes(component.id);
-
-    const f = component.focalLength;
-    const a = component.apertureRadius;
-    const wd = component.workingDistance;
-    const bodyR = Math.max(a + 1, component.diameter / 2); // Use physical diameter, but ensure it covers aperture
-
-    // Local Z coordinates:
-    // Sample plane is strictly at z = -f
-    // Parfocal shoulder (back thread) is at z = -f + 35mm
-    const parfocalDistance = 35;
-    const zFront = -f + wd;
-    const zBack = Math.max(-f + parfocalDistance, zFront + 20);
-    const zTaperEnd = zFront + Math.min(15, (zBack - zFront) * 0.6);
-
-    const immersionIdx = component.immersionIndex || 1;
-    const maxSin = component.NA / immersionIdx;
-    const maxTan = maxSin / Math.sqrt(1 - maxSin * maxSin);
-    const opticalFrontRadius = wd * maxTan; 
-    const frontRadius = Math.max(opticalFrontRadius + 0.5, 2); // steep dipping cone down to the exact optical clear aperture
-    const barrelLength = zBack - zFront;
-
-    // Helper to color-code based on objective magnification standard
-    const getObjectiveBandColor = (mag: number) => {
-        if (mag <= 4) return '#ff0000'; // Red
-        if (mag <= 10) return '#ffd700'; // Yellow
-        if (mag <= 20) return '#00ff00'; // Green
-        if (mag <= 40) return '#00bfff'; // Light Blue
-        if (mag <= 60) return '#0000ff'; // Dark Blue
-        return '#ffffff'; // White for 100x/oil
-    };
-
-    const lathePoints = React.useMemo(() => {
-        const pts = [];
-        // Note: Lathe spins around Y. We map Z to Y.
-        // Start front-inner edge
-        pts.push(new Vector2(opticalFrontRadius, zFront));
-        // Go out to front-outer edge
-        pts.push(new Vector2(frontRadius, zFront));
-        // Go up outer taper
-        if (zTaperEnd > zFront) pts.push(new Vector2(bodyR, zTaperEnd));
-        // Go up outer barrel
-        if (zBack > zTaperEnd) pts.push(new Vector2(bodyR, zBack));
-        // Go in to back inner edge
-        pts.push(new Vector2(a, zBack));
-        // Go down inner bore to principal plane
-        if (zBack > 0 && zFront < 0) pts.push(new Vector2(a, 0));
-        // Back down inner cone to front-inner edge
-        pts.push(new Vector2(opticalFrontRadius, zFront));
-        return pts;
-    }, [opticalFrontRadius, zFront, frontRadius, bodyR, zTaperEnd, zBack, a]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Visualizing the Abstract Abbe Reference Plane at z=0 */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                <cylinderGeometry args={[a, a, 0.5, 32]} />
-                <meshBasicMaterial color="#b388ff" transparent opacity={0.3} side={DoubleSide} depthWrite={false}/>
-            </mesh>
-
-            {/* Inner Clear Optical Path (Glass Core to visualize PhysicsPlan active area) */}
-            <mesh position={[0, 0, (zFront + 0.01) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                {/* From the front clear aperture up to the principal plane at z=0.01 */}
-                <cylinderGeometry args={[a, opticalFrontRadius, Math.abs(zFront - 0.01), 32, 1, true]} />
-                <meshStandardMaterial color="#88ccff" transparent opacity={0.15} depthWrite={false} roughness={0.1} side={DoubleSide} />
-            </mesh>
-            
-            {/* Working Distance Indicator (Sample Plane Visual Cone) */}
-            {/* Faint cone indicating where the sample should be placed relative to the physical front */}
-            {wd > 0.1 && (
-                <mesh position={[0, 0, (-f + zFront) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                    <cylinderGeometry args={[frontRadius, 0.1, wd, 32]} />
-                    <meshBasicMaterial color="#00ffcc" transparent opacity={0.15} wireframe={false} depthWrite={false} />
-                </mesh>
-            )}
-
-            {/* Solid Objective Barrel with true physical bounds */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
-                <latheGeometry args={[lathePoints, 32]} />
-                {/* Semi-transparent dark grey material representing the metal casing that blocks rays */}
-                <meshStandardMaterial color="#222222" roughness={0.8} metalness={0.2} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
-            </mesh>
-
-            {/* Magnification Color Band */}
-            <mesh position={[0, 0, zTaperEnd + 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
-                <cylinderGeometry args={[bodyR + 0.1, bodyR + 0.1, 3, 32, 1, true]} />
-                <meshStandardMaterial color={getObjectiveBandColor(component.magnification)} transparent opacity={0.8} depthWrite={false} roughness={0.3} side={DoubleSide} />
-            </mesh>
-
-            {/* Invisible hitbox for selection (covers the barrel) */}
-            <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[bodyR * 1.5, bodyR * 1.5, barrelLength + 10, 8]} />
-                <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} colorWrite={false} />
-            </mesh>
-
-            {/* Selection highlight */}
-            {isSelected && (
-                <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                    <cylinderGeometry args={[bodyR * 1.15, bodyR * 1.15, barrelLength + 2, 32]} />
-                    <meshBasicMaterial color="#b388ff" transparent opacity={0.3} wireframe />
-                </mesh>
-            )}
-        </group>
-    );
-};
-
-export const CameraVisualizer = ({ component }: { component: Camera }) => {
-
-    const width = 84;
-    const height = 84;
-    const depth = 122;
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Camera Body (Box) - extending behind the sensor */}
-            <mesh position={[0, 0, -depth / 2]}>
-                <boxGeometry args={[width, height, depth]} />
-                <meshStandardMaterial color="#333" metalness={0.6} roughness={0.4} />
-            </mesh>
-
-            {/* Sensor Face (Blue) - flush at local Z=0 */}
-            <mesh position={[0, 0, 0.1]}>
-                <planeGeometry args={[component.width, component.height]} />
-                <meshStandardMaterial color="rgba(104, 65, 131, 1)" metalness={0.9} roughness={0.1} />
-            </mesh>
-
-            {/* Cam text placed on top of camera box */}
-            <Text
-                position={[0, height / 2 + 0.1, -depth/4]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                fontSize={16}
-                color="#ffffff"
-                anchorX="center"
-                anchorY="top"
-            >
-                Camera
-            </Text>
-        </group>
-    );
-};
-
-export const PMTVisualizer = ({ component }: { component: PMT }) => {
-    const width = 20;
-    const height = 20;
-    const depth = 30;  // shorter than camera
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* PMT Body — compact, lighter gray */}
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[width, height, depth]} />
-                <meshStandardMaterial color="#555" metalness={0.5} roughness={0.5} />
-            </mesh>
-
-            {/* Detector window — small tinted circle at front */}
-            <mesh position={[0, 0, depth / 2 + 0.1]}>
-                <circleGeometry args={[width * 0.3, 32]} />
-                <meshStandardMaterial color="rgba(134, 45, 175, 1)" metalness={0.8} roughness={0.15} />
-            </mesh>
-        </group>
-    );
-};
-export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
-
-    const radius = component.diameter / 2;
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                {/* Shiny Metric Material */}
-                <meshPhysicalMaterial
-                    color="#ffffff"
-                    metalness={0.95}
-                    roughness={0.05}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-export const PolygonScannerVisualizer = ({ component }: { component: PolygonScanner }) => {
-    const N = component.numFaces;
-    const R = component.circumRadius;
-
-    // Build polygon shape in local XY plane
-    const shape = useMemo(() => {
-        const s = new Shape();
-        for (let k = 0; k <= N; k++) {
-            const angle = component.scanAngle + k * (2 * Math.PI / N);
-            const x = R * Math.cos(angle);
-            const y = R * Math.sin(angle);
-            if (k === 0) s.moveTo(x, y);
-            else s.lineTo(x, y);
-        }
-        return s;
-    }, [N, R, component.scanAngle]);
-
-    // Outline vertices for the polygon edges
-    const outlineVerts = useMemo(() => {
-        const verts: number[] = [];
-        for (let k = 0; k <= N; k++) {
-            const angle = component.scanAngle + k * (2 * Math.PI / N);
-            verts.push(R * Math.cos(angle), R * Math.sin(angle), 0);
-        }
-        return new Float32Array(verts);
-    }, [N, R, component.scanAngle]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Extruded polygon body — centered on Z=0 */}
-            <mesh position={[0, 0, -component.faceHeight / 2]}>
-                <extrudeGeometry args={[shape, { depth: component.faceHeight, bevelEnabled: false }]} />
-                <meshPhysicalMaterial
-                    color="#c0c0c0"
-                    metalness={0.9}
-                    roughness={0.1}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                />
-            </mesh>
-
-            {/* Polygon outline at z=0 (table plane) */}
-            <line>
-                <bufferGeometry>
-                    <bufferAttribute attach="attributes-position" args={[outlineVerts, 3]} />
-                </bufferGeometry>
-                <lineBasicMaterial color="#888" linewidth={2} />
-            </line>
-
-        </group>
-    );
-};
-
-export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
-    const geom = useMemo(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh geometry={geom} renderOrder={-1}>
-                <meshPhysicalMaterial
-                    color="#ffffff"
-                    metalness={0.95}
-                    roughness={0.05}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                    side={DoubleSide}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter }) => {
-
-    const radius = component.diameter / 2;
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color="#88ccff"
-                    metalness={0.3}
-                    roughness={0.1}
-                    transparent={true}
-                    opacity={0.6}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-// Aperture Visualizer — hollowed cylinder (annular disc / washer shape)
-export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
-    const outerR = component.housingDiameter / 2;
-    const innerR = component.openingDiameter / 2;
-    const halfT = 0.5; // fixed half-thickness (1mm total, similar to polarizers)
-
-    // LatheGeometry revolves a 2D profile around Y.
-    // Profile: thin rectangle from innerR to outerR at ±halfT depth.
-    // Points go: inner-bottom → outer-bottom → outer-top → inner-top
-    const points = useMemo(() => [
-        new Vector2(innerR, -halfT),
-        new Vector2(outerR, -halfT),
-        new Vector2(outerR,  halfT),
-        new Vector2(innerR,  halfT),
-    ], [innerR, outerR, halfT]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Solid annular disc — revolved rectangular cross-section */}
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <latheGeometry args={[points, 48]} />
-                <meshStandardMaterial color="#333" roughness={0.6} metalness={0.4} />
-            </mesh>
-        </group>
-    );
-};
-
-// Slit Aperture Visualizer — two rectangular bars with a gap
-export const SlitApertureVisualizer = ({ component }: { component: SlitAperture }) => {
-    const outerR = component.housingDiameter / 2;
-    const halfW = component.slitWidth / 2;
-    const halfH = component.slitHeight / 2;
-    const halfT = 0.5; // 1mm total thickness
-
-    // Top bar: from halfH to outerR
-    const topBarHeight = outerR - halfH;
-    // Bottom bar: from -outerR to -halfH
-    const bottomBarHeight = outerR - halfH;
-    // Side bars: from -halfH to halfH, outerR wide on each side of the slit
-    const sideBarWidth = outerR - halfW;
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Top bar */}
-            {topBarHeight > 0.1 && (
-                <mesh position={[0, 0, halfH + topBarHeight / 2]}>
-                    <boxGeometry args={[halfT * 2, outerR * 2, topBarHeight]} />
-                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
-                </mesh>
-            )}
-            {/* Bottom bar */}
-            {bottomBarHeight > 0.1 && (
-                <mesh position={[0, 0, -(halfH + bottomBarHeight / 2)]}>
-                    <boxGeometry args={[halfT * 2, outerR * 2, bottomBarHeight]} />
-                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
-                </mesh>
-            )}
-            {/* Left side bar */}
-            {sideBarWidth > 0.1 && (
-                <mesh position={[0, -(halfW + sideBarWidth / 2), 0]}>
-                    <boxGeometry args={[halfT * 2, sideBarWidth, halfH * 2]} />
-                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
-                </mesh>
-            )}
-            {/* Right side bar */}
-            {sideBarWidth > 0.1 && (
-                <mesh position={[0, halfW + sideBarWidth / 2, 0]}>
-                    <boxGeometry args={[halfT * 2, sideBarWidth, halfH * 2]} />
-                    <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
-                </mesh>
-            )}
-        </group>
-    );
-};
-
-// Filter Visualizer — colored semi-transparent disc
-export const FilterVisualizer = ({ component }: { component: Filter }) => {
-    const radius = component.diameter / 2;
-    // Get tint color from spectral profile
-    const dominantNm = component.spectralProfile.getDominantPassWavelength();
-    const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#888888';
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color={tintColor}
-                    metalness={0.1}
-                    roughness={0.1}
-                    transparent={true}
-                    opacity={0.5}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-// Dichroic Mirror Visualizer — like BeamSplitter but with colored tint
-export const DichroicVisualizer = ({ component }: { component: DichroicMirror }) => {
-    const radius = component.diameter / 2;
-    const dominantNm = component.spectralProfile.getDominantPassWavelength();
-    const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#88ccff';
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color={tintColor}
-                    metalness={0.4}
-                    roughness={0.05}
-                    transparent={true}
-                    opacity={0.55}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-// Helper: wavelength to hex color for visualizer tinting
-function wavelengthToHex(nm: number): string {
-    let r = 0, g = 0, b = 0;
-    if (nm >= 380 && nm < 440) { r = -(nm - 440) / 60; b = 1; }
-    else if (nm >= 440 && nm < 490) { g = (nm - 440) / 50; b = 1; }
-    else if (nm >= 490 && nm < 510) { g = 1; b = -(nm - 510) / 20; }
-    else if (nm >= 510 && nm < 580) { r = (nm - 510) / 70; g = 1; }
-    else if (nm >= 580 && nm < 645) { r = 1; g = -(nm - 645) / 65; }
-    else if (nm >= 645 && nm <= 780) { r = 1; }
-    else { return '#888888'; }
-    const toHex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-export const BlockerVisualizer = ({ component }: { component: Blocker }) => {
-    const radius = component.diameter / 2;
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshStandardMaterial color="#222" roughness={0.8} />
-            </mesh>
-        </group>
-    );
-};
-
-// Helper: wall panel with a real circular hole (using Shape + ExtrudeGeometry)
-const WallWithHole = ({ wallSize, holeRadius, thickness, position, rotation, color }: {
-    wallSize: number;
-    holeRadius: number;
-    thickness: number;
-    position: [number, number, number];
-    rotation: [number, number, number];
-    color: string;
-}) => {
-    const geometry = useMemo(() => {
-        const hs = wallSize / 2;
-        const shape = new Shape();
-        shape.moveTo(-hs, -hs);
-        shape.lineTo(hs, -hs);
-        shape.lineTo(hs, hs);
-        shape.lineTo(-hs, hs);
-        shape.closePath();
-
-        const hole = new ThreePath();
-        hole.absarc(0, 0, holeRadius, 0, Math.PI * 2, false);
-        shape.holes.push(hole);
-
-        return new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
-    }, [wallSize, holeRadius, thickness]);
-
-    return (
-        <mesh position={position} rotation={rotation} geometry={geometry}>
-            <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
-        </mesh>
-    );
-};
-
-// SampleChamber Visualizer — hollow open-top cube with real circular holes on all 4 side faces
-export const SampleChamberVisualizer = ({ component }: { component: SampleChamber }) => {
-    const s = component.cubeSize;
-    const wt = component.wallThickness;
-    const boreR = component.boreDiameter / 2;
-    const half = s / 2;
-
-    const bodyColor = '#778899';  // light steel gray
-
-    // ExtrudeGeometry extrudes the shape (in local XY) along local +Z from 0 to depth.
-    // Wall rotations place each wall on the correct face of the cube:
-    //   +X wall: Ry(π/2)  → local Z extrudes along world +X
-    //   -X wall: Ry(-π/2) → local Z extrudes along world -X
-    //   +Y wall: Rx(-π/2) → local Z extrudes along world +Y
-    //   -Y wall: Rx(π/2)  → local Z extrudes along world -Y
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* ── Bottom wall (solid, no hole, dark for contrast from above) ── */}
-            <mesh position={[0, 0, -half]}>
-                <boxGeometry args={[s, s, wt]} />
-                <meshStandardMaterial color="#1a1a1a" roughness={0.8} metalness={0.1} />
-            </mesh>
-
-            {/* ── +X wall (real hole) ── */}
-            <WallWithHole
-                wallSize={s} holeRadius={boreR} thickness={wt}
-                position={[half - wt, 0, 0]}
-                rotation={[0, Math.PI / 2, 0]}
-                color={bodyColor}
-            />
-            {/* ── -X wall (real hole) ── */}
-            <WallWithHole
-                wallSize={s} holeRadius={boreR} thickness={wt}
-                position={[-half + wt, 0, 0]}
-                rotation={[0, -Math.PI / 2, 0]}
-                color={bodyColor}
-            />
-            {/* ── +Y wall (real hole) ── */}
-            <WallWithHole
-                wallSize={s} holeRadius={boreR} thickness={wt}
-                position={[0, half - wt, 0]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                color={bodyColor}
-            />
-            {/* ── -Y wall (real hole) ── */}
-            <WallWithHole
-                wallSize={s} holeRadius={boreR} thickness={wt}
-                position={[0, -half + wt, 0]}
-                rotation={[Math.PI / 2, 0, 0]}
-                color={bodyColor}
-            />
-
-            {/* ── 3D Mickey specimen at center — same size as Sample physics ── */}
-            {/* Head sphere */}
-            <mesh position={[0, 0, 0]}>
-                <sphereGeometry args={[0.5, 24, 24]} />
-                <meshStandardMaterial color="#ffccaa" roughness={0.6} />
-            </mesh>
-            {/* Left ear (-Y, +Z) */}
-            <mesh position={[0, -0.5, 0.5]}>
-                <sphereGeometry args={[0.25, 16, 16]} />
-                <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
-            </mesh>
-            {/* Right ear (+Y, +Z) */}
-            <mesh position={[0, 0.5, 0.5]}>
-                <sphereGeometry args={[0.25, 16, 16]} />
-                <meshStandardMaterial color="#3a3a3a" roughness={0.6} />
-            </mesh>
-        </group>
-    );
-};
-
-export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => {
-
-    const r = component.apertureRadius;
-    const modeColors: Record<string, string> = {
-        'half': '#6a5acd',      // slate blue for λ/2
-        'quarter': '#20b2aa',   // teal for λ/4
-        'polarizer': '#b8860b'  // dark goldenrod for polarizer
-    };
-    const color = modeColors[component.waveplateMode] || '#888';
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[r, r, 1.5, 32]} />
-                <meshStandardMaterial color={color} transparent opacity={0.7} roughness={0.3} />
-            </mesh>
-            {/* Fast axis arc indicators — two small arcs on opposite sides of rim.
-                Ring default plane = XY (normal Z). Cylinder face = YZ plane (normal X).
-                Euler XYZ intrinsic: [0, π/2, fastAxisAngle]
-                  Step 1: 0 around X (no-op)
-                  Step 2: π/2 around Y → ring normal Z maps to X (ring now in YZ plane) ✓
-                  Step 3: fastAxisAngle around new Z'' = beam axis X → rotates within face */}
-            <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
-                <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
-                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
-            </mesh>
-            <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
-                <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, -Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
-                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
-            </mesh>
-        </group>
-    );
-};
-
-export const CardVisualizer = ({ component }: { component: Card }) => {
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* White Screen */}
-            <mesh>
-                <boxGeometry args={[component.width, component.height, 1]} />
-                <meshStandardMaterial color="white" roughness={0.5} emissive="white" emissiveIntensity={0.1} />
-            </mesh>
-            {/* Invisible hitbox for easier selection — extends along beam axis */}
-            <mesh>
-                <boxGeometry args={[component.width, component.height, 10]} />
-                <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} />
-            </mesh>
-        </group>
-    );
-};
-
-export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
-    const [selection] = useAtom(selectionAtom);
-    const isSelected = selection.includes(component.id);
-
-    // Safety check for malformed components
-    if (!component || !component.rotation || !component.position) return null;
-
-    const aperture = component.apertureRadius || 10;
-    const thickness = component.thickness || 2;
-
-    let R1 = 1e9;
-    let R2 = -1e9;
-
-    try {
-        if (typeof component.getRadii === 'function') {
-            const r = component.getRadii();
-            // Validate Radii - use large number for Infinity to simplify math logic below
-            R1 = (!isNaN(r.R1) && Math.abs(r.R1) < 1e12) ? r.R1 : (r.R1 > 0 ? 1e9 : -1e9);
-            R2 = (!isNaN(r.R2) && Math.abs(r.R2) < 1e12) ? r.R2 : (r.R2 > 0 ? 1e9 : -1e9);
-        } else {
-            const power = component.curvature || 0;
-            const ior = component.ior || 1.5;
-            const R = Math.abs(power) > 1e-6 ? (2 * (ior - 1)) / power : 1e9;
-            R1 = R;
-            R2 = -R;
-        }
-    } catch (e) {
-        console.warn("LensVisualizer: Error getting radii", e);
-    }
-
-    // Generate profile using the SAME function as the physics mesh — single source of truth
-    const profilePoints = useMemo(() => {
-        const profile = SphericalLens.generateProfile(R1, R2, aperture, thickness, 32);
-
-
-        if (profile.length < 2) {
-            const frontApex = -thickness / 2;
-            const backApex = thickness / 2;
-            return [new Vector2(0, frontApex), new Vector2(aperture, frontApex), new Vector2(aperture, backApex), new Vector2(0, backApex)];
-        }
-
-        return profile;
-    }, [aperture, thickness, R1, R2]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Lens body - LatheGeometry for accurate spherical cap profile */}
-            {/* Rotate Lathe (Y-axis symmetry) to Optical Axis (Z-axis) */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <latheGeometry args={[profilePoints, 32]} />
-                <meshPhysicalMaterial
-                    color={component.ior > 1.55 ? "#88ffee" : "#aaddff"}
-                    transmission={isSelected ? 0.85 : 0.95}
-                    opacity={isSelected ? 0.6 : 0.4}
-                    transparent
-                    roughness={0}
-                    metalness={0}
-                    ior={component.ior || 1.5}
-                    side={DoubleSide}
-                    depthWrite={false}
-                    emissive={isSelected ? "#64ffda" : "#000000"}
-                    emissiveIntensity={isSelected ? 0.15 : 0}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
-
-    const isLaser = component instanceof Laser || component.constructor.name === 'Laser';
-    // Map wavelength to approximate hex color code (very rough visible spectrum mapping)
-    let beamColor = "#222";
-    if (isLaser) {
-        const wl = (component as Laser).wavelength;
-        if (wl < 430) beamColor = "#8a2be2"; // Violet/Blue
-        else if (wl < 490) beamColor = "#00bfff"; // Cyan/Blue
-        else if (wl < 550) beamColor = "#00ff00"; // Green
-        else if (wl < 590) beamColor = "#ffd700"; // Yellow
-        else if (wl < 630) beamColor = "#ff8c00"; // Orange
-        else beamColor = "#ff0000"; // Red
-    }
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Laser Box*/}
-            <mesh position={[-33, 0, 0]}>
-                <boxGeometry args={[70, 40, 38]} />
-                <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
-            </mesh>
-            
-            {/* Wavelength Patch */}
-            {isLaser && (
-                <mesh position={[-45, 0, 19.1]}>
-                    <planeGeometry args={[20, 40]} />
-                    <meshBasicMaterial color={beamColor} />
-                </mesh>
-            )}
-
-            {/* Aperture Ring*/}
-            <mesh position={[2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[10, 5, 6, 16]} />
-                <meshStandardMaterial color="#666" />
-            </mesh>
-        </group>
-    );
-};
-
-// Lamp Visualizer — wider, shorter body with warm dome to distinguish from laser
-const LampVisualizer = ({ component }: { component: OpticalComponent }) => {
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Lamp Housing*/}
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[40, 22, 30]} />
-                <meshStandardMaterial color="#2a2520" metalness={0.3} roughness={0.7} />
-            </mesh>
-            {/* Aperture slit - at emission end (+X) */}
-            <mesh position={[21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[5, 5, 2, 16]} />
-                <meshStandardMaterial color="#BBB" />
-            </mesh>
-        </group>
-    );
-};
-
-
-// Ideal Lens Visualizer — textbook thin-lens diagram
-const IdealLensVisualizer = ({ component }: { component: IdealLens }) => {
-    const a = component.apertureRadius;
-    const converging = component.focalLength > 0;
-    const color = converging ? '#64ffda' : '#ff6b9d';
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={[component.rotation.x, component.rotation.y, component.rotation.z, component.rotation.w]}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            {/* Thin disc representing the ideal lens */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[a, a, 0.5, 32]} />
-                <meshStandardMaterial
-                    color={color}
-                    transparent
-                    opacity={0.4}
-                    roughness={0.2}
-                    metalness={0.1}
-                    side={DoubleSide}
-                    depthWrite={false}
-                />
-            </mesh>
-            {/* Invisible thicker hitbox for easier selection */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[a, a, 4, 32]} />
-                <meshBasicMaterial transparent opacity={0} side={DoubleSide} />
-            </mesh>
-        </group>
-    );
-};
-
-// Cylindrical Lens Visualizer — curved in Y, flat in X, matching physics profile
-export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
-
-    if (!component || !component.rotation || !component.position) return null;
-
-    const geometry = useMemo(() => {
-        const segsY = 24;
-        const segsX = 2;
-        const halfW = component.width / 2;
-        const R1 = component.r1;
-        const R2 = component.r2;
-        const thickness = component.thickness;
-        const maxY = component.apertureRadius;
-
-        // Sag functions (same as physics)
-        const sagFront = (y: number) => {
-            const frontApex = -thickness / 2;
-            if (Math.abs(R1) > 1e8) return frontApex;
-            const val = R1 * R1 - y * y;
-            if (val < 0) return frontApex;
-            return (frontApex + R1) - (R1 > 0 ? 1 : -1) * Math.sqrt(val);
-        };
-        const sagBack = (y: number) => {
-            const backApex = thickness / 2;
-            if (Math.abs(R2) > 1e8) return backApex;
-            const val = R2 * R2 - y * y;
-            if (val < 0) return backApex;
-            return (backApex + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
-        };
-
-        const positions: number[] = [];
-        const indices: number[] = [];
-        const yCount = segsY + 1;
-
-        // Front face (curved)
-        for (let xi = 0; xi <= segsX; xi++) {
-            const x = -halfW + (component.width * xi) / segsX;
-            for (let yi = 0; yi <= segsY; yi++) {
-                const y = -maxY + (2 * maxY * yi) / segsY;
-                positions.push(x, y, sagFront(Math.abs(y)));
-            }
-        }
-        // Back face (flat or curved)
-        const backOff = (segsX + 1) * yCount;
-        for (let xi = 0; xi <= segsX; xi++) {
-            const x = -halfW + (component.width * xi) / segsX;
-            for (let yi = 0; yi <= segsY; yi++) {
-                const y = -maxY + (2 * maxY * yi) / segsY;
-                positions.push(x, y, sagBack(Math.abs(y)));
-            }
-        }
-
-        // Front face tris
-        for (let xi = 0; xi < segsX; xi++) {
-            for (let yi = 0; yi < segsY; yi++) {
-                const a = xi * yCount + yi;
-                const b = (xi + 1) * yCount + yi;
-                const c = (xi + 1) * yCount + (yi + 1);
-                const d = xi * yCount + (yi + 1);
-                indices.push(a, b, c, a, c, d);
-            }
-        }
-        // Back face tris (reversed winding)
-        for (let xi = 0; xi < segsX; xi++) {
-            for (let yi = 0; yi < segsY; yi++) {
-                const a = backOff + xi * yCount + yi;
-                const b = backOff + (xi + 1) * yCount + yi;
-                const c = backOff + (xi + 1) * yCount + (yi + 1);
-                const d = backOff + xi * yCount + (yi + 1);
-                indices.push(a, c, b, a, d, c);
-            }
-        }
-
-        // Side walls: top, bottom, left, right
-        // Top wall (y = maxY)
-        const topOff = positions.length / 3;
-        for (let xi = 0; xi <= segsX; xi++) {
-            const x = -halfW + (component.width * xi) / segsX;
-            positions.push(x, maxY, sagFront(maxY));
-            positions.push(x, maxY, sagBack(maxY));
-        }
-        for (let xi = 0; xi < segsX; xi++) {
-            const a = topOff + xi * 2, b = topOff + (xi + 1) * 2;
-            const c = topOff + (xi + 1) * 2 + 1, d = topOff + xi * 2 + 1;
-            indices.push(a, b, c, a, c, d);
-        }
-        // Bottom wall (y = -maxY)
-        const botOff = positions.length / 3;
-        for (let xi = 0; xi <= segsX; xi++) {
-            const x = -halfW + (component.width * xi) / segsX;
-            positions.push(x, -maxY, sagFront(maxY));
-            positions.push(x, -maxY, sagBack(maxY));
-        }
-        for (let xi = 0; xi < segsX; xi++) {
-            const a = botOff + xi * 2, b = botOff + (xi + 1) * 2;
-            const c = botOff + (xi + 1) * 2 + 1, d = botOff + xi * 2 + 1;
-            indices.push(a, c, b, a, d, c);
-        }
-        // Left wall (x = -halfW)
-        const leftOff = positions.length / 3;
-        for (let yi = 0; yi <= segsY; yi++) {
-            const y = -maxY + (2 * maxY * yi) / segsY;
-            positions.push(-halfW, y, sagFront(Math.abs(y)));
-            positions.push(-halfW, y, sagBack(Math.abs(y)));
-        }
-        for (let yi = 0; yi < segsY; yi++) {
-            const a = leftOff + yi * 2, b = leftOff + (yi + 1) * 2;
-            const c = leftOff + (yi + 1) * 2 + 1, d = leftOff + yi * 2 + 1;
-            indices.push(a, c, b, a, d, c);
-        }
-        // Right wall (x = +halfW)
-        const rightOff = positions.length / 3;
-        for (let yi = 0; yi <= segsY; yi++) {
-            const y = -maxY + (2 * maxY * yi) / segsY;
-            positions.push(halfW, y, sagFront(Math.abs(y)));
-            positions.push(halfW, y, sagBack(Math.abs(y)));
-        }
-        for (let yi = 0; yi < segsY; yi++) {
-            const a = rightOff + yi * 2, b = rightOff + (yi + 1) * 2;
-            const c = rightOff + (yi + 1) * 2 + 1, d = rightOff + yi * 2 + 1;
-            indices.push(a, b, c, a, c, d);
-        }
-
-        const geo = new BufferGeometry();
-        geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
-        geo.setIndex(indices);
-        geo.computeVertexNormals();
-        return geo;
-    }, [component.r1, component.r2, component.apertureRadius, component.width, component.thickness]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh geometry={geometry}>
-                <meshPhysicalMaterial
-                    color="#ccffff"
-                    transmission={0.99}
-                    opacity={0.6}
-                    transparent
-                    roughness={0}
-                    side={2}
-                    depthWrite={false}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-// Prism Visualizer — triangular cross-section extruded along X
-export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-
-    if (!component || !component.rotation || !component.position) return null;
-
-    const halfAngle = component.apexAngle / 2;
-    const baseHalfWidth = component.height * Math.tan(halfAngle);
-    const centroidY = component.height / 3;
-    const halfW = component.width / 2;
-
-    const geometry = useMemo(() => {
-        const ay = component.height - centroidY, az = 0;
-        const bly = -centroidY, blz = -baseHalfWidth;
-        const bry = -centroidY, brz = baseHalfWidth;
-        // Vertices are duplicated per face so each face has its own normals
-        // (sharp edges, no smooth interpolation across different faces)
-        const positions = [
-            -halfW, ay, az, -halfW, bly, blz, -halfW, bry, brz,           // 0-2:  left cap
-            halfW, ay, az, halfW, bly, blz, halfW, bry, brz,              // 3-5:  right cap
-            -halfW, ay, az, halfW, ay, az, -halfW, bly, blz, halfW, bly, blz, // 6-9:  front face
-            -halfW, ay, az, halfW, ay, az, -halfW, bry, brz, halfW, bry, brz, // 10-13: back face
-            -halfW, bly, blz, halfW, bly, blz, -halfW, bry, brz, halfW, bry, brz, // 14-17: base
-        ];
-        const indices = [0, 2, 1, 3, 4, 5, 6, 8, 7, 7, 8, 9, 10, 11, 12, 11, 13, 12, 14, 15, 16, 15, 17, 16];
-
-        // Compute flat per-face normals (NOT computeVertexNormals which averages)
-        // Front face: edge from apex → baseLeft, normal = perpendicular in YZ plane
-        const frontDy = bly - ay, frontDz = blz - az;
-        const frontLen = Math.sqrt(frontDy * frontDy + frontDz * frontDz);
-        const fnY = -frontDz / frontLen, fnZ = frontDy / frontLen;
-
-        // Back face: edge from apex → baseRight
-        const backDy = bry - ay, backDz = brz - az;
-        const backLen = Math.sqrt(backDy * backDy + backDz * backDz);
-        const bnY = backDz / backLen, bnZ = -backDy / backLen;
-
-        // Per-vertex normals: same normal for all verts of each face
-        const normals = [
-            -1, 0, 0, -1, 0, 0, -1, 0, 0,            // left cap
-            1, 0, 0, 1, 0, 0, 1, 0, 0,             // right cap
-            0, fnY, fnZ, 0, fnY, fnZ, 0, fnY, fnZ, 0, fnY, fnZ,  // front face
-            0, bnY, bnZ, 0, bnY, bnZ, 0, bnY, bnZ, 0, bnY, bnZ,  // back face
-            0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,     // base
-        ];
-
-        const geo = new BufferGeometry();
-        geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
-        geo.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-        geo.setIndex(indices);
-        return geo;
-    }, [component.apexAngle, component.height, component.width]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh geometry={geometry}>
-                <meshPhysicalMaterial
-                    color="#ccffff"
-                    transmission={0.99}
-                    opacity={0.6}
-                    transparent
-                    roughness={0}
-                    side={2}
-                    depthWrite={false}
-                />
-            </mesh>
-        </group>
-    );
-};
 
 export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
@@ -1242,55 +109,12 @@ export const OpticalTable: React.FC = () => {
     // ─── Optics fingerprint: changes only when non-Card components change ───
     // Cards are passive detectors and don't affect the optical path, so moving
     // them should NOT trigger the expensive Solver1/Solver2 re-computation.
+    // Uses component.version which is bumped on every property mutation.
     const opticsFingerprint = useMemo(() => {
         if (!components) return '';
         return components
             .filter(c => !(c instanceof Card))
-            .map(c => {
-
-                const base = `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`;
-                const props: string[] = [];
-                if ('wavelength' in c) props.push(`wl=${(c as any).wavelength}`);
-                if ('beamRadius' in c) props.push(`br=${(c as any).beamRadius}`);
-                
-                if ('power' in c) props.push(`pw=${(c as any).power}`);
-                if ('ior' in c) props.push(`ior=${(c as any).ior}`);
-                if ('curvature' in c) props.push(`cv=${(c as any).curvature}`);
-                if ('apertureRadius' in c) props.push(`ar=${(c as any).apertureRadius}`);
-                if ('aperture' in c) props.push(`ap=${(c as any).aperture}`);
-                if ('thickness' in c) props.push(`th=${(c as any).thickness}`);
-                if ('openingDiameter' in c) props.push(`od=${(c as any).openingDiameter}`);
-                if ('apexAngle' in c) props.push(`aa=${(c as any).apexAngle}`);
-                if ('height' in c) props.push(`h=${(c as any).height}`);
-                if ('r1' in c) props.push(`r1=${(c as any).r1}`);
-                if ('r2' in c) props.push(`r2=${(c as any).r2}`);
-                if ('focalLength' in c) props.push(`fl=${(c as any).focalLength}`);
-                if ('diameter' in c) props.push(`d=${(c as any).diameter}`);
-                if ('width' in c) props.push(`w=${(c as any).width}`);
-                if ('radiusOfCurvature' in c) props.push(`roc=${(c as any).radiusOfCurvature}`);
-                if ('spectralProfile' in c) {
-                    const sp = (c as any).spectralProfile;
-                    props.push(`sp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
-                }
-                // PolygonScanner properties
-                if ('numFaces' in c) props.push(`nf=${(c as any).numFaces}`);
-                if ('inscribedRadius' in c) props.push(`ir=${(c as any).inscribedRadius}`);
-                if ('faceHeight' in c) props.push(`fh=${(c as any).faceHeight}`);
-                if ('scanAngle' in c) props.push(`sa=${(c as any).scanAngle}`);
-                // Sample fluorescence spectral profiles
-                if ('excitationSpectrum' in c) {
-                    const sp = (c as any).excitationSpectrum;
-                    props.push(`exsp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
-                }
-                if ('emissionSpectrum' in c) {
-                    const sp = (c as any).emissionSpectrum;
-                    props.push(`emsp=${sp.preset},${sp.cutoffNm},${sp.edgeSteepness},${JSON.stringify(sp.bands)}`);
-                }
-                if ('fluorescenceEfficiency' in c) props.push(`fe=${(c as any).fluorescenceEfficiency}`);
-                if ('absorption' in c) props.push(`abs=${(c as any).absorption}`);
-
-                return props.length > 0 ? `${base}:${props.join(',')}` : base;
-            })
+            .map(c => `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`)
             .join('|');
     }, [components, animTick]);
 
@@ -1310,195 +134,7 @@ export const OpticalTable: React.FC = () => {
         }
 
         const solver = new Solver1(components);
-
-        const laserComps = components.filter(c => c instanceof Laser) as Laser[];
-
-        const sourceRays: Ray[] = [];
-
-
-        for (const laserComp of laserComps) {
-            let origin = laserComp.position.clone();
-            const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
-
-
-            const offset = direction.clone().multiplyScalar(5);
-            origin.add(offset);
-
-            const laserWavelength = laserComp.wavelength * 1e-9;
-            const beamRadius = laserComp.beamRadius;
-
-
-            sourceRays.push({
-                origin: origin.clone(),
-                direction: direction.clone(),
-                wavelength: laserWavelength, intensity: laserComp.power, polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } }, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
-                isMainRay: true, sourceId: laserComp.id
-            });
-
-            // Hierarchical ray distribution using binary subdivision:
-            //   Ring 0: 24 rays at full beam radius (marginal rays)
-            //   Ring 1+: 12 rays each at radii that fill gaps via binary subdivision
-            //     Sequence: 1/2, 1/4, 3/4, 1/8, 3/8, 5/8, 7/8, ...
-            // Each ring is angularly offset so projected 2D lines don't overlap.
-            const totalRays = Math.max(1, rayConfig.rayCount);
-            const FIRST_RING_COUNT = Math.min(24, totalRays);
-            const INNER_RING_COUNT = 12;
-
-            // Build radius fractions via breadth-first binary subdivision:
-            // Level 0: [1/2]  Level 1: [1/4, 3/4]  Level 2: [1/8, 3/8, 5/8, 7/8] ...
-            const radiusFractions: number[] = [1]; // ring 0 = marginal (full radius)
-            let subdivLevel = 1;
-            while (radiusFractions.length < 100) { // generate enough levels
-                const denom = 1 << subdivLevel; // 2, 4, 8, 16, ...
-                for (let k = 1; k < denom; k += 2) { // odd numerators only
-                    radiusFractions.push(k / denom);
-                }
-                subdivLevel++;
-            }
-
-            const up = new Vector3(0, 1, 0);
-            if (Math.abs(direction.dot(up)) > 0.9) {
-                up.set(0, 0, 1);
-            }
-            const right = new Vector3().crossVectors(direction, up).normalize();
-            const trueUp = new Vector3().crossVectors(right, direction).normalize();
-
-            let raysPlaced = 0;
-            let ringIndex = 0;
-            while (raysPlaced < totalRays && ringIndex < radiusFractions.length) {
-                const ringRadius = beamRadius * radiusFractions[ringIndex];
-                const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
-                const raysThisRing = Math.min(raysForThisRing, totalRays - raysPlaced);
-
-                // Angular offset per ring to avoid 2D line overlap
-                const angularOffset = ringIndex * Math.PI / 7; // golden-ish rotation
-
-                for (let i = 0; i < raysThisRing; i++) {
-                    const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
-
-                    const ringOffset = new Vector3()
-                        .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
-                        .addScaledVector(right, Math.cos(phi) * ringRadius);
-
-
-                    const rNorm = radiusFractions[ringIndex]; // 0..1
-                    const gaussIntensity = Math.exp(-2 * rNorm * rNorm);
-
-                    sourceRays.push({
-                        origin: origin.clone().add(ringOffset),
-                        direction: direction.clone().normalize(),
-                        wavelength: laserWavelength, intensity: gaussIntensity, polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } }, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent,
-                        sourceId: laserComp.id
-                    });
-                    raysPlaced++;
-                }
-                ringIndex++;
-            }
-        }
-
-
-
-        const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
-        for (const lampComp of lampComps) {
-            let origin = lampComp.position.clone();
-            const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
-            const offset = direction.clone().multiplyScalar(5);
-            origin.add(offset);
-
-            const beamRadius = lampComp.beamRadius;
-            const rayOpacity = lampComp.additiveOpacity;
-
-            for (let wIdx = 0; wIdx < lampComp.spectralWavelengths.length; wIdx++) {
-                const wavelengthNm = lampComp.spectralWavelengths[wIdx];
-                const wavelengthM = wavelengthNm * 1e-9;
-
-
-                sourceRays.push({
-                    origin: origin.clone(),
-                    direction: direction.clone(),
-                    wavelength: wavelengthM, intensity: rayOpacity,
-                    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                    opticalPathLength: 0, footprintRadius: 0,
-                    coherenceMode: Coherence.Incoherent,
-                    isMainRay: true, sourceId: `${lampComp.id}_${wavelengthNm}nm`
-                });
-
-                const defaultRays = Math.max(1, rayConfig.rayCount);
-                // With many spectral bands, halve rays per wavelength to keep
-                // total count reasonable. Only reduce when default >= 16.
-                const totalRays = defaultRays >= 16
-                    ? Math.max(1, Math.floor(defaultRays / 2))
-                    : defaultRays;
-                const FIRST_RING_COUNT = Math.min(24, totalRays);
-                const INNER_RING_COUNT = 12;
-
-                const radiusFractions: number[] = [1];
-                let subdivLevel = 1;
-                while (radiusFractions.length < 100) {
-                    const denom = 1 << subdivLevel;
-                    for (let k = 1; k < denom; k += 2) {
-                        radiusFractions.push(k / denom);
-                    }
-                    subdivLevel++;
-                }
-
-                const up = new Vector3(0, 1, 0);
-                if (Math.abs(direction.dot(up)) > 0.9) up.set(0, 0, 1);
-                const right = new Vector3().crossVectors(direction, up).normalize();
-                const trueUp = new Vector3().crossVectors(right, direction).normalize();
-
-                let raysPlaced = 0;
-                let ringIndex = 0;
-                while (raysPlaced < totalRays && ringIndex < radiusFractions.length) {
-                    const ringRadius = beamRadius * radiusFractions[ringIndex];
-                    const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
-                    const raysThisRing = Math.min(raysForThisRing, totalRays - raysPlaced);
-                    const angularOffset = ringIndex * Math.PI / 7;
-
-                    for (let i = 0; i < raysThisRing; i++) {
-                        const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
-                        const ringOffset = new Vector3()
-                            .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
-                            .addScaledVector(right, Math.cos(phi) * ringRadius);
-
-
-                        sourceRays.push({
-                            origin: origin.clone().add(ringOffset),
-                            direction: direction.clone().normalize(),
-                            wavelength: wavelengthM, intensity: rayOpacity,
-                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                            opticalPathLength: 0, footprintRadius: 0,
-                            coherenceMode: Coherence.Incoherent,
-                            sourceId: `${lampComp.id}_${wavelengthNm}nm`
-                        });
-                        raysPlaced++;
-                    }
-                    ringIndex++;
-                }
-            }
-        }
-
-        // ── PMT preview ray: single dashed line showing where PMT looks ──
-        const pmtComps = components.filter(c => c instanceof PMT) as PMT[];
-        for (const pmtComp of pmtComps) {
-            pmtComp.updateMatrices();
-            const pmtDir = new Vector3(0, 0, 1).applyQuaternion(pmtComp.rotation).normalize();
-            const pmtOrigin = pmtComp.position.clone().add(pmtDir.clone().multiplyScalar(1));
-            // Use emission wavelength from sample if available
-            const sampleComp = components.find(c => c instanceof Sample) as Sample | undefined;
-            const emWl = sampleComp ? sampleComp.getEmissionWavelength() * 1e-9 : 520e-9;
-            sourceRays.push({
-                origin: pmtOrigin,
-                direction: pmtDir,
-                wavelength: emWl,
-                intensity: 0.3,
-                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                opticalPathLength: 0,
-                footprintRadius: 0,
-                coherenceMode: Coherence.Coherent,
-                sourceId: `pmt_preview_${pmtComp.id}`,
-            });
-        }
+        const sourceRays = createSourceRays(components, rayConfig.rayCount, 'full');
 
         const calculatedPaths = solver.trace(sourceRays);
 
@@ -1810,76 +446,113 @@ export const OpticalTable: React.FC = () => {
         const beamSegs = beamSegsRef.current;
         setSolver3Rendering(true);
 
-        setTimeout(() => {
+        // Use requestAnimationFrame-driven generator for non-blocking rendering.
+        // Each animation frame processes rows for up to ~16ms, then yields to the browser.
+        let cancelled = false;
+
+        const runAsync = () => {
             try {
                 const solver3 = new Solver3(components, beamSegs);
                 const allPaths: Ray[][] = [];
 
-                // Backward trace from every Camera
-                for (const camera of cameras) {
-                    const result = solver3.render(camera, rayConfig.rayCount);
-                    camera.solver3Image = result.emissionImage;
-                    camera.forwardImage = result.excitationImage;
-                    camera.solver3Paths = result.paths;
-                    camera.solver3Stale = false;
-                    allPaths.push(...result.paths);
-                }
+                // Build a list of camera generators to process sequentially
+                const cameraGens = cameras.map(cam => ({
+                    camera: cam,
+                    gen: solver3.renderGenerator(cam, rayConfig.rayCount),
+                }));
 
-                // Backward trace from every PMT
-                if (pmts.length > 0) {
-                    const sample = components.find(c => c instanceof Sample) as Sample | undefined;
-                    const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
+                let camIdx = 0;
 
-                    for (const pmt of pmts) {
-                        pmt.updateMatrices();
-                        const pmtPos = pmt.position.clone();
-                        const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
-                        const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
-                        const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
+                const step = () => {
+                    if (cancelled) { setSolver3Rendering(false); return; }
 
-                        const numRays = Math.min(rayConfig.rayCount, 32);
-                        const sinThetaMax = 0.3;
+                    const frameStart = performance.now();
+                    // Process rows for up to 16ms per animation frame
+                    while (camIdx < cameraGens.length && performance.now() - frameStart < 16) {
+                        const { camera, gen } = cameraGens[camIdx];
+                        const { value, done } = gen.next();
+                        if (done) {
+                            // Generator returned the final Solver3Result
+                            const result = value as import('../physics/Solver3').Solver3Result;
+                            camera.solver3Image = result.emissionImage;
+                            camera.forwardImage = result.excitationImage;
+                            camera.solver3Paths = result.paths;
+                            camera.solver3Stale = false;
+                            allPaths.push(...result.paths);
+                            camIdx++;
+                        }
+                        // If not done, the generator yielded a progress update — continue in this frame
+                    }
 
-                        for (let i = 0; i < numRays; i++) {
-                            const phi = Math.random() * 2 * Math.PI;
-                            const sinTheta = sinThetaMax * Math.sqrt(Math.random());
-                            const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+                    if (camIdx < cameraGens.length) {
+                        // More cameras to process — schedule next frame
+                        requestAnimationFrame(step);
+                        return;
+                    }
 
-                            const dir = pmtW.clone().multiplyScalar(cosTheta)
-                                .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
-                                .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
-                                .normalize();
+                    // All cameras done — now handle PMTs (synchronous, they're fast)
+                    if (pmts.length > 0) {
+                        const sample = components.find(c => c instanceof Sample) as Sample | undefined;
+                        const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
 
-                            const polAngle = Math.random() * Math.PI;
-                            const backwardRay: Ray = {
-                                origin: pmtPos.clone(),
-                                direction: dir,
-                                wavelength: emissionWavelength,
-                                intensity: 1.0,
-                                polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
-                                opticalPathLength: 0,
-                                footprintRadius: 0.1,
-                                coherenceMode: Coherence.Incoherent,
-                                sourceId: `pmt_backward_${pmt.id}_${i}`,
-                            };
+                        for (const pmt of pmts) {
+                            pmt.updateMatrices();
+                            const pmtPos = pmt.position.clone();
+                            const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
+                            const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
+                            const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
 
-                            const result = solver3.traceBackward(backwardRay, sample);
-                            if (result.path.length > 1) {
-                                allPaths.push(result.path);
+                            const numRays = Math.min(rayConfig.rayCount, 32);
+                            const sinThetaMax = 0.3;
+
+                            for (let i = 0; i < numRays; i++) {
+                                const phi = Math.random() * 2 * Math.PI;
+                                const sinTheta = sinThetaMax * Math.sqrt(Math.random());
+                                const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+
+                                const dir = pmtW.clone().multiplyScalar(cosTheta)
+                                    .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
+                                    .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
+                                    .normalize();
+
+                                const polAngle = Math.random() * Math.PI;
+                                const backwardRay: Ray = {
+                                    origin: pmtPos.clone(),
+                                    direction: dir,
+                                    wavelength: emissionWavelength,
+                                    intensity: 1.0,
+                                    polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
+                                    opticalPathLength: 0,
+                                    footprintRadius: 0.1,
+                                    coherenceMode: Coherence.Incoherent,
+                                    sourceId: `pmt_backward_${pmt.id}_${i}`,
+                                };
+
+                                const result = solver3.traceBackward(backwardRay, sample);
+                                if (result.path.length > 1) {
+                                    allPaths.push(result.path);
+                                }
                             }
                         }
                     }
-                }
 
-                console.log(`[Solver3] Backward traced ${cameras.length} cameras + ${pmts.length} PMTs → ${allPaths.length} paths`);
-                setSolver3Paths(allPaths);
-                solver3PathsRef.current = allPaths;
+                    console.log(`[Solver3] Backward traced ${cameras.length} cameras + ${pmts.length} PMTs → ${allPaths.length} paths`);
+                    setSolver3Paths(allPaths);
+                    solver3PathsRef.current = allPaths;
+                    setSolver3Rendering(false);
+                };
+
+                requestAnimationFrame(step);
             } catch (e) {
                 console.warn('Solver 3 error:', e);
+                setSolver3Rendering(false);
             }
-            setSolver3Rendering(false);
-        }, 50);
+        };
 
+        // Kick off on next frame to let the "rendering" state update paint first
+        requestAnimationFrame(runAsync);
+
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [solver3Trigger]);
 
@@ -1995,50 +668,7 @@ export const OpticalTable: React.FC = () => {
             try {
                 // ── Solver 1: Forward trace ──
                 const solver1 = new Solver1(components);
-                const laserComps = components.filter(c => c instanceof Laser) as Laser[];
-                const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
-                const sourceRays: Ray[] = [];
-
-                for (const laserComp of laserComps) {
-                    let origin = laserComp.position.clone();
-                    const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
-                    origin.add(direction.clone().multiplyScalar(5));
-                    const laserWavelength = laserComp.wavelength * 1e-9;
-
-                    sourceRays.push({
-                        origin: origin.clone(),
-                        direction: direction.clone(),
-                        wavelength: laserWavelength,
-                        intensity: laserComp.power,
-                        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                        opticalPathLength: 0,
-                        footprintRadius: 0,
-                        coherenceMode: Coherence.Coherent,
-                        isMainRay: true,
-                        sourceId: laserComp.id
-                    });
-                }
-
-                for (const lampComp of lampComps) {
-                    let origin = lampComp.position.clone();
-                    const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
-                    origin.add(direction.clone().multiplyScalar(5));
-                    for (const wavelengthNm of lampComp.spectralWavelengths) {
-                        sourceRays.push({
-                            origin: origin.clone(),
-                            direction: direction.clone(),
-                            wavelength: wavelengthNm * 1e-9,
-                            intensity: lampComp.additiveOpacity,
-                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                            opticalPathLength: 0,
-                            footprintRadius: 0,
-                            coherenceMode: Coherence.Incoherent,
-                            isMainRay: true,
-                            sourceId: `${lampComp.id}_${wavelengthNm}nm`
-                        });
-                    }
-                }
-
+                const sourceRays = createSourceRays(components, 1, 'center');
                 const paths = solver1.trace(sourceRays);
 
                 // ── Solver 2: Gaussian beam propagation ──
@@ -2134,8 +764,6 @@ export const OpticalTable: React.FC = () => {
         })).filter(sv => sv.target);
 
         console.log(`[PMT Raster] Starting ${resX}×${resY} raster scan (${totalPixels} pixels)`);
-        (globalThis as any).__pmtDebugCounter = 0; // Reset debug counter for traceBackward logs
-        (globalThis as any).__pmtPathLogDone = false; // Reset backward path log
 
         // Lock animation loop
         scanAccumActiveRef.current = true;
@@ -2203,47 +831,7 @@ export const OpticalTable: React.FC = () => {
                 try {
                     // Solver 1: Forward trace
                     const solver1 = new Solver1(components);
-                    const sourceRays: Ray[] = [];
-                    const laserComps = components.filter(c => c instanceof Laser) as Laser[];
-                    const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
-
-                    for (const laserComp of laserComps) {
-                        let origin = laserComp.position.clone();
-                        const direction = new Vector3(1, 0, 0).applyQuaternion(laserComp.rotation).normalize();
-                        origin.add(direction.clone().multiplyScalar(5));
-                        sourceRays.push({
-                            origin, direction,
-                            wavelength: laserComp.wavelength * 1e-9,
-                            intensity: laserComp.power,
-                            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                            opticalPathLength: 0,
-                            footprintRadius: laserComp.beamRadius || 0,
-                            coherenceMode: Coherence.Coherent,
-                            isMainRay: true,
-                            sourceId: laserComp.id
-                        });
-                    }
-
-                    for (const lampComp of lampComps) {
-                        let origin = lampComp.position.clone();
-                        const direction = new Vector3(1, 0, 0).applyQuaternion(lampComp.rotation).normalize();
-                        origin.add(direction.clone().multiplyScalar(5));
-                        for (const wavelengthNm of lampComp.spectralWavelengths) {
-                            sourceRays.push({
-                                origin: origin.clone(),
-                                direction: direction.clone(),
-                                wavelength: wavelengthNm * 1e-9,
-                                intensity: lampComp.additiveOpacity,
-                                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                                opticalPathLength: 0,
-                                footprintRadius: 0,
-                                coherenceMode: Coherence.Incoherent,
-                                isMainRay: true,
-                                sourceId: `${lampComp.id}_${wavelengthNm}nm`
-                            });
-                        }
-                    }
-
+                    const sourceRays = createSourceRays(components, 1, 'center');
                     const paths = solver1.trace(sourceRays);
 
                     // Solver 2: Gaussian beam propagation
@@ -2252,9 +840,7 @@ export const OpticalTable: React.FC = () => {
                         const solver2 = new Solver2();
                         beamSegs = solver2.propagate(paths, components);
                     } catch (e) {
-                        if ((globalThis as any).__pmtDebugCounter < 25) {
-                            console.warn('[PMT Raster] Solver2 FAILED:', e);
-                        }
+                        console.warn('[PMT Raster] Solver2 FAILED:', e);
                     }
 
                     // Debug: log beam focus position at corner/center pixels
@@ -2549,7 +1135,6 @@ export const OpticalTable: React.FC = () => {
                     else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
                     else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
                     else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
-
                     else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                     else if (c instanceof Card) visual = <CardVisualizer component={c} />;
                     else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;

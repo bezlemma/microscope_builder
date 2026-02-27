@@ -277,7 +277,7 @@ export class PrismLens extends OpticalComponent {
      *  - Internal propagation distance d between the two faces
      *  - Sagittal plane: no angular magnification, just propagation d/n
      */
-    getABCD_for_ray(worldDir: Vector3): {
+    getABCD_for_ray(worldDir: Vector3, wavelengthSI?: number): {
         abcdTangential: [number, number, number, number];
         abcdSagittal: [number, number, number, number];
     } {
@@ -316,7 +316,7 @@ export class PrismLens extends OpticalComponent {
         if (cosTheta1 < 0.01) return { abcdTangential: identity, abcdSagittal: identity };
 
         const sinTheta1 = Math.sqrt(1 - cosTheta1 * cosTheta1);
-        const ior = this.ior; // ABCD uses base IOR (beam propagation is monochromatic per-branch)
+        const ior = wavelengthSI ? this.getIOR(wavelengthSI) : this.ior;
         const sinTheta2 = sinTheta1 / ior;
         if (sinTheta2 >= 1) return { abcdTangential: identity, abcdSagittal: identity }; // TIR
         const cosTheta2 = Math.sqrt(1 - sinTheta2 * sinTheta2);
@@ -362,5 +362,19 @@ export class PrismLens extends OpticalComponent {
             abcdTangential: [A_t, B_t, C_t, D_t],
             abcdSagittal: [A_s, B_s, C_s, D_s]
         };
+    }
+
+    /** Override: prism has anamorphic ABCD that depends on ray direction and wavelength */
+    getComponentABCD(rayDirection?: Vector3, wavelengthSI?: number): {
+        abcdX: [number, number, number, number];
+        abcdY: [number, number, number, number];
+        apertureRadius: number;
+    } {
+        if (rayDirection) {
+            const { abcdTangential, abcdSagittal } = this.getABCD_for_ray(rayDirection, wavelengthSI);
+            // Prism's tangential plane (plane of incidence) is Y-Z → maps to qy.
+            return { abcdX: abcdSagittal, abcdY: abcdTangential, apertureRadius: 0 };
+        }
+        return { abcdX: [1, 0, 0, 1], abcdY: [1, 0, 0, 1], apertureRadius: 0 };
     }
 }

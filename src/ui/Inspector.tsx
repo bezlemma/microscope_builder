@@ -31,49 +31,8 @@ import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 
-// Wavelength to visible spectrum color (approximation)
-function wavelengthToColor(wavelength: number): string {
-    let r = 0, g = 0, b = 0;
-
-    if (wavelength >= 380 && wavelength < 440) {
-        r = -(wavelength - 440) / (440 - 380);
-        b = 1.0;
-    } else if (wavelength >= 440 && wavelength < 490) {
-        g = (wavelength - 440) / (490 - 440);
-        b = 1.0;
-    } else if (wavelength >= 490 && wavelength < 510) {
-        g = 1.0;
-        b = -(wavelength - 510) / (510 - 490);
-    } else if (wavelength >= 510 && wavelength < 580) {
-        r = (wavelength - 510) / (580 - 510);
-        g = 1.0;
-    } else if (wavelength >= 580 && wavelength < 645) {
-        r = 1.0;
-        g = -(wavelength - 645) / (645 - 580);
-    } else if (wavelength >= 645 && wavelength <= 780) {
-        r = 1.0;
-    }
-
-    // Apply intensity correction for edge wavelengths
-    let factor = 1.0;
-    if (wavelength >= 380 && wavelength < 420) {
-        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
-    } else if (wavelength >= 645 && wavelength <= 780) {
-        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 645);
-    } else if (wavelength < 380 || wavelength > 780) {
-        return '#888888'; // Gray for UV/IR
-    }
-
-    r = Math.round(255 * Math.pow(r * factor, 0.8));
-    g = Math.round(255 * Math.pow(g * factor, 0.8));
-    b = Math.round(255 * Math.pow(b * factor, 0.8));
-
-    return `rgb(${r}, ${g}, ${b})`;
-}
-
-function isVisibleSpectrum(wavelength: number): boolean {
-    return wavelength >= 380 && wavelength <= 780;
-}
+import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
+import { snapToRingBoundary } from '../physics/SourceRayFactory';
 
 // ─── CardViewer with pin toggle ─────────────────────────────────────
 
@@ -260,7 +219,7 @@ const SolverPanel: React.FC<{
                             onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
                             style={{ width: '80px' }}
                         />
-                        <span style={{ minWidth: '20px' }}>{Math.max(4, rayConfig.rayCount)} Rays</span>
+                        <span style={{ minWidth: '20px' }}>{snapToRingBoundary(Math.max(4, rayConfig.rayCount))} Rays</span>
                     </div>
 
                     {/* E&M (toggleable) */}
@@ -384,6 +343,8 @@ export const Inspector: React.FC = () => {
     const [_channelVersion, setChannelVersion] = useState(0);
     // Remembers the last-used galvo settings per component, persists across stop/start
     const [galvoAngles, setGalvoAngles] = useState<Map<string, { halfDeg: number; periodMs: number; axis: string }>>(new Map());
+    // Remembers the last-used piezo settings per sample component
+    const [piezoSettings, setPiezoSettings] = useState<Map<string, { halfMm: number; periodMs: number; axis: string }>>(new Map());
 
 
     const selectedComponent = selection.length === 1
@@ -475,6 +436,14 @@ export const Inspector: React.FC = () => {
     const [localEmBands, setLocalEmBands] = useState<{ center: string; width: string }[]>([{ center: '520', width: '40' }]);
     const [localFluorEff, setLocalFluorEff] = useState<string>('0.0001');
     const [localAbsorption, setLocalAbsorption] = useState<string>('3');
+
+    // Specimen orientation (Euler degrees) and offset (mm, ±5)
+    const [localSpecRotX, setLocalSpecRotX] = useState<string>('0');
+    const [localSpecRotY, setLocalSpecRotY] = useState<string>('0');
+    const [localSpecRotZ, setLocalSpecRotZ] = useState<string>('0');
+    const [localSpecOffX, setLocalSpecOffX] = useState<string>('0');
+    const [localSpecOffY, setLocalSpecOffY] = useState<string>('0');
+    const [localSpecOffZ, setLocalSpecOffZ] = useState<string>('0');
 
 
     useEffect(() => {
@@ -617,6 +586,14 @@ export const Inspector: React.FC = () => {
                     setLocalEmBands(selectedComponent.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                     setLocalFluorEff(selectedComponent.fluorescenceEfficiency.toPrecision(3));
                     setLocalAbsorption(String(selectedComponent.absorption));
+                    // Specimen rotation (radians → degrees)
+                    setLocalSpecRotX(String(Math.round(selectedComponent.specimenRotation.x * 180 / Math.PI * 100) / 100));
+                    setLocalSpecRotY(String(Math.round(selectedComponent.specimenRotation.y * 180 / Math.PI * 100) / 100));
+                    setLocalSpecRotZ(String(Math.round(selectedComponent.specimenRotation.z * 180 / Math.PI * 100) / 100));
+                    // Specimen offset (mm)
+                    setLocalSpecOffX(String(Math.round(selectedComponent.specimenOffset.x * 1000) / 1000));
+                    setLocalSpecOffY(String(Math.round(selectedComponent.specimenOffset.y * 1000) / 1000));
+                    setLocalSpecOffZ(String(Math.round(selectedComponent.specimenOffset.z * 1000) / 1000));
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -1162,7 +1139,7 @@ export const Inspector: React.FC = () => {
                                                     const oldPeriodMs = activeChannel!.periodMs;
                                                     animator.removeChannel(activeChannel!.id, components);
                                                     // Compute center from the NEW axis's current rotation (not the old axis!)
-                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
                                                     const newCenter = newAxisProp === 'rotation.y' ? euler.y : euler.z;
                                                     const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || String(currentHalfDeg));
@@ -1259,7 +1236,7 @@ export const Inspector: React.FC = () => {
                                                     const halfAngleDeg = parseFloat(rangeEl?.value || '5');
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
                                                     // Use restoreValue if coming from an existing channel, else current rotation
-                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
+                                                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
                                                     const currentRotVal = axis === 'rotation.y' ? euler.y : euler.z;
                                                     const center = channelCenter || currentRotVal;
                                                     const ch: AnimationChannel = {
@@ -1686,13 +1663,16 @@ export const Inspector: React.FC = () => {
                                     const deg = parseFloat(v);
                                     if (isNaN(deg)) return;
                                     const rad = deg * Math.PI / 180;
+                                    const oldDeg = parseFloat(localCylClocking);
+                                    const oldRad = isNaN(oldDeg) ? 0 : oldDeg * Math.PI / 180;
+                                    const deltaRad = rad - oldRad;
+
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof CylindricalLens) {
-                                            // Get current Euler, modify the X rotation (maps to W/optical axis after π/2 Y rotation)
-                                            const euler = new Euler().setFromQuaternion(c.rotation);
-                                            euler.x = rad;
-                                            c.rotation.setFromEuler(euler);
+                                            const q = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), deltaRad);
+                                            c.rotation.multiply(q);
                                             c.updateMatrices();
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -2275,7 +2255,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof SlitAperture) {
                                             // Rotate around the optical axis (local X)
-                                            const euler = new Euler().setFromQuaternion(c.rotation);
+                                            const euler = new Euler().setFromQuaternion(c.rotation, 'ZYX');
                                             euler.x = rad;
                                             c.rotation.setFromEuler(euler);
                                             c.updateMatrices();
@@ -2611,6 +2591,229 @@ export const Inspector: React.FC = () => {
                     );
                 })()}
 
+                {/* ── Specimen Orientation & Offset ── */}
+                {isSample && (() => {
+                    const commitSpecimenRotation = (axis: 'x' | 'y' | 'z', v: string) => {
+                        const deg = parseFloat(v);
+                        if (isNaN(deg)) return;
+                        const rad = deg * Math.PI / 180;
+                        const newComponents = components.map(c => {
+                            if (c.id === selection[0] && c instanceof Sample) {
+                                c.specimenRotation[axis] = rad;
+                                c.version++;
+                                return c;
+                            }
+                            return c;
+                        });
+                        setComponents([...newComponents]);
+                    };
+                    const commitSpecimenOffset = (axis: 'x' | 'y' | 'z', v: string) => {
+                        const val = parseFloat(v);
+                        if (isNaN(val)) return;
+                        const clamped = Math.max(-5, Math.min(5, val));
+                        const newComponents = components.map(c => {
+                            if (c.id === selection[0] && c instanceof Sample) {
+                                c.specimenOffset[axis] = clamped;
+                                c.version++;
+                                return c;
+                            }
+                            return c;
+                        });
+                        setComponents([...newComponents]);
+                    };
+                    return (
+                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Specimen Orientation</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                                <ScrubInput label="Rx" suffix="°" value={localSpecRotX} onChange={setLocalSpecRotX} onCommit={(v: string) => commitSpecimenRotation('x', v)} speed={1} step={1} />
+                                <ScrubInput label="Ry" suffix="°" value={localSpecRotY} onChange={setLocalSpecRotY} onCommit={(v: string) => commitSpecimenRotation('y', v)} speed={1} step={1} />
+                                <ScrubInput label="Rz" suffix="°" value={localSpecRotZ} onChange={setLocalSpecRotZ} onCommit={(v: string) => commitSpecimenRotation('z', v)} speed={1} step={1} />
+                            </div>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8, marginTop: 10 }}>Specimen Offset</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                                <ScrubInput label="dX" suffix="mm" value={localSpecOffX} onChange={setLocalSpecOffX} onCommit={(v: string) => commitSpecimenOffset('x', v)} speed={0.05} step={0.01} min={-5} max={5} />
+                                <ScrubInput label="dY" suffix="mm" value={localSpecOffY} onChange={setLocalSpecOffY} onCommit={(v: string) => commitSpecimenOffset('y', v)} speed={0.05} step={0.01} min={-5} max={5} />
+                                <ScrubInput label="dZ" suffix="mm" value={localSpecOffZ} onChange={setLocalSpecOffZ} onCommit={(v: string) => commitSpecimenOffset('z', v)} speed={0.05} step={0.01} min={-5} max={5} />
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* ── Piezo Scan — for Sample and SampleChamber ── */}
+                {isSample && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Piezo Scan</label>
+                        {(() => {
+                            const piezoProps = ['specimenOffset.x', 'specimenOffset.y', 'specimenOffset.z'];
+                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && piezoProps.includes(ch.property));
+                            const isScanning = !!activeChannel;
+                            const saved = piezoSettings.get(selectedComponent.id);
+                            const axisLabels: Record<string, string> = { 'specimenOffset.x': 'dX', 'specimenOffset.y': 'dY', 'specimenOffset.z': 'dZ' };
+                            const currentProp = activeChannel?.property ?? (saved?.axis === 'dY' ? 'specimenOffset.y' : saved?.axis === 'dZ' ? 'specimenOffset.z' : 'specimenOffset.x');
+                            const currentAxisLabel = axisLabels[currentProp] ?? 'dX';
+                            const currentHalfMm = isScanning
+                                ? Math.round((activeChannel!.to - activeChannel!.from) / 2 * 1000) / 1000
+                                : (saved?.halfMm ?? 1);
+
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                                        <span style={{ fontSize: '10px', color: '#888', minWidth: '30px' }}>Axis</span>
+                                        <select
+                                            value={currentAxisLabel}
+                                            onChange={e => {
+                                                const label = e.target.value;
+                                                const prop = label === 'dY' ? 'specimenOffset.y' : label === 'dZ' ? 'specimenOffset.z' : 'specimenOffset.x';
+                                                if (isScanning) {
+                                                    const oldPeriodMs = activeChannel!.periodMs;
+                                                    animator.removeChannel(activeChannel!.id, components);
+                                                    const comp = selectedComponent as Sample;
+                                                    const axis = prop.split('.')[1] as 'x' | 'y' | 'z';
+                                                    const center = comp.specimenOffset[axis];
+                                                    const halfMm = currentHalfMm;
+                                                    animator.addChannel({
+                                                        id: generateChannelId(),
+                                                        targetId: selectedComponent.id,
+                                                        property: prop,
+                                                        from: center - halfMm,
+                                                        to: center + halfMm,
+                                                        easing: 'sinusoidal',
+                                                        periodMs: oldPeriodMs,
+                                                        repeat: true,
+                                                        restoreValue: center,
+                                                    });
+                                                    setAnimPlaying(true);
+                                                    setChannelVersion(v => v + 1);
+                                                } else {
+                                                    setPiezoSettings(prev => {
+                                                        const next = new Map(prev);
+                                                        next.set(selectedComponent.id, {
+                                                            halfMm: saved?.halfMm ?? currentHalfMm,
+                                                            periodMs: saved?.periodMs ?? 2000,
+                                                            axis: label,
+                                                        });
+                                                        return next;
+                                                    });
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#222', color: '#ccc', border: '1px solid #555',
+                                                borderRadius: '3px', fontSize: '10px', padding: '2px 4px', cursor: 'pointer',
+                                            }}
+                                        >
+                                            <option value="dX">dX (left–right)</option>
+                                            <option value="dY">dY (up–down)</option>
+                                            <option value="dZ">dZ (in–out)</option>
+                                        </select>
+                                        <span style={{ fontSize: '10px', color: '#888', marginLeft: '6px', minWidth: '18px' }}>±</span>
+                                        <input
+                                            type="number"
+                                            defaultValue={currentHalfMm}
+                                            key={activeChannel?.id ?? `piezo-idle-${selectedComponent.id}`}
+                                            min={0.01}
+                                            max={5}
+                                            step={0.1}
+                                            onChange={e => {
+                                                if (isScanning) {
+                                                    const halfMm = parseFloat(e.target.value);
+                                                    if (isNaN(halfMm) || halfMm <= 0) return;
+                                                    const center = activeChannel!.restoreValue ?? (activeChannel!.from + activeChannel!.to) / 2;
+                                                    activeChannel!.from = center - halfMm;
+                                                    activeChannel!.to = center + halfMm;
+                                                }
+                                            }}
+                                            style={{
+                                                width: '48px', background: '#222', color: '#ccc', border: '1px solid #555',
+                                                borderRadius: '3px', fontSize: '10px', padding: '2px 4px', textAlign: 'center',
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '10px', color: '#888' }}>mm</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <button
+                                            onClick={() => {
+                                                if (isScanning) {
+                                                    const halfMm = Math.round((activeChannel!.to - activeChannel!.from) / 2 * 1000) / 1000;
+                                                    const periodMs = activeChannel!.periodMs;
+                                                    setPiezoSettings(prev => new Map(prev).set(selectedComponent.id, { halfMm, periodMs, axis: currentAxisLabel }));
+                                                    animator.removeChannel(activeChannel!.id, components);
+                                                    if (animator.channels.length === 0) setAnimPlaying(false);
+                                                    setChannelVersion(v => v + 1);
+                                                } else {
+                                                    const comp = selectedComponent as Sample;
+                                                    const axis = currentProp.split('.')[1] as 'x' | 'y' | 'z';
+                                                    const center = comp.specimenOffset[axis];
+                                                    const halfMm = currentHalfMm;
+                                                    const ch: AnimationChannel = {
+                                                        id: generateChannelId(),
+                                                        targetId: selectedComponent.id,
+                                                        property: currentProp,
+                                                        from: center - halfMm,
+                                                        to: center + halfMm,
+                                                        easing: 'sinusoidal',
+                                                        periodMs: saved?.periodMs ?? 2000,
+                                                        repeat: true,
+                                                        restoreValue: center,
+                                                    };
+                                                    animator.addChannel(ch);
+                                                    setAnimPlaying(true);
+                                                    setChannelVersion(v => v + 1);
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1, padding: '6px 0',
+                                                background: isScanning ? '#3a1a1a' : '#1a2a3a',
+                                                border: `1px solid ${isScanning ? '#8a3a3a' : '#3a6a8a'}`,
+                                                borderRadius: '5px',
+                                                color: isScanning ? '#ff7b7b' : '#74b9ff',
+                                                cursor: 'pointer', fontSize: '11px', fontWeight: 600,
+                                                letterSpacing: '0.3px', transition: 'all 0.15s',
+                                            }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.background = isScanning ? '#4a2a2a' : '#253a4a';
+                                                e.currentTarget.style.borderColor = isScanning ? '#f44' : '#64b5f6';
+                                            }}
+                                            onMouseOut={e => {
+                                                e.currentTarget.style.background = isScanning ? '#3a1a1a' : '#1a2a3a';
+                                                e.currentTarget.style.borderColor = isScanning ? '#8a3a3a' : '#3a6a8a';
+                                            }}
+                                        >
+                                            {isScanning ? `⏹ Stop (${currentAxisLabel})` : '⏵ Scan Piezo'}
+                                        </button>
+                                        {isScanning && (
+                                            <>
+                                                <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
+                                                <input
+                                                    type="number"
+                                                    defaultValue={Math.round(1000 / activeChannel!.periodMs * 10) / 10}
+                                                    key={activeChannel!.id}
+                                                    min={0.1}
+                                                    max={100}
+                                                    step={0.1}
+                                                    onChange={e => {
+                                                        const hz = parseFloat(e.target.value);
+                                                        if (isNaN(hz) || hz <= 0) return;
+                                                        activeChannel!.periodMs = 1000 / hz;
+                                                    }}
+                                                    style={{
+                                                        width: '48px', background: '#222', color: '#ccc', border: '1px solid #555',
+                                                        borderRadius: '3px', fontSize: '10px', padding: '2px 4px', textAlign: 'center',
+                                                    }}
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                    {isScanning && (
+                                        <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>
+                                            ±{Math.round((activeChannel!.to - activeChannel!.from) / 2 * 1000) / 1000}mm sweep · {currentAxisLabel} · {Math.round(1000 / activeChannel!.periodMs * 10) / 10} Hz
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </div>
+                )}
+
                 {/* ── Sample Fluorescence Spectral Profiles ── */}
                 {isSample && (() => {
                     const comp = selectedComponent as Sample;
@@ -2894,13 +3097,24 @@ export const Inspector: React.FC = () => {
                 {/* PMT Detector: axis binding + raster scan */}
                 {isPMT && (() => {
                     const pmt = selectedComponent as PMT;
-                    // Find all components with active galvo animation channels
+                    // Find all components with active galvo/piezo animation channels
                     const galvoOptions: { compId: string; compName: string; property: string; label: string }[] = [];
                     for (const ch of animator.channels) {
                         if (ch.property === 'rotation.y' || ch.property === 'rotation.z') {
                             const comp = components.find(c => c.id === ch.targetId);
                             if (comp) {
                                 const axisLabel = ch.property === 'rotation.y' ? 'U' : 'V';
+                                galvoOptions.push({
+                                    compId: comp.id,
+                                    compName: comp.name,
+                                    property: ch.property,
+                                    label: `${comp.name} · ${axisLabel}`,
+                                });
+                            }
+                        } else if (ch.property.startsWith('specimenOffset.')) {
+                            const comp = components.find(c => c.id === ch.targetId);
+                            if (comp) {
+                                const axisLabel = 'd' + ch.property.split('.')[1].toUpperCase();
                                 galvoOptions.push({
                                     compId: comp.id,
                                     compName: comp.name,
@@ -2937,7 +3151,7 @@ export const Inspector: React.FC = () => {
 
                             {galvoOptions.length === 0 && (
                                 <div style={{ fontSize: '10px', color: '#666', marginBottom: 8, fontStyle: 'italic' }}>
-                                    No galvo channels active. Enable galvo scan on mirrors first.
+                                    No scan channels active. Enable galvo scan on mirrors or piezo scan on samples first.
                                 </div>
                             )}
 

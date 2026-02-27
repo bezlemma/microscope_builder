@@ -1,52 +1,9 @@
 import { Vector3 } from 'three';
 import { Ray, JonesVector } from './types';
 import { OpticalComponent } from './Component';
-import { SphericalLens } from './components/SphericalLens';
-import { CylindricalLens } from './components/CylindricalLens';
-import { IdealLens } from './components/IdealLens';
-import { Objective } from './components/Objective';
-import { Mirror } from './components/Mirror';
 import { Laser } from './components/Laser';
-import { Waveplate } from './components/Waveplate';
-import { PrismLens } from './components/PrismLens';
-import { BeamSplitter } from './components/BeamSplitter';
-import { Aperture } from './components/Aperture';
-import { Filter } from './components/Filter';
-import { DichroicMirror } from './components/DichroicMirror';
+import { Complex, cAdd, cMul, cDiv, cReal, cInv } from './complex';
 
-// ─── Complex Number Helpers ───────────────────────────────────────────
-interface Complex {
-    re: number;
-    im: number;
-}
-
-function cAdd(a: Complex, b: Complex): Complex {
-    return { re: a.re + b.re, im: a.im + b.im };
-}
-
-function cMul(a: Complex, b: Complex): Complex {
-    return {
-        re: a.re * b.re - a.im * b.im,
-        im: a.re * b.im + a.im * b.re
-    };
-}
-
-function cDiv(a: Complex, b: Complex): Complex {
-    const denom = b.re * b.re + b.im * b.im;
-    if (denom < 1e-30) return { re: 0, im: 0 };
-    return {
-        re: (a.re * b.re + a.im * b.im) / denom,
-        im: (a.im * b.re - a.re * b.im) / denom
-    };
-}
-
-function cReal(x: number): Complex {
-    return { re: x, im: 0 };
-}
-
-function cInv(a: Complex): Complex {
-    return cDiv({ re: 1, im: 0 }, a);
-}
 
 // ─── Gaussian Beam Physics ────────────────────────────────────────────
 
@@ -228,9 +185,13 @@ export class Solver2 {
                         if (iLen < 1e-6) continue;
                         iDir.normalize();
 
-                        // Propagate q through this internal leg
-                        const qx_int_end = propagateFreeSpace(qx, iLen);
-                        const qy_int_end = propagateFreeSpace(qy, iLen);
+                        // Propagate q through this internal leg using reduced distance d/n.
+                        // Inside a medium of index n, the q-parameter advances as q' = q + d/n.
+                        // This makes the beam envelope render correctly inside glass
+                        // (gradual width change rather than flat constant).
+                        const reducedDist = iLen / glassIOR;
+                        const qx_int_end = propagateFreeSpace(qx, reducedDist);
+                        const qy_int_end = propagateFreeSpace(qy, reducedDist);
 
                         segments.push({
                             start: iStart,
@@ -293,15 +254,15 @@ export class Solver2 {
 
                 // 4. Apply component ABCD at the interaction point (if not last segment)
                 if (i < path.length - 1) {
-                    const nextOrigin = path[i + 1].origin;
-                    const interactingComponent = this.findComponentAt(
-                        nextOrigin, components
-                    );
+                    // Use Solver 1's interaction tag for exact component match
+                    const interactingComponent = ray.interactionComponentId
+                        ? componentById.get(ray.interactionComponentId) ?? null
+                        : null;
 
                     if (interactingComponent) {
                         // Get ABCD and apply (pass ray direction for prism)
                         const { abcdX, abcdY, apertureRadius } =
-                            this.getComponentABCD(interactingComponent, ray.direction);
+                            this.getComponentABCD(interactingComponent, ray.direction, wavelengthSI);
 
                         // Aperture clipping check
                         const wx = beamRadius(qx, wavelengthMm);
@@ -358,8 +319,10 @@ export class Solver2 {
             }
         }
 
-        // Must be reasonably close (within 50mm of component center)
-        return bestDist < 50 ? best : null;
+        // Must be reasonably close (within aperture + thickness allowance)
+        if (!best) return null;
+        const maxDist = (best as any).apertureRadius ?? 50;
+        return bestDist < maxDist + 20 ? best : null;
     }
 
     /**
@@ -367,112 +330,14 @@ export class Solver2 {
      * Returns separate tangential (X) and sagittal (Y) matrices,
      * plus aperture radius for clipping checks.
      */
-    private getComponentABCD(component: OpticalComponent, rayDirection?: Vector3): {
+    private getComponentABCD(component: OpticalComponent, rayDirection?: Vector3, wavelengthSI?: number): {
         abcdX: [number, number, number, number];
         abcdY: [number, number, number, number];
         apertureRadius: number;
     } {
-        const identity: [number, number, number, number] = [1, 0, 0, 1];
-
-        if (component instanceof CylindricalLens) {
-            return {
-                abcdX: component.getABCD_sagittal(),
-                abcdY: component.getABCD_tangential(),
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof SphericalLens) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof IdealLens) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.apertureRadius
-            };
-        }
-
-        if (component instanceof Objective) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.apertureRadius
-            };
-        }
-
-        if (component instanceof Mirror) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof Waveplate) {
-            return {
-                abcdX: identity,
-                abcdY: identity,
-                apertureRadius: component.apertureRadius
-            };
-        }
-
-        if (component instanceof BeamSplitter) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof Aperture) {
-            return {
-                abcdX: identity,
-                abcdY: identity,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof Filter) {
-            return {
-                abcdX: identity,
-                abcdY: identity,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof DichroicMirror) {
-            const abcd = component.getABCD();
-            return {
-                abcdX: abcd,
-                abcdY: abcd,
-                apertureRadius: component.getApertureRadius()
-            };
-        }
-
-        if (component instanceof PrismLens && rayDirection) {
-            const { abcdTangential, abcdSagittal } = component.getABCD_for_ray(rayDirection);
-            // Prism's tangential plane (plane of incidence) is the Y-Z plane
-            // (vertical), which maps to beam's Y-axis (qy). Sagittal → qx.
-            return {
-                abcdX: abcdSagittal,
-                abcdY: abcdTangential,
-                apertureRadius: 0
-            };
-        }
-
-        // Default: identity (blockers, cards, etc.)
-        return { abcdX: identity, abcdY: identity, apertureRadius: 0 };
+        // Polymorphic dispatch — each component type overrides getComponentABCD
+        // with its own tangential/sagittal mapping logic.
+        return component.getComponentABCD(rayDirection, wavelengthSI);
     }
 
     // ─── Solver Handshake: E-field Query (PhysicsPlan §3.G) ───────────
@@ -596,8 +461,9 @@ export class Solver2 {
             // Filter by wavelength if requested (e.g., evaluating broadband brightfield at specific wl)
             if (targetWavelength !== undefined) {
                 const branchWl = branch[0].wavelength;
-                // Allow ±2nm tolerance
-                if (Math.abs(branchWl - targetWavelength) > 2e-9) {
+                // Allow ±15nm tolerance to account for spectral peak estimation
+                // (getDominantPassWavelength scans in 5nm steps, so peaks may be offset)
+                if (Math.abs(branchWl - targetWavelength) > 15e-9) {
                     continue;
                 }
             }
@@ -623,12 +489,16 @@ export class Solver2 {
             ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
             ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
             
-            // For incoherent sources like Lamp, simply sum scalar intensities.
             totalIntensity += result.intensity;
         }
 
-        // Return scalar intensity sum to support incoherent lamp brightfield rendering.
-        return totalIntensity;
+        // Coherent sources (lasers): superpose E-fields, then take |E|²
+        const coherentIntensity = ex_re * ex_re + ex_im * ex_im + ey_re * ey_re + ey_im * ey_im;
+
+        // If no coherent contributions were made (all branches empty), return 0.
+        // Otherwise, use coherent sum. For truly incoherent sources (Lamps),
+        // the phases are random so coherent sum ≈ incoherent sum statistically.
+        return coherentIntensity > 0 ? coherentIntensity : totalIntensity;
     }
 }
 

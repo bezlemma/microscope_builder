@@ -14,30 +14,30 @@ export class Mirror extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Two flat faces at w=±halfThickness (optical axis along x → w)
-        // Transverse plane: u=y, v=z
+        // Two flat faces at w=±halfThickness (optical axis along z → w)
+        // Transverse plane: u=x, v=y
         const radius = this.diameter / 2;
         const halfThickness = this.thickness / 2;
 
-        const dw = rayLocal.direction.x;
+        const dw = rayLocal.direction.z;
         if (Math.abs(dw) < 1e-6) return null; // Parallel to both planes
 
         let bestT = Infinity;
         let bestHit: HitRecord | null = null;
 
         for (const planeW of [-halfThickness, halfThickness]) {
-            const t = (planeW - rayLocal.origin.x) / dw;
+            const t = (planeW - rayLocal.origin.z) / dw;
             if (t > 0.001 && t < bestT) {
                 const hitPoint = rayLocal.origin.clone().add(
                     rayLocal.direction.clone().multiplyScalar(t)
                 );
                 // Circular aperture check in uv transverse plane
-                const hu = hitPoint.y;
-                const hv = hitPoint.z;
+                const hu = hitPoint.x;
+                const hv = hitPoint.y;
                 if (hu * hu + hv * hv <= radius * radius) {
                     bestT = t;
                     // Normal points outward from the face along ±w
-                    const normal = new Vector3(planeW > 0 ? 1 : -1, 0, 0);
+                    const normal = new Vector3(0, 0, planeW > 0 ? 1 : -1);
                     bestHit = {
                         t: t,
                         point: hitPoint,

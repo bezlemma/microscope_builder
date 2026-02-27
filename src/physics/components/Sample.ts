@@ -1,4 +1,4 @@
-import { Vector3, Box3 } from 'three';
+import { Vector3, Box3, Euler, Quaternion } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { SpectralProfile } from '../SpectralProfile';
@@ -20,18 +20,25 @@ export class Sample extends OpticalComponent {
     fluorescenceEfficiency: number;        // Quantum yield × absorption (dimensionless)
     absorption: number;                    // Beer-Lambert coeff (mm⁻¹). Higher = more opaque.
 
+    // Internal specimen rotation: Allows rotating the Mickey Mouse independent of the outer boundary box (e.g. for SPIM SampleChamber cups to remain unspilled)
+    specimenRotation: Euler = new Euler(0, 0, 0);
+
+    // Internal specimen offset: translates the Mickey within the holder, ±5mm.
+    // Designed to later integrate with animation channels for scanning.
+    specimenOffset: Vector3 = new Vector3(0, 0, 0);
+
     // Mickey Mouse geometry definition (local space)
-    // Frame is in YZ plane (standing upright at default rotation),
-    // holder normal is along X, ears point +Z (up), spread in ±Y.
+    // Frame is in XY plane (standing upright at default rotation),
+    // holder normal is along Z, ears point +Y (up), spread in ±X.
     private static readonly SPHERES = [
         { center: new Vector3(0, 0, 0), radius: 0.5 },        // Head
-        { center: new Vector3(0, -0.5, 0.5), radius: 0.25 },  // Left ear (+Z up, -Y left)
-        { center: new Vector3(0, 0.5, 0.5), radius: 0.25 },   // Right ear (+Z up, +Y right)
+        { center: new Vector3(-0.5, 0.5, 0), radius: 0.25 },  // Left ear (+Y up, -X left)
+        { center: new Vector3(0.5, 0.5, 0), radius: 0.25 },   // Right ear (+Y up, +X right)
     ];
 
     private static readonly BOUNDS = new Box3(
-        new Vector3(-0.5, -10, -10),
-        new Vector3(0.5, 10, 10)
+        new Vector3(-15, -15, -10),
+        new Vector3(15, 15, 10)
     );
 
     constructor(name: string = "Sample (Mickey)") {
@@ -59,6 +66,14 @@ export class Sample extends OpticalComponent {
         return this.emissionSpectrum.getDominantPassWavelength() ?? 520;
     }
 
+    /**
+     * Get the dominant excitation wavelength (nm).
+     * Returns the peak of the excitation spectrum, or 488nm fallback.
+     */
+    getExcitationWavelength(): number {
+        return this.excitationSpectrum.getDominantPassWavelength() ?? 488;
+    }
+
     intersect(rayLocal: Ray): HitRecord | null {
         const { hit, tMin, tMax } = intersectAABB(rayLocal.origin, rayLocal.direction, Sample.BOUNDS);
         if (!hit || tMax < 0.001) return null;
@@ -69,7 +84,7 @@ export class Sample extends OpticalComponent {
         return {
             t: t,
             point: point,
-            normal: new Vector3(1, 0, 0), // Generic normal for bounding box
+            normal: new Vector3(0, 0, 1), // Generic normal for bounding box
             localPoint: point
         };
     }
@@ -99,17 +114,26 @@ export class Sample extends OpticalComponent {
      * Sums chord lengths across all spheres the ray passes through.
      * Returns 0 if the ray misses all spheres.
      */
-    computeChordLength(worldRay: Ray): number {
+    computeChordLength(worldRay: Ray): { chordLength: number; midT: number } {
         // Transform ray to local space
         this.updateMatrices();
         const localOrigin = worldRay.origin.clone().applyMatrix4(this.worldToLocal);
         const localDir = worldRay.direction.clone().transformDirection(this.worldToLocal).normalize();
 
+        // Apply specimen internal offset (subtract offset = move origin into offset frame)
+        const offsetOrigin = localOrigin.clone().sub(this.specimenOffset);
+
+        // Apply specimen internal rotation
+        const invQ = new Quaternion().setFromEuler(this.specimenRotation).invert();
+        const specOrigin = offsetOrigin.applyQuaternion(invQ);
+        const specDir = localDir.clone().applyQuaternion(invQ);
+
         let totalChord = 0;
+        let weightedCenterT = 0;
 
         for (const sphere of Sample.SPHERES) {
-            const oc = localOrigin.clone().sub(sphere.center);
-            const b = oc.dot(localDir);
+            const oc = specOrigin.clone().sub(sphere.center);
+            const b = oc.dot(specDir);
             const c = oc.dot(oc) - sphere.radius * sphere.radius;
             const h = b * b - c;
 
@@ -123,12 +147,32 @@ export class Sample extends OpticalComponent {
                 const tExit = Math.max(t2, 0);
 
                 if (tExit > tEntry) {
-                    totalChord += tExit - tEntry;
+                    const segmentLength = tExit - tEntry;
+                    const segmentMidT = (tEntry + tExit) / 2;
+                    totalChord += segmentLength;
+                    weightedCenterT += segmentMidT * segmentLength;
                 }
             }
         }
 
-        return totalChord;
+        if (totalChord === 0) return { chordLength: 0, midT: 0 };
+
+        // midT_spec is in the specimen (offset+rotated) frame.
+        // Transform the corresponding point back to world space so the caller
+        // can use it with the original world ray.
+        const midTSpec = weightedCenterT / totalChord;
+        const specPoint = specOrigin.clone().add(specDir.clone().multiplyScalar(midTSpec));
+        // Undo rotation
+        const q = new Quaternion().setFromEuler(this.specimenRotation);
+        specPoint.applyQuaternion(q);
+        // Undo offset
+        specPoint.add(this.specimenOffset);
+        // specPoint is now in component-local space. Transform to world:
+        specPoint.applyMatrix4(this.localToWorld);
+        // Project onto the world ray to get the correct world-space t
+        const midT = specPoint.clone().sub(worldRay.origin).dot(worldRay.direction);
+
+        return { chordLength: totalChord, midT };
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {

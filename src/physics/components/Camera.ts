@@ -53,30 +53,81 @@ export class Camera extends OpticalComponent {
         this.scanVersionSnapshot = null;
     }
 
+    // Camera body dimensions (must match CameraVisualizer in ComponentVisualizers.tsx)
+    static readonly BODY_WIDTH  = 84;
+    static readonly BODY_HEIGHT = 84;
+    static readonly BODY_DEPTH  = 122;
+
     intersect(rayLocal: Ray): HitRecord | null {
-        // Sensor plane at w=0, facing +w direction
-        const ow = rayLocal.origin.z;
-        const dw = rayLocal.direction.z;
+        // The camera body is a solid box:
+        //   x: [-BODY_WIDTH/2,  +BODY_WIDTH/2]
+        //   y: [-BODY_HEIGHT/2, +BODY_HEIGHT/2]
+        //   z: [-BODY_DEPTH,    0]              (sensor face at z=0, body extends behind)
+        const hw = Camera.BODY_WIDTH / 2;
+        const hh = Camera.BODY_HEIGHT / 2;
+        const minZ = -Camera.BODY_DEPTH;
 
-        if (Math.abs(dw) < 1e-6) return null;
+        const ox = rayLocal.origin.x, oy = rayLocal.origin.y, oz = rayLocal.origin.z;
+        const dx = rayLocal.direction.x, dy = rayLocal.direction.y, dz = rayLocal.direction.z;
 
-        const t = -ow / dw;
+        // Slab-based ray-AABB intersection
+        let tMin = -Infinity, tMax = Infinity;
+        let normalAxis = 0; // 0=x, 1=y, 2=z
+        let normalSign = 1;
+
+        // X slab
+        if (Math.abs(dx) < 1e-12) {
+            if (ox < -hw || ox > hw) return null;
+        } else {
+            let t1 = (-hw - ox) / dx;
+            let t2 = ( hw - ox) / dx;
+            let sign = -1;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
+            if (t1 > tMin) { tMin = t1; normalAxis = 0; normalSign = sign; }
+            if (t2 < tMax) tMax = t2;
+            if (tMin > tMax) return null;
+        }
+
+        // Y slab
+        if (Math.abs(dy) < 1e-12) {
+            if (oy < -hh || oy > hh) return null;
+        } else {
+            let t1 = (-hh - oy) / dy;
+            let t2 = ( hh - oy) / dy;
+            let sign = -1;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
+            if (t1 > tMin) { tMin = t1; normalAxis = 1; normalSign = sign; }
+            if (t2 < tMax) tMax = t2;
+            if (tMin > tMax) return null;
+        }
+
+        // Z slab
+        if (Math.abs(dz) < 1e-12) {
+            if (oz < minZ || oz > 0) return null;
+        } else {
+            let t1 = (minZ - oz) / dz;
+            let t2 = (0    - oz) / dz;
+            let sign = -1;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
+            if (t1 > tMin) { tMin = t1; normalAxis = 2; normalSign = sign; }
+            if (t2 < tMax) tMax = t2;
+            if (tMin > tMax) return null;
+        }
+
+        const t = tMin > 0.001 ? tMin : (tMax > 0.001 ? tMax : -1);
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-
-        // Check bounds in uv transverse plane
-        const hu = hitPoint.x;  // u coordinate
-        const hv = hitPoint.y;  // v coordinate
-        if (Math.abs(hu) > this.width / 2 || Math.abs(hv) > this.height / 2) {
-            return null;
-        }
+        const normal = new Vector3(0, 0, 0);
+        if (normalAxis === 0) normal.x = normalSign;
+        else if (normalAxis === 1) normal.y = normalSign;
+        else normal.z = normalSign;
 
         return {
-            t: t,
+            t,
             point: hitPoint,
-            normal: new Vector3(0, 0, 1),  // +w normal
-            localPoint: hitPoint
+            normal,
+            localPoint: hitPoint,
         };
     }
 

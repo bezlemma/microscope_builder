@@ -53,19 +53,30 @@ export const ControlsHelp: React.FC = () => {
                 >
                     <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: 10, color: '#fff' }}>Controls</div>
 
-                    <Section title="Navigate">
-                        <Row keys="Middle-drag / Shift+Drag / WASD" action="Pan" />
-                        <Row keys="Alt+Drag / Alt+Middle-drag" action="Rotate" />
-                        <Row keys="Scroll / []" action="Zoom" />
+                    <Section title="Navigate (no selection)">
+                        <Row keys="WASD / Arrows" action="Pan" />
+                        <Row keys="Shift + Left-drag" action="Pan" />
+                        <Row keys="Middle-drag" action="Pan" />
+                        <Row keys="Alt + Left-drag" action="Rotate 3D" />
+                        <Row keys="Scroll / [ ]" action="Zoom" />
                     </Section>
 
-                    <Section title="Components">
+                    <Section title="Components (with selection)">
                         <Row keys="Click" action="Select" />
                         <Row keys="Shift + Click" action="Multi-select" />
                         <Row keys="Drag" action="Move" />
-                        <Row keys="Scroll / Q/E" action="Rotate" />
-                        <Row keys="Escape" action="Deselect all" />
+                        <Row keys="Q / E" action="Rotate ±15°" />
                         <Row keys="Delete" action="Remove" />
+                        <Row keys="Escape" action="Deselect all" />
+                    </Section>
+
+                    <Section title="Solvers">
+                        <Row keys="2" action="Toggle E&M (Solver 2)" />
+                        <Row keys="3" action="Fire Backward Tracer" />
+                    </Section>
+
+                    <Section title="Edit">
+                        <Row keys="Ctrl + Z" action="Undo" />
                     </Section>
                 </div>
             )}

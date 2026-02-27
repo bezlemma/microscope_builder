@@ -57,16 +57,16 @@ export class CurvedMirror extends OpticalComponent {
         let bestT = Infinity;
         let bestHit: HitRecord | null = null;
 
-        // ── Front face: curved spherical surface at x ≈ -halfT ──
+        // ── Front face: curved spherical surface at z ≈ -halfT ──
         if (isFlat) {
-            const dw = rayLocal.direction.x;
+            const dw = rayLocal.direction.z;
             if (Math.abs(dw) > 1e-6) {
-                const t = (-halfT - rayLocal.origin.x) / dw;
+                const t = (-halfT - rayLocal.origin.z) / dw;
                 if (t > 0.001 && t < bestT) {
                     const hp = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                    const ru = hp.y, rv = hp.z;
+                    const ru = hp.x, rv = hp.y;
                     if (ru * ru + rv * rv <= radius * radius) {
-                        const outward = new Vector3(-1, 0, 0);
+                        const outward = new Vector3(0, 0, -1);
                         bestT = t;
                         bestHit = outward.dot(rayLocal.direction) >= 0
                             ? { t, point: hp, normal: RIM_NORMAL.clone(), localPoint: hp.clone() }
@@ -75,8 +75,8 @@ export class CurvedMirror extends OpticalComponent {
                 }
             }
         } else {
-            const cx = -halfT + R;
-            const oc = rayLocal.origin.clone().sub(new Vector3(cx, 0, 0));
+            const cz = -halfT + R;
+            const oc = rayLocal.origin.clone().sub(new Vector3(0, 0, cz));
             const d = rayLocal.direction;
             const a = d.dot(d);
             const b2 = 2 * oc.dot(d);
@@ -88,16 +88,16 @@ export class CurvedMirror extends OpticalComponent {
                 for (const t of [(-b2 - sqrtDisc) / (2 * a), (-b2 + sqrtDisc) / (2 * a)]) {
                     if (t < 0.001 || t >= bestT) continue;
                     const hp = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                    const ru = hp.y, rv = hp.z;
+                    const ru = hp.x, rv = hp.y;
                     if (ru * ru + rv * rv > radius * radius) continue;
 
                     const sagAtR = this.sag(Math.sqrt(ru * ru + rv * rv));
-                    const expectedX = -halfT + sagAtR;
-                    if (Math.abs(hp.x - expectedX) > 1.0) continue;
+                    const expectedZ = -halfT + sagAtR;
+                    if (Math.abs(hp.z - expectedZ) > 1.0) continue;
 
-                    const geoNormal = hp.clone().sub(new Vector3(cx, 0, 0)).normalize();
-                    // Front face outward direction is -x
-                    const outward = geoNormal.x <= 0 ? geoNormal : geoNormal.clone().negate();
+                    const geoNormal = hp.clone().sub(new Vector3(0, 0, cz)).normalize();
+                    // Front face outward direction is -z
+                    const outward = geoNormal.z <= 0 ? geoNormal : geoNormal.clone().negate();
 
                     bestT = t;
                     bestHit = outward.dot(rayLocal.direction) >= 0
@@ -107,16 +107,16 @@ export class CurvedMirror extends OpticalComponent {
             }
         }
 
-        // ── Back face: curved at x ≈ +halfT (same R, offset by thickness) ──
+        // ── Back face: curved at z ≈ +halfT (same R, offset by thickness) ──
         if (isFlat) {
-            const dw = rayLocal.direction.x;
+            const dw = rayLocal.direction.z;
             if (Math.abs(dw) > 1e-6) {
-                const t = (halfT - rayLocal.origin.x) / dw;
+                const t = (halfT - rayLocal.origin.z) / dw;
                 if (t > 0.001 && t < bestT) {
                     const hp = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                    const ru = hp.y, rv = hp.z;
+                    const ru = hp.x, rv = hp.y;
                     if (ru * ru + rv * rv <= radius * radius) {
-                        const outward = new Vector3(1, 0, 0);
+                        const outward = new Vector3(0, 0, 1);
                         bestT = t;
                         bestHit = outward.dot(rayLocal.direction) >= 0
                             ? { t, point: hp, normal: RIM_NORMAL.clone(), localPoint: hp.clone() }
@@ -125,8 +125,8 @@ export class CurvedMirror extends OpticalComponent {
                 }
             }
         } else {
-            const cxBack = halfT + R;
-            const ocBack = rayLocal.origin.clone().sub(new Vector3(cxBack, 0, 0));
+            const czBack = halfT + R;
+            const ocBack = rayLocal.origin.clone().sub(new Vector3(0, 0, czBack));
             const d = rayLocal.direction;
             const a = d.dot(d);
             const b2 = 2 * ocBack.dot(d);
@@ -138,16 +138,16 @@ export class CurvedMirror extends OpticalComponent {
                 for (const t of [(-b2 - sqrtDisc) / (2 * a), (-b2 + sqrtDisc) / (2 * a)]) {
                     if (t < 0.001 || t >= bestT) continue;
                     const hp = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                    const ru = hp.y, rv = hp.z;
+                    const ru = hp.x, rv = hp.y;
                     if (ru * ru + rv * rv > radius * radius) continue;
 
                     const sagAtR = this.sag(Math.sqrt(ru * ru + rv * rv));
-                    const expectedX = halfT + sagAtR;
-                    if (Math.abs(hp.x - expectedX) > 1.0) continue;
+                    const expectedZ = halfT + sagAtR;
+                    if (Math.abs(hp.z - expectedZ) > 1.0) continue;
 
-                    const geoNormal = hp.clone().sub(new Vector3(cxBack, 0, 0)).normalize();
-                    // Back face outward direction is +x
-                    const outward = geoNormal.x >= 0 ? geoNormal : geoNormal.clone().negate();
+                    const geoNormal = hp.clone().sub(new Vector3(0, 0, czBack)).normalize();
+                    // Back face outward direction is +z
+                    const outward = geoNormal.z >= 0 ? geoNormal : geoNormal.clone().negate();
 
                     bestT = t;
                     bestHit = outward.dot(rayLocal.direction) >= 0
@@ -159,19 +159,19 @@ export class CurvedMirror extends OpticalComponent {
 
         // ── Cylinder rim at r = radius (catches angled edge rays) ──
         {
-            const oy = rayLocal.origin.y, oz = rayLocal.origin.z;
-            const dy = rayLocal.direction.y, dz = rayLocal.direction.z;
-            const a = dy * dy + dz * dz;
+            const ox = rayLocal.origin.x, oy = rayLocal.origin.y;
+            const dx = rayLocal.direction.x, dy = rayLocal.direction.y;
+            const a = dx * dx + dy * dy;
             if (a > 1e-12) {
-                const b2 = 2 * (oy * dy + oz * dz);
-                const c = oy * oy + oz * oz - radius * radius;
+                const b2 = 2 * (ox * dx + oy * dy);
+                const c = ox * ox + oy * oy - radius * radius;
                 const disc = b2 * b2 - 4 * a * c;
                 if (disc >= 0) {
                     const sqrtDisc = Math.sqrt(disc);
                     for (const t of [(-b2 - sqrtDisc) / (2 * a), (-b2 + sqrtDisc) / (2 * a)]) {
                         if (t < 0.001 || t >= bestT) continue;
                         const hp = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
-                        if (hp.x >= -halfT - 0.5 && hp.x <= halfT + 0.5) {
+                        if (hp.z >= -halfT - 0.5 && hp.z <= halfT + 0.5) {
                             bestT = t;
                             bestHit = { t, point: hp, normal: RIM_NORMAL.clone(), localPoint: hp.clone() };
                         }
@@ -236,14 +236,14 @@ export class CurvedMirror extends OpticalComponent {
 
         // ── Front (reflective) surface: spherical cap ──
         const frontStart = 0;
-        positions.push(-halfT + this.sag(0), 0, 0); // center
+        positions.push(0, 0, -halfT + this.sag(0)); // center
 
         for (let ri = 1; ri <= radSegs; ri++) {
             const r = (ri / radSegs) * radius;
             const sagR = this.sag(r);
             for (let ai = 0; ai < angSegs; ai++) {
                 const angle = (ai / angSegs) * Math.PI * 2;
-                positions.push(-halfT + sagR, Math.cos(angle) * r, Math.sin(angle) * r);
+                positions.push(Math.cos(angle) * r, Math.sin(angle) * r, -halfT + sagR);
             }
         }
 
@@ -266,14 +266,14 @@ export class CurvedMirror extends OpticalComponent {
 
         // ── Back surface: offset by thickness (uniform wall) ──
         const backStart = positions.length / 3;
-        positions.push(halfT + this.sag(0), 0, 0); // center (offset by thickness)
+        positions.push(0, 0, halfT + this.sag(0)); // center (offset by thickness)
 
         for (let ri = 1; ri <= radSegs; ri++) {
             const r = (ri / radSegs) * radius;
             const sagR = this.sag(r);
             for (let ai = 0; ai < angSegs; ai++) {
                 const angle = (ai / angSegs) * Math.PI * 2;
-                positions.push(halfT + sagR, Math.cos(angle) * r, Math.sin(angle) * r);
+                positions.push(Math.cos(angle) * r, Math.sin(angle) * r, halfT + sagR);
             }
         }
 

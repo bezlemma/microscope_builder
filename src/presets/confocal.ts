@@ -35,7 +35,7 @@ export interface ConfocalPresetResult {
  *   Sample → Objective → Fold 2 → Fold 1 → Scan Lens → Y Galvo → X Galvo
  *   → Dichroic (transmits 520) → Relay Lens → Em Filter → Pinhole → PMT
  */
-export const createConfocalScene = (): ConfocalPresetResult => {
+export function createConfocalScene(): ConfocalPresetResult {
     const scene: OpticalComponent[] = [];
     const mOff = (2 / 2) * Math.cos(Math.PI / 4);  // mirror thickness offset ≈ 0.707
 
@@ -44,7 +44,7 @@ export const createConfocalScene = (): ConfocalPresetResult => {
     // ══════════════════════════════════════════════════════════════════
     const laser = new Laser("488 nm Laser");
     laser.setPosition(-112.5, -62.5, 0);
-    laser.setRotation(0, 0, Math.PI / 2);  // fires +Y
+    laser.pointAlong(0, 1, 0);  // fires +Y
     laser.beamRadius = 1;
     laser.wavelength = 488;
     laser.power = 1.0;
@@ -59,7 +59,7 @@ export const createConfocalScene = (): ConfocalPresetResult => {
         "Dichroic (LP 505)"
     );
     dichroic.setPosition(-112.5, -12.5, 0);
-    dichroic.setRotation(0, 0, -Math.PI / 4);  // -45°: +Y → +X
+    dichroic.setRotation(Math.PI / 2, -3 * Math.PI / 4, 0);  // +Y → +X
     scene.push(dichroic);
 
     // ══════════════════════════════════════════════════════════════════
@@ -69,42 +69,42 @@ export const createConfocalScene = (): ConfocalPresetResult => {
     // ── X Galvo Mirror ──
     const xGalvo = new Mirror(15, 2, "X Galvo");
     xGalvo.setPosition(-87.5 + mOff, -12.5 + mOff, 0);
-    xGalvo.setRotation(0, 0, Math.PI / 4);  // +X → -Y
+    xGalvo.setRotation(Math.PI / 2, 3 * Math.PI / 4, 0);  // +X → -Y
     scene.push(xGalvo);
 
     // ── Y Galvo Mirror ──
     // At f₁=50mm from scan lens (telecentric condition).
     const yGalvo = new Mirror(15, 2, "Y Galvo");
     yGalvo.setPosition(-87.5 - mOff, -37.5 - mOff, 0);
-    yGalvo.setRotation(0, 0, Math.PI / 4);  // -Y → +X
+    yGalvo.setRotation(Math.PI / 2, -Math.PI / 4, 0);  // -Y → +X
     scene.push(yGalvo);
 
     // ── Scan Lens (f₁ = 50mm) ──
     // 50mm from Y galvo → telecentric.
     const scanLens = new IdealLens(50, 12.5, "Scan Lens");
     scanLens.setPosition(-37.5, -37.5, 0);
-    scanLens.setRotation(0, Math.PI / 2, 0);  // faces ±X
+    scanLens.pointAlong(1, 0, 0);  // optical axis along +X (beam goes +X here)
     scene.push(scanLens);
 
     // ── Fold Mirror 1 ──
     // 125mm from scan lens (going +X). Reflects +X → -Y.
     const fold1 = new Mirror(25, 2, "Fold Mirror 1");
     fold1.setPosition(87.5 + mOff, -37.5 + mOff, 0);
-    fold1.setRotation(0, 0, Math.PI / 4);  // +X → -Y
+    fold1.setRotation(Math.PI / 2, 3 * Math.PI / 4, 0);  // +X → -Y
     scene.push(fold1);
 
     // ── Tube Lens (f₂ = 200mm, Nikon standard) ──
     // 125mm from fold 1 (going -Y). Total from scan lens: 125+125 = 250 = f₁+f₂.
     const tubeLens = new IdealLens(200, 12.5, "Tube Lens");
     tubeLens.setPosition(87.5, -162.5, 0);
-    tubeLens.setRotation(Math.PI / 2, 0, 0);  // faces ±Y (beam goes -Y)
+    tubeLens.pointAlong(0, -1, 0);  // optical axis along -Y (beam goes -Y here)
     scene.push(tubeLens);
 
     // ── Fold Mirror 2 ──
     // 50mm from tube lens (going -Y). Reflects -Y → -X (back left).
     const fold2 = new Mirror(30, 2, "Fold Mirror 2");
     fold2.setPosition(87.5 + mOff, -212.5 - mOff, 0);
-    fold2.setRotation(0, 0, -Math.PI / 4);  // -Y → -X
+    fold2.setRotation(Math.PI / 2, -3 * Math.PI / 4, 0);  // -Y → -X
     scene.push(fold2);
 
     // ── Objective (20×/0.85W) ──
@@ -118,7 +118,7 @@ export const createConfocalScene = (): ConfocalPresetResult => {
         name: '20×/0.85W Objective'
     });
     objective.setPosition(-62.5, -212.5, 0);
-    objective.setRotation(0, Math.PI / 2, 0);  // local -Z faces sample (world -X)
+    objective.pointAlong(1, 0, 0);  // local +Z = +X, front element faces -X (toward sample)
     scene.push(objective);
 
     // ── Fluorescent Sample ──
@@ -127,7 +127,7 @@ export const createConfocalScene = (): ConfocalPresetResult => {
     sample.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
     sample.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
     sample.setPosition(-72.5, -212.5, 0);
-    sample.setRotation(0, 0, 0);
+    sample.pointAlong(1, 0, 0);  // local +Z = +X
     scene.push(sample);
 
     // ══════════════════════════════════════════════════════════════════
@@ -137,7 +137,7 @@ export const createConfocalScene = (): ConfocalPresetResult => {
     // ── Relay Lens (f = 50mm) ──
     const relayLens = new IdealLens(50, 12.5, "Pinhole Lens");
     relayLens.setPosition(-162.5, -12.5, 0);
-    relayLens.setRotation(0, Math.PI / 2, 0);
+    relayLens.pointAlong(1, 0, 0);  // optical axis along +X (emission path goes -X)
     scene.push(relayLens);
 
     // ── Emission Filter ──
@@ -147,19 +147,19 @@ export const createConfocalScene = (): ConfocalPresetResult => {
         "Em Filter (BP 525/50)"
     );
     emFilter.setPosition(-212.5, -12.5, 0);
-    emFilter.setRotation(0, 0, 0);
+    emFilter.pointAlong(1, 0, 0);  // along +X
     scene.push(emFilter);
 
     // ── Confocal Pinhole ──
     const pinhole = new Aperture(0.5, 15, "Confocal Pinhole");
     pinhole.setPosition(-262.5, -12.5, 0);
-    pinhole.setRotation(0, 0, 0);
+    pinhole.pointAlong(1, 0, 0);  // along +X
     scene.push(pinhole);
 
     // ── PMT Detector ──
     const pmt = new PMT(10, 10, "PMT");
     pmt.setPosition(-312.5, -12.5, 0);
-    pmt.setRotation(0, Math.PI / 2, 0);
+    pmt.pointAlong(1, 0, 0);  // detector faces +X (toward incoming beam)
     scene.push(pmt);
 
     // ══════════════════════════════════════════════════════════════════
@@ -177,32 +177,32 @@ export const createConfocalScene = (): ConfocalPresetResult => {
         {
             id: generateChannelId(),
             targetId: xGalvo.id,
-            property: 'rotation.z',
-            from: xEuler.z - halfAngle,
-            to: xEuler.z + halfAngle,
+            property: 'rotation.y',
+            from: xEuler.y - halfAngle,
+            to: xEuler.y + halfAngle,
             easing: 'sinusoidal',
             periodMs: 1000 / 32,
             repeat: true,
-            restoreValue: xEuler.z,
+            restoreValue: xEuler.y,
         },
         {
             id: generateChannelId(),
             targetId: yGalvo.id,
-            property: 'rotation.y',
-            from: yEuler.y - halfAngle,
-            to: yEuler.y + halfAngle,
+            property: 'rotation.x',
+            from: yEuler.x - halfAngle,
+            to: yEuler.x + halfAngle,
             easing: 'sinusoidal',
             periodMs: 1000 / 0.5,
             repeat: true,
-            restoreValue: yEuler.y,
+            restoreValue: yEuler.x,
         },
     ];
 
     // ── PMT axis bindings ──
     pmt.xAxisComponentId = xGalvo.id;
-    pmt.xAxisProperty = 'rotation.z';
+    pmt.xAxisProperty = 'rotation.y';
     pmt.yAxisComponentId = yGalvo.id;
-    pmt.yAxisProperty = 'rotation.y';
+    pmt.yAxisProperty = 'rotation.x';
     pmt.pmtSampleHz = 2048;
     pmt.scanResX = 64;
     pmt.scanResY = 64;
@@ -213,4 +213,4 @@ export const createConfocalScene = (): ConfocalPresetResult => {
         animationPlaying: true,
         animationSpeed: 0.1,
     };
-};
+}

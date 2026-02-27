@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, solver3RenderTriggerAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -16,6 +16,8 @@ export const EditorControls: React.FC = () => {
     const activePreset = useAtomValue(activePresetAtom);
     const [, undo] = useAtom(undoAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
+    const [, setRayConfig] = useAtom(rayConfigAtom);
+    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const { size } = useThree();
 
     // ─── Auto-zoom to fit when preset changes ───
@@ -47,7 +49,7 @@ export const EditorControls: React.FC = () => {
         // Orthographic camera: visible width = canvasWidth / zoom
         // We want: spanX * (1 + padding) ≤ canvasWidth / zoom
         //          spanY * (1 + padding) ≤ canvasHeight / zoom
-        const padding = 0.25; // 25% margin
+        const padding = 0.35; // 35% margin — extra buffer for browser testing visibility
         const zoomX = spanX > 0 ? size.width / (spanX * (1 + padding)) : 2;
         const zoomY = spanY > 0 ? size.height / (spanY * (1 + padding)) : 2;
         const newZoom = Math.min(zoomX, zoomY);
@@ -58,6 +60,40 @@ export const EditorControls: React.FC = () => {
         camera.zoom = Math.max(0.2, Math.min(newZoom, 10)); // clamp to reasonable range
         camera.updateProjectionMatrix();
         controls.update();
+
+        // ─── URL camera override: ?xy1=left,top&xy2=right,bottom ───
+        // Fits the camera to show the world-coordinate rectangle defined by
+        // the upper-left (xy1) and lower-right (xy2) corners.
+        // Example: ?preset=lightsheetopenspim&xy1=330,244&xy2=344,230
+        const params = new URLSearchParams(window.location.search);
+        const xy1 = params.get('xy1');
+        const xy2 = params.get('xy2');
+        if (xy1 && xy2) {
+            setTimeout(() => {
+                const ctrl = controlsRef.current;
+                if (!ctrl) return;
+                const cam = ctrl.object;
+                if (!(cam instanceof OrthographicCamera)) return;
+
+                const [x1, y1] = xy1.split(',').map(Number);
+                const [x2, y2] = xy2.split(',').map(Number);
+                const cx = (x1 + x2) / 2;
+                const cy = (y1 + y2) / 2;
+                const spanX = Math.abs(x2 - x1);
+                const spanY = Math.abs(y2 - y1);
+
+                cam.position.set(cx, cy, cam.position.z);
+                ctrl.target.set(cx, cy, 0);
+
+                // Fit zoom so the bounding box fills the viewport
+                const zX = spanX > 0 ? size.width / spanX : cam.zoom;
+                const zY = spanY > 0 ? size.height / spanY : cam.zoom;
+                cam.zoom = Math.max(0.1, Math.min(zX, zY));
+
+                cam.updateProjectionMatrix();
+                ctrl.update();
+            }, 200);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePreset]);
 
@@ -86,6 +122,22 @@ export const EditorControls: React.FC = () => {
                     }
                     controls.update();
                 }
+            }
+
+            // '2' key: toggle Solver 2 (Gaussian beam E&M)
+            if (e.key === '2') {
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+                e.preventDefault();
+                setRayConfig(prev => ({ ...prev, solver2Enabled: !prev.solver2Enabled }));
+            }
+
+            // '3' key: fire Solver 3 (Calculate Emission and Image)
+            if (e.key === '3') {
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+                e.preventDefault();
+                setSolver3Trigger(prev => prev + 1);
             }
 
             // WASD / Arrow keys: pan camera when nothing is selected
@@ -138,8 +190,9 @@ export const EditorControls: React.FC = () => {
                             new Vector3(0, 0, 1),
                             direction * rotationStep
                         );
-                        c.rotation.premultiply(qStep);
-                        const euler = new Euler().setFromQuaternion(c.rotation);
+                        // Compose rotation without mutating existing quaternion
+                        const newQuat = qStep.multiply(c.rotation.clone());
+                        const euler = new Euler().setFromQuaternion(newQuat);
                         c.setRotation(euler.x, euler.y, euler.z);
                         return c;
                     }

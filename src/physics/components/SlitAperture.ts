@@ -32,10 +32,10 @@ export class SlitAperture extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        const dw = rayLocal.direction.x;
+        const dw = rayLocal.direction.z;
         if (Math.abs(dw) < 1e-6) return null;
 
-        const t = -rayLocal.origin.x / dw;
+        const t = -rayLocal.origin.z / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(
@@ -43,8 +43,8 @@ export class SlitAperture extends OpticalComponent {
         );
 
         // Check if ray passes through the rectangular opening
-        const hu = hitPoint.y;  // horizontal (width)
-        const hv = hitPoint.z;  // vertical (height)
+        const hu = hitPoint.x;  // horizontal (width)
+        const hv = hitPoint.y;  // vertical (height)
         const halfW = this.slitWidth / 2;
         const halfH = this.slitHeight / 2;
 
@@ -61,7 +61,7 @@ export class SlitAperture extends OpticalComponent {
         }
 
         // Hit the frame body — will be absorbed
-        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);
+        const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);
         return {
             t,
             point: hitPoint,
@@ -83,5 +83,18 @@ export class SlitAperture extends OpticalComponent {
     // Aperture radius for Solver2 beam clipping — use half the slit width.
     getApertureRadius(): number {
         return this.slitWidth / 2;
+    }
+
+    /** Override: slit clips only in X direction, Y is unobstructed */
+    getComponentABCD(): {
+        abcdX: [number, number, number, number];
+        abcdY: [number, number, number, number];
+        apertureRadius: number;
+    } {
+        return {
+            abcdX: this.getABCD(),
+            abcdY: [1, 0, 0, 1],
+            apertureRadius: this.getApertureRadius()
+        };
     }
 }

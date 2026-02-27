@@ -380,37 +380,31 @@ export class SphericalLens extends OpticalComponent {
         const n = this.ior;
         const t = this.thickness;
 
-        // M_refract at surface 1 (air→glass): [[1, 0], [-(n-1)/R1, 1]]
-        // Using the general form: [[1, 0], [-(n2-n1)/(n2*R), n1/n2]]
-        // Surface 1: n1=1 (air), n2=n (glass)
-        const C1 = -(n - 1) / (n * R1);
-        const D1 = 1 / n;
-
-        // M_propagate through glass: [[1, t/n], [0, 1]]
-        // Actually d = t (physical thickness), already in glass
+        // Convention B (reduced ray): standard for Gaussian beam q-parameter ABCD.
+        // Refraction matrix:  [[1, 0], [-(n2-n1)/R, 1]]
+        // Propagation in n:   [[1, d/n], [0, 1]]
+        //
+        // Surface 1 (air→glass, n1=1, n2=n):
+        const C1 = -(n - 1) / R1;
+        // Surface 2 (glass→air, n1=n, n2=1):
+        const C2 = (n - 1) / R2;
+        // Propagation through glass thickness t at index n:
         const B_prop = t / n;
 
-        // M_refract at surface 2 (glass→air): [[1, 0], [-(1-n)/(1*R2), n/1]]
-        // n1=n (glass), n2=1 (air)
-        const C2 = -(1 - n) / R2; // = (n - 1) / R2
-        const D2 = n;
-
         // Chain: M = M2 × M_prop × M1
-        // M1 = [[1, 0], [C1, D1]]
-        // M_prop = [[1, B_prop], [0, 1]]
-        // M2 = [[1, 0], [C2, D2]]
-        
+        // M1 = [[1, 0], [C1, 1]],  M_prop = [[1, B_prop], [0, 1]],  M2 = [[1, 0], [C2, 1]]
+
         // Step 1: M_prop × M1
-        const a1 = 1;
-        const b1 = B_prop * D1;
+        const a1 = 1 + B_prop * C1;
+        const b1 = B_prop;
         const c1 = C1;
-        const d1 = B_prop * C1 + D1;
+        const d1 = 1;
 
         // Step 2: M2 × (M_prop × M1)
         const A = a1;
         const B = b1;
-        const C = C2 * a1 + D2 * c1;
-        const D = C2 * b1 + D2 * d1;
+        const C = C2 * a1 + c1;
+        const D = C2 * b1 + d1;
 
         return [A, B, C, D];
     }

@@ -272,6 +272,11 @@ export const Sidebar: React.FC = () => {
     // Auto-close sidebar on mobile after selecting a preset
     const handlePresetClick = (preset: PresetName) => {
         loadPreset(preset);
+        // Clear URL query params (xy1, xy2, preset, etc.) so old camera/zoom
+        // settings don't bleed into the new preset
+        if (window.location.search) {
+            window.history.replaceState({}, '', window.location.pathname);
+        }
         if (isMobile) setMobileOpen(false);
     };
 

@@ -27,6 +27,7 @@ export interface Ray {
     polarization: JonesVector;
     opticalPathLength: number; // Accumulated phase [mm]
     interactionDistance?: number; // Distance to intersection (if any)
+    interactionComponentId?: string; // ID of the component that was hit
     footprintRadius: number; // [mm]
     coherenceMode: Coherence;
 

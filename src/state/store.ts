@@ -43,7 +43,28 @@ export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
 
 export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene());
 
+/** Normalized preset result — all presets produce this shape. */
+export interface PresetResult {
+    scene: OpticalComponent[];
+    channels?: import('../physics/PropertyAnimator').AnimationChannel[];
+    animationPlaying?: boolean;
+    animationSpeed?: number;
+}
+
 // Action to load a preset
+const presetFactories = new Map<PresetName, () => PresetResult>([
+    [PresetName.BeamExpander, () => ({ scene: createBeamExpanderScene() })],
+    [PresetName.TransFluorescence, () => ({ scene: createTransFluorescenceScene() })],
+    [PresetName.Brightfield, () => ({ scene: createBrightfieldScene() })],
+    [PresetName.LensZoo, () => ({ scene: createLensZooScene() })],
+    [PresetName.PrismDebug, () => ({ scene: createPrismDebugScene() })],
+    [PresetName.PolarizationZoo, () => ({ scene: createPolarizationZooScene() })],
+    [PresetName.MZInterferometer, () => ({ scene: createMZInterferometerScene() })],
+    [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
+    [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene() })],
+    [PresetName.Confocal, () => createConfocalScene()],
+]);
+
 export const loadPresetAtom = atom(
     null,
     (get, set, presetName: PresetName) => {
@@ -51,45 +72,29 @@ export const loadPresetAtom = atom(
         // Reset E&M state for fresh preset
         set(rayConfigAtom, { rayCount: 32, showFootprint: false, solver2Enabled: false, emFieldVisible: false });
         set(undoStackAtom, []); // Clear undo history on preset load
-        if (presetName === PresetName.BeamExpander) {
-            set(componentsAtom, createBeamExpanderScene());
-        } else if (presetName === PresetName.TransFluorescence) {
-            set(componentsAtom, createTransFluorescenceScene());
-        } else if (presetName === PresetName.Brightfield) {
-            set(componentsAtom, createBrightfieldScene());
-        } else if (presetName === PresetName.LensZoo) {
-            set(componentsAtom, createLensZooScene());
-        } else if (presetName === PresetName.PrismDebug) {
-            set(componentsAtom, createPrismDebugScene());
-        } else if (presetName === PresetName.PolarizationZoo) {
-            set(componentsAtom, createPolarizationZooScene());
-        } else if (presetName === PresetName.MZInterferometer) {
-            set(componentsAtom, createMZInterferometerScene());
-        } else if (presetName === PresetName.EpiFluorescence) {
-            set(componentsAtom, createEpiFluorescenceScene());
-        } else if (presetName === PresetName.OpenSPIM) {
-            set(componentsAtom, createOpenSPIMScene());
-        } else if (presetName === PresetName.Confocal) {
-            const preset = createConfocalScene();
-            set(componentsAtom, preset.scene);
 
-            // Apply animation channels from the preset
-            const animator = get(animatorAtom);
-            animator.clearAll();
-            animator.reset();
-            for (const ch of preset.channels) {
-                animator.addChannel(ch);
-            }
+        const factory = presetFactories.get(presetName);
+        if (!factory) return;
+        const result = factory();
 
-            set(animationPlayingAtom, preset.animationPlaying);
-            set(animationSpeedAtom, preset.animationSpeed);
-            return;  // Already set componentsAtom above
-        }
+        set(componentsAtom, result.scene);
 
-        // Clear animator for all other presets
         const animator = get(animatorAtom);
         animator.clearAll();
         animator.reset();
+
+        if (result.channels) {
+            for (const ch of result.channels) {
+                animator.addChannel(ch);
+            }
+        }
+
+        if (result.animationPlaying !== undefined) {
+            set(animationPlayingAtom, result.animationPlaying);
+        }
+        if (result.animationSpeed !== undefined) {
+            set(animationSpeedAtom, result.animationSpeed);
+        }
     }
 );
 

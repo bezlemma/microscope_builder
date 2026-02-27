@@ -5,59 +5,55 @@ import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Card } from '../physics/components/Card';
 
 /**
- * Interferometer
+ * Mach-Zehnder Interferometer
  *
- *  Laser ──→ BS1 ──(transmitted)──→ Mirror_B ──→ (down)
- *               │                                    │
- *          (reflected, up)                            │
- *               │                                    ↓
- *          Mirror_A ──→ (right) ──→ BS2 ──→ Card
+ * Beam path (XY plane):
+ *   Laser → BS1 ──(transmitted +X)──→ Mirror_B ──(reflected -Y)──→ BS2 → Card
+ *                ╰─(reflected +Y)──→ Mirror_A ──(reflected +X)──╯
  *
- * Layout (all at z=0, XY plane):
- *   Laser    at x=-200, y=0
- *   BS1      at x=-100, y=0   (45° → reflects up)
- *   Mirror_A at x=-100, y=80  (reflects right)
- *   Mirror_B at x=0,    y=0   (reflects down → toward BS2)
- *   BS2      at x=0,    y=80  (recombines beams → Card)
- *   Card     at x=80,   y=80
+ * Layout:
+ *   Laser    at (-200, 0)  — emits +X
+ *   BS1      at (-100, 0)  — 45° splits
+ *   Mirror_A at (-100, 80) — redirects +Y → +X
+ *   Mirror_B at (0, 0)     — redirects +X → +Y
+ *   BS2      at (0, 80)    — recombines
+ *   Card     at (80, 80)   — detector
  */
-export const createMZInterferometerScene = (): OpticalComponent[] => [
-    (() => {
-        const c = new Laser("MZ Laser (532nm)");
-        c.wavelength = 532;
-        c.power = 1.0;
-        c.setPosition(-200, 0, 0);
-        c.setRotation(0, 0, 0);
-        return c;
-    })(),
-    (() => {
-        const c = new BeamSplitter(20, 2, 0.5, "BS1 (50/50)");
-        c.setPosition(-100, 0, 0);
-        c.setRotation(0, 0, 3 * Math.PI / 4);
-        return c;
-    })(),
-    (() => {
-        const c = new Mirror(20, 2, "Mirror A");
-        c.setPosition(-100, 80, 0);
-        c.setRotation(0, 0, -Math.PI / 4);
-        return c;
-    })(),
-    (() => {
-        const c = new Mirror(20, 2, "Mirror B");
-        c.setPosition(0, 0, 0);
-        c.setRotation(0, 0, 3 * Math.PI / 4);
-        return c;
-    })(),
-    (() => {
-        const c = new BeamSplitter(20, 2, 0.5, "BS2 (50/50)");
-        c.setPosition(0, 80, 0);
-        c.setRotation(0, 0, 3 * Math.PI / 4);
-        return c;
-    })(),
-    (() => {
-        const c = new Card(30, 30, "MZ Detector");
-        c.setPosition(80, 80, 0);
-        c.setRotation(0, Math.PI / 2, 0);
-        return c;
-    })(),
-];
+export function createMZInterferometerScene(): OpticalComponent[] {
+    const scene: OpticalComponent[] = [];
+
+    const laser = new Laser("MZ Laser (532nm)");
+    laser.wavelength = 532;
+    laser.power = 1.0;
+    laser.setPosition(-200, 0, 0);
+    laser.pointAlong(1, 0, 0);  // emit along +X
+    scene.push(laser);
+
+    // 45° mirrors and beam splitters need compound rotations (setRotation)
+    const bs1 = new BeamSplitter(20, 2, 0.5, "BS1 (50/50)");
+    bs1.setPosition(-100, 0, 0);
+    bs1.setRotation(0, 0, 3 * Math.PI / 4);  // 45° reflector in XY plane
+    scene.push(bs1);
+
+    const mirrorA = new Mirror(20, 2, "Mirror A");
+    mirrorA.setPosition(-100, 80, 0);
+    mirrorA.setRotation(0, 0, -Math.PI / 4);  // 45° reflector in XY plane
+    scene.push(mirrorA);
+
+    const mirrorB = new Mirror(20, 2, "Mirror B");
+    mirrorB.setPosition(0, 0, 0);
+    mirrorB.setRotation(0, 0, 3 * Math.PI / 4);  // 45° reflector in XY plane
+    scene.push(mirrorB);
+
+    const bs2 = new BeamSplitter(20, 2, 0.5, "BS2 (50/50)");
+    bs2.setPosition(0, 80, 0);
+    bs2.setRotation(0, 0, 3 * Math.PI / 4);  // 45° reflector in XY plane
+    scene.push(bs2);
+
+    const card = new Card(30, 30, "MZ Detector");
+    card.setPosition(80, 80, 0);
+    card.pointAlong(1, 0, 0);  // faces beam traveling +X
+    scene.push(card);
+
+    return scene;
+}

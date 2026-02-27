@@ -9,12 +9,14 @@ export class Laser extends OpticalComponent {
     power: number = 1.0;      // Watts (optical output power)
 
     private static readonly HOUSING = new Box3(
-        new Vector3(-68, -20, -19),
-        new Vector3(2, 20, 19)
+        new Vector3(-19, -20, -68),
+        new Vector3(19, 20, 2)
     );
     
     constructor(name: string = "Laser Source") {
         super(name);
+        // Default: beam fires along +X (in the optical table XY plane)
+        this.pointAlong(1, 0, 0);
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -27,7 +29,7 @@ export class Laser extends OpticalComponent {
         return {
             t,
             point: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t)),
-            normal: new Vector3(1, 0, 0),
+            normal: new Vector3(0, 0, 1),
             localPoint: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t))
         };
     }

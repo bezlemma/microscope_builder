@@ -1,0 +1,23 @@
+=== Brightfield Camera (old setRotation) ===
+Ray +X from x=0: HIT at t=420.91 Γ£ô
+
+=== Brightfield Camera (new pointAlong) ===
+Ray +X from x=0: HIT at t=420.91 Γ£ô
+
+=== Epi Camera (old setRotation) ===
+Ray +Y from y=0: HIT at t=230.91 Γ£ô
+
+=== Epi Camera (new pointAlong -Y) ===
+Ray +Y from y=0: HIT at t=230.91 Γ£ô
+
+=== Quaternion comparison ===
+Brightfield old: (0.0000, -0.7071, 0.0000, 0.7071)
+Brightfield new: (0.0000, -0.7071, 0.0000, 0.7071)
+Epi old:         (0.7071, 0.0000, 0.0000, 0.7071)
+Epi new:         (-0.5000, -0.5000, 0.5000, -0.5000)
+
+=== Sensor face direction (local +Z in world) ===
+Brightfield old: (-1.000, 0.000, -0.000)
+Brightfield new: (-1.000, 0.000, 0.000)
+Epi old:         (0.000, -1.000, -0.000)
+Epi new:         (0.000, -1.000, 0.000)

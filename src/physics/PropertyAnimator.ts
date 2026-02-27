@@ -1,5 +1,6 @@
 import { OpticalComponent } from './Component';
 import { Euler } from 'three';
+import { Sample } from './components/Sample';
 
 /**
  * PropertyAnimator — generic animation system for optical components.
@@ -95,10 +96,16 @@ export function setProperty(
         component.updateMatrices();
     } else if (property.startsWith('rotation.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        const euler = new Euler().setFromQuaternion(component.rotation);
+        const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
         euler[axis] = value;
         component.rotation.setFromEuler(euler);
         component.updateMatrices();
+    } else if (property.startsWith('specimenOffset.') && component instanceof Sample) {
+        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        component.specimenOffset[axis] = value;
+    } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
+        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        component.specimenRotation[axis] = value;
     } else {
         // Direct scalar property (e.g. scanAngle, aperture, focalLength)
         (component as any)[property] = value;
@@ -120,8 +127,14 @@ export function getProperty(component: OpticalComponent, property: string): numb
         return component.position[axis];
     } else if (property.startsWith('rotation.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        const euler = new Euler().setFromQuaternion(component.rotation);
+        const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
         return euler[axis];
+    } else if (property.startsWith('specimenOffset.') && component instanceof Sample) {
+        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        return component.specimenOffset[axis];
+    } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
+        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        return component.specimenRotation[axis];
     } else {
         return (component as any)[property] ?? 0;
     }
@@ -204,7 +217,10 @@ export class PropertyAnimator {
         this.channels = this.channels.filter(c => c.id !== id);
     }
 
-    clearAll(): void {
+    clearAll(components?: OpticalComponent[]): void {
+        if (components) {
+            this.restoreAll(components);
+        }
         this.channels = [];
     }
 

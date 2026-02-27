@@ -5,7 +5,7 @@ import { Solver1 } from '../../physics/Solver1';
 import { OpticalComponent } from '../../physics/Component';
 import { SphericalLens } from '../../physics/components/SphericalLens';
 import { RayVisualizer } from '../RayVisualizer';
-import { LensVisualizer } from '../OpticalTable';
+import { LensVisualizer } from '../visualizers/ComponentVisualizers';
 
 export const InfinitySystemTest: React.FC = () => {
     const sceneComponents = useMemo(() => {

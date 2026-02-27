@@ -30,13 +30,13 @@ export class Filter extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        // Flat plane at w=0 (optical axis along x → w)
-        // Transverse plane: u=y, v=z
+        // Flat plane at w=0 (optical axis along z → w)
+        // Transverse plane: u=x, v=y
         const radius = this.diameter / 2;
-        const dw = rayLocal.direction.x;
+        const dw = rayLocal.direction.z;
         if (Math.abs(dw) < 1e-6) return null;
 
-        const t = -rayLocal.origin.x / dw;
+        const t = -rayLocal.origin.z / dw;
         if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(
@@ -44,13 +44,13 @@ export class Filter extends OpticalComponent {
         );
 
         // Circular aperture check in uv transverse plane
-        const hu = hitPoint.y;
-        const hv = hitPoint.z;
+        const hu = hitPoint.x;
+        const hv = hitPoint.y;
         if (hu * hu + hv * hv > radius * radius) {
             return null;
         }
 
-        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);  // ±w normal
+        const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);  // ±w normal
         return {
             t,
             point: hitPoint,

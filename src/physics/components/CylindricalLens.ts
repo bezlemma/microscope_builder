@@ -1,4 +1,4 @@
-import { Vector3, BufferGeometry, Float32BufferAttribute } from 'three';
+import { Vector3, BufferGeometry, Float32BufferAttribute, Euler } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult } from '../types';
 import { OpticMesh, NormalFn } from '../OpticMesh';
@@ -314,22 +314,21 @@ export class CylindricalLens extends OpticalComponent {
         const n = this.ior;
         const t = this.thickness;
 
-        const C1 = -(n - 1) / (n * R1);
-        const D1 = 1 / n;
-        const B_prop = t / n;
+        // Convention B (reduced ray): standard for Gaussian beam q-parameter ABCD.
+        const C1 = -(n - 1) / R1;
         const C2 = (n - 1) / R2;
-        const D2 = n;
+        const B_prop = t / n;
 
         // Chain: M2 × M_prop × M1
-        const a1 = 1;
-        const b1 = B_prop * D1;
+        const a1 = 1 + B_prop * C1;
+        const b1 = B_prop;
         const c1 = C1;
-        const d1 = B_prop * C1 + D1;
+        const d1 = 1;
 
         const A = a1;
         const B = b1;
-        const C = C2 * a1 + D2 * c1;
-        const D = C2 * b1 + D2 * d1;
+        const C = C2 * a1 + c1;
+        const D = C2 * b1 + d1;
 
         return [A, B, C, D];
     }
@@ -345,5 +344,73 @@ export class CylindricalLens extends OpticalComponent {
 
     getApertureRadius(): number {
         return this.apertureRadius;
+    }
+
+    /** Override: cylindrical lens has different tangential/sagittal based on
+     *  which Solver2 transverse axis aligns with the lens curvature direction.
+     *
+     *  The curvature acts in the local Y direction (axis along local X).
+     *  Solver2 constructs a transverse frame {right, localUp} from the beam
+     *  direction using a cross-product convention with fallback up=(0,1,0).
+     *  We need to figure out whether Solver2's "right" or "localUp" aligns
+     *  with our curvature direction (local Y in world space) and assign
+     *  the tangential ABCD accordingly.
+     */
+    getComponentABCD(rayDirection?: Vector3): {
+        abcdX: [number, number, number, number];
+        abcdY: [number, number, number, number];
+        apertureRadius: number;
+    } {
+        // Get the lens's local Y axis in world coordinates (the curvature direction)
+        this.updateMatrices();
+        const localY = new Vector3(0, 1, 0).applyQuaternion(this.rotation).normalize();
+
+        if (rayDirection) {
+            // Reconstruct Solver2's transverse frame from the ray direction
+            // (must match Solver2.queryIntensity's logic exactly)
+            const segDir = rayDirection.clone().normalize();
+            const up = new Vector3(0, 1, 0);
+            if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
+            const right = new Vector3().crossVectors(segDir, up).normalize();
+            const localUp = new Vector3().crossVectors(right, segDir).normalize();
+
+            // Check which transverse axis has more overlap with our curvature Y
+            const rightDotY = Math.abs(right.dot(localY));
+            const upDotY = Math.abs(localUp.dot(localY));
+
+            if (rightDotY > upDotY) {
+                // Curvature aligns with Solver2's "right"  → abcdX = tangential
+                return {
+                    abcdX: this.getABCD_tangential(),
+                    abcdY: this.getABCD_sagittal(),
+                    apertureRadius: this.getApertureRadius()
+                };
+            } else {
+                // Curvature aligns with Solver2's "localUp" → abcdY = tangential
+                return {
+                    abcdX: this.getABCD_sagittal(),
+                    abcdY: this.getABCD_tangential(),
+                    apertureRadius: this.getApertureRadius()
+                };
+            }
+        }
+
+        // Fallback when no ray direction given — use old heuristic
+        const euler = new Euler().setFromQuaternion(this.rotation);
+        const isRotated90 = Math.abs(Math.cos(euler.z)) < 0.5;
+
+        if (isRotated90) {
+            return {
+                abcdX: this.getABCD_tangential(),
+                abcdY: this.getABCD_sagittal(),
+                apertureRadius: this.getApertureRadius()
+            };
+        } else {
+            return {
+                abcdX: this.getABCD_sagittal(),
+                abcdY: this.getABCD_tangential(),
+                apertureRadius: this.getApertureRadius()
+            };
+        }
     }
 }

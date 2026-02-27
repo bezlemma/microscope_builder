@@ -2,26 +2,14 @@ import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult } from '../types';
 import { intersectAABB } from '../math_solvers';
 import { Vector3, Box3 } from 'three';
+import { wavelengthToRGB } from '../spectral';
 
 /**
- * Convert wavelength (nm) to linear RGB using the same algorithm as RayVisualizer.
- * Used here purely for computing white-balance weights.
+ * Convert wavelength (nm) to linear RGB for white-balance computation.
+ * Delegates to the centralized spectral.ts implementation.
  */
 function wavelengthToRGBLinear(wlNm: number): { r: number; g: number; b: number } {
-    let r = 0, g = 0, b = 0;
-    if (wlNm >= 380 && wlNm < 440) { r = -(wlNm - 440) / (440 - 380); b = 1; }
-    else if (wlNm >= 440 && wlNm < 490) { g = (wlNm - 440) / (490 - 440); b = 1; }
-    else if (wlNm >= 490 && wlNm < 510) { g = 1; b = -(wlNm - 510) / (510 - 490); }
-    else if (wlNm >= 510 && wlNm < 580) { r = (wlNm - 510) / (580 - 510); g = 1; }
-    else if (wlNm >= 580 && wlNm < 645) { r = 1; g = -(wlNm - 645) / (645 - 580); }
-    else if (wlNm >= 645 && wlNm <= 780) { r = 1; }
-    let f = 1;
-    if (wlNm >= 380 && wlNm < 420) f = 0.3 + 0.7 * (wlNm - 380) / (420 - 380);
-    else if (wlNm >= 645 && wlNm <= 780) f = 0.3 + 0.7 * (780 - wlNm) / (780 - 645);
-    else if (wlNm < 380 || wlNm > 780) return { r: 0, g: 0, b: 0 };
-    r = Math.pow(r * f, 0.8);
-    g = Math.pow(g * f, 0.8);
-    b = Math.pow(b * f, 0.8);
+    const { r, g, b } = wavelengthToRGB(wlNm);
     return { r, g, b };
 }
 
@@ -31,7 +19,7 @@ function wavelengthToRGBLinear(wlNm: number): { r: number; g: number; b: number 
  * should each reach ~1.0, producing white. Formula: opacity = 1 / min(sumR, sumG, sumB).
  * The weakest channel barely saturates; stronger channels clamp.
  */
-function computeAdditiveOpacity(wavelengthsNm: number[]): number {
+export function computeAdditiveOpacity(wavelengthsNm: number[]): number {
     let sumR = 0, sumG = 0, sumB = 0;
     for (const wl of wavelengthsNm) {
         const c = wavelengthToRGBLinear(wl);
@@ -73,12 +61,14 @@ export class Lamp extends OpticalComponent {
     }
 
     private static readonly HOUSING = new Box3(
-        new Vector3(-20, -11, -15),
-        new Vector3(3, 11, 15)
+        new Vector3(-15, -11, -20),
+        new Vector3(15, 11, 3)
     );
 
     constructor(name: string = "Lamp Source") {
         super(name);
+        // Default: beam fires along +X (in the optical table XY plane)
+        this.pointAlong(1, 0, 0);
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -91,7 +81,7 @@ export class Lamp extends OpticalComponent {
         return {
             t,
             point: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t)),
-            normal: new Vector3(1, 0, 0),
+            normal: new Vector3(0, 0, 1),
             localPoint: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t))
         };
     }

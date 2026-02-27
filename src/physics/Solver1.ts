@@ -63,6 +63,7 @@ export class Solver1 {
         }
 
         currentRay.interactionDistance = nearestT;
+        currentRay.interactionComponentId = nearestComponent.id;
 
         // Terminate rays that re-enter a Laser housing
         if (nearestComponent instanceof Laser) {
@@ -79,15 +80,15 @@ export class Solver1 {
             return;
         }
 
-        // Passthrough components (e.g., card) don't break the ray path
+        // Passthrough components (e.g., card) don't break the ray path visually
         if (result.passthrough && result.rays.length === 1) {
-            currentRay.interactionDistance = undefined;
             const nextRay = result.rays[0];
-            nextRay.interactionDistance = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
-
-            this.traceRecursive(nextRay, currentPath, depth + 1, allPaths);
+            
+            // Critical! Pushing the current ray preserves the interaction line
+            const nextPath = [...currentPath, nextRay];
+            this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
             return;
         }
 
@@ -96,6 +97,7 @@ export class Solver1 {
             const nextRay = result.rays[i];
 
             nextRay.interactionDistance = undefined;
+            nextRay.interactionComponentId = undefined;
 
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
