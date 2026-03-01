@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { Vector3 } from "three";
 import { Solver1 } from "../Solver1";
-import { Laser } from "../components/Laser";
-import { Lamp } from "../components/Lamp";
+import { Laser } from "../../parts/Laser";
+import { Lamp } from "../../parts/Lamp";
 import { Ray } from "../types";
 import { createBrightfieldScene } from "../../presets/brightfield";
 import { createOpenSPIMScene } from "../../presets/openSPIM";
@@ -25,7 +24,7 @@ function testPreset(name: string, createSceneFn: () => any[], targetClassNames: 
         for (const source of sources) {
             // The central ray firing exactly down the component's optic axis
             const origin = source.position.clone();
-            const direction = new Vector3(0, 0, 1).applyQuaternion(source.rotation).normalize();
+            const direction = source.getForwardDirection();
             
             // Advance slightly to avoid self-intersection immediately at origin
             origin.add(direction.clone().multiplyScalar(3));
@@ -68,7 +67,7 @@ function testPreset(name: string, createSceneFn: () => any[], targetClassNames: 
 describe("End-to-End Preset Integrity", () => {
     testPreset("Brightfield", createBrightfieldScene, ["Sample", "Camera"]);
     testPreset("Epi-Fluorescence", createEpiFluorescenceScene, ["Sample", "Camera"]);
-    testPreset("OpenSPIM", createOpenSPIMScene, ["SampleChamber", "Camera"]);
+    testPreset("OpenSPIM", createOpenSPIMScene, ["LXSampleHolder", "Camera"]);
     testPreset("Transmission Fluorescence", createTransFluorescenceScene, ["Sample", "Camera"]);
     testPreset("Beam Expander", createBeamExpanderScene, ["SphericalLens"]);
     testPreset("Confocal", () => createConfocalScene().scene, ["Sample", "PMT"]);
@@ -82,7 +81,7 @@ describe("End-to-End Preset Integrity", () => {
 
 import { Solver3 } from "../Solver3";
 import { Solver2 } from "../Solver2";
-import { Camera } from "../components/Camera";
+import { Camera } from "../../parts/Camera";
 
 function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
     test(`Solver 3: ${presetName} backward rays produce paths`, () => {
@@ -99,7 +98,7 @@ function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
 
         for (const source of sources) {
             const origin = source.position.clone();
-            const direction = new Vector3(0, 0, 1).applyQuaternion(source.rotation).normalize();
+            const direction = source.getForwardDirection();
             origin.add(direction.clone().multiplyScalar(3));
 
             const sourceWl = ((source as Laser).wavelength || 532) * 1e-9;
@@ -155,7 +154,7 @@ describe("Solver 3: OpenSPIM Camera Facing", () => {
         expect(camera).toBeDefined();
 
         // Camera backward ray direction = local +Z transformed to world
-        const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
+        const camW = camera.getForwardDirection();
 
         // For the detection arm going in -X direction, camera must fire backward
         // rays in +X (toward the sample at column N, x ≈ 337.5)

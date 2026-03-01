@@ -131,7 +131,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                 onPointerUp={handleLabelPointerUp}
                 style={{
                     fontSize: '12px',
-                    color: isScrubbing ? '#64ffda' : '#aaa',
+                    color: isScrubbing ? '#007fff' : '#aaa',
                     marginBottom: 4,
                     cursor: 'ew-resize',
                     userSelect: 'none',
@@ -161,7 +161,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                 }}
                 style={{
                     backgroundColor: '#222',
-                    border: `1px solid ${isScrubbing ? '#64ffda' : '#444'}`,
+                    border: `1px solid ${isScrubbing ? '#007fff' : '#444'}`,
                     color: '#fff',
                     padding: '6px',
                     borderRadius: '4px',

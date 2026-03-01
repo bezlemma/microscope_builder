@@ -1,7 +1,7 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../physics/components/Laser';
-import { Card } from '../physics/components/Card';
-import { Waveplate } from '../physics/components/Waveplate';
+import { Laser } from '../parts/Laser';
+import { Card } from '../parts/Card';
+import { Waveplate } from '../parts/Waveplate';
 
 /**
  * Polarization Zoo — three classic polarization demonstrations.

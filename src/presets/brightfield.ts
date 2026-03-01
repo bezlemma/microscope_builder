@@ -1,10 +1,10 @@
 import { OpticalComponent } from '../physics/Component';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Camera } from '../physics/components/Camera';
-import { Lamp } from '../physics/components/Lamp';
-import { Objective } from '../physics/components/Objective';
-import { Sample } from '../physics/components/Sample';
-import { Aperture } from '../physics/components/Aperture';
+import { SphericalLens } from '../parts/SphericalLens';
+import { Camera } from '../parts/Camera';
+import { Lamp } from '../parts/Lamp';
+import { Objective } from '../parts/Objective';
+import { Sample } from '../parts/Sample';
+import { Aperture } from '../parts/Aperture';
 
 /**
  * Brightfield Microscope — absorption/shadow imaging with white light.

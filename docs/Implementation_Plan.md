@@ -4,13 +4,36 @@
 
 -Vite + Typescript, compiled with bun.
 
+-Three.js for visualization. 
+
+
+# Parts
+
+Each part type (a type of mirror, a type of lens) should have it's own .tsx file, with all it's geometry, necessary calculations, properties, etc. handled within the single file. This is because a lot of coding goes into making a new part and making it behave correctly, and we tend to think about one part at a time rather than "all the orientations of all the blocker parts". So in the folder "Parts" we should have "Spherical Lens.tsx", "ViewingCard.tsx", "Camera.tsx" etc. 
+ 
+The following parts exist:
+
+Sources: 
+    - Laser
+    - Lamp
+Lenses: 
+    - Spherical Lens
+    - Achromatic Doublet
+    - Aspheric Lens
+    - Cylindrical Lens
+    - Ideal Lens
+    - Objective
+    - Prism
+Mirrors:
+
 
 # UI
 
 - Elements simply float, there are no posts supporting them from the table
+
 - The camera is such that the program looks actually 2D when seen from above, and only when user rotates the camera to an angle does it look 3D.
-- No lens objects should have housing. So that you can see the light source go through the lens.
-- Any complicated thing that does have housing such as an objective should be transparent, so that you can see the light source go through the subcomponents.
+
+- Lens, objective, camera housing should be semi-transparent to the user, so that you can see the light source go through the subcomponents.
 
 # Order of implementation
 

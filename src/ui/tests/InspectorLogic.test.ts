@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 // Instead, we will test the logic by instantiating the Component and checking its methods/properties directly
 // verifying that the data structure supports the new features.
 
-import { SphericalLens } from '../../physics/components/SphericalLens';
+import { SphericalLens } from '../../parts/SphericalLens';
 
 describe("Inspector Logic - Lens Radii", () => {
     test("SphericalLens supports asymmetric radii", () => {

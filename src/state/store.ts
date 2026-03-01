@@ -1,7 +1,11 @@
 import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
-import { serializeScene, deserializeScene } from './ubzSerializer';
 import { PropertyAnimator } from '../physics/PropertyAnimator';
+
+// Re-export atoms that component visualizers need (from cycle-free standalone file)
+export { selectionAtom, subElementIndexAtom } from './selectionAtom';
+// Also import locally for use within this file
+import { selectionAtom } from './selectionAtom';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
@@ -14,6 +18,7 @@ import { createMZInterferometerScene } from '../presets/mzInterferometer';
 import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
 import { createConfocalScene } from '../presets/confocal';
+import { serializeScene, deserializeScene } from './ubzSerializer';
 
 // --- State Types ---
 export interface RayConfig {
@@ -98,8 +103,7 @@ export const loadPresetAtom = atom(
     }
 );
 
-// 2. Selection State (supports multi-select via Ctrl+Click)
-export const selectionAtom = atom<string[]>([]);
+// 2. Selection State — re-exported from ./selectionAtom.ts (see above)
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
@@ -186,3 +190,27 @@ export const animationSpeedAtom = atom<number>(1.0);
 // ════════════════════════════════════════════════════════════
 export const scanAccumTriggerAtom = atom<{ steps: number; trigger: number }>({ steps: 16, trigger: 0 });
 export const scanAccumProgressAtom = atom<number>(0);  // 0..1 progress
+
+// ════════════════════════════════════════════════════════════
+//  13. VIEW MODE — 2D/3D camera snap
+//  '2D' when camera is top-down, '3D' when rotated.
+// ════════════════════════════════════════════════════════════
+export const viewModeAtom = atom<'2D' | '3D'>('2D');
+
+// ════════════════════════════════════════════════════════════
+//  14. DRAG AXIS LOCK — constrains component drag to one axis
+// ════════════════════════════════════════════════════════════
+export const dragAxisLockAtom = atom<'free' | 'x' | 'y'>('free');
+
+// ════════════════════════════════════════════════════════════
+//  15. SUB-ELEMENT SELECTION — select individual surfaces within compound
+// ════════════════════════════════════════════════════════════
+// Index into a compound component's surfaces. null = whole component selected.
+// subElementIndexAtom — re-exported from ./selectionAtom.ts (see top of file)
+
+// ════════════════════════════════════════════════════════════
+//  16. DEFAULT ROTATION PLANE — constrains component rotation
+// ════════════════════════════════════════════════════════════
+// 'xy' = rotate in optical table plane (default), 'xz' = vertical tilt, 'yz' = lateral tilt
+export const rotationPlaneAtom = atom<'xy' | 'xz' | 'yz'>('xy');
+

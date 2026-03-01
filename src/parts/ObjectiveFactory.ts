@@ -1,4 +1,4 @@
-import { OpticalComponent } from '../Component';
+import { OpticalComponent } from '../physics/Component';
 import { SphericalLens } from './SphericalLens';
 import { Vector3, Euler } from 'three';
 

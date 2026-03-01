@@ -1,8 +1,8 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../physics/components/Laser';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { CylindricalLens } from '../physics/components/CylindricalLens';
-import { PrismLens } from '../physics/components/PrismLens';
+import { Laser } from '../parts/Laser';
+import { SphericalLens } from '../parts/SphericalLens';
+import { CylindricalLens } from '../parts/CylindricalLens';
+import { PrismLens } from '../parts/PrismLens';
 
 /**
  * Lens Zoo — A showcase preset with multiple lens types and lasers.

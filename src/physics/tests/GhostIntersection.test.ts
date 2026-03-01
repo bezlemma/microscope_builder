@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
-import { SphericalLens } from "../components/SphericalLens";
-import { Laser } from "../components/Laser";
+import { SphericalLens } from "../../parts/SphericalLens";
+import { Laser } from "../../parts/Laser";
 import { Solver1 } from "../Solver1";
 import { Ray, Coherence } from "../types";
 
@@ -22,13 +22,12 @@ describe("Ghost Intersection Debugging", () => {
         // Moved to Y=17 per user report
         const lens1 = new SphericalLens(1/50.0, 15, 4, "Expander Lens 1");
         lens1.setPosition(-100, 17, 0); 
-        lens1.setRotation(0, Math.PI / 2, 0); // Face +X
+        // No rotation needed — X-forward convention has optical axis along +X
         scene.push(lens1);
 
         // Lens 2: f=100, Aperture=25, Thickness=4
         const lens2 = new SphericalLens(1/100.0, 25, 4, "Expander Lens 2");
         lens2.setPosition(50, 0, 0);
-        lens2.setRotation(0, Math.PI / 2, 0);
         scene.push(lens2);
 
         // 2. Define Marginal Ray

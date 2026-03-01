@@ -52,7 +52,7 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
                 e.currentTarget.style.color = '#ccc';
             }}
         >
-            <Icon size={14} style={{ marginRight: '8px', color: '#64ffda', flexShrink: 0 }} />
+            <Icon size={14} style={{ marginRight: '8px', color: '#007fff', flexShrink: 0 }} />
             <span style={{ fontWeight: 400 }}>{label}</span>
         </div>
     );
@@ -86,9 +86,11 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
     {
         name: 'Lenses',
         icon: Circle,
-        color: '#64ffda',
+        color: '#007fff',
         items: [
             { type: 'lens', label: 'Spherical Lens', icon: Circle },
+            { type: 'achromaticDoublet', label: 'Achromatic Doublet', icon: Circle },
+            { type: 'asphericLens', label: 'Aspheric Lens', icon: Circle },
             { type: 'cylindricalLens', label: 'Cylindrical Lens', icon: Circle },
             { type: 'idealLens', label: 'Ideal Lens', icon: Circle },
             { type: 'objective', label: 'Objective', icon: Circle },
@@ -288,7 +290,7 @@ export const Sidebar: React.FC = () => {
                 margin: '2px 0',
                 backgroundColor: active ? '#2a4a3a' : '#252525',
                 cursor: 'pointer',
-                border: `1px solid ${active ? '#64ffda' : 'transparent'}`,
+                border: `1px solid ${active ? '#007fff' : 'transparent'}`,
                 borderRadius: '4px',
                 transition: 'all 0.15s',
                 fontSize: '12px',
@@ -297,12 +299,12 @@ export const Sidebar: React.FC = () => {
             }}
             onMouseOver={(e) => {
                 e.currentTarget.style.backgroundColor = active ? '#3a5a4a' : '#333';
-                e.currentTarget.style.borderColor = active ? '#64ffda' : '#555';
+                e.currentTarget.style.borderColor = active ? '#007fff' : '#555';
                 e.currentTarget.style.color = '#fff';
             }}
             onMouseOut={(e) => {
                 e.currentTarget.style.backgroundColor = active ? '#2a4a3a' : '#252525';
-                e.currentTarget.style.borderColor = active ? '#64ffda' : 'transparent';
+                e.currentTarget.style.borderColor = active ? '#007fff' : 'transparent';
                 e.currentTarget.style.color = active ? '#fff' : '#aaa';
             }}
         >
@@ -452,7 +454,7 @@ export const Sidebar: React.FC = () => {
                             padding: '4px 0',
                             transition: 'color 0.15s',
                         }}
-                        onMouseOver={(e) => { e.currentTarget.style.color = '#64ffda'; }}
+                        onMouseOver={(e) => { e.currentTarget.style.color = '#007fff'; }}
                         onMouseOut={(e) => { e.currentTarget.style.color = '#888'; }}
                     >
                         ← Bezia Lemma

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
 import { Solver3 } from "../Solver3";
 import { GaussianBeamSegment, initialQ } from "../Solver2";
-import { Camera } from "../components/Camera";
-import { Sample } from "../components/Sample";
+import { Camera } from "../../parts/Camera";
+import { Sample } from "../../parts/Sample";
 import { Coherence } from "../types";
 
 // ─── Helper: create a GaussianBeamSegment along a direction ────────
@@ -44,8 +44,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         // Minimal scene: Camera at (0, 25, 0) facing -Y, Sample at (0, 0, 0)
         const camera = new Camera(1, 1, "Test Camera");
         camera.setPosition(0, 25, 0);
-        // Rotation(π/2, 0, 0) maps local +Z → world (0, -1, 0)
-        camera.setRotation(Math.PI / 2, 0, 0);
+        // Rz(-π/2) maps local +X → world -Y (camera faces -Y toward sample)
+        camera.setRotation(0, 0, -Math.PI / 2);
         camera.sensorResX = 4;
         camera.sensorResY = 4;
         camera.sensorNA = 0.01;      // Near-zero NA for deterministic test
@@ -53,7 +53,7 @@ describe("Solver 3: Backward Ray Direction", () => {
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);
-        sample.setRotation(Math.PI / 2, 0, 0);
+        sample.setRotation(0, 0, -Math.PI / 2);
 
         // Beam segment illuminating the sample region
         const beamSeg = makeSeg(
@@ -83,7 +83,7 @@ describe("Solver 3: Backward Ray Direction", () => {
         // Direct line of sight: Camera → Sample with illumination
         const camera = new Camera(4, 4, "Test Camera");
         camera.setPosition(0, 50, 0);
-        camera.setRotation(Math.PI / 2, 0, 0);
+        camera.setRotation(0, 0, -Math.PI / 2);
         camera.sensorResX = 8;
         camera.sensorResY = 8;
         camera.sensorNA = 0.05;
@@ -91,7 +91,7 @@ describe("Solver 3: Backward Ray Direction", () => {
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);
-        sample.setRotation(Math.PI / 2, 0, 0);
+        sample.setRotation(0, 0, -Math.PI / 2);
 
         // Beam segment illuminating the sample centered at origin
         const beamSeg = makeSeg(
@@ -121,8 +121,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         // Camera at (0, 100, 0) facing +Y (AWAY from sample at origin)
         const camera = new Camera(4, 4, "Wrong-Facing Camera");
         camera.setPosition(0, 100, 0);
-        // Rotation(-π/2, 0, 0) maps local +Z → world (0, 1, 0) — camera faces +Y
-        camera.setRotation(-Math.PI / 2, 0, 0);
+        // Rz(π/2) maps local +X → world +Y — camera faces +Y (AWAY from sample)
+        camera.setRotation(0, 0, Math.PI / 2);
         camera.sensorResX = 4;
         camera.sensorResY = 4;
         camera.sensorNA = 0.01;
@@ -130,7 +130,7 @@ describe("Solver 3: Backward Ray Direction", () => {
 
         const sample = new Sample("Test Sample");
         sample.setPosition(0, 0, 0);
-        sample.setRotation(Math.PI / 2, 0, 0);
+        sample.setRotation(0, 0, -Math.PI / 2);
 
         const beamSeg = makeSeg(
             new Vector3(0, 10, 0),

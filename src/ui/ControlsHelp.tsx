@@ -66,7 +66,7 @@ export const ControlsHelp: React.FC = () => {
                         <Row keys="Shift + Click" action="Multi-select" />
                         <Row keys="Drag" action="Move" />
                         <Row keys="Q / E" action="Rotate ±15°" />
-                        <Row keys="Delete" action="Remove" />
+                        <Row keys="Delete / Backspace" action="Remove" />
                         <Row keys="Escape" action="Deselect all" />
                     </Section>
 
@@ -76,7 +76,7 @@ export const ControlsHelp: React.FC = () => {
                     </Section>
 
                     <Section title="Edit">
-                        <Row keys="Ctrl + Z" action="Undo" />
+                        <Row keys="Ctrl/⌘ + Z" action="Undo" />
                     </Section>
                 </div>
             )}

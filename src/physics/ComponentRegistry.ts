@@ -11,30 +11,32 @@
  * dispatch sites pick it up automatically.
  */
 import { OpticalComponent } from './Component';
-import { Laser } from './components/Laser';
-import { Lamp } from './components/Lamp';
-import { SphericalLens } from './components/SphericalLens';
-import { CurvedMirror } from './components/CurvedMirror';
-import { Mirror } from './components/Mirror';
-import { Blocker } from './components/Blocker';
-import { BeamSplitter } from './components/BeamSplitter';
-import { DichroicMirror } from './components/DichroicMirror';
-import { SampleChamber } from './components/SampleChamber';
-import { Filter } from './components/Filter';
-import { Camera } from './components/Camera';
-import { Sample } from './components/Sample';
-import { Objective } from './components/Objective';
-import { PrismLens } from './components/PrismLens';
-import { Waveplate } from './components/Waveplate';
-import { Aperture } from './components/Aperture';
-import { CylindricalLens } from './components/CylindricalLens';
-import { IdealLens } from './components/IdealLens';
-import { Card } from './components/Card';
-import { SlitAperture } from './components/SlitAperture';
-import { PolygonScanner } from './components/PolygonScanner';
-import { PMT } from './components/PMT';
-import { GalvoScanHead } from './components/GalvoScanHead';
-import { DualGalvoScanHead } from './components/DualGalvoScanHead';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
+import { SphericalLens } from '../parts/SphericalLens';
+import { AchromaticDoublet } from '../parts/AchromaticDoublet';
+import { CurvedMirror } from '../parts/CurvedMirror';
+import { Mirror } from '../parts/Mirror';
+import { Blocker } from '../parts/Blocker';
+import { BeamSplitter } from '../parts/BeamSplitter';
+import { DichroicMirror } from '../parts/DichroicMirror';
+import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { Filter } from '../parts/Filter';
+import { Camera } from '../parts/Camera';
+import { Sample } from '../parts/Sample';
+import { Objective } from '../parts/Objective';
+import { PrismLens } from '../parts/PrismLens';
+import { Waveplate } from '../parts/Waveplate';
+import { Aperture } from '../parts/Aperture';
+import { CylindricalLens } from '../parts/CylindricalLens';
+import { IdealLens } from '../parts/IdealLens';
+import { Card } from '../parts/Card';
+import { SlitAperture } from '../parts/SlitAperture';
+import { PolygonScanner } from '../parts/PolygonScanner';
+import { PMT } from '../parts/PMT';
+import { GalvoScanHead } from '../parts/GalvoScanHead';
+import { DualGalvoScanHead } from '../parts/DualGalvoScanHead';
+import { AsphericLens } from '../parts/AsphericLens';
 
 /** Registry entry for a component type. */
 export interface ComponentEntry {
@@ -51,12 +53,13 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['Laser',           { ctor: Laser }],
     ['Lamp',            { ctor: Lamp }],
     ['SphericalLens',   { ctor: SphericalLens }],
+    ['AchromaticDoublet', { ctor: AchromaticDoublet }],
     ['CurvedMirror',    { ctor: CurvedMirror }],
     ['Mirror',          { ctor: Mirror }],
     ['Blocker',         { ctor: Blocker }],
     ['BeamSplitter',    { ctor: BeamSplitter }],
     ['DichroicMirror',  { ctor: DichroicMirror }],
-    ['SampleChamber',   { ctor: SampleChamber }],
+    ['LXSampleHolder',   { ctor: LXSampleHolder }],
     ['Filter',          { ctor: Filter }],
     ['Camera',          { ctor: Camera }],
     ['Sample',          { ctor: Sample }],
@@ -72,6 +75,7 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['PMT',             { ctor: PMT }],
     ['GalvoScanHead',  { ctor: GalvoScanHead }],
     ['DualGalvoScanHead', { ctor: DualGalvoScanHead }],
+    ['AsphericLens',    { ctor: AsphericLens }],
 ];
 
 /** Map from type name → entry. */

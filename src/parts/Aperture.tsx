@@ -1,0 +1,104 @@
+import { Vector3, Vector2 } from 'three';
+import { useMemo } from 'react';
+import { OpticalComponent } from '../physics/Component';
+import { Ray, HitRecord, InteractionResult } from '../physics/types';
+
+/**
+ * Aperture / Iris — an adjustable circular stop.
+ *
+ * Geometry: flat annular ring at x = 0.
+ * Rays hitting the ring body are absorbed. Rays passing through
+ * the central opening miss entirely and propagate unimpeded.
+ *
+ * For Solver2, the aperture radius is used for beam clipping checks.
+ */
+export class Aperture extends OpticalComponent {
+    openingDiameter: number;  // mm — inner opening diameter (adjustable)
+    housingDiameter: number;  // mm — outer housing diameter (fixed)
+
+    constructor(
+        openingDiameter: number = 10,
+        housingDiameter: number = 25,
+        name: string = "Aperture"
+    ) {
+        super(name);
+        this.openingDiameter = openingDiameter;
+        this.housingDiameter = housingDiameter;
+    }
+
+    intersect(rayLocal: Ray): HitRecord | null {
+
+        const dw = rayLocal.direction.x;
+        if (Math.abs(dw) < 1e-6) return null;
+
+        const t = -rayLocal.origin.x / dw;
+        if (t < 0.001) return null;
+
+        const hitPoint = rayLocal.origin.clone().add(
+            rayLocal.direction.clone().multiplyScalar(t)
+        );
+
+        // Annular ring check in uv transverse plane
+        const hu = hitPoint.y;
+        const hv = hitPoint.z;
+        const rSq = hu * hu + hv * hv;
+        const innerR = this.openingDiameter / 2;
+        const outerR = this.housingDiameter / 2;
+
+        // Only intersect if hit is on the annular ring (outside opening, inside housing)
+        if (rSq < innerR * innerR || rSq > outerR * outerR) {
+            return null;  // Passes through the opening or misses entirely
+        }
+
+        const normal = new Vector3(dw < 0 ? 1 : -1, 0, 0);  // ±w normal
+        return {
+            t,
+            point: hitPoint,
+            normal,
+            localPoint: hitPoint.clone()
+        };
+    }
+
+    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
+        // Absorb: ray hit the ring body
+        return { rays: [] };
+    }
+
+    // ABCD matrix — identity (aperture is just a stop, no optical power).
+    getABCD(): [number, number, number, number] {
+        return [1, 0, 0, 1];
+    }
+
+    // Aperture radius for Solver2 beam clipping.
+    getApertureRadius(): number {
+        return this.openingDiameter / 2;
+    }
+}
+
+// ─── Visualizer ────────────────────────────────────────────
+
+export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
+    const outerR = component.housingDiameter / 2;
+    const innerR = component.openingDiameter / 2;
+    const halfT = 0.5;
+
+    const points = useMemo(() => [
+        new Vector2(innerR, -halfT),
+        new Vector2(outerR, -halfT),
+        new Vector2(outerR,  halfT),
+        new Vector2(innerR,  halfT),
+    ], [innerR, outerR, halfT]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+                <latheGeometry args={[points, 48]} />
+                <meshStandardMaterial color="#333" roughness={0.6} metalness={0.4} />
+            </mesh>
+        </group>
+    );
+};

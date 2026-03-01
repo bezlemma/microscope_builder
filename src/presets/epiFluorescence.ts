@@ -1,12 +1,12 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../physics/components/Laser';
-import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { Objective } from '../physics/components/Objective';
-import { Sample } from '../physics/components/Sample';
-import { Camera } from '../physics/components/Camera';
+import { Laser } from '../parts/Laser';
+import { DichroicMirror } from '../parts/DichroicMirror';
+import { Objective } from '../parts/Objective';
+import { Sample } from '../parts/Sample';
+import { Camera } from '../parts/Camera';
 import { SpectralProfile } from '../physics/SpectralProfile';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Filter } from '../physics/components/Filter';
+import { SphericalLens } from '../parts/SphericalLens';
+import { Filter } from '../parts/Filter';
 
 /**
  * Epi-Fluorescence Microscope — widefield fluorescence via back-illumination.
@@ -78,7 +78,7 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
         name: '10×/0.30 Objective'
     });
     objective.setPosition(0, -160, 0);
-    objective.pointAlong(0, -1, 0);  // faces -Y (towards sample below)
+    objective.pointAlong(0, 1, 0);  // barrel faces +Y (toward tube lens), nosepiece faces -Y (toward sample below)
     scene.push(objective);
 
    const emissionFilter = new Filter(

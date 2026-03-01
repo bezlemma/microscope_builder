@@ -9,9 +9,9 @@
 import React from 'react';
 import { useAtom } from 'jotai';
 import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
-import { Card } from '../physics/components/Card';
-import { Camera } from '../physics/components/Camera';
-import { PMT } from '../physics/components/PMT';
+import { Card } from '../parts/Card';
+import { Camera } from '../parts/Camera';
+import { PMT } from '../parts/PMT';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { OpticalComponent } from '../physics/Component';

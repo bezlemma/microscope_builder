@@ -33,11 +33,18 @@ export abstract class OpticalComponent implements Surface {
     private _matrixVersion: number = -1;
     private static readonly UNIT_SCALE = new Vector3(1, 1, 1);
 
+    /**
+     * The local-space forward axis (optical axis / w).
+     * All component geometry is defined with +X as the optical axis.
+     * Use `getForwardDirection()` to get this in world space.
+     */
+    static readonly LOCAL_FORWARD = Object.freeze(new Vector3(1, 0, 0));
+
     constructor(name: string = "Unnamed Component") {
         this.id = uuidv4();
         this.name = name;
         this.position = new Vector3(0, 0, 0);
-        this.rotation = new Quaternion();
+        this.rotation = new Quaternion(); // Identity — geometry is X-forward by definition
         this.worldToLocal = new Matrix4();
         this.localToWorld = new Matrix4();
         this.bounds = new Box3(new Vector3(-10, -10, -10), new Vector3(10, 10, 10)); // Default bounds
@@ -49,6 +56,11 @@ export abstract class OpticalComponent implements Surface {
         this.version++;
     }
 
+    /** Returns the component's forward direction (optical axis) in world space. */
+    getForwardDirection(): Vector3 {
+        return OpticalComponent.LOCAL_FORWARD.clone().applyQuaternion(this.rotation).normalize();
+    }
+
     /**
      * Recompute the quaternion from panAngle and tiltAngle.
      * q = Ry(tilt) · Rz(pan) · Rx(π/2)
@@ -57,20 +69,20 @@ export abstract class OpticalComponent implements Surface {
      * All animation and galvo scan code sets panAngle/tiltAngle then calls this.
      */
     recomputeRotation(): void {
-        const qx = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
+        // X-forward convention: pan rotates around Z, tilt rotates around Y.
+        // Identity = optical axis along +X.
         const qz = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), this.panAngle);
         const qy = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), this.tiltAngle);
-        // q = Ry · Rz · Rx
-        this.rotation.copy(qy.multiply(qz).multiply(qx));
+        // q = Ry(tilt) · Rz(pan)
+        this.rotation.copy(qy.multiply(qz));
         this.version++;
     }
 
     setRotation(x: number, y: number, z: number) {
-        // Build quaternion from Euler (preserves exact backward compat)
+        // Build quaternion from Euler
         this.rotation.setFromEuler(new Euler(x, y, z));
-        // Extract panAngle/tiltAngle from the resulting forward direction
-        // (same logic as pointAlong — works for all orientations)
-        const forward = new Vector3(0, 0, 1).applyQuaternion(this.rotation);
+        // Extract panAngle/tiltAngle from local +X (forward axis)
+        const forward = new Vector3(1, 0, 0).applyQuaternion(this.rotation);
         this.panAngle = Math.atan2(forward.y, forward.x);
         const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
         this.tiltAngle = Math.atan2(forward.z, xyLen);
@@ -78,20 +90,21 @@ export abstract class OpticalComponent implements Surface {
     }
 
     /**
-     * Orient this component so its local +Z axis points along the given
-     * world-space direction. This is the "forward" direction for all optics:
-     *   - Lasers/Lamps emit along local +Z
-     *   - Cameras/Cards detect on local Z=0 plane, facing +Z
-     *   - Lenses/Mirrors have their optical axis along local Z
+     * Orient this component so its local +X axis points along the given
+     * world-space direction. This is the "forward" / optical axis for all optics.
      *
-     * SCENE CONVENTION: The scene is viewed top-down from +Z.
-     *   - Local Y ("up" on the component, where labels are) maps to world +Z
-     *     (toward the viewer), so labels are always readable from the default view.
-     *   - When pointing along the Z axis, local Y falls back to world +Y.
+     * GEOMETRY CONVENTION (X-forward):
+     *   - Local +X = optical axis / forward direction
+     *   - Local +Y = "right" on the table (perpendicular to beam, horizontal)
+     *   - Local +Z = "up" (toward viewer in top-down scene)
+     *
+     * With IDENTITY rotation (no pointAlong), local = world:
+     *   - Optical axis along world +X (horizontal on table)
+     *   - Component extends in YZ plane
+     *   - Correct default orientation for all components
      *
      * RULES FOR PRESET AUTHORS:
-     *   - "faces toward beam"  → pointAlong opposite to beam travel direction
-     *   - "emits along +X"     → pointAlong(1, 0, 0)
+     *   - "emits along +X"     → pointAlong(1, 0, 0) — or just use identity
      *   - "sensor faces left"  → pointAlong(-1, 0, 0)
      *   - "objective faces -Y" → pointAlong(0, -1, 0)
      */
@@ -106,8 +119,9 @@ export abstract class OpticalComponent implements Surface {
         const right = new Vector3().crossVectors(upHint, forward).normalize();
         const up = new Vector3().crossVectors(forward, right).normalize();
 
-        // Build rotation matrix: columns = [right, up, forward]
-        const m = new Matrix4().makeBasis(right, up, forward);
+        // Build rotation matrix: columns = [forward, right, up]
+        // local X → forward, local Y → right, local Z → up
+        const m = new Matrix4().makeBasis(forward, right, up);
         this.rotation.setFromRotationMatrix(m);
 
         // Extract panAngle from the forward direction projected to XY plane

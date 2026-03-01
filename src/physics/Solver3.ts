@@ -1,11 +1,11 @@
 import { Vector3 } from 'three';
 import { Ray, Coherence, childRay } from './types';
 import { OpticalComponent } from './Component';
-import { Camera } from './components/Camera';
-import { Laser } from './components/Laser';
-import { Lamp } from './components/Lamp';
-import { PMT } from './components/PMT';
-import { Sample } from './components/Sample';
+import { Camera } from '../parts/Camera';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
+import { PMT } from '../parts/PMT';
+import { Sample } from '../parts/Sample';
 import { Solver2, GaussianBeamSegment } from './Solver2';
 
 /**
@@ -70,7 +70,7 @@ export class Solver3 {
         const m = camera.localToWorld;
         const camPos = new Vector3().setFromMatrixPosition(m);
         // Forward direction (optical axis)
-        const camW = new Vector3(0, 0, 1).transformDirection(m).normalize();
+        const camW = new Vector3(1, 0, 0).transformDirection(m).normalize();
         // Transverse axes (U = right, V = up)
         // We use local basis vectors (-1, -1) to match the UI's existing display logic
         const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
@@ -231,7 +231,7 @@ export class Solver3 {
         const m = camera.localToWorld;
         const camPos = new Vector3().setFromMatrixPosition(m);
         // Forward direction (optical axis)
-        const camW = new Vector3(0, 0, 1).transformDirection(m).normalize();
+        const camW = new Vector3(1, 0, 0).transformDirection(m).normalize();
         // Transverse axes (U = right, V = up)
         // We use local basis vectors (-1, -1) to match the UI's existing display logic
         const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
@@ -343,7 +343,7 @@ export class Solver3 {
     renderPMTPixel(pmt: PMT): { radiance: number; bestPath: Ray[] | null } {
         pmt.updateMatrices();
         const pmtPos = pmt.position.clone();
-        const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
+        const pmtW = pmt.getForwardDirection();
         const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
         const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
 

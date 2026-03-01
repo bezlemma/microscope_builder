@@ -7,10 +7,10 @@
  */
 import { Vector3 } from 'three';
 import { OpticalComponent } from './Component';
-import { Laser } from './components/Laser';
-import { Lamp } from './components/Lamp';
-import { PMT } from './components/PMT';
-import { Sample } from './components/Sample';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
+import { PMT } from '../parts/PMT';
+import { Sample } from '../parts/Sample';
 import { Ray, Coherence } from './types';
 
 /**
@@ -139,7 +139,7 @@ export function createSourceRays(
     const laserComps = components.filter(c => c instanceof Laser) as Laser[];
     for (const laser of laserComps) {
         const origin = laser.position.clone();
-        const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
+        const direction = laser.getForwardDirection();
         origin.add(direction.clone().multiplyScalar(3));
 
         const wavelength = laser.wavelength * 1e-9;
@@ -172,7 +172,7 @@ export function createSourceRays(
     const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
     for (const lamp of lampComps) {
         const origin = lamp.position.clone();
-        const direction = new Vector3(0, 0, 1).applyQuaternion(lamp.rotation).normalize();
+        const direction = lamp.getForwardDirection();
         origin.add(direction.clone().multiplyScalar(3));
 
         const beamRadius = lamp.beamRadius;
@@ -216,7 +216,7 @@ export function createSourceRays(
     const pmtComps = components.filter(c => c instanceof PMT) as PMT[];
     for (const pmt of pmtComps) {
         pmt.updateMatrices();
-        const pmtDir = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
+        const pmtDir = pmt.getForwardDirection();
         const pmtOrigin = pmt.position.clone().add(pmtDir.clone().multiplyScalar(1));
         const sampleComp = components.find(c => c instanceof Sample) as Sample | undefined;
         const emWl = sampleComp ? sampleComp.getEmissionWavelength() * 1e-9 : 520e-9;

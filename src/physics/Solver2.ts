@@ -1,8 +1,8 @@
 import { Vector3 } from 'three';
 import { Ray, JonesVector, Coherence } from './types';
 import { OpticalComponent } from './Component';
-import { Laser } from './components/Laser';
-import { Lamp } from './components/Lamp';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
 import { Complex, cAdd, cMul, cDiv, cReal, cInv } from './complex';
 
 

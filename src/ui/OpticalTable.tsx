@@ -8,31 +8,33 @@ import { useFrame } from '@react-three/fiber';
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
-import { Mirror } from '../physics/components/Mirror';
-import { GalvoScanHead } from '../physics/components/GalvoScanHead';
-import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Laser } from '../physics/components/Laser';
-import { Lamp } from '../physics/components/Lamp';
-import { Blocker } from '../physics/components/Blocker';
-import { Card } from '../physics/components/Card';
-import { Sample } from '../physics/components/Sample';
-import { Objective } from '../physics/components/Objective';
-import { ObjectiveCasing } from '../physics/components/ObjectiveCasing';
-import { IdealLens } from '../physics/components/IdealLens';
-import { Camera } from '../physics/components/Camera';
-import { CylindricalLens } from '../physics/components/CylindricalLens';
-import { PrismLens } from '../physics/components/PrismLens';
-import { Waveplate } from '../physics/components/Waveplate';
-import { BeamSplitter } from '../physics/components/BeamSplitter';
-import { Aperture } from '../physics/components/Aperture';
-import { SlitAperture } from '../physics/components/SlitAperture';
-import { SampleChamber } from '../physics/components/SampleChamber';
-import { Filter } from '../physics/components/Filter';
-import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { CurvedMirror } from '../physics/components/CurvedMirror';
-import { PolygonScanner } from '../physics/components/PolygonScanner';
-import { PMT } from '../physics/components/PMT';
+import { Mirror } from '../parts/Mirror';
+import { GalvoScanHead } from '../parts/GalvoScanHead';
+import { DualGalvoScanHead } from '../parts/DualGalvoScanHead';
+import { SphericalLens } from '../parts/SphericalLens';
+import { AchromaticDoublet } from '../parts/AchromaticDoublet';
+import { AsphericLens } from '../parts/AsphericLens';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
+import { Blocker } from '../parts/Blocker';
+import { Card } from '../parts/Card';
+import { Sample } from '../parts/Sample';
+import { Objective } from '../parts/Objective';
+import { ObjectiveCasing } from '../parts/ObjectiveCasing';
+import { IdealLens } from '../parts/IdealLens';
+import { Camera } from '../parts/Camera';
+import { CylindricalLens } from '../parts/CylindricalLens';
+import { PrismLens } from '../parts/PrismLens';
+import { Waveplate } from '../parts/Waveplate';
+import { BeamSplitter } from '../parts/BeamSplitter';
+import { Aperture } from '../parts/Aperture';
+import { SlitAperture } from '../parts/SlitAperture';
+import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { Filter } from '../parts/Filter';
+import { DichroicMirror } from '../parts/DichroicMirror';
+import { CurvedMirror } from '../parts/CurvedMirror';
+import { PolygonScanner } from '../parts/PolygonScanner';
+import { PMT } from '../parts/PMT';
 
 import { RayVisualizer } from './RayVisualizer';
 
@@ -57,7 +59,7 @@ import {
     FilterVisualizer,
     DichroicVisualizer,
     BlockerVisualizer,
-    SampleChamberVisualizer,
+    LXSampleHolderVisualizer,
     WaveplateVisualizer,
     CardVisualizer,
     LensVisualizer,
@@ -68,6 +70,8 @@ import {
     PrismVisualizer,
     GalvoScanHeadVisualizer,
     DualGalvoScanHeadVisualizer,
+    AchromaticDoubletVisualizer,
+    AsphericLensVisualizer,
 } from './visualizers/ComponentVisualizers';
 
 
@@ -1137,11 +1141,13 @@ export const OpticalTable: React.FC = () => {
                     else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
                     else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
                     else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
+                    else if (c instanceof AchromaticDoublet) visual = <AchromaticDoubletVisualizer component={c} />;
+                    else if (c instanceof AsphericLens) visual = <AsphericLensVisualizer component={c} />;
                     else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
                     else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
                     else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
                     else if (c instanceof Card) visual = <CardVisualizer component={c} />;
-                    else if (c instanceof SampleChamber) visual = <SampleChamberVisualizer component={c} />;
+                    else if (c instanceof LXSampleHolder) visual = <LXSampleHolderVisualizer component={c} />;
                     else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
                     else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
                     else if (c instanceof PMT) visual = <PMTVisualizer component={c} />;

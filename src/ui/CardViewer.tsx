@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Card, BeamProfile } from '../physics/components/Card';
+import { Card, BeamProfile } from '../parts/Card';
 
 // ─── Wavelength → Color helpers ─────────────────────────────────────
 

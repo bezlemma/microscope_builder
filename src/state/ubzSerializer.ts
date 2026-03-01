@@ -10,32 +10,35 @@ import { OpticalComponent } from '../physics/Component';
 import { Euler } from 'three';
 
 // Component imports
-import { Laser } from '../physics/components/Laser';
+import { Laser } from '../parts/Laser';
 import { getComponentTypeName } from '../physics/ComponentRegistry';
-import { Lamp } from '../physics/components/Lamp';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { CurvedMirror } from '../physics/components/CurvedMirror';
-import { Mirror } from '../physics/components/Mirror';
-import { Blocker } from '../physics/components/Blocker';
-import { BeamSplitter } from '../physics/components/BeamSplitter';
-import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { Filter } from '../physics/components/Filter';
-import { Camera } from '../physics/components/Camera';
-import { Sample } from '../physics/components/Sample';
-import { Objective } from '../physics/components/Objective';
-import { PrismLens } from '../physics/components/PrismLens';
-import { Waveplate } from '../physics/components/Waveplate';
-import { Aperture } from '../physics/components/Aperture';
-import { CylindricalLens } from '../physics/components/CylindricalLens';
-import { IdealLens } from '../physics/components/IdealLens';
-import { Card } from '../physics/components/Card';
-import { SampleChamber } from '../physics/components/SampleChamber';
-import { SlitAperture } from '../physics/components/SlitAperture';
-import { PolygonScanner } from '../physics/components/PolygonScanner';
-import { GalvoScanHead } from '../physics/components/GalvoScanHead';
-import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
-import { PMT } from '../physics/components/PMT';
+import { Lamp } from '../parts/Lamp';
+import { SphericalLens } from '../parts/SphericalLens';
+import { CurvedMirror } from '../parts/CurvedMirror';
+import { Mirror } from '../parts/Mirror';
+import { Blocker } from '../parts/Blocker';
+import { BeamSplitter } from '../parts/BeamSplitter';
+import { DichroicMirror } from '../parts/DichroicMirror';
+import { Filter } from '../parts/Filter';
+import { Camera } from '../parts/Camera';
+import { Sample } from '../parts/Sample';
+import { Objective } from '../parts/Objective';
+import { PrismLens } from '../parts/PrismLens';
+import { Waveplate } from '../parts/Waveplate';
+import { Aperture } from '../parts/Aperture';
+import { CylindricalLens } from '../parts/CylindricalLens';
+import { IdealLens } from '../parts/IdealLens';
+import { Card } from '../parts/Card';
+import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { SlitAperture } from '../parts/SlitAperture';
+import { PolygonScanner } from '../parts/PolygonScanner';
+import { GalvoScanHead } from '../parts/GalvoScanHead';
+import { DualGalvoScanHead } from '../parts/DualGalvoScanHead';
+import { PMT } from '../parts/PMT';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
+import { AchromaticDoublet } from '../parts/AchromaticDoublet';
+import { AsphericLens } from '../parts/AsphericLens';
+import { MATERIAL_PRESETS } from '../physics/Dispersion';
 
 // ════════════════════════════════════════════════════════════
 //  SERIALIZE
@@ -124,7 +127,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`height = ${fmt(comp.height)}`);
         lines.push(`sensorNA = ${fmt(comp.sensorNA)}`);
         lines.push(`samplesPerPixel = ${fmt(comp.samplesPerPixel)}`);
-    } else if (comp instanceof SampleChamber) {
+    } else if (comp instanceof LXSampleHolder) {
         lines.push(`cubeSize = ${fmt(comp.cubeSize)}`);
         lines.push(`wallThickness = ${fmt(comp.wallThickness)}`);
         lines.push(`boreDiameter = ${fmt(comp.boreDiameter)}`);
@@ -203,6 +206,32 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`pmtSampleHz = ${fmt(comp.pmtSampleHz)}`);
         lines.push(`scanResX = ${fmt(comp.scanResX)}`);
         lines.push(`scanResY = ${fmt(comp.scanResY)}`);
+    } else if (comp instanceof AchromaticDoublet) {
+        lines.push(`r1 = ${fmt(comp.r1)}`);
+        lines.push(`r2 = ${fmt(comp.r2)}`);
+        lines.push(`r3 = ${fmt(comp.r3)}`);
+        lines.push(`thickness1 = ${fmt(comp.thickness1)}`);
+        lines.push(`thickness2 = ${fmt(comp.thickness2)}`);
+        lines.push(`apertureRadius = ${fmt(comp.apertureRadius)}`);
+        lines.push(`material1 = ${comp.material1.name}`);
+        lines.push(`material2 = ${comp.material2.name}`);
+    } else if (comp instanceof AsphericLens) {
+        lines.push(`apertureRadius = ${fmt(comp.apertureRadius)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`ior = ${fmt(comp.ior)}`);
+        lines.push(`frontR = ${fmt(comp.front.R)}`);
+        lines.push(`frontK = ${fmt(comp.front.k)}`);
+        lines.push(`frontA4 = ${fmt(comp.front.A4)}`);
+        lines.push(`frontA6 = ${fmt(comp.front.A6)}`);
+        lines.push(`frontA8 = ${fmt(comp.front.A8)}`);
+        lines.push(`frontA10 = ${fmt(comp.front.A10)}`);
+        lines.push(`backR = ${fmt(comp.back.R)}`);
+        lines.push(`backK = ${fmt(comp.back.k)}`);
+        lines.push(`backA4 = ${fmt(comp.back.A4)}`);
+        lines.push(`backA6 = ${fmt(comp.back.A6)}`);
+        lines.push(`backA8 = ${fmt(comp.back.A8)}`);
+        lines.push(`backA10 = ${fmt(comp.back.A10)}`);
+        if (comp.materialName !== 'Custom') lines.push(`materialName = ${comp.materialName}`);
     }
 }
 
@@ -541,8 +570,8 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c.scanResY = num(props, 'scanResY', 64);
             return c;
         }
-        case 'SampleChamber': {
-            const sc = new SampleChamber(
+        case 'LXSampleHolder': {
+            const sc = new LXSampleHolder(
                 num(props, 'cubeSize', 75),
                 num(props, 'wallThickness', 3),
                 num(props, 'boreDiameter', 30),
@@ -561,6 +590,49 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 sc.specimenOffset.set(ox, oy, oz);
             }
             return sc;
+        }
+        case 'AchromaticDoublet': {
+            const c = new AchromaticDoublet(
+                str(props, 'name', 'Achromatic Doublet'),
+                num(props, 'r1', 61.47),
+                num(props, 'r2', -44.64),
+                num(props, 'r3', -129.2),
+                num(props, 'thickness1', 6),
+                num(props, 'thickness2', 2.5),
+                num(props, 'apertureRadius', 12.5),
+                MATERIAL_PRESETS[str(props, 'material1', 'N-BK7')],
+                MATERIAL_PRESETS[str(props, 'material2', 'N-SF6')],
+            );
+            return c;
+        }
+        case 'AsphericLens': {
+            const c = new AsphericLens(
+                num(props, 'apertureRadius', 12.5),
+                num(props, 'thickness', 6),
+                str(props, 'name', 'Aspheric Lens'),
+                num(props, 'ior', 1.5168)
+            );
+            c.front = {
+                R: num(props, 'frontR', 50),
+                k: num(props, 'frontK', -1),
+                A4: num(props, 'frontA4', 0),
+                A6: num(props, 'frontA6', 0),
+                A8: num(props, 'frontA8', 0),
+                A10: num(props, 'frontA10', 0),
+            };
+            c.back = {
+                R: num(props, 'backR', -50),
+                k: num(props, 'backK', 0),
+                A4: num(props, 'backA4', 0),
+                A6: num(props, 'backA6', 0),
+                A8: num(props, 'backA8', 0),
+                A10: num(props, 'backA10', 0),
+            };
+            const matName = str(props, 'materialName', 'Custom');
+            if (matName !== 'Custom' && MATERIAL_PRESETS[matName]) {
+                c.setMaterial(MATERIAL_PRESETS[matName]);
+            }
+            return c;
         }
         default:
             return null;

@@ -1,11 +1,11 @@
 import { OpticalComponent } from '../physics/Component';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Aperture } from '../physics/components/Aperture';
-import { Camera } from '../physics/components/Camera';
-import { Laser } from '../physics/components/Laser';
-import { Filter } from '../physics/components/Filter';
-import { Objective } from '../physics/components/Objective';
-import { Sample } from '../physics/components/Sample';
+import { SphericalLens } from '../parts/SphericalLens';
+import { Aperture } from '../parts/Aperture';
+import { Camera } from '../parts/Camera';
+import { Laser } from '../parts/Laser';
+import { Filter } from '../parts/Filter';
+import { Objective } from '../parts/Objective';
+import { Sample } from '../parts/Sample';
 import { SpectralProfile } from '../physics/SpectralProfile';
 
 /**

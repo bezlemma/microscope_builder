@@ -1,6 +1,6 @@
 import { Ray, InteractionResult } from './types';
 import { OpticalComponent } from './Component';
-import { Laser } from './components/Laser';
+import { Laser } from '../parts/Laser';
 
 export class Solver1 {
     maxDepth: number = 20;

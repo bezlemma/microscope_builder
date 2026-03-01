@@ -2,28 +2,30 @@ import React, { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
 import { componentsAtom, pushUndoAtom } from '../state/store';
-import { SphericalLens } from '../physics/components/SphericalLens';
-import { Mirror } from '../physics/components/Mirror';
-import { Laser } from '../physics/components/Laser';
-import { Lamp } from '../physics/components/Lamp';
-import { Blocker } from '../physics/components/Blocker';
-import { Card } from '../physics/components/Card';
-import { Sample } from '../physics/components/Sample';
-import { Objective } from '../physics/components/Objective';
-import { IdealLens } from '../physics/components/IdealLens';
-import { Camera } from '../physics/components/Camera';
-import { CylindricalLens } from '../physics/components/CylindricalLens';
-import { PrismLens } from '../physics/components/PrismLens';
-import { Waveplate } from '../physics/components/Waveplate';
-import { BeamSplitter } from '../physics/components/BeamSplitter';
-import { Aperture } from '../physics/components/Aperture';
-import { SlitAperture } from '../physics/components/SlitAperture';
-import { Filter } from '../physics/components/Filter';
-import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { CurvedMirror } from '../physics/components/CurvedMirror';
-import { PolygonScanner } from '../physics/components/PolygonScanner';
-import { SampleChamber } from '../physics/components/SampleChamber';
-import { PMT } from '../physics/components/PMT';
+import { SphericalLens } from '../parts/SphericalLens';
+import { Mirror } from '../parts/Mirror';
+import { Laser } from '../parts/Laser';
+import { Lamp } from '../parts/Lamp';
+import { Blocker } from '../parts/Blocker';
+import { Card } from '../parts/Card';
+import { Sample } from '../parts/Sample';
+import { Objective } from '../parts/Objective';
+import { IdealLens } from '../parts/IdealLens';
+import { Camera } from '../parts/Camera';
+import { CylindricalLens } from '../parts/CylindricalLens';
+import { PrismLens } from '../parts/PrismLens';
+import { Waveplate } from '../parts/Waveplate';
+import { BeamSplitter } from '../parts/BeamSplitter';
+import { Aperture } from '../parts/Aperture';
+import { SlitAperture } from '../parts/SlitAperture';
+import { Filter } from '../parts/Filter';
+import { DichroicMirror } from '../parts/DichroicMirror';
+import { CurvedMirror } from '../parts/CurvedMirror';
+import { PolygonScanner } from '../parts/PolygonScanner';
+import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { PMT } from '../parts/PMT';
+import { AchromaticDoublet } from '../parts/AchromaticDoublet';
+import { AsphericLens } from '../parts/AsphericLens';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { OpticalComponent } from '../physics/Component';
@@ -52,26 +54,24 @@ function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'dichroic') return new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
     if (type === 'curvedMirror') return new CurvedMirror(25, 100, 3, 'Curved Mirror');
     if (type === 'polygonScanner') return new PolygonScanner({ numFaces: 6, inscribedRadius: 10, faceHeight: 10, name: 'Polygon Scanner' });
-    if (type === 'lChamber') return new SampleChamber(75, 3, 30, 'L/X Sample Holder');
+    if (type === 'lChamber') return new LXSampleHolder(75, 3, 30, 'L/X Sample Holder');
     if (type === 'pmt') return new PMT(10, 10, 'PMT Detector');
+    if (type === 'achromaticDoublet') return new AchromaticDoublet('Achromatic Doublet');
+    if (type === 'asphericLens') return new AsphericLens(12.5, 6, 'Aspheric Lens');
     return null;
 }
 
-/** Apply a sensible default rotation for the given component type. */
+/** Apply a sensible default rotation for the given component type.
+ * NOTE: Most components should be defined so that identity rotation (0,0,0)
+ * already looks correct on the table. Only override here for special cases
+ * like beam splitters that need a 45° tilt. */
 function applyDefaultRotation(comp: OpticalComponent, type: string): void {
-    if (type === 'mirror' || type === 'beamSplitter' || type === 'dichroic' || type === 'curvedMirror') {
-        comp.setRotation(0, 0, 3 * Math.PI / 4);
-    } else if (type === 'polygonScanner') {
-        comp.setRotation(0, 0, 0);  // spin axis along Z, no default tilt
-    } else if (['blocker', 'halfWavePlate', 'quarterWavePlate', 'polarizer', 'aperture', 'slitAperture', 'filter'].includes(type)) {
-        comp.setRotation(0, 0, 0);
-    } else if (type === 'laser' || type === 'lamp') {
-        comp.setRotation(0, 0, 0);
-    } else if (type === 'lChamber' || type === 'sample') {
-        comp.setRotation(0, 0, 0);  // geometry defined to stand upright at default
-    } else {
-        comp.setRotation(0, Math.PI / 2, 0);
+    if (type === 'beamSplitter' || type === 'dichroic') {
+        // Beam splitters face at 45° in the XY plane
+        comp.pointAlong(1, 1, 0);
     }
+    // All other components: identity rotation — geometry is defined to be
+    // upright on the table by default (optical axis along local X).
 }
 
 export const DragDropHandler: React.FC = () => {

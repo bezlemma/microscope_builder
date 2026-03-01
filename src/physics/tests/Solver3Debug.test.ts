@@ -4,14 +4,13 @@
  * produces no visible paths on fluorescence presets.
  */
 import { describe, test, expect } from "bun:test";
-import { Vector3 } from "three";
 import { Solver1 } from "../Solver1";
 import { Solver2 } from "../Solver2";
 import { Solver3 } from "../Solver3";
-import { Laser } from "../components/Laser";
-import { Lamp } from "../components/Lamp";
-import { Camera } from "../components/Camera";
-import { Sample } from "../components/Sample";
+import { Laser } from "../../parts/Laser";
+import { Lamp } from "../../parts/Lamp";
+import { Camera } from "../../parts/Camera";
+import { Sample } from "../../parts/Sample";
 import { Ray, Coherence } from "../types";
 import { createEpiFluorescenceScene } from "../../presets/epiFluorescence";
 import { createBrightfieldScene } from "../../presets/brightfield";
@@ -40,7 +39,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         const sourceRays: Ray[] = [];
 
         for (const laser of lasers) {
-            const dir = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
+            const dir = laser.getForwardDirection();
             const origin = laser.position.clone().add(dir.clone().multiplyScalar(3));
             sourceRays.push({
                 origin,
@@ -57,7 +56,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         }
 
         for (const lamp of lamps) {
-            const dir = new Vector3(0, 0, 1).applyQuaternion(lamp.rotation).normalize();
+            const dir = lamp.getForwardDirection();
             const origin = lamp.position.clone().add(dir.clone().multiplyScalar(3));
             for (const wlNm of lamp.spectralWavelengths) {
                 sourceRays.push({
@@ -93,7 +92,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         // Trace a single backward ray from the camera center pixel
         camera.updateMatrices();
         const camPos = camera.position.clone();
-        const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
+        const camW = camera.getForwardDirection();
         console.log(`  Camera forward direction (camW): (${camW.x.toFixed(3)}, ${camW.y.toFixed(3)}, ${camW.z.toFixed(3)})`);
 
         const sample = samples.length > 0 ? samples[0] : undefined;

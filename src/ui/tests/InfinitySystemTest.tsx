@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { Ray, Coherence } from '../../physics/types';
 import { Solver1 } from '../../physics/Solver1';
 import { OpticalComponent } from '../../physics/Component';
-import { SphericalLens } from '../../physics/components/SphericalLens';
+import { SphericalLens } from '../../parts/SphericalLens';
 import { RayVisualizer } from '../RayVisualizer';
 import { LensVisualizer } from '../visualizers/ComponentVisualizers';
 

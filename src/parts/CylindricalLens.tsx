@@ -1,0 +1,581 @@
+import { useMemo } from 'react';
+import { Vector3, BufferGeometry, Float32BufferAttribute, Euler } from 'three';
+import { OpticalComponent } from '../physics/Component';
+import { Ray, HitRecord, InteractionResult } from '../physics/types';
+import { OpticMesh, NormalFn } from '../physics/OpticMesh';
+import { MaterialDef, DispersionFormula, calculateRefractiveIndex } from '../physics/Dispersion';
+
+/**
+ * CylindricalLens - A lens curved in one axis (Y), flat in the other (X).
+ * 
+ * Creates a rectangular cross-section with one or two cylindrical surfaces.
+ * Uses ExtrudeGeometry-like custom BufferGeometry since the shape is NOT
+ * rotationally symmetric (LatheGeometry won't work).
+ * 
+ * Local Origin (0,0,0) is center of lens. Optical axis = +X (w).
+ * Width (X extent) = width parameter, Height (Y extent) = apertureRadius * 2.
+ * Front vertex at z = -thickness/2, back vertex at z = +thickness/2.
+ * 
+ * The cylindrical curvature is in the Y-Z plane:
+ *   Front surface: cylinder with radius R1, axis along X
+ *   Back surface:  cylinder with radius R2, axis along X
+ */
+export class CylindricalLens extends OpticalComponent {
+    public r1: number;          // Front radius of curvature (positive = center behind surface)
+    public r2: number;          // Back radius of curvature
+    public apertureRadius: number; // Half-height (Y extent / 2)
+    public width: number;       // X extent
+    public thickness: number;   // Center thickness
+    public ior: number;
+
+    // ─── Dispersion / Material ────────────────────────────────────────
+    public material: MaterialDef | null = null;
+
+    private _mesh: OpticMesh | null = null;
+
+    constructor(
+        r1: number, r2: number,
+        apertureRadius: number, width: number, thickness: number,
+        name: string = "Cylindrical Lens", ior: number = 1.5168
+    ) {
+        super(name);
+        this.r1 = r1;
+        this.r2 = r2;
+        this.apertureRadius = apertureRadius;
+        this.width = width;
+        this.thickness = thickness;
+        this.ior = ior;
+    }
+
+    /** Sag function for the front surface at height y */
+    private sagFront(y: number): number {
+        const R = this.r1;
+        const frontApex = -this.thickness / 2;
+        if (Math.abs(R) > 1e8) return frontApex;
+        const val = R * R - y * y;
+        if (val < 0) return frontApex;
+        return (frontApex + R) - (R > 0 ? 1 : -1) * Math.sqrt(val);
+    }
+
+    /** Sag function for the back surface at height y */
+    private sagBack(y: number): number {
+        const R = this.r2;
+        const backApex = this.thickness / 2;
+        if (Math.abs(R) > 1e8) return backApex;
+        const val = R * R - y * y;
+        if (val < 0) return backApex;
+        return (backApex + R) - (R > 0 ? 1 : -1) * Math.sqrt(val);
+    }
+
+    get mesh(): OpticMesh {
+        if (!this._mesh) {
+            this._mesh = new OpticMesh();
+            const geometry = this.buildGeometry();
+
+            const frontApex = -this.thickness / 2;
+            const backApex = this.thickness / 2;
+            const R1 = this.r1;
+            const R2 = this.r2;
+            const halfW = this.width / 2;
+
+            // Cylindrical surface centers (on the Z axis, axis along X)
+            const frontCenterX = frontApex + R1;
+            const backCenterX = backApex + R2;
+
+            const normalFn: NormalFn = (v: Vector3) => {
+                const y = v.y;
+                const ax = v.x; // axial coordinate
+
+                // Rim vertices: check if vertex is on the top/bottom/left/right edges
+                const isTopBottom = Math.abs(Math.abs(y) - this.apertureRadius) < 0.01;
+                const isLeftRight = Math.abs(Math.abs(v.z) - halfW) < 0.01;
+
+                if (isTopBottom) return new Vector3(0, Math.sign(y), 0);
+                if (isLeftRight) return new Vector3(0, 0, Math.sign(v.z));
+
+                // Compute sag Z values at this Y position
+                const sagFX = this.sagFront(y);
+                const sagBX = this.sagBack(y);
+
+                const distToFront = Math.abs(ax - sagFX);
+                const distToBack = Math.abs(ax - sagBX);
+
+                if (distToFront < distToBack) {
+                    // Front surface — cylinder with axis along X
+                    if (Math.abs(R1) > 1e8) return new Vector3(-1, 0, 0);
+                    // Normal in Y-Z plane: (0, y - 0, z - frontCenterX) normalized
+                    return new Vector3(ax - frontCenterX, y, 0).normalize();
+                } else {
+                    // Back surface — cylinder with axis along X
+                    if (Math.abs(R2) > 1e8) return new Vector3(1, 0, 0);
+                    return new Vector3(ax - backCenterX, y, 0).normalize();
+                }
+            };
+
+            this._mesh.build(geometry, normalFn);
+        }
+        return this._mesh;
+    }
+
+    /**
+     * Build a custom BufferGeometry for the cylindrical lens body.
+     * The cross-section in Y-Z is a lens profile, extruded along X.
+     */
+    private buildGeometry(): BufferGeometry {
+        const segsY = 32;  // Segments along the curved Y dimension
+        const segsX = 4;   // Segments along the flat X dimension (just needs a few)
+        const halfW = this.width / 2;
+
+        // Find effective max Y (where surfaces might cross)
+        let maxY = this.apertureRadius;
+        for (let i = 0; i <= segsY; i++) {
+            const y = (i / segsY) * this.apertureRadius;
+            if (this.sagBack(y) - this.sagFront(y) < 0) {
+                let lo = ((i - 1) / segsY) * this.apertureRadius;
+                let hi = y;
+                for (let j = 0; j < 20; j++) {
+                    const mid = (lo + hi) / 2;
+                    if (this.sagBack(mid) - this.sagFront(mid) > 0) lo = mid; else hi = mid;
+                }
+                maxY = lo;
+                break;
+            }
+        }
+
+        // Build 2D profile (Y, Z pairs) — front then back
+        const frontProfile: { y: number; z: number }[] = [];
+        const backProfile: { y: number; z: number }[] = [];
+        for (let i = 0; i <= segsY; i++) {
+            const y = -maxY + (2 * maxY * i) / segsY;
+            frontProfile.push({ y, z: this.sagFront(Math.abs(y)) });
+            backProfile.push({ y, z: this.sagBack(Math.abs(y)) });
+        }
+
+        // Create vertices and faces by extruding the profile along X
+        const positions: number[] = [];
+        const indices: number[] = [];
+
+        // Front face vertices (for each X slice, all Y profile points)
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (this.width * xi) / segsX;
+            for (const p of frontProfile) {
+                positions.push(p.z, p.y, x);
+            }
+        }
+
+        // Back face vertices
+        const backOffset = (segsX + 1) * (segsY + 1);
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (this.width * xi) / segsX;
+            for (const p of backProfile) {
+                positions.push(p.z, p.y, x);
+            }
+        }
+
+        const yCount = segsY + 1;
+
+        // Front face triangles
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = xi * yCount + yi;
+                const b = (xi + 1) * yCount + yi;
+                const c = (xi + 1) * yCount + (yi + 1);
+                const d = xi * yCount + (yi + 1);
+                indices.push(a, b, c);
+                indices.push(a, c, d);
+            }
+        }
+
+        // Back face triangles (reversed winding)
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = backOffset + xi * yCount + yi;
+                const b = backOffset + (xi + 1) * yCount + yi;
+                const c = backOffset + (xi + 1) * yCount + (yi + 1);
+                const d = backOffset + xi * yCount + (yi + 1);
+                indices.push(a, c, b);
+                indices.push(a, d, c);
+            }
+        }
+
+        // Side walls (top, bottom, left, right)
+        // Top wall (y = maxY): connect front and back profiles at yi=segsY
+        const topAndBottomOffset = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (this.width * xi) / segsX;
+            // Top front edge
+            positions.push(this.sagFront(maxY), maxY, x);
+            // Top back edge
+            positions.push(this.sagBack(maxY), maxY, x);
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = topAndBottomOffset + xi * 2;
+            const b = topAndBottomOffset + (xi + 1) * 2;
+            const c = topAndBottomOffset + (xi + 1) * 2 + 1;
+            const d = topAndBottomOffset + xi * 2 + 1;
+            indices.push(a, b, c);
+            indices.push(a, c, d);
+        }
+
+        // Bottom wall (y = -maxY)
+        const bottomOffset = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (this.width * xi) / segsX;
+            positions.push(this.sagFront(maxY), -maxY, x);
+            positions.push(this.sagBack(maxY), -maxY, x);
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = bottomOffset + xi * 2;
+            const b = bottomOffset + (xi + 1) * 2;
+            const c = bottomOffset + (xi + 1) * 2 + 1;
+            const d = bottomOffset + xi * 2 + 1;
+            indices.push(a, c, b);
+            indices.push(a, d, c);
+        }
+
+        // Left wall (x = -halfW): connect front[0] to back[0] for all Y
+        const leftOffset = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const fp = frontProfile[yi];
+            const bp = backProfile[yi];
+            positions.push(fp.z, fp.y, -halfW);
+            positions.push(bp.z, bp.y, -halfW);
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = leftOffset + yi * 2;
+            const b = leftOffset + (yi + 1) * 2;
+            const c = leftOffset + (yi + 1) * 2 + 1;
+            const d = leftOffset + yi * 2 + 1;
+            indices.push(a, c, b);
+            indices.push(a, d, c);
+        }
+
+        // Right wall (x = +halfW)
+        const rightOffset = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const fp = frontProfile[yi];
+            const bp = backProfile[yi];
+            positions.push(fp.z, fp.y, halfW);
+            positions.push(bp.z, bp.y, halfW);
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = rightOffset + yi * 2;
+            const b = rightOffset + (yi + 1) * 2;
+            const c = rightOffset + (yi + 1) * 2 + 1;
+            const d = rightOffset + yi * 2 + 1;
+            indices.push(a, b, c);
+            indices.push(a, c, d);
+        }
+
+        const geometry = new BufferGeometry();
+        geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+        geometry.setIndex(indices);
+        return geometry;
+    }
+
+    public invalidateMesh(): void {
+        this._mesh = null;
+        this.version++;
+    }
+
+    intersect(rayLocal: Ray): HitRecord | null {
+        const meshHit = this.mesh.intersectRay(rayLocal.origin, rayLocal.direction);
+        if (!meshHit) return null;
+        return {
+            t: meshHit.t,
+            point: meshHit.point,
+            normal: meshHit.normal,
+            localPoint: meshHit.point.clone()
+        };
+    }
+
+    interact(ray: Ray, hit: HitRecord): InteractionResult {
+    // Use raw local-space values stored during chkIntersection to avoid
+    // floating-point errors from world↔local rotation matrix round-trips.
+    const dirIn = hit.localDirection?.clone().normalize()
+        ?? ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+    const normalIn = hit.localNormal?.clone().normalize()
+        ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
+
+        const effectiveIor = this.getEffectiveIor(ray.wavelength);
+
+        return this.mesh.interact(
+            normalIn,
+            dirIn,
+            hit.localPoint!,
+            effectiveIor,
+            this.localToWorld,
+            hit.point,
+            ray
+        );
+    }
+
+    getEffectiveIor(wavelengthMeters: number): number {
+        if (this.material && this.material.formula !== DispersionFormula.NONE) {
+            return calculateRefractiveIndex(this.material, wavelengthMeters * 1e9);
+        }
+        return this.ior;
+    }
+
+    setMaterial(material: MaterialDef): void {
+        this.material = material;
+        this.ior = material.n;
+        this.invalidateMesh();
+    }
+
+    clearMaterial(): void {
+        this.material = null;
+    }
+
+    /**
+     * ABCD matrix for the tangential plane (Y-Z, where cylindrical curvature acts).
+     * Same thick-lens compound matrix as SphericalLens.
+     * Returns [A, B, C, D].
+     */
+    getABCD_tangential(): [number, number, number, number] {
+        const R1 = this.r1;
+        const R2 = this.r2;
+        const n = this.ior;
+        const t = this.thickness;
+
+        // Convention B (reduced ray): standard for Gaussian beam q-parameter ABCD.
+        const C1 = -(n - 1) / R1;
+        const C2 = (n - 1) / R2;
+        const B_prop = t / n;
+
+        // Chain: M2 × M_prop × M1
+        const a1 = 1 + B_prop * C1;
+        const b1 = B_prop;
+        const c1 = C1;
+        const d1 = 1;
+
+        const A = a1;
+        const B = b1;
+        const C = C2 * a1 + c1;
+        const D = C2 * b1 + d1;
+
+        return [A, B, C, D];
+    }
+
+    /**
+     * ABCD matrix for the sagittal plane (X-Z, no curvature — flat window).
+     * Just propagation through glass: [[1, t/n], [0, 1]]
+     * Returns [A, B, C, D].
+     */
+    getABCD_sagittal(): [number, number, number, number] {
+        return [1, this.thickness / this.ior, 0, 1];
+    }
+
+    getApertureRadius(): number {
+        return this.apertureRadius;
+    }
+
+    /** Override: cylindrical lens has different tangential/sagittal based on
+     *  which Solver2 transverse axis aligns with the lens curvature direction.
+     *
+     *  The curvature acts in the local Y direction (axis along local X).
+     *  Solver2 constructs a transverse frame {right, localUp} from the beam
+     *  direction using a cross-product convention with fallback up=(0,1,0).
+     *  We need to figure out whether Solver2's "right" or "localUp" aligns
+     *  with our curvature direction (local Y in world space) and assign
+     *  the tangential ABCD accordingly.
+     */
+    getComponentABCD(rayDirection?: Vector3): {
+        abcdX: [number, number, number, number];
+        abcdY: [number, number, number, number];
+        apertureRadius: number;
+    } {
+        // Get the lens's local Y axis in world coordinates (the curvature direction)
+        this.updateMatrices();
+        const localY = new Vector3(0, 1, 0).applyQuaternion(this.rotation).normalize();
+
+        if (rayDirection) {
+            // Reconstruct Solver2's transverse frame from the ray direction
+            // (must match Solver2.queryIntensity's logic exactly)
+            const segDir = rayDirection.clone().normalize();
+            const up = new Vector3(0, 1, 0);
+            if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
+            const right = new Vector3().crossVectors(segDir, up).normalize();
+            const localUp = new Vector3().crossVectors(right, segDir).normalize();
+
+            // Check which transverse axis has more overlap with our curvature Y
+            const rightDotY = Math.abs(right.dot(localY));
+            const upDotY = Math.abs(localUp.dot(localY));
+
+            if (rightDotY > upDotY) {
+                // Curvature aligns with Solver2's "right"  → abcdX = tangential
+                return {
+                    abcdX: this.getABCD_tangential(),
+                    abcdY: this.getABCD_sagittal(),
+                    apertureRadius: this.getApertureRadius()
+                };
+            } else {
+                // Curvature aligns with Solver2's "localUp" → abcdY = tangential
+                return {
+                    abcdX: this.getABCD_sagittal(),
+                    abcdY: this.getABCD_tangential(),
+                    apertureRadius: this.getApertureRadius()
+                };
+            }
+        }
+
+        // Fallback when no ray direction given — use old heuristic
+        const euler = new Euler().setFromQuaternion(this.rotation);
+        const isRotated90 = Math.abs(Math.cos(euler.z)) < 0.5;
+
+        if (isRotated90) {
+            return {
+                abcdX: this.getABCD_tangential(),
+                abcdY: this.getABCD_sagittal(),
+                apertureRadius: this.getApertureRadius()
+            };
+        } else {
+            return {
+                abcdX: this.getABCD_sagittal(),
+                abcdY: this.getABCD_tangential(),
+                apertureRadius: this.getApertureRadius()
+            };
+        }
+    }
+}
+
+// --- Visualizer ----------------------------------------------------
+
+export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
+    if (!component || !component.rotation || !component.position) return null;
+
+    const geometry = useMemo(() => {
+        const segsY = 24;
+        const segsX = 2;
+        const halfW = component.width / 2;
+        const R1 = component.r1;
+        const R2 = component.r2;
+        const thickness = component.thickness;
+        const maxY = component.apertureRadius;
+
+        const sagFront = (y: number) => {
+            const frontApex = -thickness / 2;
+            if (Math.abs(R1) > 1e8) return frontApex;
+            const val = R1 * R1 - y * y;
+            if (val < 0) return frontApex;
+            return (frontApex + R1) - (R1 > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+        const sagBack = (y: number) => {
+            const backApex = thickness / 2;
+            if (Math.abs(R2) > 1e8) return backApex;
+            const val = R2 * R2 - y * y;
+            if (val < 0) return backApex;
+            return (backApex + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+
+        const positions: number[] = [];
+        const indices: number[] = [];
+        const yCount = segsY + 1;
+
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            for (let yi = 0; yi <= segsY; yi++) {
+                const y = -maxY + (2 * maxY * yi) / segsY;
+                positions.push(sagFront(Math.abs(y)), y, x);
+            }
+        }
+        const backOff = (segsX + 1) * yCount;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            for (let yi = 0; yi <= segsY; yi++) {
+                const y = -maxY + (2 * maxY * yi) / segsY;
+                positions.push(sagBack(Math.abs(y)), y, x);
+            }
+        }
+
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = xi * yCount + yi;
+                const b = (xi + 1) * yCount + yi;
+                const c = (xi + 1) * yCount + (yi + 1);
+                const d = xi * yCount + (yi + 1);
+                indices.push(a, b, c, a, c, d);
+            }
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            for (let yi = 0; yi < segsY; yi++) {
+                const a = backOff + xi * yCount + yi;
+                const b = backOff + (xi + 1) * yCount + yi;
+                const c = backOff + (xi + 1) * yCount + (yi + 1);
+                const d = backOff + xi * yCount + (yi + 1);
+                indices.push(a, c, b, a, d, c);
+            }
+        }
+
+        const topOff = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            positions.push(sagFront(maxY), maxY, x);
+            positions.push(sagBack(maxY), maxY, x);
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = topOff + xi * 2, b = topOff + (xi + 1) * 2;
+            const c = topOff + (xi + 1) * 2 + 1, d = topOff + xi * 2 + 1;
+            indices.push(a, b, c, a, c, d);
+        }
+        const botOff = positions.length / 3;
+        for (let xi = 0; xi <= segsX; xi++) {
+            const x = -halfW + (component.width * xi) / segsX;
+            positions.push(sagFront(maxY), -maxY, x);
+            positions.push(sagBack(maxY), -maxY, x);
+        }
+        for (let xi = 0; xi < segsX; xi++) {
+            const a = botOff + xi * 2, b = botOff + (xi + 1) * 2;
+            const c = botOff + (xi + 1) * 2 + 1, d = botOff + xi * 2 + 1;
+            indices.push(a, c, b, a, d, c);
+        }
+        const leftOff = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const y = -maxY + (2 * maxY * yi) / segsY;
+            positions.push(sagFront(Math.abs(y)), y, -halfW);
+            positions.push(sagBack(Math.abs(y)), y, -halfW);
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = leftOff + yi * 2, b = leftOff + (yi + 1) * 2;
+            const c = leftOff + (yi + 1) * 2 + 1, d = leftOff + yi * 2 + 1;
+            indices.push(a, c, b, a, d, c);
+        }
+        const rightOff = positions.length / 3;
+        for (let yi = 0; yi <= segsY; yi++) {
+            const y = -maxY + (2 * maxY * yi) / segsY;
+            positions.push(sagFront(Math.abs(y)), y, halfW);
+            positions.push(sagBack(Math.abs(y)), y, halfW);
+        }
+        for (let yi = 0; yi < segsY; yi++) {
+            const a = rightOff + yi * 2, b = rightOff + (yi + 1) * 2;
+            const c = rightOff + (yi + 1) * 2 + 1, d = rightOff + yi * 2 + 1;
+            indices.push(a, b, c, a, c, d);
+        }
+
+        const geo = new BufferGeometry();
+        geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+    }, [component.r1, component.r2, component.apertureRadius, component.width, component.thickness]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh geometry={geometry}>
+                <meshPhysicalMaterial
+                    color="#ccffff"
+                    transmission={0.99}
+                    opacity={0.6}
+                    transparent
+                    roughness={0}
+                    side={2}
+                    depthWrite={false}
+                />
+            </mesh>
+        </group>
+    );
+};

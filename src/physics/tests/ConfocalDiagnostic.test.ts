@@ -7,9 +7,8 @@
 import { describe, test, expect } from 'bun:test';
 import { createConfocalScene } from '../../presets/confocal';
 import { Solver1 } from '../Solver1';
-import { Laser } from '../components/Laser';
+import { Laser } from '../../parts/Laser';
 import { Ray } from '../types';
-import { Vector3 } from 'three';
 
 describe('Confocal Beam Path Diagnostic', () => {
 
@@ -23,7 +22,7 @@ describe('Confocal Beam Path Diagnostic', () => {
 
         // Create central ray from laser
         const origin = laser.position.clone();
-        const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
+        const direction = laser.getForwardDirection();
         origin.add(direction.clone().multiplyScalar(3)); // advance past self
 
         const ray: Ray = {
@@ -81,7 +80,7 @@ describe('Confocal Beam Path Diagnostic', () => {
 
         console.log('\n=== COMPONENT POSITIONS ===');
         for (const c of scene) {
-            const fwd = new Vector3(0, 0, 1).applyQuaternion(c.rotation);
+            const fwd = c.getForwardDirection();
             console.log(`  ${c.name.padEnd(25)} pos=(${c.position.x.toFixed(1)}, ${c.position.y.toFixed(1)})  fwd=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
         }
 
@@ -108,7 +107,7 @@ describe('Confocal Beam Path Diagnostic', () => {
         );
 
         for (const m of mirrors) {
-            const fwd = new Vector3(0, 0, 1).applyQuaternion(m.rotation);
+            const fwd = m.getForwardDirection();
             console.log(`  ${m.name.padEnd(25)} normal=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
         }
     });

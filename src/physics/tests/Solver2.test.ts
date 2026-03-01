@@ -7,8 +7,8 @@ import {
     initialQ,
     sampleBeamProfile
 } from "../Solver2";
-import { SphericalLens } from "../components/SphericalLens";
-import { Laser } from "../components/Laser";
+import { SphericalLens } from "../../parts/SphericalLens";
+import { Laser } from "../../parts/Laser";
 import { Solver1 } from "../Solver1";
 import { Ray, Coherence } from "../types";
 
