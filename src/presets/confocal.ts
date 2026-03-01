@@ -237,6 +237,7 @@ export function createConfocalScene(): ConfocalPresetResult {
     pmt.yAxisComponentId = galvoM2.id;
     pmt.yAxisProperty = 'panAngle';
     pmt.pmtSampleHz = 2048;
+    pmt.samplesPerPixel = 4;
     pmt.scanResX = 64;
     pmt.scanResY = 64;
 

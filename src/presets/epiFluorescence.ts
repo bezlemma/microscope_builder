@@ -59,7 +59,8 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
         "Dichroic (LP 505)"
     );
     dichroic.setPosition(0, -125, 0);
-    dichroic.setRotation(Math.PI / 2, -Math.PI / 4, 0); // 45° reflector
+    // Reflect +X (laser) to -Y (sample). Normal must bisect -X and -Y.
+    dichroic.pointAlong(-1, -1, 0);
     scene.push(dichroic);
 
     const sample = new Sample("Specimen (GFP)");

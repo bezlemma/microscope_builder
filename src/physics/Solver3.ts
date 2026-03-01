@@ -1,9 +1,9 @@
 import { Vector3 } from 'three';
-import { Ray, Coherence } from './types';
+import { Ray, Coherence, childRay } from './types';
 import { OpticalComponent } from './Component';
 import { Camera } from './components/Camera';
 import { Laser } from './components/Laser';
-import { Lamp, computeAdditiveOpacity } from './components/Lamp';
+import { Lamp } from './components/Lamp';
 import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { Solver2, GaussianBeamSegment } from './Solver2';
@@ -67,10 +67,14 @@ export class Solver3 {
 
         // Camera world-space transform
         camera.updateMatrices();
-        const camPos = camera.position.clone();
-        const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
-        const camU = new Vector3(-1, 0, 0).applyQuaternion(camera.rotation).normalize();
-        const camV = new Vector3(0, -1, 0).applyQuaternion(camera.rotation).normalize();
+        const m = camera.localToWorld;
+        const camPos = new Vector3().setFromMatrixPosition(m);
+        // Forward direction (optical axis)
+        const camW = new Vector3(0, 0, 1).transformDirection(m).normalize();
+        // Transverse axes (U = right, V = up)
+        // We use local basis vectors (-1, -1) to match the UI's existing display logic
+        const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
+        const camV = new Vector3(0, -1, 0).transformDirection(m).normalize();
 
         // Find the sample in the scene (for fluorescence metadata)
         const sample = this.scene.find(c => c instanceof Sample) as Sample | undefined;
@@ -82,7 +86,12 @@ export class Solver3 {
         const activeWavelengths = new Set<number>();
 
         // Add the sample's emission wavelength for fluorescence backward tracing
-        const sampleEmissionWl = sample ? sample.getEmissionWavelength() * 1e-9 : null;
+        // Only if fluorescence is enabled — brightfield samples (efficiency=0) must NOT
+        // inject the emission wavelength, or it routes through the fluorescence path
+        // and bypasses the Mickey Mouse chord absorption geometry.
+        const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
+            ? sample.getEmissionWavelength() * 1e-9
+            : null;
         if (sampleEmissionWl) activeWavelengths.add(sampleEmissionWl);
 
         for (const branch of this.beamSegments) {
@@ -90,11 +99,7 @@ export class Solver3 {
         }
         
         const wlList = Array.from(activeWavelengths);
-        if (wlList.length === 0) wlList.push(532e-9); // Fallback
-
-        // Compute per-wavelength opacity for additive white balance.
-        // When all wavelengths overlap, AdditiveBlending produces balanced white.
-        const additiveOpacity = computeAdditiveOpacity(wlList.map(wl => wl * 1e9));
+        if (wlList.length === 0) wlList.push(532e-9);
 
         // Pixel acceptance cone: half-angle from sensor NA
         const sinThetaMax = Math.min(camera.sensorNA, 1.0);
@@ -111,11 +116,11 @@ export class Solver3 {
                     .add(camU.clone().multiplyScalar(u))
                     .add(camV.clone().multiplyScalar(v));
 
-                // Forward excitation: query Solver 2 beam field at this pixel
-                const forwardIntensity = Solver2.queryIntensityMultiBeam(
-                    sensorPoint, this.beamSegments
-                );
-                excitationImage[py * resX + px] = forwardIntensity;
+                // Note: excitationImage is NOT populated here. The backward trace
+                // already computes the complete sensor signal (illumination × sample
+                // throughput) via traceBackward(). Querying the raw beam field at the
+                // sensor would double-count the illumination when CameraViewer sums
+                // both channels.
 
                 // ── Monte Carlo backward emission: N samples per pixel ──
                 let radianceSum = 0;
@@ -144,15 +149,16 @@ export class Solver3 {
                             origin: sensorPoint,
                             direction: backwardDir,
                             wavelength: wl,
-                            intensity: additiveOpacity,
+                            intensity: 1.0, // Unit importance for throughput tracking
                             polarization,
                             opticalPathLength: 0,
                             footprintRadius: 0.1,
                             coherenceMode: Coherence.Incoherent,
+                            isBackward: true,
                             sourceId: `solver3_px${px}_py${py}_s${s}_wl${Math.round(wl*1e9)}`,
                         };
 
-                        const result = this.traceBackward(backwardRay, sample);
+                        const result = this.traceBackward(backwardRay, sample, camera);
                         radianceSum += result.radiance;
 
                         if (result.radiance > 0 && result.path.length > 1) {
@@ -222,24 +228,30 @@ export class Solver3 {
 
         // Camera world-space transform
         camera.updateMatrices();
-        const camPos = camera.position.clone();
-        const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
-        const camU = new Vector3(-1, 0, 0).applyQuaternion(camera.rotation).normalize();
-        const camV = new Vector3(0, -1, 0).applyQuaternion(camera.rotation).normalize();
+        const m = camera.localToWorld;
+        const camPos = new Vector3().setFromMatrixPosition(m);
+        // Forward direction (optical axis)
+        const camW = new Vector3(0, 0, 1).transformDirection(m).normalize();
+        // Transverse axes (U = right, V = up)
+        // We use local basis vectors (-1, -1) to match the UI's existing display logic
+        const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
+        const camV = new Vector3(0, -1, 0).transformDirection(m).normalize();
 
         const sample = this.scene.find(c => c instanceof Sample) as Sample | undefined;
 
         const activeWavelengths = new Set<number>();
-        const sampleEmissionWl = sample ? sample.getEmissionWavelength() * 1e-9 : null;
+        const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
+            ? sample.getEmissionWavelength() * 1e-9
+            : null;
         if (sampleEmissionWl) activeWavelengths.add(sampleEmissionWl);
         for (const branch of this.beamSegments) {
             if (branch.length > 0) activeWavelengths.add(branch[0].wavelength);
         }
-        const wlList = Array.from(activeWavelengths);
-        if (wlList.length === 0) wlList.push(532e-9);
-
-        const additiveOpacity = computeAdditiveOpacity(wlList.map(wl => wl * 1e9));
-        const sinThetaMax = Math.min(camera.sensorNA, 1.0);
+                const wlList = Array.from(activeWavelengths);
+                if (wlList.length === 0) wlList.push(532e-9);
+        
+                const sinThetaMax = Math.min(camera.sensorNA, 1.0);
+        
         const N = camera.samplesPerPixel;
 
         for (let py = 0; py < resY; py++) {
@@ -251,10 +263,8 @@ export class Solver3 {
                     .add(camU.clone().multiplyScalar(u))
                     .add(camV.clone().multiplyScalar(v));
 
-                const forwardIntensity = Solver2.queryIntensityMultiBeam(
-                    sensorPoint, this.beamSegments
-                );
-                excitationImage[py * resX + px] = forwardIntensity;
+                // excitationImage not populated — backward trace already computes
+                // the complete sensor signal (see render() comment).
 
                 let radianceSum = 0;
                 for (let s = 0; s < N; s++) {
@@ -276,15 +286,16 @@ export class Solver3 {
                             origin: sensorPoint,
                             direction: backwardDir,
                             wavelength: wl,
-                            intensity: additiveOpacity,
+                            intensity: 1.0, // Unit importance for throughput tracking
                             polarization,
                             opticalPathLength: 0,
                             footprintRadius: 0.1,
                             coherenceMode: Coherence.Incoherent,
+                            isBackward: true,
                             sourceId: `solver3_px${px}_py${py}_s${s}_wl${Math.round(wl*1e9)}`,
                         };
 
-                        const result = this.traceBackward(backwardRay, sample);
+                        const result = this.traceBackward(backwardRay, sample, camera);
                         radianceSum += result.radiance;
                         if (result.radiance > 0 && result.path.length > 1) {
                             bundle.push(result.path);
@@ -360,20 +371,54 @@ export class Solver3 {
         const sinThetaMax = Math.min(pmt.sensorNA, 1.0);
         const N = pmt.samplesPerPixel;
 
+        // Pinhole-aware sampling: if there's an aperture very close in front of the PMT,
+        // we should fire rays TOWARDS the aperture opening instead of random cone sampling.
+        // This dramatically improves confocal scan efficiency.
+        let targetApertureCenter: Vector3 | null = null;
+        let targetApertureRadius = 0;
+        
+        const searchRay = { origin: pmtPos, direction: pmtW };
+        for (const comp of this.scene) {
+            if (comp === pmt) continue;
+            const hit = comp.chkIntersection(searchRay as any);
+            if (hit && hit.t < 100) { // Within 100mm
+                if (comp.constructor.name === 'Aperture' || comp.constructor.name === 'SlitAperture') {
+                    targetApertureCenter = hit.point;
+                    targetApertureRadius = (comp as any).openingDiameter / 2 || (comp as any).slitWidth / 2 || 1.0;
+                    break;
+                }
+            }
+        }
+
         let radianceSum = 0;
         let bestPath: Ray[] | null = null;
         let bestRadiance = 0;
 
         for (let s = 0; s < N; s++) {
-            // Sample a random direction within the PMT's acceptance cone
-            const phi = Math.random() * 2 * Math.PI;
-            const sinTheta = sinThetaMax * Math.sqrt(Math.random());
-            const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+            let backwardDir: Vector3;
 
-            const backwardDir = pmtW.clone().multiplyScalar(cosTheta)
-                .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
-                .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
-                .normalize();
+            if (targetApertureCenter && Math.random() < 0.9) {
+                // Importance sample the aperture: pick a random point in the hole
+                const phi = Math.random() * 2 * Math.PI;
+                const r = targetApertureRadius * Math.sqrt(Math.random());
+                // Aperture is in the UV plane of the component. 
+                // Since we hit it with a ray along pmtW, we can use pmtU/pmtV as a proxy if they are aligned.
+                // Better: just use a small perturbation around the vector to the center.
+                const pointInHole = targetApertureCenter.clone()
+                    .add(pmtU.clone().multiplyScalar(r * Math.cos(phi)))
+                    .add(pmtV.clone().multiplyScalar(r * Math.sin(phi)));
+                backwardDir = pointInHole.clone().sub(pmtPos).normalize();
+            } else {
+                // Standard cone sampling
+                const phi = Math.random() * 2 * Math.PI;
+                const sinTheta = sinThetaMax * Math.sqrt(Math.random());
+                const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+
+                backwardDir = pmtW.clone().multiplyScalar(cosTheta)
+                    .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
+                    .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
+                    .normalize();
+            }
 
             for (const wl of wlList) {
                 const polAngle = Math.random() * Math.PI;
@@ -386,10 +431,11 @@ export class Solver3 {
                     opticalPathLength: 0,
                     footprintRadius: 0.1,
                     coherenceMode: Coherence.Coherent,
+                    isBackward: true,
                     sourceId: `pmt_bw_s${s}_wl${Math.round(wl*1e9)}`,
                 };
 
-                const result = this.traceBackward(backwardRay, sample);
+                const result = this.traceBackward(backwardRay, sample, pmt);
                 radianceSum += result.radiance;
 
                 if (result.radiance > bestRadiance && result.path.length > 1) {
@@ -416,7 +462,8 @@ export class Solver3 {
      */
     traceBackward(
         startRay: Ray,
-        sample: Sample | undefined
+        sample: Sample | undefined,
+        originator?: OpticalComponent
     ): { radiance: number; path: Ray[]; absorbed: boolean } {
         const path: Ray[] = [startRay];
         let currentRay = startRay;
@@ -430,7 +477,8 @@ export class Solver3 {
             let nearestComponent: OpticalComponent | null = null;
 
             for (const component of this.scene) {
-                if (depth === 0 && (component instanceof Camera || component instanceof PMT)) continue;
+                // Self-intersection guard
+                if (depth === 0 && component === originator) continue;
 
                 const hit = component.chkIntersection(currentRay);
                 if (hit && hit.t < nearestT && hit.t > 0.001) {
@@ -448,31 +496,19 @@ export class Solver3 {
 
             currentRay.interactionDistance = nearestT;
 
-            // ── Light source reached: brightfield transmission ──
+            // ── Light source reached: terminate trace ──
             if (nearestComponent instanceof Laser || nearestComponent instanceof Lamp) {
-                const sourcePower = (nearestComponent as any).power ?? 1.0;
-
-                // Wavelength check: a Laser only contributes if it emits at
-                // the backward ray's wavelength. This prevents the backward ray
-                // (at emission λ) from picking up excitation sources that would
-                // be blocked by filters in the real forward direction.
-                // Lamps (broadband) always contribute.
-                if (nearestComponent instanceof Laser) {
-                    const laserWlM = (nearestComponent as Laser).wavelength * 1e-9; // nm → m
-                    const rayWl = currentRay.wavelength; // already in meters
-                    const tolerance = 15e-9; // ±15 nm acceptance window
-                    if (Math.abs(laserWlM - rayWl) > tolerance) {
-                        // Laser doesn't emit at backward ray's wavelength — no contribution
-                        break;
-                    }
-                }
+                // Query the background field at the hit point
+                const backgroundIntensity = Solver2.queryIntensityMultiBeam(
+                    nearestHit.point, this.beamSegments, currentRay.wavelength
+                );
 
                 // Terminal ray at light source for visualization
                 const terminalRay: Ray = {
                     origin: nearestHit.point,
                     direction: currentRay.direction.clone(),
                     wavelength: currentRay.wavelength,
-                    intensity: throughput * sourcePower,
+                    intensity: Math.max(0.1, backgroundIntensity),
                     polarization: currentRay.polarization,
                     opticalPathLength: currentRay.opticalPathLength + nearestT,
                     footprintRadius: currentRay.footprintRadius,
@@ -482,71 +518,60 @@ export class Solver3 {
                 };
                 path.push(terminalRay);
 
-                // Total: transmitted illumination + any fluorescence from sample
-                const transmitted = throughput * sourcePower;
-                return { radiance: fluorescenceRadiance + transmitted, path, absorbed: false };
+                // Total: transmitted illumination + any fluorescence accumulated at sample
+                const transmitted = backgroundIntensity * throughput;
+                return { radiance: transmitted + fluorescenceRadiance, path, absorbed: false };
             }
 
-            // ── Sample hit: Volumetric E&M Integration ──
+            // ── Sample hit: Unified Volumetric Integration ──
+            // Every ray experiences the same physics: Beer-Lambert absorption
+            // through the specimen geometry AND fluorescence emission from
+            // excitation field. No mode-dependent branching.
             if (nearestComponent instanceof Sample && sample) {
-                const bounds = sample.getVolumeIntersection(currentRay);
-                if (!bounds) break; // Safety fallback
-                
-                // Camera ray mathematically and visually terminates at the near-plane
-                const nearPoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(bounds.tNear));
-                const farPoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(bounds.tFar));
-                
-                // 1. Query Background Illumination at the FAR plane (Light entering the sample block)
-                // We ask for exactly our reverse ray's wavelength (e.g. 600nm red photon from Lamp).
-                let backgroundIntensity = Solver2.queryIntensityMultiBeam(farPoint, this.beamSegments, currentRay.wavelength);
-                
-                // 2. Compute absorption through the entire sample slab
-                // Beer-Lambert absorption: T = exp(-α·d) where d is chord length through Mickey Mouse
+                // 1. Beer-Lambert absorption through specimen geometry (Mickey spheres)
                 const { chordLength, midT } = sample.computeChordLength(currentRay);
-                const transmission = Math.exp(-(sample.absorption ?? 3.0) * chordLength);
-                
-                // 3. Query Fluorescence (Emission from the internal E&M field)
-                // We estimate the internal field by querying the exact physical center of mass of the hit spheres
-                const midPoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(midT));
-                
-                const isFluorescent = (sample.fluorescenceEfficiency ?? 1e-4) > 0;
-                let integratedFluorescence = 0;
-                
-                // Only consider fluorescence if the reverse ray wavelength lies within the fluorophore's emission spectrum!
-                const emitsAtThisWl = sample.emissionSpectrum.getTransmission(currentRay.wavelength * 1e9);
-                
-                if (isFluorescent && emitsAtThisWl > 0.05 && chordLength > 0) {
-                    // Query excitation field, strictly passing target excitation peak
-                    let excitationIntensity = Solver2.queryIntensityMultiBeam(midPoint, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
-                    integratedFluorescence = excitationIntensity * (sample.fluorescenceEfficiency ?? 1e-4) * emitsAtThisWl * chordLength;
-                }
-                
-                // Final radiance exiting the near-plane toward the camera
-                const exitingRadiance = (backgroundIntensity * transmission) + integratedFluorescence;
-                
-                // Apply the throughput gathered from the camera down to the sample
-                const finalRadiance = exitingRadiance * throughput;
-                
-                // Visually terminate the camera ray at the specimen geometry center,
-                // not the outer AABB boundary (which is ~15mm away from the 1mm Mickey).
-                const sampleTermPoint = chordLength > 0
-                    ? currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(midT))
-                    : nearPoint;  // fallback to AABB entry if ray misses all spheres
-                const terminalRay: Ray = {
-                    origin: nearestHit.point, // entry point from intersect()
-                    direction: currentRay.direction.clone(),
-                    wavelength: currentRay.wavelength,
-                    intensity: Math.max(0.1, exitingRadiance), // Keep path somewhat visible
-                    polarization: currentRay.polarization,
-                    opticalPathLength: currentRay.opticalPathLength + bounds.tNear,
-                    footprintRadius: currentRay.footprintRadius,
-                    coherenceMode: Coherence.Incoherent,
-                    sourceId: currentRay.sourceId,
-                    terminationPoint: sampleTermPoint, 
-                };
-                path.push(terminalRay);
+                throughput *= Math.exp(-sample.absorption * chordLength);
 
-                return { radiance: fluorescenceRadiance + finalRadiance, path, absorbed: false };
+                // 2. Fluorescence: accumulate emission from excitation field along chord
+                if (sample.fluorescenceEfficiency > 0) {
+                    const emitsAtThisWl = sample.emissionSpectrum.getTransmission(currentRay.wavelength * 1e9);
+                    if (emitsAtThisWl > 0.5) {
+                        const chordSegments = sample.computeChordSegments(currentRay);
+                        let fluorescenceSum = 0;
+                        for (const seg of chordSegments) {
+                            const segLen = seg.tEnd - seg.tStart;
+                            if (segLen <= 0) continue;
+                            const numSamples = Math.max(4, Math.ceil(segLen * 10));
+                            let segRadianceSum = 0;
+                            for (let i = 0; i < numSamples; i++) {
+                                const fraction = (i + Math.random()) / numSamples;
+                                const t = seg.tStart + fraction * segLen;
+                                const samplePoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
+                                segRadianceSum += Solver2.queryIntensityMultiBeam(samplePoint, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                            }
+                            fluorescenceSum += (segRadianceSum / numSamples) * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
+                        }
+                        fluorescenceRadiance += fluorescenceSum * throughput;
+                    }
+                }
+
+                // 3. Continue tracing past the sample volume.
+                // getVolumeIntersection can return null when the ray hits exactly on a
+                // triangle edge of the BoxGeometry mesh (degenerate hit). Fall back to
+                // the chord midpoint + generous offset to jump past the bounding box.
+                const bounds = sample.getVolumeIntersection(currentRay);
+                const jumpT = bounds
+                    ? bounds.tFar + 0.01
+                    : (midT > 0 ? midT + 20 : nearestT + 30);
+                const nextRay = childRay(currentRay, {
+                    origin: currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(jumpT)),
+                    direction: currentRay.direction.clone(),
+                    intensity: currentRay.intensity,
+                    opticalPathLength: currentRay.opticalPathLength + jumpT
+                });
+                currentRay = nextRay;
+                path.push(nextRay);
+                continue;
             }
 
             // ── Normal optical element: refraction/reflection ──

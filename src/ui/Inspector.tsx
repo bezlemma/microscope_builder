@@ -26,6 +26,7 @@ import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Sample } from '../physics/components/Sample';
+import { SampleChamber } from '../physics/components/SampleChamber';
 import { PMT } from '../physics/components/PMT';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
@@ -90,6 +91,9 @@ const SolverPanel: React.FC<{
     const [components] = useAtom(componentsAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
+
+    // Scan accumulation UI state
+    const [localScanSteps, setLocalScanSteps] = React.useState<string>('16');
 
     return (
         <>
@@ -276,34 +280,59 @@ const SolverPanel: React.FC<{
                                 backgroundColor: isRendering ? '#fa4' : '#555',
                                 transition: 'background-color 0.2s'
                             }}></div>
-                            <button
-                                onClick={() => {
-                                    if (hasChannels) {
-                                        // Animation channels present — auto scan accumulation
-                                        setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
-                                    } else {
-                                        // No animation — single Solver 3 render
-                                        setSolver3Trigger((prev: number) => prev + 1);
-                                    }
-                                }}
-                                disabled={isRendering || !rayConfig.solver2Enabled}
-                                title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
-                                style={{
-                                    padding: '3px 10px',
-                                    background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
-                                    border: '1px solid #444',
-                                    borderRadius: '4px',
-                                    color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
-                                    cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
-                                    fontSize: '11px',
-                                    fontFamily: 'monospace',
-                                    transition: 'background 0.2s',
-                                }}
-                            >
-                                {isRendering && scanProgress > 0 && scanProgress < 1
-                                    ? `⏳ ${Math.round(scanProgress * 100)}%`
-                                    : isRendering ? '⏳ Calculating...' : 'Calculate Emission and Image'}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                    onClick={() => {
+                                        const steps = parseInt(localScanSteps) || 16;
+                                        if (hasChannels) {
+                                            // Animation channels present — auto scan accumulation
+                                            setScanAccumConfig({ steps, trigger: scanAccumConfig.trigger + 1 });
+                                        } else {
+                                            // No animation — single Solver 3 render
+                                            setSolver3Trigger((prev: number) => prev + 1);
+                                        }
+                                    }}
+                                    disabled={isRendering || !rayConfig.solver2Enabled}
+                                    title={!rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
+                                    style={{
+                                        padding: '3px 10px',
+                                        background: isRendering || !rayConfig.solver2Enabled ? '#333' : '#1a5a2a',
+                                        border: '1px solid #444',
+                                        borderRadius: '4px',
+                                        color: isRendering || !rayConfig.solver2Enabled ? '#666' : '#8f8',
+                                        cursor: isRendering || !rayConfig.solver2Enabled ? 'not-allowed' : 'pointer',
+                                        fontSize: '11px',
+                                        fontFamily: 'monospace',
+                                        transition: 'background 0.2s',
+                                    }}
+                                >
+                                    {isRendering && scanProgress > 0 && scanProgress < 1
+                                        ? `⏳ ${Math.round(scanProgress * 100)}%`
+                                        : isRendering ? '⏳ Calculating...' : 'Calculate Emission and Image'}
+                                </button>
+                                {hasChannels && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
+                                        <span style={{ fontSize: '10px', color: '#888' }}>Steps</span>
+                                        <input
+                                            type="number"
+                                            value={localScanSteps}
+                                            min={1}
+                                            max={256}
+                                            onChange={(e) => setLocalScanSteps(e.target.value)}
+                                            style={{
+                                                width: '36px',
+                                                background: '#222',
+                                                color: '#ccc',
+                                                border: '1px solid #444',
+                                                borderRadius: '3px',
+                                                fontSize: '10px',
+                                                padding: '1px 3px',
+                                                textAlign: 'center'
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         {isRendering && scanProgress > 0 && scanProgress < 1 && (
                             <div style={{
@@ -355,6 +384,7 @@ export const Inspector: React.FC = () => {
 
     const [localX, setLocalX] = useState<string>('0');
     const [localY, setLocalY] = useState<string>('0');
+    const [localZ, setLocalZ] = useState<string>('0');
     const [localRot, setLocalRot] = useState<string>('0');
 
 
@@ -446,12 +476,17 @@ export const Inspector: React.FC = () => {
     const [localSpecOffY, setLocalSpecOffY] = useState<string>('0');
     const [localSpecOffZ, setLocalSpecOffZ] = useState<string>('0');
 
+    // Piezo scan UI state
+    const [localPiezoHalfMm, setLocalPiezoHalfMm] = useState<string>('1');
+    const [localPiezoHz, setLocalPiezoHz] = useState<string>('0.5');
+
 
     useEffect(() => {
         if (selectedComponent) {
             try {
                 setLocalX(String(Math.round(selectedComponent.position.x * 100) / 100));
                 setLocalY(String(Math.round(selectedComponent.position.y * 100) / 100));
+                setLocalZ(String(Math.round(selectedComponent.position.z * 100) / 100));
 
                 // Rotation around Z (World Up) - extract via ZYX Euler decomposition
                 // The Z component in ZYX order IS the world-Z rotation, regardless of
@@ -582,19 +617,26 @@ export const Inspector: React.FC = () => {
                     }
                     setLocalBands(sp.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                 }
-                if (selectedComponent instanceof Sample) {
-                    setLocalExBands(selectedComponent.excitationSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
-                    setLocalEmBands(selectedComponent.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
-                    setLocalFluorEff(selectedComponent.fluorescenceEfficiency.toPrecision(3));
-                    setLocalAbsorption(String(selectedComponent.absorption));
+                if (selectedComponent instanceof Sample || selectedComponent instanceof SampleChamber) {
+                    const comp = selectedComponent as (Sample | SampleChamber);
+                    setLocalExBands(comp.excitationSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
+                    setLocalEmBands(comp.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
+                    setLocalFluorEff(comp.fluorescenceEfficiency.toPrecision(3));
+                    setLocalAbsorption(String(comp.absorption));
                     // Specimen rotation (radians → degrees)
-                    setLocalSpecRotX(String(Math.round(selectedComponent.specimenRotation.x * 180 / Math.PI * 100) / 100));
-                    setLocalSpecRotY(String(Math.round(selectedComponent.specimenRotation.y * 180 / Math.PI * 100) / 100));
-                    setLocalSpecRotZ(String(Math.round(selectedComponent.specimenRotation.z * 180 / Math.PI * 100) / 100));
+                    setLocalSpecRotX(String(Math.round(comp.specimenRotation.x * 180 / Math.PI * 100) / 100));
+                    setLocalSpecRotY(String(Math.round(comp.specimenRotation.y * 180 / Math.PI * 100) / 100));
+                    setLocalSpecRotZ(String(Math.round(comp.specimenRotation.z * 180 / Math.PI * 100) / 100));
                     // Specimen offset (mm)
-                    setLocalSpecOffX(String(Math.round(selectedComponent.specimenOffset.x * 1000) / 1000));
-                    setLocalSpecOffY(String(Math.round(selectedComponent.specimenOffset.y * 1000) / 1000));
-                    setLocalSpecOffZ(String(Math.round(selectedComponent.specimenOffset.z * 1000) / 1000));
+                    setLocalSpecOffX(String(Math.round(comp.specimenOffset.x * 1000) / 1000));
+                    setLocalSpecOffY(String(Math.round(comp.specimenOffset.y * 1000) / 1000));
+                    setLocalSpecOffZ(String(Math.round(comp.specimenOffset.z * 1000) / 1000));
+
+                    const savedPiezo = piezoSettings.get(comp.id);
+                    if (savedPiezo) {
+                        setLocalPiezoHalfMm(String(savedPiezo.halfMm));
+                        setLocalPiezoHz(String(Math.round(1000 / savedPiezo.periodMs * 10) / 10));
+                    }
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -603,7 +645,7 @@ export const Inspector: React.FC = () => {
     }, [selectedComponent, selection, components]);
 
 
-    const commitPosition = (axis: 'x' | 'y' | 'z', valueStr: string) => { /* ... same ... */
+    const commitPosition = (axis: 'x' | 'y' | 'z', valueStr: string) => {
         if (!selectedComponent) return;
         const val = parseFloat(valueStr);
         if (isNaN(val)) return;
@@ -742,9 +784,9 @@ export const Inspector: React.FC = () => {
     const isCurvedMirror = selectedComponent instanceof CurvedMirror;
     const isFlatMirror = selectedComponent instanceof Mirror && !(selectedComponent instanceof CurvedMirror) && !(selectedComponent instanceof DichroicMirror) && !(selectedComponent instanceof PolygonScanner);
     const isPolygonScanner = selectedComponent instanceof PolygonScanner;
-    const isSample = selectedComponent instanceof Sample;
+    const isSample = selectedComponent instanceof Sample || selectedComponent instanceof SampleChamber;
     const isGalvoCapable = isFlatMirror || isCurvedMirror;
-    const isScanHead = selectedComponent instanceof GalvoScanHead;
+    const isScanHead = selectedComponent instanceof GalvoScanHead || (selectedComponent && selectedComponent.constructor.name === 'DualGalvoScanHead');
     const isGalvoOrScanHead = isGalvoCapable || isScanHead;
     const isPMT = selectedComponent instanceof PMT;
 
@@ -861,8 +903,8 @@ export const Inspector: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* X / Y / Rotation — compact single row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px', gap: 6 }}>
+                {/* X / Y / Z / Rotation — compact single row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 70px', gap: 6 }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>X (mm)</label>
                         <input
@@ -883,6 +925,16 @@ export const Inspector: React.FC = () => {
                             onBlur={() => commitPosition('y', localY)}
                             onKeyDown={(e) => handleKeyDown(e, () => commitPosition('y', localY))}
                             style={inputStyle}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <ScrubInput
+                            label="Z"
+                            suffix="mm"
+                            value={localZ}
+                            onChange={setLocalZ}
+                            onCommit={() => commitPosition('z', localZ)}
+                            speed={0.5}
                         />
                     </div>
                     <ScrubInput
@@ -2717,12 +2769,13 @@ export const Inspector: React.FC = () => {
                                         <span style={{ fontSize: '10px', color: '#888', marginLeft: '6px', minWidth: '18px' }}>±</span>
                                         <input
                                             type="number"
-                                            defaultValue={currentHalfMm}
+                                            value={localPiezoHalfMm}
                                             key={activeChannel?.id ?? `piezo-idle-${selectedComponent.id}`}
                                             min={0.01}
                                             max={5}
                                             step={0.1}
                                             onChange={e => {
+                                                setLocalPiezoHalfMm(e.target.value);
                                                 if (isScanning) {
                                                     const halfMm = parseFloat(e.target.value);
                                                     if (isNaN(halfMm) || halfMm <= 0) return;
@@ -2745,14 +2798,18 @@ export const Inspector: React.FC = () => {
                                                     const halfMm = Math.round((activeChannel!.to - activeChannel!.from) / 2 * 1000) / 1000;
                                                     const periodMs = activeChannel!.periodMs;
                                                     setPiezoSettings(prev => new Map(prev).set(selectedComponent.id, { halfMm, periodMs, axis: currentAxisLabel }));
+                                                    setLocalPiezoHalfMm(String(halfMm));
+                                                    setLocalPiezoHz(String(Math.round(1000 / periodMs * 10) / 10));
                                                     animator.removeChannel(activeChannel!.id, components);
                                                     if (animator.channels.length === 0) setAnimPlaying(false);
                                                     setChannelVersion(v => v + 1);
                                                 } else {
-                                                    const comp = selectedComponent as Sample;
+                                                    const comp = selectedComponent as (Sample | SampleChamber);
                                                     const axis = currentProp.split('.')[1] as 'x' | 'y' | 'z';
                                                     const center = comp.specimenOffset[axis];
-                                                    const halfMm = currentHalfMm;
+                                                    const halfMm = parseFloat(localPiezoHalfMm) || 1;
+                                                    const hz = parseFloat(localPiezoHz) || 0.5;
+                                                    const periodMs = 1000 / hz;
                                                     const ch: AnimationChannel = {
                                                         id: generateChannelId(),
                                                         targetId: selectedComponent.id,
@@ -2760,13 +2817,15 @@ export const Inspector: React.FC = () => {
                                                         from: center - halfMm,
                                                         to: center + halfMm,
                                                         easing: 'sinusoidal',
-                                                        periodMs: saved?.periodMs ?? 2000,
+                                                        periodMs: periodMs,
                                                         repeat: true,
                                                         restoreValue: center,
                                                     };
                                                     animator.addChannel(ch);
                                                     setAnimPlaying(true);
                                                     setChannelVersion(v => v + 1);
+                                                    // Sync back to saved settings so they persist if we stop
+                                                    setPiezoSettings(prev => new Map(prev).set(selectedComponent.id, { halfMm, periodMs, axis: currentAxisLabel }));
                                                 }
                                             }}
                                             style={{
@@ -2789,28 +2848,27 @@ export const Inspector: React.FC = () => {
                                         >
                                             {isScanning ? `⏹ Stop (${currentAxisLabel})` : '⏵ Scan Piezo'}
                                         </button>
-                                        {isScanning && (
-                                            <>
-                                                <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
-                                                <input
-                                                    type="number"
-                                                    defaultValue={Math.round(1000 / activeChannel!.periodMs * 10) / 10}
-                                                    key={activeChannel!.id}
-                                                    min={0.1}
-                                                    max={100}
-                                                    step={0.1}
-                                                    onChange={e => {
-                                                        const hz = parseFloat(e.target.value);
-                                                        if (isNaN(hz) || hz <= 0) return;
-                                                        activeChannel!.periodMs = 1000 / hz;
-                                                    }}
-                                                    style={{
-                                                        width: '48px', background: '#222', color: '#ccc', border: '1px solid #555',
-                                                        borderRadius: '3px', fontSize: '10px', padding: '2px 4px', textAlign: 'center',
-                                                    }}
-                                                />
-                                            </>
-                                        )}
+                                        <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
+                                        <input
+                                            type="number"
+                                            value={isScanning ? Math.round(1000 / activeChannel!.periodMs * 10) / 10 : localPiezoHz}
+                                            key={activeChannel?.id ?? `piezo-hz-idle-${selectedComponent.id}`}
+                                            min={0.1}
+                                            max={100}
+                                            step={0.1}
+                                            onChange={e => {
+                                                setLocalPiezoHz(e.target.value);
+                                                if (isScanning) {
+                                                    const hz = parseFloat(e.target.value);
+                                                    if (isNaN(hz) || hz <= 0) return;
+                                                    activeChannel!.periodMs = 1000 / hz;
+                                                }
+                                            }}
+                                            style={{
+                                                width: '48px', background: '#222', color: '#ccc', border: '1px solid #555',
+                                                borderRadius: '3px', fontSize: '10px', padding: '2px 4px', textAlign: 'center',
+                                            }}
+                                        />
                                     </div>
                                     {isScanning && (
                                         <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>

@@ -73,6 +73,9 @@ export function createBrightfieldScene(): OpticalComponent[] {
     const sample = new Sample("Specimen");
     // Disable fluorescence completely so it acts purely as an absorption shadow
     sample.fluorescenceEfficiency = 0;
+    // Strong absorption for a clearly visible silhouette:
+    // exp(-5.0 * 1.0mm) = 0.7% transmission through head center
+    sample.absorption = 5.0;
     sample.setPosition(0, 0, 0);
     sample.pointAlong(-1, 0, 0);  // faces -X (towards beam)
     scene.push(sample);
@@ -105,6 +108,8 @@ export function createBrightfieldScene(): OpticalComponent[] {
     scene.push(tubeLensFlint);
 
     // 7. Camera — at tube lens BFP  
+    // 13mm sensor with 10× objective gives 1.3mm field at sample —
+    // Mickey head (1mm) fills most of the field.
     const camera = new Camera(13, 13, "CMOS Sensor");
     // Back focal length (BFL) of this doublet is 196.4 mm from the back vertex.
     // Back vertex is at x = 223.26 + 1.25 = 224.51 mm.

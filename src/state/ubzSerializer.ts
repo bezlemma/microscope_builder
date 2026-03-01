@@ -33,6 +33,7 @@ import { SampleChamber } from '../physics/components/SampleChamber';
 import { SlitAperture } from '../physics/components/SlitAperture';
 import { PolygonScanner } from '../physics/components/PolygonScanner';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
+import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { PMT } from '../physics/components/PMT';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
 
@@ -185,6 +186,11 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof GalvoScanHead) {
         lines.push(`diameter = ${fmt(comp.diameter)}`);
         lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`scanX = ${fmt(comp.scanX)}`);
+        lines.push(`scanY = ${fmt(comp.scanY)}`);
+    } else if (comp instanceof DualGalvoScanHead) {
+        lines.push(`mirrorSpacing = ${fmt(comp.mirrorSpacing)}`);
+        lines.push(`mirrorDiameter = ${fmt(comp.mirrorDiameter)}`);
         lines.push(`scanX = ${fmt(comp.scanX)}`);
         lines.push(`scanY = ${fmt(comp.scanY)}`);
     } else if (comp instanceof PMT) {
@@ -379,6 +385,16 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 num(props, 'diameter', 15),
                 num(props, 'thickness', 2),
                 str(props, 'name', 'Galvo Scan Head')
+            );
+            c.scanX = num(props, 'scanX', 0);
+            c.scanY = num(props, 'scanY', 0);
+            return c;
+        }
+        case 'DualGalvoScanHead': {
+            const c = new DualGalvoScanHead(
+                num(props, 'mirrorSpacing', 15),
+                num(props, 'mirrorDiameter', 12),
+                str(props, 'name', 'Dual Galvo Scan Head')
             );
             c.scanX = num(props, 'scanX', 0);
             c.scanY = num(props, 'scanY', 0);

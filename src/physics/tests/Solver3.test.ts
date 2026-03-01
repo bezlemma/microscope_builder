@@ -4,6 +4,7 @@ import { Solver3 } from "../Solver3";
 import { GaussianBeamSegment, initialQ } from "../Solver2";
 import { Camera } from "../components/Camera";
 import { Sample } from "../components/Sample";
+import { Coherence } from "../types";
 
 // ─── Helper: create a GaussianBeamSegment along a direction ────────
 function makeSeg(
@@ -28,6 +29,7 @@ function makeSeg(
         polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
         opticalPathLength: 0,
         refractiveIndex: 1.0,
+        coherenceMode: Coherence.Coherent,
         ...overrides
     };
 }
@@ -39,10 +41,9 @@ function makeSeg(
 describe("Solver 3: Backward Ray Direction", () => {
 
     test("backward rays travel from camera TOWARD the sample (not away)", () => {
-        // Minimal scene: Camera at (0, 10, 0) facing -Y, Sample at (0, 0, 0)
-        // Small sensor (1mm) close to sample so center pixel hits the 0.5mm-radius spheres
+        // Minimal scene: Camera at (0, 25, 0) facing -Y, Sample at (0, 0, 0)
         const camera = new Camera(1, 1, "Test Camera");
-        camera.setPosition(0, 10, 0);
+        camera.setPosition(0, 25, 0);
         // Rotation(π/2, 0, 0) maps local +Z → world (0, -1, 0)
         camera.setRotation(Math.PI / 2, 0, 0);
         camera.sensorResX = 4;
@@ -71,8 +72,8 @@ describe("Solver 3: Backward Ray Direction", () => {
         for (const path of result.paths) {
             expect(path.length).toBeGreaterThan(0);
             const firstRay = path[0];
-            // The first ray should originate near the camera position (y ≈ 10)
-            expect(firstRay.origin.y).toBeCloseTo(10, 0);
+            // The first ray should originate near the camera position (y ≈ 25)
+            expect(firstRay.origin.y).toBeCloseTo(25, 0);
             // Direction should have a significant -Y component (toward the sample)
             expect(firstRay.direction.y).toBeLessThan(-0.5);
         }

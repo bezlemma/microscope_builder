@@ -184,6 +184,7 @@ export class SphericalLens extends OpticalComponent {
                 break;
             }
         }
+        this.invalidateMesh();
     }
 
     getLensType(): string {

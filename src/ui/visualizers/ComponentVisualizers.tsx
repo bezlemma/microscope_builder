@@ -33,6 +33,7 @@ import { CurvedMirror } from '../../physics/components/CurvedMirror';
 import { PolygonScanner } from '../../physics/components/PolygonScanner';
 import { PMT } from '../../physics/components/PMT';
 import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
+import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
@@ -363,6 +364,52 @@ export const GalvoScanHeadVisualizer = ({ component }: { component: GalvoScanHea
                 <boxGeometry args={[0.5, radius * 0.8, 0.5]} />
                 <meshStandardMaterial color="#4488ff" emissive="#112266" />
             </mesh>
+        </group>
+    );
+};
+
+export const DualGalvoScanHeadVisualizer = ({ component }: { component: DualGalvoScanHead }) => {
+    const radius = component.mirrorDiameter / 2;
+    const halfS = component.mirrorSpacing / 2;
+    const housingW = component.mirrorSpacing + component.mirrorDiameter;
+    const housingH = component.mirrorDiameter * 1.2;
+    const housingD = component.mirrorDiameter * 1.2;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {/* Shared housing */}
+            <mesh>
+                <boxGeometry args={[housingW, housingH, housingD]} />
+                <meshStandardMaterial color="#111" metalness={0.4} roughness={0.8} transparent opacity={0.6} />
+            </mesh>
+
+            {/* Mirror 1 (X) */}
+            <group position={[-halfS, 0, 0]} rotation={[0, 0, component.scanX]}>
+                <mesh rotation={[0, 0, -Math.PI/4]}>
+                    <cylinderGeometry args={[radius, radius, 1, 32]} />
+                    <meshPhysicalMaterial color="#fff" metalness={1} roughness={0.05} />
+                </mesh>
+                <mesh position={[0, radius + 2, 0]}>
+                    <boxGeometry args={[0.5, 4, 0.5]} />
+                    <meshBasicMaterial color="red" />
+                </mesh>
+            </group>
+
+            {/* Mirror 2 (Y) */}
+            <group position={[halfS, 0, 0]} rotation={[0, component.scanY, 0]}>
+                <mesh rotation={[0, 0, Math.PI/4]}>
+                    <cylinderGeometry args={[radius, radius, 1, 32]} />
+                    <meshPhysicalMaterial color="#fff" metalness={1} roughness={0.05} />
+                </mesh>
+                <mesh position={[0, radius + 2, 0]}>
+                    <boxGeometry args={[4, 0.5, 0.5]} />
+                    <meshBasicMaterial color="blue" />
+                </mesh>
+            </group>
         </group>
     );
 };

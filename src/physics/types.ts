@@ -38,6 +38,10 @@ export interface Ray {
     // Only the first child ray (index 0) from each interaction inherits this flag.
     isMainRay?: boolean;
 
+    // Solver 3: identifies rays traced from the sensor backward to the source.
+    // Used to apply specialized interaction logic (e.g. spectral leakage).
+    isBackward?: boolean;
+
     // Visualization: For thick components, the point where ray entered (front surface)
     // This allows the visualizer to draw: prev.origin → entryPoint → internalPath → origin → next
     entryPoint?: Vector3;

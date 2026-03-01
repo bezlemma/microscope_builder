@@ -1,7 +1,8 @@
 import { Vector3 } from 'three';
-import { Ray, JonesVector } from './types';
+import { Ray, JonesVector, Coherence } from './types';
 import { OpticalComponent } from './Component';
 import { Laser } from './components/Laser';
+import { Lamp } from './components/Lamp';
 import { Complex, cAdd, cMul, cDiv, cReal, cInv } from './complex';
 
 
@@ -84,6 +85,8 @@ export interface GaussianBeamSegment {
     opticalPathLength: number;
     // Refractive index of the medium (1.0 for air, >1 for glass)
     refractiveIndex: number;
+    // Coherence of the source (propagated for interference logic)
+    coherenceMode: Coherence;
 }
 
 // ─── Solver 2 ─────────────────────────────────────────────────────────
@@ -113,8 +116,11 @@ export class Solver2 {
             componentById.set(c.id, c);
         }
 
-        // 2. Find the source laser for each main path to get initial q
-        const laserComponents = components.filter(c => c instanceof Laser) as Laser[];
+        // 2. Find the source for each main path to get initial q.
+        //    Both Laser and Lamp components have beamRadius and power properties.
+        const sourceComponents = components.filter(
+            c => c instanceof Laser || c instanceof Lamp
+        ) as (Laser | Lamp)[];
 
         const allSegments: GaussianBeamSegment[][] = [];
 
@@ -124,15 +130,15 @@ export class Solver2 {
             const wavelengthSI = path[0].wavelength; // meters
             const wavelengthMm = wavelengthSI * 1e3; // Convert m → mm (world units)
 
-            // Find source laser by sourceId
+            // Find source by sourceId (works for both Laser and Lamp)
             const sourceId = path[0].sourceId;
-            const sourceLaser = laserComponents.find(l => l.id === sourceId);
-            const waist = sourceLaser ? sourceLaser.beamRadius : 2; // mm default
+            const source = sourceComponents.find(s => s.id === sourceId);
+            const waist = source ? source.beamRadius : 2; // mm default
 
             // Initialize q-parameter (symmetric beam: qx = qy)
             let qx = initialQ(waist, wavelengthMm);
             let qy = initialQ(waist, wavelengthMm);
-            let power = sourceLaser ? sourceLaser.power : 1.0;
+            let power = source ? source.power : 1.0;
 
             const segments: GaussianBeamSegment[] = [];
 
@@ -208,7 +214,8 @@ export class Solver2 {
                                 y: { ...ray.polarization.y }
                             },
                             opticalPathLength: ray.opticalPathLength,
-                            refractiveIndex: glassIOR
+                            refractiveIndex: glassIOR,
+                            coherenceMode: ray.coherenceMode
                         });
 
                         // Beer-Lambert absorption: P(z) = P₀ · exp(-μ · Δz)
@@ -245,7 +252,8 @@ export class Solver2 {
                         y: { ...ray.polarization.y }
                     },
                     opticalPathLength: ray.opticalPathLength,
-                    refractiveIndex: 1.0
+                    refractiveIndex: 1.0,
+                    coherenceMode: ray.coherenceMode
                 });
 
                 // Update q for the next iteration (after free-space propagation)
@@ -361,18 +369,20 @@ export class Solver2 {
         let bestDist = Infinity;
         let bestT = 0; // fraction along segment
 
+        const toPoint = new Vector3();
+        const closest = new Vector3();
+
         for (const seg of segments) {
-            const segDir = seg.end.clone().sub(seg.start);
-            const segLen = segDir.length();
+            const segDir = seg.direction;
+            const segLen = seg.start.distanceTo(seg.end);
             if (segLen < 1e-6) continue;
-            segDir.normalize();
 
             // Project point onto segment axis
-            const toPoint = point.clone().sub(seg.start);
+            toPoint.subVectors(point, seg.start);
             const along = toPoint.dot(segDir);
             const t = Math.max(0, Math.min(segLen, along));
 
-            const closest = seg.start.clone().add(segDir.clone().multiplyScalar(t));
+            closest.copy(seg.start).addScaledVector(segDir, t);
             const dist = point.distanceTo(closest);
 
             if (dist < bestDist) {
@@ -385,7 +395,7 @@ export class Solver2 {
         if (!bestSeg) return null;
 
         const seg = bestSeg;
-        const segDir = seg.end.clone().sub(seg.start).normalize();
+        const segDir = seg.direction;
         const wavelengthMm = seg.wavelength * 1e3;
         const n = seg.refractiveIndex || 1.0;
         const effectiveWl = wavelengthMm / n;
@@ -399,18 +409,15 @@ export class Solver2 {
 
         if (wx <= 0 || wy <= 0) return null;
 
-        // Distance guard: if the query point is far from the nearest
-        // segment (e.g., past an absorbing filter), don't extrapolate.
-        // The beam only exists within its segment boundaries.
         const maxBeamRadius = Math.max(wx, wy);
-        if (bestDist > maxBeamRadius * 5) return null;
+        if (bestDist > maxBeamRadius * 10) return null;
 
         // Decompose displacement into transverse coordinates
-        const toPoint = point.clone().sub(seg.start);
+        toPoint.subVectors(point, seg.start);
         const along = toPoint.dot(segDir);
         const transverse = toPoint.clone().sub(segDir.clone().multiplyScalar(along));
 
-        // Build local frame (consistent with EFieldVisualizer)
+        // Build local frame
         const up = new Vector3(0, 1, 0);
         if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
         const right = new Vector3().crossVectors(segDir, up).normalize();
@@ -419,15 +426,13 @@ export class Solver2 {
         const x = transverse.dot(right);
         const y = transverse.dot(localUp);
 
-        // Astigmatic Gaussian intensity:
-        // I(x,y) = P·(w0x·w0y)/(wx·wy) · exp(-2(x²/wx² + y²/wy²))
-        // For simplicity, use P/(π·wx·wy) · exp(-2(x²/wx² + y²/wy²))
+        // Astigmatic Gaussian intensity
         const gaussArg = 2 * (x * x / (wx * wx) + y * y / (wy * wy));
         const gaussFactor = Math.exp(-gaussArg);
         const intensity = (seg.power / (Math.PI * wx * wy)) * gaussFactor;
 
         // Phase: accumulated OPL + local propagation
-        const k = 2 * Math.PI / wavelengthMm; // real wavenumber in air
+        const k = 2 * Math.PI / wavelengthMm; 
         const phase = k * (seg.opticalPathLength + bestT * n);
 
         return {
@@ -453,16 +458,13 @@ export class Solver2 {
         // Collect contributions from each branch
         let ex_re = 0, ex_im = 0;
         let ey_re = 0, ey_im = 0;
-        let totalIntensity = 0;
+        let incoherentSum = 0;
 
         for (const branch of allSegments) {
             if (branch.length === 0) continue;
             
-            // Filter by wavelength if requested (e.g., evaluating broadband brightfield at specific wl)
             if (targetWavelength !== undefined) {
                 const branchWl = branch[0].wavelength;
-                // Allow ±15nm tolerance to account for spectral peak estimation
-                // (getDominantPassWavelength scans in 5nm steps, so peaks may be offset)
                 if (Math.abs(branchWl - targetWavelength) > 15e-9) {
                     continue;
                 }
@@ -471,34 +473,31 @@ export class Solver2 {
             const result = Solver2.queryIntensity(point, branch);
             if (!result || result.intensity < 1e-12) continue;
 
-            // E-field amplitude ∝ √I
-            const amplitude = Math.sqrt(result.intensity);
-            const phi = result.phase;
+            const mode = branch[0].coherenceMode;
 
-            // Vector E-field: E = amplitude · polarization · e^{iφ}
-            const cosPhi = Math.cos(phi);
-            const sinPhi = Math.sin(phi);
+            // Default to Coherent if mode is missing (for older tests/data)
+            if (mode === Coherence.Coherent || mode === undefined) {
+                // Coherent: add to E-field sum
+                const amplitude = Math.sqrt(result.intensity);
+                const phi = result.phase;
+                const cosPhi = Math.cos(phi);
+                const sinPhi = Math.sin(phi);
 
-            // Jones x-component
-            const jx = result.polarization.x;
-            ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
-            ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
+                const jx = result.polarization.x;
+                ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
+                ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
 
-            // Jones y-component
-            const jy = result.polarization.y;
-            ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
-            ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
-            
-            totalIntensity += result.intensity;
+                const jy = result.polarization.y;
+                ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
+                ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+            } else {
+                // Incoherent: add intensity directly
+                incoherentSum += result.intensity;
+            }
         }
 
-        // Coherent sources (lasers): superpose E-fields, then take |E|²
         const coherentIntensity = ex_re * ex_re + ex_im * ex_im + ey_re * ey_re + ey_im * ey_im;
-
-        // If no coherent contributions were made (all branches empty), return 0.
-        // Otherwise, use coherent sum. For truly incoherent sources (Lamps),
-        // the phases are random so coherent sum ≈ incoherent sum statistically.
-        return coherentIntensity > 0 ? coherentIntensity : totalIntensity;
+        return coherentIntensity + incoherentSum;
     }
 }
 

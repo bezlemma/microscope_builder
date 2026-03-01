@@ -102,6 +102,7 @@ export class Objective extends OpticalComponent {
         this.maxAngle = Math.asin(indexRatio);
         this.apertureRadius = this.focalLength * indexRatio;
         this._updateBounds();
+        this.version++;
     }
 
     private _updateBounds(): void {
@@ -363,45 +364,42 @@ export class Objective extends OpticalComponent {
             return { rays: [] }; // Ray crashed into the solid metal bounds
         }
 
-        const dirIn = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const dirInLocal = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
         const hitLocal = hit.localPoint!;
+        const opl = ray.opticalPathLength + hit.t;
 
-        const x = hitLocal.x;
-        const y = hitLocal.y;
-
-        // Vectorial momentum map (assuming n=1 on both sides for simplicity in ray direction)
-        // If n_immersion is used, p_in = dirIn * n_immersion, p_out = dirOut * n_out.
-        // But for a simple ideal aplanat, we just apply the momentum kick to the unit direction.
+        // Vectorial momentum map (Hamiltonian map) for an Aplanatic surface.
+        // p_out = p_in - (r / f)
+        // This mapping is strictly reciprocal and preserves the 2D phase space.
         
-        let px_out = dirIn.x - (x / this.focalLength);
-        let py_out = dirIn.y - (y / this.focalLength);
+        const px_in = dirInLocal.x;
+        const py_in = dirInLocal.y;
         
-        // Ensure the transverse momentum doesn't exceed 1.0 (TIR/evanescent)
+        // Momentum kick towards the axis
+        const px_out = px_in - (hitLocal.x / this.focalLength);
+        const py_out = py_in - (hitLocal.y / this.focalLength);
+        
+        // Conservation of energy: |p| = 1 (assuming n=1 for simplicity in direction)
         const pT_sq = px_out * px_out + py_out * py_out;
         if (pT_sq > 1.0) {
             return { rays: [] }; // Evanescent/TIR at the principal plane
         }
 
-        // The outgoing z momentum is preserved by conservation of energy (|p| = 1)
-        // Sign is the same as the incoming ray, as it propagates forward
-        const pz_out = Math.sign(dirIn.z) * Math.sqrt(1.0 - pT_sq);
+        // Outgoing z momentum maintains the general propagation direction
+        const pz_out = Math.sign(dirInLocal.z) * Math.sqrt(1.0 - pT_sq);
 
-        const dirOut = new Vector3(px_out, py_out, pz_out).normalize();
+        const dirOutLocal = new Vector3(px_out, py_out, pz_out).normalize();
+        const dirOutWorld = dirOutLocal.transformDirection(this.localToWorld).normalize();
 
-        // Transform exit direction back to world space
-        const dirOutWorld = dirOut.transformDirection(this.localToWorld).normalize();
-        const hitWorld = hit.point.clone();
-
-        // Exact OPL phase shift (cancels the geometric path length difference for perfect focus)
-        // For a perfect aplanatic lens, the added OPL forms a perfect spherical wavefront.
-        const h = Math.sqrt(x * x + y * y);
-        const deltaOPL = -(h * h) / (2 * this.focalLength); // Paraxial approx of phase shift is sufficient for visualization
+        // Exact OPL phase shift (Abbe Sine Condition OPL)
+        const h2 = hitLocal.x * hitLocal.x + hitLocal.y * hitLocal.y;
+        const deltaOPL = -h2 / (2 * this.focalLength);
 
         return {
             rays: [childRay(ray, {
-                origin: hitWorld,
+                origin: hit.point,
                 direction: dirOutWorld,
-                opticalPathLength: ray.opticalPathLength + deltaOPL
+                opticalPathLength: opl + deltaOPL
             })]
         };
     }

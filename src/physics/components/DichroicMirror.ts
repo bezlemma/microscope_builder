@@ -70,7 +70,7 @@ export class DichroicMirror extends OpticalComponent {
         const approaching = ray.direction.dot(hit.normal) < 0;
 
         if (!approaching) {
-            // Hitting from inside — pass through (shouldn't normally happen)
+            // Hitting from the back of the mirror — pass through undeviated
             return {
                 rays: [childRay(ray, {
                     origin: hit.point,
@@ -85,9 +85,13 @@ export class DichroicMirror extends OpticalComponent {
         const opl = ray.opticalPathLength + hit.t;
         const rays: Ray[] = [];
 
-        // Transmitted ray — passes straight through
+        // Threshold for spawning rays: must be physically significant (>1e-5).
+        // This prevents 'ghost' leakage from rays that are mathematically near-zero.
+        const minIntensity = 1e-5;
+
+        // Transmitted ray
         const transmittedIntensity = ray.intensity * transmission;
-        if (transmittedIntensity > 0.001) {
+        if (transmittedIntensity > minIntensity) {
             rays.push(childRay(ray, {
                 origin: hit.point,
                 direction: ray.direction.clone(),
@@ -96,9 +100,10 @@ export class DichroicMirror extends OpticalComponent {
             }));
         }
 
-        // Reflected ray — bounces off the surface
-        const reflectedIntensity = ray.intensity * (1 - transmission);
-        if (reflectedIntensity > 0.001) {
+        // Reflected ray
+        const reflection = 1.0 - transmission;
+        const reflectedIntensity = ray.intensity * reflection;
+        if (reflectedIntensity > minIntensity) {
             const reflectedDir = reflectVector(ray.direction, hit.normal);
 
             // Mirror reflection introduces π phase shift (E → -E)
@@ -119,6 +124,7 @@ export class DichroicMirror extends OpticalComponent {
 
         return { rays };
     }
+    
 
     /**
      * ABCD matrix — identity (thin flat plate).

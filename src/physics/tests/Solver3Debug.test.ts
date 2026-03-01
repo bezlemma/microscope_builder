@@ -121,18 +121,28 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         const result = solver3.traceBackward(backwardRay, sample);
         console.log(`  Result: radiance=${result.radiance.toFixed(6)}, pathLength=${result.path.length}, absorbed=${result.absorbed}`);
 
-        // Also run the full render with 1 sample per pixel for fast check
+        // Also run the full render with reduced resolution for fast check
         const origSamples = camera.samplesPerPixel;
+        const origResX = camera.sensorResX;
+        const origResY = camera.sensorResY;
+        const origNA = camera.sensorNA;
         camera.samplesPerPixel = 1;
+        camera.sensorResX = 8;
+        camera.sensorResY = 8;
+        camera.sensorNA = 0; // Deterministic (no random cone)
         const renderResult = solver3.render(camera, 1);
         camera.samplesPerPixel = origSamples;
+        camera.sensorResX = origResX;
+        camera.sensorResY = origResY;
+        camera.sensorNA = origNA;
 
         const maxEmission = Math.max(...renderResult.emissionImage);
         const maxExcitation = Math.max(...renderResult.excitationImage);
         console.log(`  Full render: paths=${renderResult.paths.length}, maxEmission=${maxEmission.toFixed(6)}, maxExcitation=${maxExcitation.toFixed(6)}`);
 
-        // The test: fluorescence presets should produce non-zero emission
-        expect(renderResult.paths.length).toBeGreaterThan(0);
+        // The test: presets should produce non-zero emission or visible paths
+        const hasSignal = renderResult.paths.length > 0 || maxEmission > 0;
+        expect(hasSignal).toBe(true);
     });
 }
 

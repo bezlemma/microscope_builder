@@ -113,12 +113,19 @@ export function setProperty(
     } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         component.specimenRotation[axis] = value;
+    } else if (property === 'scanX' || property === 'scanY') {
+        (component as any)[property] = value;
+        // Dual galvos don't use panAngle/tiltAngle for scanning, so we just set the raw value
     } else {
-        // Direct scalar property (e.g. scanAngle, aperture, focalLength)
+        // Direct scalar property (e.g. aperture, focalLength)
         (component as any)[property] = value;
         // Call recalculate if available (updates bounds, geometry, etc.)
         if (typeof (component as any).recalculate === 'function') {
             (component as any).recalculate();
+        }
+        // Invalidate physics mesh if it's a mesh-based component
+        if (typeof (component as any).invalidateMesh === 'function') {
+            (component as any).invalidateMesh();
         }
     }
     // Bump version so fingerprint detects the change
@@ -146,6 +153,8 @@ export function getProperty(component: OpticalComponent, property: string): numb
     } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         return component.specimenRotation[axis];
+    } else if (property === 'scanX' || property === 'scanY') {
+        return (component as any)[property] ?? 0;
     } else {
         return (component as any)[property] ?? 0;
     }
@@ -203,6 +212,25 @@ export class PropertyAnimator {
             if (!target) continue;
 
             const newValue = evaluateEasing(ch, clockMs);
+            setProperty(target, ch.property, newValue);
+        }
+    }
+
+    /**
+     * Evaluate all channels using a linear range [0, 1] mapping to each channel's [from, to].
+     * Ignores the channel's easing and cycle time. Used for a single clean sweep from A to B.
+     */
+    evaluateLinearRange(fraction: number, components: OpticalComponent[]): void {
+        if (this.channels.length === 0) return;
+
+        const byId = new Map<string, OpticalComponent>();
+        for (const c of components) byId.set(c.id, c);
+
+        for (const ch of this.channels) {
+            const target = byId.get(ch.targetId);
+            if (!target) continue;
+
+            const newValue = ch.from + (ch.to - ch.from) * fraction;
             setProperty(target, ch.property, newValue);
         }
     }

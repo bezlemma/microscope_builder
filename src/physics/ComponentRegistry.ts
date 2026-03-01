@@ -34,6 +34,7 @@ import { SlitAperture } from './components/SlitAperture';
 import { PolygonScanner } from './components/PolygonScanner';
 import { PMT } from './components/PMT';
 import { GalvoScanHead } from './components/GalvoScanHead';
+import { DualGalvoScanHead } from './components/DualGalvoScanHead';
 
 /** Registry entry for a component type. */
 export interface ComponentEntry {
@@ -70,6 +71,7 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['PolygonScanner',  { ctor: PolygonScanner }],
     ['PMT',             { ctor: PMT }],
     ['GalvoScanHead',  { ctor: GalvoScanHead }],
+    ['DualGalvoScanHead', { ctor: DualGalvoScanHead }],
 ];
 
 /** Map from type name → entry. */

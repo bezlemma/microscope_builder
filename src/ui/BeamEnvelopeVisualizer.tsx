@@ -79,55 +79,65 @@ function buildTubeGeometry(
     return geo;
 }
 
+interface BeamSegmentMeshProps {
+    segment: GaussianBeamSegment;
+}
+
+const BeamSegmentMesh: React.FC<BeamSegmentMeshProps> = ({ segment }) => {
+    const geometry = useMemo(() => {
+        // Sample beam profile along this segment
+        const samples = sampleBeamProfile(segment, 30);
+        
+        // Skip if beam is too small to see or too large (diverged badly)
+        const maxW = Math.max(...samples.map(s => Math.max(s.wx, s.wy)));
+        if (maxW < 0.01 || maxW > 500) return null;
+        
+        return buildTubeGeometry(segment, samples);
+    }, [segment]);
+
+    // Cleanup geometry on unmount or when it changes
+    React.useEffect(() => {
+        return () => {
+            if (geometry) geometry.dispose();
+        };
+    }, [geometry]);
+
+    const color = useMemo(() => {
+        const rgb = wavelengthToRGB(segment.wavelength);
+        return new Color(rgb.r, rgb.g, rgb.b);
+    }, [segment.wavelength]);
+
+    if (!geometry) return null;
+
+    return (
+        <mesh geometry={geometry}>
+            <meshBasicMaterial
+                color={color}
+                transparent
+                opacity={0.15}
+                side={DoubleSide}
+                depthWrite={false}
+                toneMapped={false}
+            />
+        </mesh>
+    );
+};
+
 interface BeamEnvelopeVisualizerProps {
     beamSegments: GaussianBeamSegment[][];
 }
 
 export const BeamEnvelopeVisualizer: React.FC<BeamEnvelopeVisualizerProps> = ({ beamSegments }) => {
-    const meshes = useMemo(() => {
-        const result: { geometry: BufferGeometry; color: Color; key: string }[] = [];
-        
-        for (let bi = 0; bi < beamSegments.length; bi++) {
-            const segments = beamSegments[bi];
-            for (let si = 0; si < segments.length; si++) {
-                const seg = segments[si];
-                
-                // Sample beam profile along this segment
-                const samples = sampleBeamProfile(seg, 30);
-                
-                // Skip if beam is too small to see or too large (diverged badly)
-                const maxW = Math.max(...samples.map(s => Math.max(s.wx, s.wy)));
-                if (maxW < 0.01 || maxW > 500) continue;
-                
-                const geometry = buildTubeGeometry(seg, samples);
-                const rgb = wavelengthToRGB(seg.wavelength);
-                const color = new Color(rgb.r, rgb.g, rgb.b);
-                
-                result.push({
-                    geometry,
-                    color,
-                    key: `beam-${bi}-${si}`
-                });
-            }
-        }
-        
-        return result;
-    }, [beamSegments]);
-
     return (
         <group>
-            {meshes.map(({ geometry, color, key }) => (
-                <mesh key={key} geometry={geometry}>
-                    <meshBasicMaterial
-                        color={color}
-                        transparent
-                        opacity={0.15}
-                        side={DoubleSide}
-                        depthWrite={false}
-                        toneMapped={false}
+            {beamSegments.map((segments, bi) => 
+                segments.map((seg, si) => (
+                    <BeamSegmentMesh 
+                        key={`beam-${bi}-${si}-${seg.wavelength}`} 
+                        segment={seg} 
                     />
-                </mesh>
-            ))}
+                ))
+            )}
         </group>
     );
 };

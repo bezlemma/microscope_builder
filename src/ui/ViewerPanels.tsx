@@ -106,7 +106,7 @@ export const ViewerPanels: React.FC = () => {
                                 }
                                 if (animator.channels.length > 0) {
                                     // Animation channels present — auto scan accumulation
-                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
+                                    setScanAccumConfig({ steps: scanAccumConfig.steps, trigger: scanAccumConfig.trigger + 1 });
                                 } else {
                                     setSolver3Trigger(n => n + 1);
                                 }

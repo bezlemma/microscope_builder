@@ -10,13 +10,6 @@ import { Solver1 } from '../Solver1';
 import { Laser } from '../components/Laser';
 import { Ray } from '../types';
 import { Vector3 } from 'three';
-import { writeFileSync } from 'fs';
-
-const OUT = 'confocal_diag.txt';
-const lines: string[] = [];
-function log(s: string) { lines.push(s); console.log(s); }
-import { Ray } from '../types';
-import { Vector3 } from 'three';
 
 describe('Confocal Beam Path Diagnostic', () => {
 
@@ -69,7 +62,8 @@ describe('Confocal Beam Path Diagnostic', () => {
 
         // Verify key components are hit
         expect(hitComponents).toContain('Dichroic (LP 505)');
-        expect(hitComponents).toContain('Galvo Scan Head');
+        expect(hitComponents).toContain('Galvo M1 (X)');
+        expect(hitComponents).toContain('Galvo M2 (Y)');
         expect(hitComponents).toContain('Scan Lens');
         expect(hitComponents).toContain('Fold Mirror 1');
         expect(hitComponents).toContain('Tube Lens');

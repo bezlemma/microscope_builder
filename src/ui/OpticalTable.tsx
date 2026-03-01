@@ -10,6 +10,7 @@ import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
 import { Mirror } from '../physics/components/Mirror';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
+import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
@@ -66,6 +67,7 @@ import {
     CylindricalLensVisualizer,
     PrismVisualizer,
     GalvoScanHeadVisualizer,
+    DualGalvoScanHeadVisualizer,
 } from './visualizers/ComponentVisualizers';
 
 
@@ -660,12 +662,10 @@ export const OpticalTable: React.FC = () => {
                 return;
             }
 
-            // Linear sweep: interpolate each channel from→to
+            // Evaluation: jump to discrete time points within the animation range.
+            // This ensures we capture a single sweep from Point A to Point B.
             const fraction = steps > 1 ? step / (steps - 1) : 0.5;
-            for (const sv of savedValues) {
-                const value = sv.channel.from + (sv.channel.to - sv.channel.from) * fraction;
-                setProperty(sv.target, sv.channel.property, value);
-            }
+            animator.evaluateLinearRange(fraction, components);
 
             try {
                 // ── Solver 1: Forward trace ──
@@ -1130,6 +1130,7 @@ export const OpticalTable: React.FC = () => {
                 {components.map(c => {
                     let visual = null;
                     if (c instanceof GalvoScanHead) visual = <GalvoScanHeadVisualizer component={c} />;
+                    else if (c instanceof DualGalvoScanHead) visual = <DualGalvoScanHeadVisualizer component={c} />;
                     else if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
                     else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
                     else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;

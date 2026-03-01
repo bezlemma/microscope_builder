@@ -64,8 +64,11 @@ export class Filter extends OpticalComponent {
         const wavelengthNm = ray.wavelength * 1e9;
         const transmission = this.spectralProfile.getTransmission(wavelengthNm);
 
-        // If transmission is negligible, absorb
-        if (transmission <= 0.01) {
+        // Threshold for spawning rays: must be physically significant (>1e-5).
+        const minIntensity = 1e-5;
+
+        const transmittedIntensity = ray.intensity * transmission;
+        if (transmittedIntensity <= minIntensity) {
             return { rays: [] };
         }
 
@@ -74,7 +77,7 @@ export class Filter extends OpticalComponent {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: ray.direction.clone(),
-                intensity: ray.intensity * transmission,
+                intensity: transmittedIntensity,
                 opticalPathLength: ray.opticalPathLength + hit.t
             })]
         };

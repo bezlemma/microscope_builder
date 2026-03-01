@@ -202,6 +202,7 @@ export class PrismLens extends OpticalComponent {
 
     public invalidateMesh(): void {
         this._mesh = null;
+        this.version++;
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

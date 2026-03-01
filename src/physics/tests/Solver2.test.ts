@@ -48,6 +48,7 @@ function makeSeg(overrides: Partial<GaussianBeamSegment> = {}): GaussianBeamSegm
         polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
         opticalPathLength: 0,
         refractiveIndex: 1.0,
+        coherenceMode: Coherence.Coherent,
         ...overrides
     };
 }

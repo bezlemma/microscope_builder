@@ -20,7 +20,7 @@ export class PMT extends OpticalComponent {
 
     // Solver 3 backward trace parameters (PMT acts as a 1-pixel camera)
     sensorNA: number = 0.01;        // Acceptance cone half-angle (matches Camera default)
-    samplesPerPixel: number = 100;   // Monte Carlo samples per galvo position
+    samplesPerPixel: number = 4;     // Monte Carlo samples per galvo position
 
     // Raster scan result
     scanResX: number = 64;

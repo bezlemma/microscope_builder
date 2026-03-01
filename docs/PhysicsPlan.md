@@ -310,3 +310,29 @@ When an `interact()` method creates a child ray using JavaScript's spread operat
 React's state lifecycle can call physics methods while position/rotation have been partially updated, producing identity or stale world↔local matrices. Rays then interact with the component as if it were at the origin.
 **Fix:** `chkIntersection()` calls `updateMatrices()` before every intersection check, guaranteeing the transform is always fresh. This is slightly wasteful (recomputes even when nothing moved) but eliminates the entire class of stale-matrix bugs.
 **Rule:** Never cache world↔local matrices across frames. Recompute on every physics query.
+
+### No Mode-Dependent Branching in Physics Code
+The physics engine must never branch based on "imaging mode" (brightfield vs fluorescence vs darkfield). A photon does not know what kind of microscope it is in. When a backward-traced ray hits a sample, the **same unified code path** must compute:
+1. **Beer-Lambert absorption** through the specimen geometry (chord length through material).
+2. **Fluorescence emission** proportional to `fluorescenceEfficiency × excitationIntensity × chordLength`.
+3. **Continue tracing** past the sample to the illumination source.
+
+Fluorescence and absorption are not mutually exclusive — a mixed-modality scene (e.g., brightfield + fluorescence overlay) must produce correct results from the same physics. If `fluorescenceEfficiency = 0`, the fluorescence integral naturally contributes zero without any special-case branching.
+
+**Anti-pattern (DO NOT DO THIS):**
+```typescript
+if (isFluorescenceWavelength) {
+    // fluorescence-only path (terminates at sample)
+} else {
+    // brightfield-only path (continues to lamp)
+}
+```
+
+**Correct pattern:**
+```typescript
+// 1. Absorption (always)
+throughput *= exp(-absorption * chordLength);
+// 2. Fluorescence (naturally zero when efficiency = 0)
+fluorescenceRadiance += efficiency * excitationIntensity * chordLength * throughput;
+// 3. Continue tracing (always)
+```
