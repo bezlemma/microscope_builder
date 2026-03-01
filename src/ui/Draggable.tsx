@@ -56,7 +56,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             }
         }
 
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari/mobile may not support pointer capture */ }
         pushUndo();  // snapshot before drag
         setIsDragging(true);
         setGlobalDragging(true);
@@ -76,7 +76,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
     const handlePointerUp = (e: any) => {
         e.stopPropagation();
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
         setIsDragging(false);
         setGlobalDragging(false);
 

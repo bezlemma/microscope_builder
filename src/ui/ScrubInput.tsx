@@ -64,7 +64,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         setIsScrubbing(true);
 
         // Capture pointer for reliable drag tracking
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari/mobile */ }
     }, [value]);
 
     const handleLabelPointerMove = useCallback((e: React.PointerEvent) => {
@@ -98,20 +98,26 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     const handleLabelPointerUp = useCallback((e: React.PointerEvent) => {
         if (!isScrubbing) return;
         setIsScrubbing(false);
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
     }, [isScrubbing]);
 
     // Prevent body selection while scrubbing
     useEffect(() => {
         if (isScrubbing) {
             document.body.style.userSelect = 'none';
+            (document.body.style as any).webkitUserSelect = 'none';  // Safari
+            (document.body.style as any).MozUserSelect = 'none';     // Firefox
             document.body.style.cursor = 'ew-resize';
         } else {
             document.body.style.userSelect = '';
+            (document.body.style as any).webkitUserSelect = '';
+            (document.body.style as any).MozUserSelect = '';
             document.body.style.cursor = '';
         }
         return () => {
             document.body.style.userSelect = '';
+            (document.body.style as any).webkitUserSelect = '';
+            (document.body.style as any).MozUserSelect = '';
             document.body.style.cursor = '';
         };
     }, [isScrubbing]);

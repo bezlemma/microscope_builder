@@ -80,7 +80,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
     const [hasImage, setHasImage] = useState(false);
     
     // Scan projection mode
-    const [projection, setProjection] = useState<'avg' | 'max' | 'none'>('avg');
+    const [projection, setProjection] = useState<'avg' | 'max' | 'none'>('none');
     // Frame scrubbing: 0..N-1
     const [frameIndex, setFrameIndex] = useState(0);
 

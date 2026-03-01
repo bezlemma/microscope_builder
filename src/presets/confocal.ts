@@ -92,16 +92,16 @@ export function createConfocalScene(): ConfocalPresetResult {
     // ══════════════════════════════════════════════════════════════════
 
     // ── Galvo M1 (X scan, fast axis) ──
-    // Normal bisects +X and (√2/2,-√2/2): points at (-sin(π/8), -cos(π/8))
+    // Beam arrives +X, should exit (1,-1,0)/√2.
+    // Normal = (-sin(π/8), -cos(π/8), 0) — faces TOWARD incoming beam (dot < 0).
     const galvoM1 = new Mirror(12, mirrorThickness, "Galvo M1 (X)");
     galvoM1.setPosition(35, 0, 0);
     galvoM1.pointAlong(-Math.sin(a), -Math.cos(a), 0);
     scene.push(galvoM1);
 
     // ── Galvo M2 (Y scan, slow axis) ──
-    // Normal bisects (√2/2,-√2/2) and (0,-1): points at (-cos(π/8), -sin(π/8))
-    // Position: 15mm from M1 along the (√2/2, -√2/2) intermediate beam direction,
-    // with x=50 so beam exits -Y aligned with the scan lens column.
+    // Beam arrives (1,-1,0)/√2, should exit (0,-1,0).
+    // Normal = (-cos(π/8), -sin(π/8), 0) — faces TOWARD incoming beam (dot < 0).
     const galvoM2 = new Mirror(12, mirrorThickness, "Galvo M2 (Y)");
     galvoM2.setPosition(50, -15, 0);
     galvoM2.pointAlong(-Math.cos(a), -Math.sin(a), 0);

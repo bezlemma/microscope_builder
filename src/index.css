@@ -1,8 +1,31 @@
-body {
+/* ─── Cross-browser baseline ─────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   background-color: #000;
   color: #fff;
-  font-family: sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Prevent pull-to-refresh / overscroll bounce on mobile */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* R3F Canvas — critical for Safari & mobile touch event routing.
+ * Without touch-action: none, Safari's gesture recognizer intercepts
+ * pointer events for scrolling/pinch-zoom before R3F sees them. */
+canvas {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;  /* Remove iOS tap flash */
+}
+
+/* Vendor-prefixed user-select for Firefox & older Safari */
+::selection {
+  background: rgba(100, 255, 218, 0.3);
 }

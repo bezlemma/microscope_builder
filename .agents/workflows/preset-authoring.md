@@ -58,11 +58,12 @@ Use `pointAlong` for ALL axis-aligned components. This sets the component's loca
 | Sample | Toward the incoming beam |
 | Objective | Toward the sample |
 
-### When to use `setRotation` instead
-Only for **compound angles** that can't be expressed as a single axis direction:
-- 45° fold mirrors
-- Dichroic beam splitters at 45°
-- Prisms with custom tilt angles
+### Mirrors and Dichroics — USE THE MIRROR PLACEMENT SKILL
+For mirrors and dichroics, **always read the Mirror Placement skill first** (`.agents/skills/mirror-placement/SKILL.md`).
+
+Quick formula: `mirror.pointAlong(normalize(-beam_in + beam_out))` — the surface normal is the bisector of the reversed incoming and outgoing beam directions.
+
+**Do NOT guess mirror orientations. Always use the formula.**
 
 ## Preset URL Access
 // turbo
