@@ -164,7 +164,9 @@ export class AchromaticDoublet extends OpticalComponent {
                 this.apertureRadius, segments
             );
 
-            const geometry = new LatheGeometry(profile, segments);
+            // Phase offset to shift seam away from principal planes
+            const phiOffset = Math.PI / segments;
+            const geometry = new LatheGeometry(profile, segments, phiOffset);
             geometry.rotateZ(Math.PI / 2);
 
             const totalT = this.totalThickness;
@@ -172,9 +174,12 @@ export class AchromaticDoublet extends OpticalComponent {
             const cementZ = frontApex + this.thickness1;
             const backApex = totalT / 2;
 
-            const frontCenter = new Vector3(0, 0, frontApex + this.r1);
-            const cementCenter = new Vector3(0, 0, cementZ + this.r2);
-            const backCenter = new Vector3(0, 0, backApex + this.r3);
+            // After rotateZ(π/2), LatheGeometry's axial Y maps to -X:
+            //   v.x = -axialPosition
+            // Sphere centers must use negated-X frame.
+            const frontCenter = new Vector3(-(frontApex + this.r1), 0, 0);
+            const cementCenter = new Vector3(-(cementZ + this.r2), 0, 0);
+            const backCenter = new Vector3(-(backApex + this.r3), 0, 0);
 
             const R1 = this.r1, R2 = this.r2, R3 = this.r3;
             const maxR = this.apertureRadius;
@@ -187,40 +192,43 @@ export class AchromaticDoublet extends OpticalComponent {
                     return new Vector3(0, v.y, v.z).normalize();
                 }
 
-                // Sag Z values
-                const sagFZ = (() => {
+                // v.x = -axialPosition, so negate for sag comparison
+                const axialPos = -v.x;
+
+                // Sag values (in original axial frame)
+                const sagF = (() => {
                     if (Math.abs(R1) > 1e8) return frontApex;
                     const val = R1 * R1 - r * r;
                     if (val < 0) return frontApex;
                     return (frontApex + R1) - (R1 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
-                const sagCZ = (() => {
+                const sagC = (() => {
                     if (Math.abs(R2) > 1e8) return cementZ;
                     const val = R2 * R2 - r * r;
                     if (val < 0) return cementZ;
                     return (cementZ + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
-                const sagBZ = (() => {
+                const sagB = (() => {
                     if (Math.abs(R3) > 1e8) return backApex;
                     const val = R3 * R3 - r * r;
                     if (val < 0) return backApex;
                     return (backApex + R3) - (R3 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
 
-                const distFront = Math.abs(v.z - sagFZ);
-                const distCement = Math.abs(v.z - sagCZ);
-                const distBack = Math.abs(v.z - sagBZ);
+                const distFront = Math.abs(axialPos - sagF);
+                const distCement = Math.abs(axialPos - sagC);
+                const distBack = Math.abs(axialPos - sagB);
 
                 const minDist = Math.min(distFront, distCement, distBack);
 
                 if (minDist === distFront) {
-                    if (Math.abs(R1) > 1e8) return new Vector3(-1, 0, 0);
+                    if (Math.abs(R1) > 1e8) return new Vector3(1, 0, 0); // flat front faces +X in negated frame
                     return v.clone().sub(frontCenter).normalize();
                 } else if (minDist === distCement) {
-                    if (Math.abs(R2) > 1e8) return new Vector3(1, 0, 0);
+                    if (Math.abs(R2) > 1e8) return new Vector3(-1, 0, 0);
                     return v.clone().sub(cementCenter).normalize();
                 } else {
-                    if (Math.abs(R3) > 1e8) return new Vector3(1, 0, 0);
+                    if (Math.abs(R3) > 1e8) return new Vector3(-1, 0, 0); // flat back faces -X in negated frame
                     return v.clone().sub(backCenter).normalize();
                 }
             };

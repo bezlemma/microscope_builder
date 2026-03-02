@@ -57,14 +57,23 @@ export class SphericalLens extends OpticalComponent {
             const segments = 64;
             const profilePoints = SphericalLens.generateProfile(R1, R2, this.apertureRadius, this.thickness, segments);
 
-            // Build LatheGeometry from profile, rotate to align Z = optical axis
-            const geometry = new LatheGeometry(profilePoints, segments);
+            // Build LatheGeometry from profile
+            // Phase offset of π/segments shifts the seam away from the Y=0 plane
+            // (where it causes rays to hit back-surface triangles first)
+            const phiOffset = Math.PI / segments;
+            const geometry = new LatheGeometry(profilePoints, segments, phiOffset);
             geometry.rotateZ(Math.PI / 2);
 
             const frontApex = -this.thickness / 2;
             const backApex = this.thickness / 2;
-            const frontCenter = new Vector3(frontApex + R1, 0, 0);
-            const backCenter = new Vector3(backApex + R2, 0, 0);
+
+            // After rotateZ(π/2), LatheGeometry's axial Y maps to -X:
+            //   v.x = -axialPosition
+            // So front vertex (axial = frontApex) maps to v.x = -frontApex = +thickness/2
+            // and back vertex (axial = backApex) maps to v.x = -backApex = -thickness/2.
+            // Sphere centers and sag values must use this negated-X frame.
+            const frontCenter = new Vector3(-(frontApex + R1), 0, 0);
+            const backCenter = new Vector3(-(backApex + R2), 0, 0);
 
             const normalFn: NormalFn = (v: Vector3) => {
                 const r = Math.sqrt(v.y * v.y + v.z * v.z);
@@ -75,30 +84,34 @@ export class SphericalLens extends OpticalComponent {
                     return new Vector3(0, v.y, v.z).normalize();
                 }
 
+                // v.x = -axialPosition, so negate to get the axial position
+                // for comparison with sag values (which are in the original axial frame)
+                const axialPos = -v.x;
+
                 // Classify by proximity to actual sag values
-                const sagFrontX = (() => {
+                const sagFront = (() => {
                     if (Math.abs(R1) > 1e8) return frontApex;
                     const val = R1 * R1 - r * r;
                     if (val < 0) return frontApex;
                     return (frontApex + R1) - (R1 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
-                const sagBackX = (() => {
+                const sagBack = (() => {
                     if (Math.abs(R2) > 1e8) return backApex;
                     const val = R2 * R2 - r * r;
                     if (val < 0) return backApex;
                     return (backApex + R2) - (R2 > 0 ? 1 : -1) * Math.sqrt(val);
                 })();
 
-                const distToFront = Math.abs(v.x - sagFrontX);
-                const distToBack = Math.abs(v.x - sagBackX);
+                const distToFront = Math.abs(axialPos - sagFront);
+                const distToBack = Math.abs(axialPos - sagBack);
 
                 if (distToFront < distToBack) {
                     // Front surface
-                    if (Math.abs(R1) > 1e8) return new Vector3(-1, 0, 0);
+                    if (Math.abs(R1) > 1e8) return new Vector3(1, 0, 0); // flat front faces +X in negated frame
                     return v.clone().sub(frontCenter).normalize();
                 } else {
                     // Back surface
-                    if (Math.abs(R2) > 1e8) return new Vector3(1, 0, 0);
+                    if (Math.abs(R2) > 1e8) return new Vector3(-1, 0, 0); // flat back faces -X in negated frame
                     return v.clone().sub(backCenter).normalize();
                 }
             };

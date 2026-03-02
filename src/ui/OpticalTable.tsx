@@ -118,13 +118,19 @@ export const OpticalTable: React.FC = () => {
     // Cards are passive detectors and don't affect the optical path, so moving
     // them should NOT trigger the expensive Solver1/Solver2 re-computation.
     // Uses component.version which is bumped on every property mutation.
+    //
+    // IMPORTANT: Animated components (e.g. specimens with piezo scan) are excluded
+    // from the fingerprint because their version changes every animation frame
+    // (from specimenOffset updates). Including them would cause an infinite
+    // re-render loop: useFrame→setProperty→version++→fingerprint→Effect1a→setState→render→useFrame
+    const animatedIds = useMemo(() => new Set(animator.channels.map(ch => ch.targetId)), [animator.channels.length]);
     const opticsFingerprint = useMemo(() => {
         if (!components) return '';
         return components
-            .filter(c => !(c instanceof Card))
+            .filter(c => !(c instanceof Card) && !animatedIds.has(c.id))
             .map(c => `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`)
             .join('|');
-    }, [components, animTick]);
+    }, [components, animTick, animatedIds]);
 
     // Refs to hold expensive solver results for card sampling effect
     const solverPathsRef = useRef<Ray[][]>([]);
@@ -690,10 +696,15 @@ export const OpticalTable: React.FC = () => {
                 const solver3 = new Solver3(components, beamSegs);
                 const result = solver3.render(camera, 8);
 
-                if (step === 0 || step === steps - 1) {
+                {
                     let stepEmission = 0;
-                    for (let i = 0; i < result.emissionImage.length; i++) stepEmission += result.emissionImage[i];
-                    console.log(`[ScanAccum] Step ${step}/${steps}: frac=${fraction.toFixed(3)}, beamSegs=${beamSegs.length}, paths=${result.paths.length}, emission=${stepEmission.toFixed(6)}`);
+                    let stepNonZero = 0;
+                    for (let i = 0; i < result.emissionImage.length; i++) {
+                        stepEmission += result.emissionImage[i];
+                        if (result.emissionImage[i] > 0) stepNonZero++;
+                    }
+                    const totalPx = camera.sensorResX * camera.sensorResY;
+                    console.log(`[ScanAccum] Step ${step}/${steps}: frac=${fraction.toFixed(3)}, beamSegs=${beamSegs.length}, paths=${result.paths.length}, res=${camera.sensorResX}×${camera.sensorResY}, spp=${camera.samplesPerPixel}, nonZero=${stepNonZero}/${totalPx}, emission=${stepEmission.toFixed(6)}`);
                 }
 
                 // Store this frame's individual images

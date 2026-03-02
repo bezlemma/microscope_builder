@@ -59,3 +59,4 @@ https://www.thorlabs.com/dual-axis-vantagepro-r-galvanometer-scan-head-systems-2
 
 - Image generation for the epi reflection microscope takes a very very long time. We need to find the single slowest thing here and find a way to make it faster.
 
+- There should be a bit of friction before a part starts to move, so that it doesn't start to move at the first pixel nudge, that way we don't accidently get rid of Calculate Emission and Image by accident by just clicking on the camera and accidently dragging a micro bit.

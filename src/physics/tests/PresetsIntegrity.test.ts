@@ -125,8 +125,8 @@ function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
 
         // Run Solver 3 backward tracing with small resolution
         for (const camera of cameras) {
-            camera.sensorResX = 4;
-            camera.sensorResY = 4;
+            camera.sensorResX = 8;
+            camera.sensorResY = 8;
             camera.samplesPerPixel = 1;
             // NA=0 → backward rays fire exactly along optical axis (deterministic, no random cone)
             camera.sensorNA = 0;

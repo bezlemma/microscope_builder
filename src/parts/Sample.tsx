@@ -21,7 +21,7 @@ export class Sample extends OpticalComponent {
     absorption: number;                    // Beer-Lambert coeff (mm⁻¹). Higher = more opaque.
 
     // Internal specimen rotation: Allows rotating the Mickey Mouse independent of the outer boundary box (e.g. for SPIM LXSampleHolder cups to remain unspilled)
-    specimenRotation: Euler = new Euler(0, 0, 0);
+    specimenRotation: Euler = new Euler(Math.PI/2, Math.PI/2, 0);
 
     // Internal specimen offset: translates the Mickey within the holder, ±5mm.
     // Designed to later integrate with animation channels for scanning.

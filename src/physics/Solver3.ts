@@ -71,10 +71,10 @@ export class Solver3 {
         const camPos = new Vector3().setFromMatrixPosition(m);
         // Forward direction (optical axis)
         const camW = new Vector3(1, 0, 0).transformDirection(m).normalize();
-        // Transverse axes (U = right, V = up)
-        // We use local basis vectors (-1, -1) to match the UI's existing display logic
-        const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
-        const camV = new Vector3(0, -1, 0).transformDirection(m).normalize();
+        // Transverse axes: local Y = sensor width, local Z = sensor height
+        // Must match renderGenerator() which produces correct images
+        const camU = new Vector3(0, 1, 0).transformDirection(m).normalize();
+        const camV = new Vector3(0, 0, 1).transformDirection(m).normalize();
 
         // Find the sample in the scene (for fluorescence metadata)
         const sample = this.scene.find(c => c instanceof Sample) as Sample | undefined;
@@ -232,10 +232,9 @@ export class Solver3 {
         const camPos = new Vector3().setFromMatrixPosition(m);
         // Forward direction (optical axis)
         const camW = new Vector3(1, 0, 0).transformDirection(m).normalize();
-        // Transverse axes (U = right, V = up)
-        // We use local basis vectors (-1, -1) to match the UI's existing display logic
-        const camU = new Vector3(-1, 0, 0).transformDirection(m).normalize();
-        const camV = new Vector3(0, -1, 0).transformDirection(m).normalize();
+        // Transverse axes: local Y = sensor width, local Z = sensor height
+        const camU = new Vector3(0, 1, 0).transformDirection(m).normalize();
+        const camV = new Vector3(0, 0, 1).transformDirection(m).normalize();
 
         const sample = this.scene.find(c => c instanceof Sample) as Sample | undefined;
 
@@ -533,6 +532,13 @@ export class Solver3 {
                 throughput *= Math.exp(-sample.absorption * chordLength);
 
                 // 2. Fluorescence: accumulate emission from excitation field along chord
+                //
+                // The excitation beam can be extremely thin (e.g. 0.003mm for a focused
+                // light sheet). Uniform Monte Carlo over a 1mm chord would almost never
+                // hit the beam peak (P≈0.3%), producing extreme noise.
+                //
+                // Solution: importance sampling — find where the beam axis crosses the
+                // chord, then concentrate most samples there.
                 if (sample.fluorescenceEfficiency > 0) {
                     const emitsAtThisWl = sample.emissionSpectrum.getTransmission(currentRay.wavelength * 1e9);
                     if (emitsAtThisWl > 0.5) {
@@ -541,15 +547,96 @@ export class Solver3 {
                         for (const seg of chordSegments) {
                             const segLen = seg.tEnd - seg.tStart;
                             if (segLen <= 0) continue;
-                            const numSamples = Math.max(4, Math.ceil(segLen * 10));
-                            let segRadianceSum = 0;
-                            for (let i = 0; i < numSamples; i++) {
-                                const fraction = (i + Math.random()) / numSamples;
-                                const t = seg.tStart + fraction * segLen;
-                                const samplePoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
-                                segRadianceSum += Solver2.queryIntensityMultiBeam(samplePoint, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+
+                            // Find the excitation beam's closest approach to this chord.
+                            // We test 5 evenly spaced points and pick the brightest.
+                            let bestT = (seg.tStart + seg.tEnd) / 2;
+                            let bestIntensity = 0;
+                            for (let probe = 0; probe < 5; probe++) {
+                                const frac = (probe + 0.5) / 5;
+                                const tProbe = seg.tStart + frac * segLen;
+                                const pProbe = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(tProbe));
+                                const I = Solver2.queryIntensityMultiBeam(pProbe, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                                if (I > bestIntensity) {
+                                    bestIntensity = I;
+                                    bestT = tProbe;
+                                }
                             }
-                            fluorescenceSum += (segRadianceSum / numSamples) * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
+
+                            // Estimate beam width along the chord at the peak location.
+                            // We find the half-width where intensity drops to 1/e² of peak.
+                            let beamHalfWidth = segLen / 2; // fallback: full chord
+                            if (bestIntensity > 1e-12) {
+                                const threshold = bestIntensity * 0.135; // 1/e²
+                                // Binary search for half-width (probe outward from peak)
+                                let lo = 0, hi = segLen / 2;
+                                for (let iter = 0; iter < 8; iter++) {
+                                    const mid = (lo + hi) / 2;
+                                    const tTest = Math.min(Math.max(bestT + mid, seg.tStart), seg.tEnd);
+                                    const pTest = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(tTest));
+                                    const ITest = Solver2.queryIntensityMultiBeam(pTest, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                                    if (ITest > threshold) lo = mid;
+                                    else hi = mid;
+                                }
+                                beamHalfWidth = Math.max(hi * 3, 0.01); // 3× the e⁻² width for safety margin
+                            }
+
+                            // Decide sampling strategy based on beam width vs chord length
+                            const numSamples = Math.max(8, Math.ceil(segLen * 10));
+                            let segRadianceSum = 0;
+
+                            if (beamHalfWidth < segLen * 0.3 && bestIntensity > 1e-12) {
+                                // Beam is narrow relative to chord → importance sampling
+                                // Split: 70% of samples in the focused region, 30% uniform
+                                const nFocused = Math.ceil(numSamples * 0.7);
+                                const nUniform = numSamples - nFocused;
+
+                                // Focused region: sample within ±beamHalfWidth of peak
+                                const focusStart = Math.max(bestT - beamHalfWidth, seg.tStart);
+                                const focusEnd = Math.min(bestT + beamHalfWidth, seg.tEnd);
+                                const focusLen = focusEnd - focusStart;
+                                let focusSum = 0;
+                                for (let i = 0; i < nFocused; i++) {
+                                    const frac = (i + Math.random()) / nFocused;
+                                    const t = focusStart + frac * focusLen;
+                                    const p = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
+                                    focusSum += Solver2.queryIntensityMultiBeam(p, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                                }
+                                // Contribution from focused region: mean intensity × region length
+                                segRadianceSum += (focusSum / nFocused) * focusLen;
+
+                                // Uniform region: sample the REST of the chord
+                                const uniformLen = segLen - focusLen;
+                                if (nUniform > 0 && uniformLen > 0) {
+                                    let uniformSum = 0;
+                                    for (let i = 0; i < nUniform; i++) {
+                                        // Sample from [tStart, focusStart] ∪ [focusEnd, tEnd]
+                                        let t: number;
+                                        const r = Math.random() * uniformLen;
+                                        const leftLen = focusStart - seg.tStart;
+                                        if (r < leftLen) {
+                                            t = seg.tStart + r;
+                                        } else {
+                                            t = focusEnd + (r - leftLen);
+                                        }
+                                        const p = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
+                                        uniformSum += Solver2.queryIntensityMultiBeam(p, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                                    }
+                                    segRadianceSum += (uniformSum / nUniform) * uniformLen;
+                                }
+
+                                // segRadianceSum is now the integral ∫ I(t) dt
+                                fluorescenceSum += segRadianceSum * sample.fluorescenceEfficiency * emitsAtThisWl;
+                            } else {
+                                // Beam fills most of the chord → standard uniform sampling
+                                for (let i = 0; i < numSamples; i++) {
+                                    const fraction = (i + Math.random()) / numSamples;
+                                    const t = seg.tStart + fraction * segLen;
+                                    const samplePoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
+                                    segRadianceSum += Solver2.queryIntensityMultiBeam(samplePoint, this.beamSegments, sample.getExcitationWavelength() * 1e-9);
+                                }
+                                fluorescenceSum += (segRadianceSum / numSamples) * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
+                            }
                         }
                         fluorescenceRadiance += fluorescenceSum * throughput;
                     }

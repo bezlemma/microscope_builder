@@ -1,3 +1,4 @@
+import { Quaternion, Vector3 } from 'three';
 import { Laser } from '../parts/Laser';
 import { Mirror } from '../parts/Mirror';
 import { SphericalLens } from '../parts/SphericalLens';
@@ -120,6 +121,10 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     );
     cylLens.setPosition(hole(C.K, 1).x, hole(C.K, 1).y, 0);
     cylLens.pointAlong(1, 0, 0);  // optical axis along +X
+    // Roll 90° around optical axis so curvature acts in world Z (vertical)
+    // This makes the light sheet tall (wide in Z) rather than wide in Y.
+    const roll90 = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
+    cylLens.rotation.multiply(roll90);
     components.push(cylLens);
 
     // 8. 1" Turn Mirror at N2 — redirects +X → +Y (up)
