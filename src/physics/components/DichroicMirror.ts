@@ -1,0 +1,137 @@
+import { Vector3 } from 'three';
+import { OpticalComponent } from '../Component';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { reflectVector } from '../math_solvers';
+import { SpectralProfile } from '../SpectralProfile';
+
+/**
+ * DichroicMirror — wavelength-selective beam splitter.
+ *
+ * Reflects some wavelengths and transmits others, based on a SpectralProfile.
+ * The profile's transmission value T determines the split:
+ *   - Transmitted ray: intensity *= T
+ *   - Reflected ray:   intensity *= (1 - T)
+ *
+ * Geometry: thin flat plate at x = 0 (same as BeamSplitter/Mirror).
+ */
+export class DichroicMirror extends OpticalComponent {
+    diameter: number;             // mm — circular aperture diameter
+    thickness: number;            // mm — plate thickness (visual only)
+    spectralProfile: SpectralProfile;
+
+    constructor(
+        diameter: number = 25.4,
+        thickness: number = 2,
+        spectralProfile?: SpectralProfile,
+        name: string = "Dichroic"
+    ) {
+        super(name);
+        this.diameter = diameter;
+        this.thickness = thickness;
+        this.spectralProfile = spectralProfile ?? new SpectralProfile('longpass', 500);
+    }
+
+    intersect(rayLocal: Ray): HitRecord | null {
+        // Flat plane at w=0 (optical axis along z → w)
+        // Transverse plane: u=x, v=y
+        const radius = this.diameter / 2;
+        const dw = rayLocal.direction.z;
+        if (Math.abs(dw) < 1e-6) {
+            return null;
+        }
+
+        const t = -rayLocal.origin.z / dw;
+        if (t < 0.001) {
+            return null;
+        }
+
+        const hitPoint = rayLocal.origin.clone().add(
+            rayLocal.direction.clone().multiplyScalar(t)
+        );
+
+        // Circular aperture check in uv transverse plane
+        const hu = hitPoint.x;
+        const hv = hitPoint.y;
+        
+        if (hu * hu + hv * hv > radius * radius) {
+            return null;
+        }
+
+        const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);  // ±w normal
+        return {
+            t,
+            point: hitPoint,
+            normal,
+            localPoint: hitPoint.clone()
+        };
+    }
+
+    interact(ray: Ray, hit: HitRecord): InteractionResult {
+        const approaching = ray.direction.dot(hit.normal) < 0;
+
+        if (!approaching) {
+            // Hitting from the back of the mirror — pass through undeviated
+            return {
+                rays: [childRay(ray, {
+                    origin: hit.point,
+                    intensity: ray.intensity
+                })]
+            };
+        }
+
+        // Ray wavelength is in meters (SI), SpectralProfile expects nm
+        const wavelengthNm = ray.wavelength * 1e9;
+        const transmission = this.spectralProfile.getTransmission(wavelengthNm);
+        const opl = ray.opticalPathLength + hit.t;
+        const rays: Ray[] = [];
+
+        // Threshold for spawning rays: must be physically significant (>1e-5).
+        // This prevents 'ghost' leakage from rays that are mathematically near-zero.
+        const minIntensity = 1e-5;
+
+        // Transmitted ray
+        const transmittedIntensity = ray.intensity * transmission;
+        if (transmittedIntensity > minIntensity) {
+            rays.push(childRay(ray, {
+                origin: hit.point,
+                direction: ray.direction.clone(),
+                intensity: transmittedIntensity,
+                opticalPathLength: opl
+            }));
+        }
+
+        // Reflected ray
+        const reflection = 1.0 - transmission;
+        const reflectedIntensity = ray.intensity * reflection;
+        if (reflectedIntensity > minIntensity) {
+            const reflectedDir = reflectVector(ray.direction, hit.normal);
+
+            // Mirror reflection introduces π phase shift (E → -E)
+            const polX = ray.polarization.x;
+            const polY = ray.polarization.y;
+
+            rays.push(childRay(ray, {
+                origin: hit.point,
+                direction: reflectedDir,
+                intensity: reflectedIntensity,
+                polarization: {
+                    x: { re: -polX.re, im: -polX.im },
+                    y: { re: -polY.re, im: -polY.im }
+                },
+                opticalPathLength: opl
+            }));
+        }
+
+        return { rays };
+    }
+    
+
+    /** Solver 2 transfer matrix — identity (thin flat plate). */
+    getParaxialTransform(): [number, number, number, number] {
+        return [1, 0, 0, 1];
+    }
+
+    getApertureRadius(): number {
+        return this.diameter / 2;
+    }
+}

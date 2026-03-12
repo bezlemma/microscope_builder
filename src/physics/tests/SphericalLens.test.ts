@@ -1,20 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
-import { SphericalLens } from "../../parts/SphericalLens";
+import { SphericalLens } from "../components/SphericalLens";
 import { Ray, Coherence } from "../types";
 
 describe("SphericalLens", () => {
     // Setup standard lens
     // Curvature 0.02 [1/mm]. f approx R/(n-1). R = 2(0.5)/0.02 = 50mm. f=50mm.
     // Aperture 10mm. Thickness 5mm.
-    // With X-forward convention, optical axis = +X (no rotation needed).
     const lens = new SphericalLens(0.02, 10, 5, "TestLens"); 
     
     test("Ray through center should pass straight", () => {
-        // On-axis ray along +X (X-forward convention)
         const ray: Ray = {
-            origin: new Vector3(-20, 0, 0),
-            direction: new Vector3(1, 0, 0),
+            origin: new Vector3(0, 0, -20),
+            direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
             polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
@@ -31,19 +29,19 @@ describe("SphericalLens", () => {
             const result = lens.interact(ray, hit);
             expect(result.rays.length).toBe(1);
             const outRay = result.rays[0];
-            // Direction should be roughly (1,0,0) — along optical axis
-            expect(outRay.direction.x).toBeCloseTo(1, 1);
+            // Direction should be roughly (0,0,1)
+            expect(outRay.direction.x).toBeCloseTo(0);
             expect(outRay.direction.y).toBeCloseTo(0);
-            expect(outRay.direction.z).toBeCloseTo(0);
+            expect(outRay.direction.z).toBeCloseTo(1);
         }
     });
 
     test("Ghost Geometry Check: Ray outside aperture should be blocked", () => {
         // Aperture radius is 10.
-        // Shoot ray at y=12 (outside aperture in transverse direction).
+        // Shoot ray at x=12.
         const ray: Ray = {
-            origin: new Vector3(-20, 12, 0),
-            direction: new Vector3(1, 0, 0),
+            origin: new Vector3(12, 0, -20),
+            direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
             polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
@@ -62,12 +60,15 @@ describe("SphericalLens", () => {
         // Concave lens (f approx -20mm). Curvature -0.05.
         // Aperture 10. Thickness 5.
         // R approx -20.
-        // Ray enters at y=7 — within the physical glass body, well inside the rim.
+        // Ray enters at r=7 — within the physical glass body, well inside the rim.
+        // At r=9, the refracted internal ray diverges enough to hit the cylindrical
+        // rim wall and undergo TIR (physically correct absorption). r=7 stays 
+        // within the optical surface and properly exits through the back.
         const concaveLens = new SphericalLens(-0.05, 10, 5, "Concave");
         
         const ray: Ray = {
-            origin: new Vector3(-10, 7, 0),
-            direction: new Vector3(1, 0, 0),
+            origin: new Vector3(7, 0, -10),
+            direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
             polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
@@ -83,9 +84,9 @@ describe("SphericalLens", () => {
             const result = concaveLens.interact(ray, hit);
             // Ray should exit (it's within the physical glass body)
             expect(result.rays.length).toBe(1);
-            // Exit ray should diverge outward (positive y-direction for y=7 entry)
+            // Exit ray should diverge outward (positive x-direction for r=7 entry)
             if (result.rays.length > 0) {
-                expect(result.rays[0].direction.y).toBeGreaterThan(0);
+                expect(result.rays[0].direction.x).toBeGreaterThan(0);
             }
         }
     });
@@ -100,17 +101,16 @@ describe("SphericalLens", () => {
      *
      * Condenser: plano-convex, f=25mm, R1=∞ (flat), R2=-12.5mm, ior=1.5
      * Aperture radius=10mm, thickness=4mm.
-     * With X-forward convention, lens optical axis is already along +X.
-     * No rotation needed — just place the lens on the X-axis.
+     * Positioned at (-25, 0, 0), rotated π/2 about Y (optical axis → world +X).
      * Laser fires from (-80, 0, 0) in +X direction.
      */
     test("Condenser lens from Transmission Microscope: rays must refract, not stop or pass straight", () => {
         const { Solver1 } = require("../Solver1");
 
         // Exact condenser from TransmissionFluorescence.ts
-        // No rotation needed for X-forward — optical axis is already +X
         const condenser = new SphericalLens(1/25, 10, 4, "Condenser", 1e9, -12.5, 1.5);
         condenser.setPosition(-25, 0, 0);
+        condenser.setRotation(0, Math.PI / 2, 0); // Optical axis → world +X
 
         const solver = new Solver1([condenser]);
 
@@ -153,11 +153,9 @@ describe("SphericalLens", () => {
             expect(r.passed).toBe(true);
         }
 
-        // ASSERTION 2: Paraxial off-axis rays must be BENT toward axis (converge).
-        // Marginal rays (Y≥7) may diverge due to spherical aberration at the edge —
-        // this is physical reality for this plano-convex design, not a bug.
+        // ASSERTION 2: Off-axis rays must be BENT
         for (const r of results) {
-            if (r.offset > 0 && r.offset <= 5) {
+            if (r.offset > 0) {
                 expect(r.dirY).toBeLessThan(-1e-3);
             }
         }
@@ -169,14 +167,15 @@ describe("SphericalLens", () => {
 
     test("Rotated Lens (via Solver1 pipeline): Off-axis ray should converge", () => {
         // This test exercises the FULL chkIntersection() -> interact() pipeline
-        // with a lens along the X-axis. No rotation needed with X-forward convention.
+        // with a rotated lens, which is the codepath where coordinate-space bugs appear.
+        // Setup: Lens at origin, rotated 90° so optical axis aligns with world +X.
         // Fire a parallel ray offset in Y, verify it refracts inward (toward axis).
         
         const { Solver1 } = require("../Solver1");
         
-        const testLens = new SphericalLens(0.02, 10, 5, "TestLens");
-        testLens.setPosition(0, 0, 0);
-        // No rotation needed — X-forward means optical axis is already +X
+        const rotatedLens = new SphericalLens(0.02, 10, 5, "RotatedLens");
+        rotatedLens.setPosition(0, 0, 0);
+        rotatedLens.setRotation(0, Math.PI / 2, 0); // Optical axis -> World +X
         
         const ray: Ray = {
             origin: new Vector3(-20, 3, 0), // Off-axis in Y
@@ -189,7 +188,7 @@ describe("SphericalLens", () => {
             coherenceMode: Coherence.Incoherent
         };
         
-        const solver = new Solver1([testLens]);
+        const solver = new Solver1([rotatedLens]);
         const paths = solver.trace([ray]);
         const path = paths[0];
         

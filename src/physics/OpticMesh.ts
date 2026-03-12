@@ -46,6 +46,10 @@ export class OpticMesh {
     private geometry: BufferGeometry | null = null;
     private raycaster: Raycaster = new Raycaster();
 
+    get builtGeometry(): BufferGeometry | null {
+        return this.geometry;
+    }
+
     /**
      * Build the physics mesh from a BufferGeometry.
      * 
@@ -85,14 +89,14 @@ export class OpticMesh {
      * using barycentric interpolation of analytical vertex normals.
      */
     private computeSmoothNormal(faceIndex: number, hitPoint: Vector3): Vector3 {
-        if (!this.geometry) return new Vector3(1, 0, 0);
+        if (!this.geometry) return new Vector3(0, 0, 1);
 
         const index = this.geometry.index;
         const posAttr = this.geometry.getAttribute('position') as BufferAttribute;
         const normAttr = this.geometry.getAttribute('normal') as BufferAttribute;
 
         if (!index || !posAttr || !normAttr) {
-            return new Vector3(1, 0, 0);
+            return new Vector3(0, 0, 1);
         }
 
         // Get vertex indices for this face
@@ -272,6 +276,36 @@ export class OpticMesh {
                 if (!allowInternalReflection && bounce > 0 && lastHitNormal) {
                     const outwardNormal = lastHitNormal.clone();
                     // outwardNormal should point outward (away from glass interior)
+                    if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
+
+                    const cosTheta = currentDir.dot(outwardNormal.clone().negate());
+                    const tangent = currentDir.clone()
+                        .sub(outwardNormal.clone().negate().multiplyScalar(cosTheta))
+                        .normalize();
+                    const dirOutLocal = tangent.clone()
+                        .add(outwardNormal.clone().multiplyScalar(0.05))
+                        .normalize();
+
+                    const dirOutWorld = dirOutLocal.clone().transformDirection(localToWorld).normalize();
+                    const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+
+                    return {
+                        rays: [childRay(ray, {
+                            origin: exitPointWorld,
+                            direction: dirOutWorld,
+                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            entryPoint: worldEntryPoint,
+                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                        })]
+                    };
+                }
+
+                // Prism fallback: after TIR bounce, the reflected ray may escape
+                // through a mesh edge gap or hit a degenerate vertex (for example
+                // the sharp apex of a triangular prism). Emit a grazing escape ray
+                // instead of silently absorbing the beam.
+                if (allowInternalReflection && bounce > 0 && lastHitNormal) {
+                    const outwardNormal = lastHitNormal.clone();
                     if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
 
                     const cosTheta = currentDir.dot(outwardNormal.clone().negate());

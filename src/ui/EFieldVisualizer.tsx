@@ -19,7 +19,7 @@ import {
     Float32BufferAttribute,
     Color,
 } from 'three';
-import { GaussianBeamSegment, beamRadius } from '../physics/Solver2';
+import { GaussianBeamSegment, segmentBeamRadii, segmentBeamRadiiAtFraction } from '../physics/Solver2';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 
@@ -61,15 +61,8 @@ function interpolatedBeamRadius(
     frac: number,
     axis: 'x' | 'y'
 ): number {
-    const wavelengthMm = seg.wavelength * 1e3;
-    // Use effective wavelength in medium: λ/n
-    const effectiveWl = wavelengthMm / (seg.refractiveIndex || 1.0);
-    const qStart = axis === 'x' ? seg.qx_start : seg.qy_start;
-    const segLen = seg.start.distanceTo(seg.end);
-    const z = frac * segLen;
-    // q(z) = q_start + z
-    const qz = { re: qStart.re + z, im: qStart.im };
-    return beamRadius(qz, effectiveWl);
+    const radii = segmentBeamRadiiAtFraction(seg, frac);
+    return axis === 'x' ? radii.wx : radii.wy;
 }
 
 // ─── Compute NORMALIZED E-field vector (amplitude ≤1, no beam-radius scaling) ─
@@ -475,11 +468,7 @@ export const EFieldVisualizer: React.FC<EFieldVisualizerProps> = ({ beamSegments
                 // Skip segments with near-zero power (extinct beams)
                 if (seg.power < 1e-6) continue;
 
-                const wavelengthMm = seg.wavelength * 1e3;
-                // Use effective wavelength in medium: λ/n
-                const effectiveWl = wavelengthMm / (seg.refractiveIndex || 1.0);
-                const wxStart = beamRadius(seg.qx_start, effectiveWl);
-                const wyStart = beamRadius(seg.qy_start, effectiveWl);
+                const { wx: wxStart, wy: wyStart } = segmentBeamRadii(seg, 0);
                 const maxW = Math.max(wxStart, wyStart);
                 if (maxW < 0.01 || maxW > 500) { runningZ += segLen * (seg.refractiveIndex || 1.0); continue; }
 

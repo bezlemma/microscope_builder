@@ -4,13 +4,13 @@
  * produces no visible paths on fluorescence presets.
  */
 import { describe, test, expect } from "bun:test";
+import { Vector3 } from "three";
 import { Solver1 } from "../Solver1";
-import { Solver2 } from "../Solver2";
 import { Solver3 } from "../Solver3";
-import { Laser } from "../../parts/Laser";
-import { Lamp } from "../../parts/Lamp";
-import { Camera } from "../../parts/Camera";
-import { Sample } from "../../parts/Sample";
+import { Laser } from "../components/Laser";
+import { Lamp } from "../components/Lamp";
+import { Camera } from "../components/Camera";
+import { Sample } from "../components/Sample";
 import { Ray, Coherence } from "../types";
 import { createEpiFluorescenceScene } from "../../presets/epiFluorescence";
 import { createBrightfieldScene } from "../../presets/brightfield";
@@ -39,7 +39,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         const sourceRays: Ray[] = [];
 
         for (const laser of lasers) {
-            const dir = laser.getForwardDirection();
+            const dir = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
             const origin = laser.position.clone().add(dir.clone().multiplyScalar(3));
             sourceRays.push({
                 origin,
@@ -56,7 +56,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         }
 
         for (const lamp of lamps) {
-            const dir = lamp.getForwardDirection();
+            const dir = new Vector3(0, 0, 1).applyQuaternion(lamp.rotation).normalize();
             const origin = lamp.position.clone().add(dir.clone().multiplyScalar(3));
             for (const wlNm of lamp.spectralWavelengths) {
                 sourceRays.push({
@@ -75,12 +75,8 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         }
 
         console.log(`  Source rays: ${sourceRays.length}`);
-        const paths = solver1.trace(sourceRays);
+        const { paths, beamSegments: beamSegs } = solver1.traceWithBeamSegments(sourceRays);
         console.log(`  Solver 1 paths: ${paths.length}`);
-
-        // Step 2: Solver 2 — propagate Gaussian beams
-        const solver2 = new Solver2();
-        const beamSegs = solver2.propagate(paths, components);
         console.log(`  Solver 2 beamSeg branches: ${beamSegs.length}`);
 
         // Step 3: Solver 3 — backward trace from camera
@@ -92,7 +88,7 @@ function runSolver3Debug(presetName: string, createScene: () => any[]) {
         // Trace a single backward ray from the camera center pixel
         camera.updateMatrices();
         const camPos = camera.position.clone();
-        const camW = camera.getForwardDirection();
+        const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
         console.log(`  Camera forward direction (camW): (${camW.x.toFixed(3)}, ${camW.y.toFixed(3)}, ${camW.z.toFixed(3)})`);
 
         const sample = samples.length > 0 ? samples[0] : undefined;

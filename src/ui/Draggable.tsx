@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
-import { useAtom, useAtomValue } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, dragAxisLockAtom } from '../state/store';
+import { useAtom } from 'jotai';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
-import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { SampleChamber } from '../physics/components/SampleChamber';
 
 interface DraggableProps {
     component: OpticalComponent;
@@ -18,7 +18,6 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const { controls } = useThree();
     const [isDragging, setIsDragging] = useState(false);
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
-    const axisLock = useAtomValue(dragAxisLockAtom);
 
     // Store offset from center to click point to prevent jumping
     const dragOffset = useRef(new Vector3(0, 0, 0));
@@ -106,9 +105,9 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             let bestAxisDist = Infinity;
             let snappedEuler: [number, number, number] | null = null;
 
-            // Check LXSampleHolder snap port axes (higher priority than grid)
+            // Check SampleChamber snap port axes (higher priority than grid)
             for (const c of components) {
-                if (c instanceof LXSampleHolder && c.id !== component.id) {
+                if (c instanceof SampleChamber && c.id !== component.id) {
 
 
                     for (const port of c.snapPorts) {
@@ -180,13 +179,6 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             return; // early return — alt path handles its own setComponents
         }
 
-        // Apply axis lock constraint
-        if (axisLock === 'x') {
-            finalY = component.position.y; // Lock Y, free X
-        } else if (axisLock === 'y') {
-            finalX = component.position.x; // Lock X, free Y
-        }
-
         // Compute delta from current dragged component position
         const deltaX = finalX - component.position.x;
         const deltaY = finalY - component.position.y;
@@ -231,7 +223,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
                 >
                     <torusGeometry args={[ringRadius, 0.5, 8, 48]} />
                     <meshBasicMaterial
-                        color="#007fff"
+                        color="#64ffda"
                         transparent
                         opacity={0.6}
                         side={DoubleSide}

@@ -5,8 +5,9 @@
  */
 import { createConfocalScene } from '../../presets/confocal';
 import { Solver1 } from '../Solver1';
-import { Laser } from '../../parts/Laser';
+import { Laser } from '../components/Laser';
 import { Ray } from '../types';
+import { Vector3 } from 'three';
 import { writeFileSync } from 'fs';
 
 const out: string[] = [];
@@ -17,7 +18,7 @@ const solver = new Solver1(scene);
 const laser = scene.find(c => c instanceof Laser) as Laser;
 
 // Central ray
-const dir = laser.getForwardDirection();
+const dir = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
 const origin = laser.position.clone().add(dir.clone().multiplyScalar(3));
 const ray: Ray = {
     origin, direction: dir,
@@ -29,7 +30,7 @@ const ray: Ray = {
 
 log('=== COMPONENT POSITIONS ===');
 for (const c of scene) {
-    const fwd = c.getForwardDirection();
+    const fwd = new Vector3(0, 0, 1).applyQuaternion(c.rotation);
     log(`  ${c.name.padEnd(25)} pos=(${c.position.x.toFixed(1)}, ${c.position.y.toFixed(1)})  fwd=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
 }
 

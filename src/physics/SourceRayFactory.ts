@@ -7,10 +7,10 @@
  */
 import { Vector3 } from 'three';
 import { OpticalComponent } from './Component';
-import { Laser } from '../parts/Laser';
-import { Lamp } from '../parts/Lamp';
-import { PMT } from '../parts/PMT';
-import { Sample } from '../parts/Sample';
+import { Laser } from './components/Laser';
+import { Lamp } from './components/Lamp';
+import { PMT } from './components/PMT';
+import { Sample } from './components/Sample';
 import { Ray, Coherence } from './types';
 
 /**
@@ -37,6 +37,11 @@ const RADIUS_FRACTIONS = buildRadiusFractions();
 /** Ray counts per ring — outer ring is 24, inner rings are 12 each. */
 const FIRST_RING_COUNT = 24;
 const INNER_RING_COUNT = 12;
+
+function estimateBeamletFootprint(beamRadius: number, totalBeamlets: number): number {
+    if (totalBeamlets <= 1) return Math.max(beamRadius, 0.05);
+    return Math.max(beamRadius / Math.sqrt(totalBeamlets), 0.05);
+}
 
 
 /**
@@ -73,6 +78,7 @@ function generateRingRays(
     intensity: number,
     coherenceMode: number,
     sourceId: string,
+    beamletFootprint: number,
 ): Ray[] {
     // Snap to ring boundary so we never have partial circles
     const snapped = snapToRingBoundary(totalRays);
@@ -109,7 +115,7 @@ function generateRingRays(
                 intensity: gaussIntensity,
                 polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
                 opticalPathLength: 0,
-                footprintRadius: 0,
+                footprintRadius: beamletFootprint,
                 coherenceMode,
                 sourceId,
             });
@@ -139,10 +145,12 @@ export function createSourceRays(
     const laserComps = components.filter(c => c instanceof Laser) as Laser[];
     for (const laser of laserComps) {
         const origin = laser.position.clone();
-        const direction = laser.getForwardDirection();
+        const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
         origin.add(direction.clone().multiplyScalar(3));
 
         const wavelength = laser.wavelength * 1e-9;
+        const totalBeamlets = mode === 'full' ? 1 + snapToRingBoundary(Math.max(1, rayCount)) : 1;
+        const beamletFootprint = estimateBeamletFootprint(laser.beamRadius, totalBeamlets);
 
         // Center (main) ray
         sourceRays.push({
@@ -152,7 +160,7 @@ export function createSourceRays(
             intensity: laser.power,
             polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
             opticalPathLength: 0,
-            footprintRadius: 0,
+            footprintRadius: beamletFootprint,
             coherenceMode: Coherence.Coherent,
             isMainRay: true,
             sourceId: laser.id,
@@ -163,7 +171,7 @@ export function createSourceRays(
             const totalRays = Math.max(1, rayCount);
             sourceRays.push(...generateRingRays(
                 origin, direction, laser.beamRadius, totalRays,
-                wavelength, laser.power, Coherence.Coherent, laser.id,
+                wavelength, laser.power, Coherence.Coherent, laser.id, beamletFootprint,
             ));
         }
     }
@@ -172,7 +180,7 @@ export function createSourceRays(
     const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
     for (const lamp of lampComps) {
         const origin = lamp.position.clone();
-        const direction = lamp.getForwardDirection();
+        const direction = new Vector3(0, 0, 1).applyQuaternion(lamp.rotation).normalize();
         origin.add(direction.clone().multiplyScalar(3));
 
         const beamRadius = lamp.beamRadius;
@@ -180,6 +188,12 @@ export function createSourceRays(
 
         for (const wavelengthNm of lamp.spectralWavelengths) {
             const wavelength = wavelengthNm * 1e-9;
+            const defaultRays = Math.max(1, rayCount);
+            const totalRays = mode === 'full'
+                ? (defaultRays >= 16 ? Math.max(1, Math.floor(defaultRays / 2)) : defaultRays)
+                : 0;
+            const totalBeamlets = mode === 'full' ? 1 + snapToRingBoundary(totalRays) : 1;
+            const beamletFootprint = estimateBeamletFootprint(beamRadius, totalBeamlets);
 
             // Center (main) ray
             sourceRays.push({
@@ -189,7 +203,7 @@ export function createSourceRays(
                 intensity,
                 polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
                 opticalPathLength: 0,
-                footprintRadius: 0,
+                footprintRadius: beamletFootprint,
                 coherenceMode: Coherence.Incoherent,
                 isMainRay: true,
                 sourceId: `${lamp.id}_${wavelengthNm}nm`,
@@ -197,16 +211,10 @@ export function createSourceRays(
 
             // Ring rays
             if (mode === 'full') {
-                const defaultRays = Math.max(1, rayCount);
-                // Halve rays per wavelength for multi-band lamps
-                const totalRays = defaultRays >= 16
-                    ? Math.max(1, Math.floor(defaultRays / 2))
-                    : defaultRays;
-
                 sourceRays.push(...generateRingRays(
                     origin, direction, beamRadius, totalRays,
                     wavelength, intensity, Coherence.Incoherent,
-                    `${lamp.id}_${wavelengthNm}nm`,
+                    `${lamp.id}_${wavelengthNm}nm`, beamletFootprint,
                 ));
             }
         }
@@ -216,7 +224,7 @@ export function createSourceRays(
     const pmtComps = components.filter(c => c instanceof PMT) as PMT[];
     for (const pmt of pmtComps) {
         pmt.updateMatrices();
-        const pmtDir = pmt.getForwardDirection();
+        const pmtDir = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
         const pmtOrigin = pmt.position.clone().add(pmtDir.clone().multiplyScalar(1));
         const sampleComp = components.find(c => c instanceof Sample) as Sample | undefined;
         const emWl = sampleComp ? sampleComp.getEmissionWavelength() * 1e-9 : 520e-9;
@@ -227,7 +235,7 @@ export function createSourceRays(
             intensity: 0.3,
             polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
             opticalPathLength: 0,
-            footprintRadius: 0,
+            footprintRadius: 0.1,
             coherenceMode: Coherence.Coherent,
             sourceId: `pmt_preview_${pmt.id}`,
         });

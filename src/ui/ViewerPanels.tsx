@@ -8,10 +8,10 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, rayConfigAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
-import { Card } from '../parts/Card';
-import { Camera } from '../parts/Camera';
-import { PMT } from '../parts/PMT';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
+import { Card } from '../physics/components/Card';
+import { Camera } from '../physics/components/Camera';
+import { PMT } from '../physics/components/PMT';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { OpticalComponent } from '../physics/Component';
@@ -21,7 +21,6 @@ export const ViewerPanels: React.FC = () => {
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
-    const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
     const [animator] = useAtom(animatorAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
 
@@ -36,12 +35,15 @@ export const ViewerPanels: React.FC = () => {
         <div style={{
             position: 'absolute',
             bottom: '20px',
-            left: '320px',
+            left: '20px',
+            right: '20px',
             display: 'flex',
             flexDirection: 'row',
+            flexWrap: 'wrap',
             gap: '8px',
             zIndex: 10,
             pointerEvents: 'none',
+            alignItems: 'flex-end',
         }}>
             {pinnedComponents.map(comp => (
                 <div
@@ -100,10 +102,6 @@ export const ViewerPanels: React.FC = () => {
                             camera={comp}
                             isRendering={isRendering}
                             onRefresh={() => {
-                                // Auto-enable E&M if not already on
-                                if (!rayConfig.solver2Enabled) {
-                                    setRayConfig({ ...rayConfig, solver2Enabled: true });
-                                }
                                 if (animator.channels.length > 0) {
                                     // Animation channels present — auto scan accumulation
                                     setScanAccumConfig({ steps: scanAccumConfig.steps, trigger: scanAccumConfig.trigger + 1 });
@@ -121,13 +119,9 @@ export const ViewerPanels: React.FC = () => {
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2px' }}>
                                     <button
                                         onClick={() => {
-                                            if (!rayConfig.solver2Enabled) {
-                                                setRayConfig({ ...rayConfig, solver2Enabled: true });
-                                            }
                                             pmt.markScanStale();
                                             pmt.version++;
-                                            // Force re-render by bumping components
-                                            // (ViewerPanels reads from componentsAtom)
+                                            setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
                                         }}
                                         disabled={isRendering}
                                         title="Re-run raster scan"

@@ -10,6 +10,46 @@ export function reflectVector(incident: Vector3, normal: Vector3): Vector3 {
 }
 
 /**
+ * Generalized Snell refraction for a zero-thickness phase surface.
+ *
+ * `phaseGradient` is the tangent-space gradient of the imposed optical-path
+ * discontinuity ΔOPL, expressed in world or local coordinates matching the
+ * incident ray and normal. For a thin lens phase sheet, for example:
+ *   ΔOPL(x, y) = -(x^2 + y^2) / (2f)
+ *   ∇ΔOPL      = (-x / f, -y / f, 0)
+ *
+ * The helper applies the tangential momentum jump and reconstructs the
+ * outgoing unit direction from the remaining normal component.
+ */
+export function refractPhaseSurface(
+    incident: Vector3,
+    normal: Vector3,
+    phaseGradient: Vector3,
+    nIn: number = 1,
+    nOut: number = 1
+): Vector3 | null {
+    const facingNormal = normal.clone().normalize();
+    if (incident.dot(facingNormal) > 0) facingNormal.negate();
+
+    const tangentGradient = phaseGradient.clone()
+        .sub(facingNormal.clone().multiplyScalar(phaseGradient.dot(facingNormal)));
+
+    const tangentialIn = incident.clone()
+        .sub(facingNormal.clone().multiplyScalar(incident.dot(facingNormal)));
+
+    const tangentialOut = tangentialIn.clone()
+        .multiplyScalar(nIn / nOut)
+        .add(tangentGradient.clone().multiplyScalar(1 / nOut));
+
+    const normalSq = 1 - tangentialOut.lengthSq();
+    if (normalSq < 0) return null;
+
+    return tangentialOut
+        .sub(facingNormal.multiplyScalar(Math.sqrt(normalSq)))
+        .normalize();
+}
+
+/**
  * Clamp near-zero floating-point artifacts to exactly zero.
  * e.g. cos(π/2) ≈ 6.12e-17 → 0, preventing phantom components
  * from corrupting refraction directions and raycaster hits.

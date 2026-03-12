@@ -34,8 +34,8 @@ export interface Ray {
     // Quantum (Solver 5 support)
     entanglementId?: number;
 
-    // Solver 2 skeleton: marks the primary path for Gaussian beam propagation.
-    // Only the first child ray (index 0) from each interaction inherits this flag.
+    // Representative path marker used by visual overlays and split recovery.
+    // Solver 2 no longer depends on this flag for beamlet propagation.
     isMainRay?: boolean;
 
     // Solver 3: identifies rays traced from the sensor backward to the source.

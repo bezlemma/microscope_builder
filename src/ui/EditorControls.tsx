@@ -1,25 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { OrbitControls } from '@react-three/drei';
-import { useThree, useFrame } from '@react-three/fiber';
-import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera, MathUtils } from 'three';
+import { useThree } from '@react-three/fiber';
+import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, solver3RenderTriggerAtom, viewModeAtom } from '../state/store';
-
-/**
- * 2D/3D Camera Snap Behavior:
- *
- *   When the camera polar angle is within SNAP_THRESHOLD of pure top-down (0°),
- *   it smoothly snaps to an exact 2D top-down view and orbit rotation is disabled.
- *   When the user Alt+drags to rotate past the threshold, the camera transitions
- *   to free 3D orbit. Releasing back to near-top-down re-engages the snap.
- *
- *   In "2D" mode: orbit rotation is locked, camera looks straight down +Z.
- *   In "3D" mode: full orbit controls enabled.
- */
-
-const SNAP_THRESHOLD_DEG = 8;  // Polar angle (from top) below which we snap to 2D
-const SNAP_LERP_SPEED = 8;     // How fast to animate toward 2D (per second)
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom } from '../state/store';
 
 export const EditorControls: React.FC = () => {
     const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -31,13 +16,10 @@ export const EditorControls: React.FC = () => {
     const activePreset = useAtomValue(activePresetAtom);
     const [, undo] = useAtom(undoAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
-    const [, setRayConfig] = useAtom(rayConfigAtom);
+    const [rayConfig] = useAtom(rayConfigAtom);
+    const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
-    const [viewMode, setViewMode] = useAtom(viewModeAtom);
     const { size } = useThree();
-
-    // Track whether user is actively rotating (Alt+drag)
-    const isUserRotating = useRef(false);
 
     // ─── Auto-zoom to fit when preset changes ───
     useEffect(() => {
@@ -52,6 +34,7 @@ export const EditorControls: React.FC = () => {
         let minY = Infinity, maxY = -Infinity;
         for (const comp of components) {
             const p = comp.position;
+            // Use a fixed half-size estimate for component extent (most are ~25mm)
             const half = 25;
             minX = Math.min(minX, p.x - half);
             maxX = Math.max(maxX, p.x + half);
@@ -64,20 +47,25 @@ export const EditorControls: React.FC = () => {
         const spanX = maxX - minX;
         const spanY = maxY - minY;
 
-        const padding = 0.35;
+        // Orthographic camera: visible width = canvasWidth / zoom
+        // We want: spanX * (1 + padding) ≤ canvasWidth / zoom
+        //          spanY * (1 + padding) ≤ canvasHeight / zoom
+        const padding = 0.35; // 35% margin — extra buffer for browser testing visibility
         const zoomX = spanX > 0 ? size.width / (spanX * (1 + padding)) : 2;
         const zoomY = spanY > 0 ? size.height / (spanY * (1 + padding)) : 2;
         const newZoom = Math.min(zoomX, zoomY);
 
-        // Reset to top-down 2D when loading a preset
-        camera.position.set(centerX, centerY, 500);
+        // Set camera position (keep Z the same)
+        camera.position.set(centerX, centerY, camera.position.z);
         controls.target.set(centerX, centerY, 0);
-        camera.zoom = Math.max(0.2, Math.min(newZoom, 10));
+        camera.zoom = Math.max(0.2, Math.min(newZoom, 10)); // clamp to reasonable range
         camera.updateProjectionMatrix();
         controls.update();
-        setViewMode('2D');
 
-        // URL camera override
+        // ─── URL camera override: ?xy1=left,top&xy2=right,bottom ───
+        // Fits the camera to show the world-coordinate rectangle defined by
+        // the upper-left (xy1) and lower-right (xy2) corners.
+        // Example: ?preset=lightsheetopenspim&xy1=330,244&xy2=344,230
         const params = new URLSearchParams(window.location.search);
         const xy1 = params.get('xy1');
         const xy2 = params.get('xy2');
@@ -97,52 +85,18 @@ export const EditorControls: React.FC = () => {
 
                 cam.position.set(cx, cy, cam.position.z);
                 ctrl.target.set(cx, cy, 0);
+
+                // Fit zoom so the bounding box fills the viewport
                 const zX = spanX > 0 ? size.width / spanX : cam.zoom;
                 const zY = spanY > 0 ? size.height / spanY : cam.zoom;
                 cam.zoom = Math.max(0.1, Math.min(zX, zY));
+
                 cam.updateProjectionMatrix();
                 ctrl.update();
             }, 200);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePreset]);
-
-    // ─── 2D/3D snap: per-frame polar angle check ───
-    useFrame((_, delta) => {
-        const controls = controlsRef.current;
-        if (!controls) return;
-
-        const camera = controls.object;
-        const target = controls.target;
-
-        // Compute polar angle: angle between camera→target vector and +Z axis
-        const camToTarget = new Vector3().subVectors(target, camera.position);
-        const polarAngle = camToTarget.angleTo(new Vector3(0, 0, -1)); // 0 = looking straight down
-
-        const polarDeg = MathUtils.radToDeg(polarAngle);
-
-        if (!isUserRotating.current && polarDeg < SNAP_THRESHOLD_DEG) {
-            // Near top-down: LERP toward exact top-down
-            if (viewMode !== '2D') setViewMode('2D');
-
-            // Smoothly snap camera position to be directly above target
-            const dx = camera.position.x - target.x;
-            const dy = camera.position.y - target.y;
-            const dist = camera.position.distanceTo(target);
-
-            // LERP the XY offset toward 0 (pure top-down)
-            const t = 1 - Math.exp(-SNAP_LERP_SPEED * delta);
-            camera.position.x -= dx * t;
-            camera.position.y -= dy * t;
-            // Keep Z distance
-            camera.position.z = target.z + dist;
-
-            camera.updateProjectionMatrix();
-            controls.update();
-        } else if (polarDeg >= SNAP_THRESHOLD_DEG) {
-            if (viewMode !== '3D') setViewMode('3D');
-        }
-    });
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -157,7 +111,7 @@ export const EditorControls: React.FC = () => {
                 return;
             }
 
-            // Zoom shortcuts
+            // Zoom shortcuts: [ = zoom out, ] = zoom in (orthographic camera)
             if (e.key === '[' || e.key === ']') {
                 const controls = controlsRef.current;
                 if (controls) {
@@ -171,15 +125,15 @@ export const EditorControls: React.FC = () => {
                 }
             }
 
-            // '2' key: toggle Solver 2
+            // '2' key: toggle forward bundle data
             if (e.key === '2') {
                 const target = e.target as HTMLElement;
                 if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
                 e.preventDefault();
-                setRayConfig(prev => ({ ...prev, solver2Enabled: !prev.solver2Enabled }));
+                setBundleDataEnabled(!rayConfig.solver2Enabled);
             }
 
-            // '3' key: fire Solver 3
+            // '3' key: fire Solver 3 (Calculate Emission and Image)
             if (e.key === '3') {
                 const target = e.target as HTMLElement;
                 if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
@@ -204,11 +158,12 @@ export const EditorControls: React.FC = () => {
                     const controls = controlsRef.current;
                     if (controls) {
                         const camera = controls.object;
+                        // Get camera-local right and up vectors for natural panning
                         const right = new Vector3();
                         const up = new Vector3();
                         camera.matrixWorld.extractBasis(right, up, new Vector3());
 
-                        const panSpeed = 10;
+                        const panSpeed = 10; // mm per keypress
                         const offset = right.multiplyScalar(dir[0] * panSpeed)
                             .add(up.multiplyScalar(dir[1] * panSpeed));
 
@@ -219,15 +174,16 @@ export const EditorControls: React.FC = () => {
                 }
             }
 
-            // Q/E rotation
+            // Q/E rotation: rotate selected component ±15° around world Z axis
             if ((e.key === 'q' || e.key === 'Q' || e.key === 'e' || e.key === 'E') && selection.length > 0) {
+                // Don't trigger if user is typing in an input field
                 const target = e.target as HTMLElement;
                 if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
 
-                const rotationStep = 15 * (Math.PI / 180);
+                const rotationStep = 15 * (Math.PI / 180); // 15 degrees
                 const direction = (e.key === 'q' || e.key === 'Q') ? 1 : -1;
 
-                pushUndo();
+                pushUndo();  // snapshot before rotation
 
                 const newComponents = components.map(c => {
                     if (selection.includes(c.id)) {
@@ -235,6 +191,7 @@ export const EditorControls: React.FC = () => {
                             new Vector3(0, 0, 1),
                             direction * rotationStep
                         );
+                        // Compose rotation without mutating existing quaternion
                         const newQuat = qStep.multiply(c.rotation.clone());
                         const euler = new Euler().setFromQuaternion(newQuat);
                         c.setRotation(euler.x, euler.y, euler.z);
@@ -259,17 +216,6 @@ export const EditorControls: React.FC = () => {
         };
     }, [setSelection, selection, components, setComponents, undo, pushUndo]);
 
-    // Track rotation start/end to distinguish user-initiated rotation from auto-snap
-    const onStart = useCallback(() => {
-        if (altHeld) {
-            isUserRotating.current = true;
-        }
-    }, [altHeld]);
-
-    const onEnd = useCallback(() => {
-        isUserRotating.current = false;
-    }, []);
-
     return (
         <OrbitControls
             ref={controlsRef}
@@ -278,29 +224,33 @@ export const EditorControls: React.FC = () => {
             enableZoom={true}
             enablePan={true}
 
-            // Mouse Mappings:
-            //   Alt + Left-drag     = Rotate camera (breaks out of 2D snap)
-            //   Shift + Left-drag   = Pan
-            //   Middle-drag         = Pan
-            //   Scroll              = Zoom
+            // Mouse Mappings (same on Mac + Windows):
+            //
+            //   Left-click             = Select / drag component (not OrbitControls)
+            //   Shift + Left-drag      = Pan
+            //   Middle-drag            = Pan
+            //   Alt + Left-drag        = Rotate camera
+            //   Alt + Middle-drag      = Rotate camera
+            //   Right-click           = (reserved)
+            //   Scroll                 = Zoom
+            //   Ctrl                   = (nothing)
             mouseButtons={{
                 LEFT: altHeld ? MOUSE.ROTATE : (shiftHeld ? MOUSE.PAN : -1 as any),
                 MIDDLE: altHeld ? MOUSE.ROTATE : MOUSE.PAN,
                 RIGHT: -1 as any
             }}
 
+            // Touch Mappings (touchscreens / tablets)
             touches={{
                 ONE: TOUCH.PAN,
                 TWO: TOUCH.DOLLY_ROTATE
             }}
 
+            // Standard constraints
             minDistance={1}
             maxDistance={2000}
             enableDamping={true}
             dampingFactor={0.1}
-
-            onStart={onStart}
-            onEnd={onEnd}
         />
     );
 };

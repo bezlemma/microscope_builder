@@ -7,8 +7,9 @@
 import { describe, test, expect } from 'bun:test';
 import { createConfocalScene } from '../../presets/confocal';
 import { Solver1 } from '../Solver1';
-import { Laser } from '../../parts/Laser';
+import { Laser } from '../components/Laser';
 import { Ray } from '../types';
+import { Vector3 } from 'three';
 
 describe('Confocal Beam Path Diagnostic', () => {
 
@@ -22,7 +23,7 @@ describe('Confocal Beam Path Diagnostic', () => {
 
         // Create central ray from laser
         const origin = laser.position.clone();
-        const direction = laser.getForwardDirection();
+        const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
         origin.add(direction.clone().multiplyScalar(3)); // advance past self
 
         const ray: Ray = {
@@ -73,6 +74,8 @@ describe('Confocal Beam Path Diagnostic', () => {
         const hitsSample = hitComponents.some(n => n.includes('Specimen'));
         console.log(`\nReaches objective: ${hitsObjective}`);
         console.log(`Reaches sample: ${hitsSample}`);
+        expect(hitsObjective).toBe(true);
+        expect(hitsSample).toBe(true);
     });
 
     test('Component positions form compact layout', () => {
@@ -80,7 +83,7 @@ describe('Confocal Beam Path Diagnostic', () => {
 
         console.log('\n=== COMPONENT POSITIONS ===');
         for (const c of scene) {
-            const fwd = c.getForwardDirection();
+            const fwd = new Vector3(0, 0, 1).applyQuaternion(c.rotation);
             console.log(`  ${c.name.padEnd(25)} pos=(${c.position.x.toFixed(1)}, ${c.position.y.toFixed(1)})  fwd=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
         }
 
@@ -107,7 +110,7 @@ describe('Confocal Beam Path Diagnostic', () => {
         );
 
         for (const m of mirrors) {
-            const fwd = m.getForwardDirection();
+            const fwd = new Vector3(0, 0, 1).applyQuaternion(m.rotation);
             console.log(`  ${m.name.padEnd(25)} normal=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
         }
     });

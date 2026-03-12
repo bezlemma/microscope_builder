@@ -1,5 +1,5 @@
 /**
- * Complex number arithmetic for Gaussian beam propagation.
+ * Complex number arithmetic for Solver 2's legacy analytic beam helpers.
  *
  * Shared module used by Solver2, and available to any future
  * physics code that needs complex math (e.g. Jones calculus).

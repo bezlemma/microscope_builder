@@ -1,263 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
-import { useAtom, useAtomValue } from 'jotai';
-import { componentsAtom, selectionAtom, pinnedViewersAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, pushUndoAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom, dragAxisLockAtom, subElementIndexAtom, rotationPlaneAtom } from '../state/store';
+import { useAtom } from 'jotai';
+import {
+    componentsAtom,
+    selectionAtom,
+    pinnedViewersAtom,
+    rayConfigAtom,
+    setVisualizationModeAtom,
+    solver3RenderTriggerAtom,
+    solver3RenderingAtom,
+    pushUndoAtom,
+    animatorAtom,
+    animationPlayingAtom,
+    animationSpeedAtom,
+    scanAccumTriggerAtom,
+    scanAccumProgressAtom,
+    MAX_FORWARD_RAY_COUNT,
+    MAX_REVERSE_PATH_COUNT,
+    MIN_FORWARD_RAY_COUNT,
+    MIN_REVERSE_PATH_COUNT,
+} from '../state/store';
 import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
 import { Euler, Quaternion, Vector3 } from 'three';
-import { SphericalLens } from '../parts/SphericalLens';
-import { Mirror } from '../parts/Mirror';
-import { GalvoScanHead } from '../parts/GalvoScanHead';
-import { Blocker } from '../parts/Blocker';
-import { Card } from '../parts/Card';
-import { Camera } from '../parts/Camera';
+import { SphericalLens } from '../physics/components/SphericalLens';
+import { Mirror } from '../physics/components/Mirror';
+import { GalvoScanHead } from '../physics/components/GalvoScanHead';
+import { Blocker } from '../physics/components/Blocker';
+import { Card } from '../physics/components/Card';
+import { Camera } from '../physics/components/Camera';
 
-import { Laser } from '../parts/Laser';
-import { Lamp } from '../parts/Lamp';
-import { IdealLens } from '../parts/IdealLens';
-import { Objective } from '../parts/Objective';
-import { PolygonScanner } from '../parts/PolygonScanner';
-import { PrismLens } from '../parts/PrismLens';
-import { Waveplate } from '../parts/Waveplate';
-import { Aperture } from '../parts/Aperture';
-import { SlitAperture } from '../parts/SlitAperture';
-import { Filter } from '../parts/Filter';
-import { DichroicMirror } from '../parts/DichroicMirror';
-import { CylindricalLens } from '../parts/CylindricalLens';
-import { CurvedMirror } from '../parts/CurvedMirror';
-import { Sample } from '../parts/Sample';
-import { LXSampleHolder } from '../parts/LXSampleHolder';
-import { PMT } from '../parts/PMT';
+import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
+import { IdealLens } from '../physics/components/IdealLens';
+import { Objective } from '../physics/components/Objective';
+import { PolygonScanner } from '../physics/components/PolygonScanner';
+import { PrismLens } from '../physics/components/PrismLens';
+import { Waveplate } from '../physics/components/Waveplate';
+import { Aperture } from '../physics/components/Aperture';
+import { SlitAperture } from '../physics/components/SlitAperture';
+import { Filter } from '../physics/components/Filter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { Sample } from '../physics/components/Sample';
+import { SampleChamber } from '../physics/components/SampleChamber';
+import { PMT } from '../physics/components/PMT';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
+import { LensProfileEditor, supportsLensProfileEditor } from './LensProfileEditor';
+import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
 import { snapToRingBoundary } from '../physics/SourceRayFactory';
-import { MATERIAL_PRESETS, getMaterialNames } from '../physics/Dispersion';
-import { AchromaticDoublet } from '../parts/AchromaticDoublet';
-import { AsphericLens } from '../parts/AsphericLens';
-import {
-    CollapsibleSection,
-} from './inspectors';
 
-// ─── Axis Lock Toggle ───────────────────────────────────────────────
-
-const AxisLockToggle: React.FC = () => {
-    const [axisLock, setAxisLock] = useAtom(dragAxisLockAtom);
-    const options: Array<{ value: 'free' | 'x' | 'y'; label: string }> = [
-        { value: 'free', label: 'Free' },
-        { value: 'x', label: 'X only' },
-        { value: 'y', label: 'Y only' },
-    ];
-    return (
-        <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
-            <span style={{ fontSize: '10px', color: '#666', lineHeight: '22px', marginRight: 4 }}>Drag:</span>
-            {options.map(opt => (
-                <button
-                    key={opt.value}
-                    onClick={() => setAxisLock(opt.value)}
-                    style={{
-                        flex: 1,
-                        padding: '2px 0',
-                        fontSize: '10px',
-                        fontWeight: axisLock === opt.value ? 600 : 400,
-                        color: axisLock === opt.value ? '#007fff' : '#888',
-                        background: axisLock === opt.value ? 'rgba(100,255,218,0.1)' : '#1a1a1a',
-                        border: `1px solid ${axisLock === opt.value ? '#007fff44' : '#333'}`,
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                    }}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
-    );
-};
-
-// ─── Rotation Plane Toggle ──────────────────────────────────────────
-
-const RotationPlaneToggle: React.FC = () => {
-    const [plane, setPlane] = useAtom(rotationPlaneAtom);
-    const options: Array<{ value: 'xy' | 'xz' | 'yz'; label: string; title: string }> = [
-        { value: 'xy', label: 'XY', title: 'Rotate in optical table plane (default)' },
-        { value: 'xz', label: 'XZ', title: 'Vertical tilt' },
-        { value: 'yz', label: 'YZ', title: 'Lateral tilt' },
-    ];
-    return (
-        <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
-            <span style={{ fontSize: '10px', color: '#666', lineHeight: '22px', marginRight: 4 }}>Plane:</span>
-            {options.map(opt => (
-                <button
-                    key={opt.value}
-                    onClick={() => setPlane(opt.value)}
-                    title={opt.title}
-                    style={{
-                        flex: 1,
-                        padding: '2px 0',
-                        fontSize: '10px',
-                        fontWeight: plane === opt.value ? 600 : 400,
-                        color: plane === opt.value ? '#ffab40' : '#888',
-                        background: plane === opt.value ? 'rgba(255,171,64,0.1)' : '#1a1a1a',
-                        border: `1px solid ${plane === opt.value ? '#ffab4044' : '#333'}`,
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                    }}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
-    );
-};
-
-// ─── Sub-Element Selector (for compound components) ─────────────────
-
-const SubElementSelector: React.FC = () => {
-    const [subIdx, setSubIdx] = useAtom(subElementIndexAtom);
-    const labels = ['S1 (Front)', 'S2 (Cement)', 'S3 (Back)'];
-    return (
-        <div style={{ marginTop: 4 }}>
-            <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 3 }}>Surface:</span>
-            <div style={{ display: 'flex', gap: 3 }}>
-                <button
-                    onClick={() => setSubIdx(null)}
-                    style={{
-                        flex: 1,
-                        padding: '2px 0',
-                        fontSize: '9px',
-                        fontWeight: subIdx === null ? 600 : 400,
-                        color: subIdx === null ? '#007fff' : '#888',
-                        background: subIdx === null ? 'rgba(100,255,218,0.1)' : '#1a1a1a',
-                        border: `1px solid ${subIdx === null ? '#007fff44' : '#333'}`,
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                    }}
-                >
-                    All
-                </button>
-                {labels.map((label, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setSubIdx(i)}
-                        style={{
-                            flex: 1,
-                            padding: '2px 0',
-                            fontSize: '9px',
-                            fontWeight: subIdx === i ? 600 : 400,
-                            color: subIdx === i ? '#ff6b9d' : '#888',
-                            background: subIdx === i ? 'rgba(255,107,157,0.1)' : '#1a1a1a',
-                            border: `1px solid ${subIdx === i ? '#ff6b9d44' : '#333'}`,
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// ─── Advanced Material Section ──────────────────────────────────────
-
-const AdvancedMaterialSection: React.FC<{
-    component: import('../physics/Component').OpticalComponent | undefined;
-    components: import('../physics/Component').OpticalComponent[];
-    selection: string[];
-    setComponents: (c: import('../physics/Component').OpticalComponent[]) => void;
-}> = ({ component, components, selection, setComponents }) => {
-    const [isOpen, setIsOpen] = React.useState(false);
-
-    if (!component) return null;
-    const isLens = component instanceof SphericalLens;
-    const isCylLens = component instanceof CylindricalLens;
-    const isPrism = component instanceof PrismLens;
-    const isAspheric = component instanceof AsphericLens;
-    if (!isLens && !isCylLens && !isPrism && !isAspheric) return null;
-
-    const currentMaterial = (component as any).material;
-    const materialNames = getMaterialNames();
-
-    const handleMaterialChange = (name: string) => {
-        const newComponents = components.map(c => {
-            if (c.id !== selection[0]) return c;
-            if (name === 'custom') {
-                if ('clearMaterial' in c) (c as any).clearMaterial();
-            } else {
-                const mat = MATERIAL_PRESETS[name];
-                if (mat && 'setMaterial' in c) (c as any).setMaterial(mat);
-            }
-            return c;
-        });
-        setComponents([...newComponents]);
-    };
-
-    return (
-        <div style={{ borderTop: '1px solid #333', paddingTop: 8 }}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                style={{
-                    background: 'none', border: 'none', color: '#888',
-                    cursor: 'pointer', fontSize: '11px', padding: 0,
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    width: '100%', textAlign: 'left',
-                }}
-            >
-                <span style={{
-                    display: 'inline-block', width: 12, textAlign: 'center',
-                    transition: 'transform 0.15s',
-                    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                }}>▶</span>
-                <span>Advanced: Glass Material</span>
-                {currentMaterial && (
-                    <span style={{ color: '#007fff', fontSize: '10px', marginLeft: 'auto' }}>
-                        {currentMaterial.name?.split('(')[0]?.trim()}
-                    </span>
-                )}
-            </button>
-            {isOpen && (
-                <div style={{ paddingTop: 8, paddingLeft: 16 }}>
-                    <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 4 }}>
-                        Material Preset
-                    </label>
-                    <select
-                        value={currentMaterial ? Object.keys(MATERIAL_PRESETS).find(k => MATERIAL_PRESETS[k].name === currentMaterial.name) || 'custom' : 'custom'}
-                        onChange={(e) => handleMaterialChange(e.target.value)}
-                        style={{
-                            width: '100%', padding: '4px 6px',
-                            background: '#1a1a1a', color: '#ddd',
-                            border: '1px solid #444', borderRadius: 4,
-                            fontSize: '11px', cursor: 'pointer',
-                        }}
-                    >
-                        <option value="custom">Custom (constant IoR)</option>
-                        {materialNames.map(name => (
-                            <option key={name} value={name}>
-                                {MATERIAL_PRESETS[name].name} (n={MATERIAL_PRESETS[name].n.toFixed(4)}, Vd={MATERIAL_PRESETS[name].abbeNumber})
-                            </option>
-                        ))}
-                    </select>
-                    {currentMaterial && (
-                        <div style={{ fontSize: '10px', color: '#666', marginTop: 6, lineHeight: 1.5 }}>
-                            <span>IoR varies with wavelength (Sellmeier formula)</span><br/>
-                            <span style={{ color: '#888' }}>
-                                Abbe# {currentMaterial.abbeNumber} • n<sub>d</sub>={currentMaterial.n.toFixed(4)}
-                            </span>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
+function clampValue(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
 
 // ─── CardViewer with pin toggle ─────────────────────────────────────
 
@@ -301,18 +102,18 @@ const CardViewerWithPin: React.FC<{
 const SolverPanel: React.FC<{
     rayConfig: any;
     setRayConfig: (v: any) => void;
+    setVisualizationMode: (mode: 'rods' | 'wave') => void;
     isRendering: boolean;
     setSolver3Trigger: (fn: (prev: number) => number) => void;
     animator: PropertyAnimator;
     animPlaying: boolean;
     setAnimPlaying: (v: boolean) => void;
-}> = ({ rayConfig, setRayConfig, isRendering, setSolver3Trigger, animator, animPlaying, setAnimPlaying }) => {
+}> = ({ rayConfig, setRayConfig, setVisualizationMode, isRendering, setSolver3Trigger, animator, animPlaying, setAnimPlaying }) => {
     const isMobile = useIsMobile();
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
     const hasChannels = animator.channels.length > 0;
     const [components] = useAtom(componentsAtom);
-    const hasSampleOrDetector = components.some(c => c instanceof Sample || c instanceof LXSampleHolder || c instanceof Camera || c instanceof PMT);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
 
@@ -368,11 +169,10 @@ const SolverPanel: React.FC<{
             {/* Panel */}
             <div style={{
                 position: isMobile ? 'fixed' : 'absolute',
-                top: 10,
-                right: 10,
-                width: 'min(320px, calc(100vw - 60px))',
-                maxHeight: 'calc(100vh - 30px)',
-                overflowY: 'auto',
+                top: 20,
+                right: 20,
+                width: 'min(280px, calc(100% - 40px))',
+                maxWidth: 'calc(100% - 40px)',
                 backgroundColor: 'rgba(30, 30, 30, 0.95)',
                 color: 'white',
                 padding: 15,
@@ -417,9 +217,9 @@ const SolverPanel: React.FC<{
                                 width: '22px',
                                 height: '22px',
                                 background: animPlaying ? '#1a3a2a' : '#333',
-                                border: `1px solid ${animPlaying ? '#007fff' : '#555'}`,
+                                border: `1px solid ${animPlaying ? '#64ffda' : '#555'}`,
                                 borderRadius: '4px',
-                                color: animPlaying ? '#007fff' : '#aaa',
+                                color: animPlaying ? '#64ffda' : '#aaa',
                                 cursor: 'pointer',
                                 fontSize: '11px',
                                 display: 'flex',
@@ -443,57 +243,67 @@ const SolverPanel: React.FC<{
                     <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
                         <input
                             type="range"
-                            min="4"
-                            max="128"
+                            min={String(MIN_FORWARD_RAY_COUNT)}
+                            max={String(MAX_FORWARD_RAY_COUNT)}
                             step="1"
-                            value={Math.max(4, rayConfig.rayCount)}
-                            onChange={(e) => setRayConfig({ ...rayConfig, rayCount: parseInt(e.target.value) })}
+                            value={clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)}
+                            onChange={(e) => setRayConfig({
+                                ...rayConfig,
+                                rayCount: clampValue(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                            })}
                             style={{ width: '80px' }}
                         />
-                        <span style={{ minWidth: '20px' }}>{snapToRingBoundary(Math.max(4, rayConfig.rayCount))} Rays</span>
+                        <span style={{ minWidth: '20px' }}>
+                            {snapToRingBoundary(clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT))} Rays
+                        </span>
                     </div>
-
-                    {/* E&M (toggleable) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 8 }}>
-                        <div style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: rayConfig.solver2Enabled ? '#4af' : '#555',
-                            transition: 'background-color 0.2s'
-                        }}></div>
+                    <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
                         <input
-                            type="checkbox"
-                            checked={rayConfig.solver2Enabled}
-                            onChange={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                            style={{ cursor: 'pointer' }}
+                            type="range"
+                            min={String(MIN_REVERSE_PATH_COUNT)}
+                            max={String(MAX_REVERSE_PATH_COUNT)}
+                            step="1"
+                            value={clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)}
+                            onChange={(e) => setRayConfig({
+                                ...rayConfig,
+                                reversePathCount: clampValue(parseInt(e.target.value), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                            })}
+                            style={{ width: '80px' }}
                         />
                         <span
-                            style={{ opacity: rayConfig.solver2Enabled ? 1 : 0.5, cursor: 'pointer' }}
-                            onClick={() => setRayConfig({ ...rayConfig, solver2Enabled: !rayConfig.solver2Enabled, emFieldVisible: !rayConfig.solver2Enabled ? rayConfig.emFieldVisible : false })}
-                        >E&M</span>
+                            style={{ minWidth: '74px', color: '#aaa', fontSize: '10px' }}
+                            title="Backward ray paths retained for rod and wave view after Calculate Emission and Image"
+                        >
+                            {clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)} Reverse
+                        </span>
+                    </div>
 
-                        {/* E-field visualization toggle */}
-                        {rayConfig.solver2Enabled && (
-                            <button
-                                onClick={() => setRayConfig({ ...rayConfig, emFieldVisible: !rayConfig.emFieldVisible })}
-                                title={rayConfig.emFieldVisible ? 'Hide E-field visualization' : 'Show 3D E-field vectors'}
-                                style={{
-                                    background: rayConfig.emFieldVisible ? '#2a3a5a' : 'none',
-                                    border: rayConfig.emFieldVisible ? '1px solid #4af' : '1px solid #444',
-                                    borderRadius: '3px',
-                                    color: rayConfig.emFieldVisible ? '#4af' : '#666',
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                    padding: '1px 4px',
-                                    lineHeight: 1,
-                                    marginLeft: '4px',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                👁
-                            </button>
-                        )}
+                    <div style={{ display: 'flex', gap: '6px', marginTop: 8 }}>
+                        {(['rods', 'wave'] as const).map(mode => {
+                            const active = rayConfig.viewerMode === mode;
+                            const label = mode === 'rods' ? 'Rod View' : 'Wave View';
+                            return (
+                                <button
+                                    key={mode}
+                                    onClick={() => setVisualizationMode(mode)}
+                                    title={mode === 'rods'
+                                        ? 'Draw individual rods'
+                                        : 'Draw grouped bundles with a representative wave'}
+                                    style={{
+                                        padding: '2px 8px',
+                                        background: active ? '#24415c' : '#1a1a1a',
+                                        border: active ? '1px solid #4af' : '1px solid #444',
+                                        borderRadius: '999px',
+                                        color: active ? '#d7ecff' : '#888',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Solver 3: Calculate Emission and Image */}
@@ -518,15 +328,15 @@ const SolverPanel: React.FC<{
                                             setSolver3Trigger((prev: number) => prev + 1);
                                         }
                                     }}
-                                    disabled={isRendering || !rayConfig.solver2Enabled || !hasSampleOrDetector}
-                                    title={!hasSampleOrDetector ? 'Add a Sample or detector (Camera/PMT) first' : !rayConfig.solver2Enabled ? 'Enable E&M first — imaging requires Gaussian beam data' : hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
+                                    disabled={isRendering}
+                                    title={hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
                                     style={{
                                         padding: '3px 10px',
-                                        background: isRendering || !rayConfig.solver2Enabled || !hasSampleOrDetector ? '#333' : '#1a5a2a',
+                                        background: isRendering ? '#333' : '#1a5a2a',
                                         border: '1px solid #444',
                                         borderRadius: '4px',
-                                        color: isRendering || !rayConfig.solver2Enabled || !hasSampleOrDetector ? '#666' : '#8f8',
-                                        cursor: isRendering || !rayConfig.solver2Enabled || !hasSampleOrDetector ? 'not-allowed' : 'pointer',
+                                        color: isRendering ? '#666' : '#8f8',
+                                        cursor: isRendering ? 'not-allowed' : 'pointer',
                                         fontSize: '11px',
                                         fontFamily: 'monospace',
                                         transition: 'background 0.2s',
@@ -587,10 +397,10 @@ export const Inspector: React.FC = () => {
     const [selection, setSelection] = useAtom(selectionAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
+    const [, setVisualizationMode] = useAtom(setVisualizationModeAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
-    const rotationPlane = useAtomValue(rotationPlaneAtom);
     const [animator] = useAtom(animatorAtom);
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
     const [animPlaying] = useAtom(animationPlayingAtom);
@@ -800,7 +610,7 @@ export const Inspector: React.FC = () => {
                     setLocalCurvedMirrorRoC(Math.abs(selectedComponent.radiusOfCurvature) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.radiusOfCurvature * 100) / 100));
                     setLocalCurvedMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
-                if (selectedComponent instanceof PrismLens) {
+                if (selectedComponent instanceof PrismLens && !(selectedComponent instanceof PolygonScanner)) {
                     setLocalApexAngle(String(Math.round(selectedComponent.apexAngle * 180 / Math.PI * 100) / 100));
                     setLocalPrismHeight(String(selectedComponent.height));
                     setLocalPrismIor(String(selectedComponent.ior));
@@ -844,8 +654,8 @@ export const Inspector: React.FC = () => {
                     }
                     setLocalBands(sp.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                 }
-                if (selectedComponent instanceof Sample || selectedComponent instanceof LXSampleHolder) {
-                    const comp = selectedComponent as (Sample | LXSampleHolder);
+                if (selectedComponent instanceof Sample || selectedComponent instanceof SampleChamber) {
+                    const comp = selectedComponent as (Sample | SampleChamber);
                     setLocalExBands(comp.excitationSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                     setLocalEmBands(comp.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                     setLocalFluorEff(comp.fluorescenceEfficiency.toPrecision(3));
@@ -897,34 +707,16 @@ export const Inspector: React.FC = () => {
 
         const newComponents = components.map(c => {
             if (c.id === selection[0]) {
-                // Determine rotation axis from rotation plane setting
-                let axis: Vector3;
-                let eulerOrder: 'ZYX' | 'YXZ' | 'XZY';
-                let extractFn: (e: Euler) => number;
+                // Unified rotation: same approach as Q/E keys and Shift+scroll.
+                // Extract current world-Z angle, compute delta to desired, premultiply.
+                // This preserves each component's base rotation (Y-axis for lenses,
+                // identity for blockers/cards, etc.) regardless of component type.
+                const currentEuler = new Euler().setFromQuaternion(c.rotation, 'ZYX');
+                const currentZRad = currentEuler.z;
+                const desiredZRad = val * Math.PI / 180;
+                const deltaZ = desiredZRad - currentZRad;
 
-                if (rotationPlane === 'xz') {
-                    // Vertical tilt → rotate around Y
-                    axis = new Vector3(0, 1, 0);
-                    eulerOrder = 'YXZ';
-                    extractFn = (e) => e.y;
-                } else if (rotationPlane === 'yz') {
-                    // Lateral tilt → rotate around X
-                    axis = new Vector3(1, 0, 0);
-                    eulerOrder = 'XZY';
-                    extractFn = (e) => e.x;
-                } else {
-                    // XY (default) → rotate around Z (world up)
-                    axis = new Vector3(0, 0, 1);
-                    eulerOrder = 'ZYX';
-                    extractFn = (e) => e.z;
-                }
-
-                const currentEuler = new Euler().setFromQuaternion(c.rotation, eulerOrder);
-                const currentRad = extractFn(currentEuler);
-                const desiredRad = val * Math.PI / 180;
-                const delta = desiredRad - currentRad;
-
-                const qStep = new Quaternion().setFromAxisAngle(axis, delta);
+                const qStep = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), deltaZ);
                 c.rotation.premultiply(qStep);
 
                 const euler = new Euler().setFromQuaternion(c.rotation);
@@ -1008,36 +800,33 @@ export const Inspector: React.FC = () => {
     useEffect(() => { setLocalName(selectedComponent?.name ?? ''); }, [selectedComponent?.id]);
 
     if (!selectedComponent) {
-        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />;
+        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />;
     }
 
-    const isCard = selectedComponent instanceof Card;
-    const isMirror = selectedComponent instanceof Mirror;
-    const isBlocker = selectedComponent instanceof Blocker;
-    const isLens = selectedComponent instanceof SphericalLens;
-    const isIdealLens = selectedComponent instanceof IdealLens;
-    const isObjective = selectedComponent instanceof Objective;
-    const isLaser = selectedComponent instanceof Laser;
-    const isLamp = selectedComponent instanceof Lamp;
-    const isPrism = selectedComponent instanceof PrismLens;
-    const isWaveplate = selectedComponent instanceof Waveplate;
-    const isAperture = selectedComponent instanceof Aperture;
-    const isSlitAperture = selectedComponent instanceof SlitAperture;
-    const isFilter = selectedComponent instanceof Filter;
-    const isDichroic = selectedComponent instanceof DichroicMirror;
-    const isCylindrical = selectedComponent instanceof CylindricalLens;
-    const isCurvedMirror = selectedComponent instanceof CurvedMirror;
-    const isFlatMirror = selectedComponent instanceof Mirror && !(selectedComponent instanceof CurvedMirror) && !(selectedComponent instanceof DichroicMirror) && !(selectedComponent instanceof PolygonScanner);
-    const isPolygonScanner = selectedComponent instanceof PolygonScanner;
-    const isSample = selectedComponent instanceof Sample || selectedComponent instanceof LXSampleHolder;
-    const isGalvoCapable = isFlatMirror || isCurvedMirror;
-    const isScanHead = selectedComponent instanceof GalvoScanHead || (selectedComponent && selectedComponent.constructor.name === 'DualGalvoScanHead');
-    const isGalvoOrScanHead = isGalvoCapable || isScanHead;
-    const isPMT = selectedComponent instanceof PMT;
-    const isDoublet = selectedComponent instanceof AchromaticDoublet;
-    const isAspheric = selectedComponent instanceof AsphericLens;
-
-    const hasSpectralProfile = isFilter || isDichroic;
+    const {
+        isCard,
+        isMirror,
+        isBlocker,
+        isLens,
+        isIdealLens,
+        isObjective,
+        isLaser,
+        isLamp,
+        isPrism,
+        isWaveplate,
+        isAperture,
+        isSlitAperture,
+        isDichroic,
+        isCylindrical,
+        isCurvedMirror,
+        isPolygonScanner,
+        isSample,
+        isScanHead,
+        isGalvoOrScanHead,
+        isPMT,
+        isCamera,
+        hasSpectralProfile,
+    } = getComponentCapabilities(selectedComponent);
 
     const commitLaserParams = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
@@ -1089,11 +878,11 @@ export const Inspector: React.FC = () => {
     return (
         <div style={{
             position: 'absolute',
-            top: 10,
-            right: 10,
-            width: 'min(320px, calc(100vw - 60px))',
-            maxHeight: 'calc(100vh - 30px)',
-            overflowY: 'auto',
+            top: 20,
+            right: 20,
+            width: 'min(280px, calc(100% - 40px))',
+            maxWidth: 'calc(100% - 40px)',
+            maxHeight: 'calc(100% - 40px)',
             backgroundColor: 'rgba(30, 30, 30, 0.95)',
             color: '#eee',
             padding: 14,
@@ -1101,6 +890,7 @@ export const Inspector: React.FC = () => {
             border: '1px solid #444',
             fontFamily: 'Inter, sans-serif',
             boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            overflowY: 'auto',
         }}>
             {/* Editable name + delete trash icon */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, borderBottom: '1px solid #555', paddingBottom: 8 }}>
@@ -1152,8 +942,6 @@ export const Inspector: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Axis Lock Toggle */}
-                <AxisLockToggle />
                 {/* X / Y / Z / Rotation — compact single row */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 70px', gap: 6 }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1189,7 +977,7 @@ export const Inspector: React.FC = () => {
                         />
                     </div>
                     <ScrubInput
-                        label={rotationPlane === 'xy' ? 'Rot (Z)' : rotationPlane === 'xz' ? 'Rot (Y)' : 'Rot (X)'}
+                        label="Rot"
                         suffix="°"
                         value={localRot}
                         onChange={setLocalRot}
@@ -1198,12 +986,6 @@ export const Inspector: React.FC = () => {
                         step={1}
                     />
                 </div>
-
-                {/* Rotation Plane Toggle */}
-                <RotationPlaneToggle />
-
-                {/* Sub-element selector (for compound components like doublets) */}
-                {isDoublet && <SubElementSelector />}
 
                 {/* Dynamic Properties */}
                 {isCard && (
@@ -1234,7 +1016,8 @@ export const Inspector: React.FC = () => {
                 )}
 
                 {isBlocker && (
-                    <CollapsibleSection title="Blocker Geometry">
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Blocker Geometry</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <ScrubInput
                                 label="Diameter"
@@ -1279,7 +1062,7 @@ export const Inspector: React.FC = () => {
                                 max={50}
                             />
                         </div>
-                    </CollapsibleSection>
+                    </div>
                 )}
 
                 {isMirror && (
@@ -2004,7 +1787,7 @@ export const Inspector: React.FC = () => {
                 )}
 
                 {isLens && (
-                    <CollapsibleSection title="Lens Properties">
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         {/* Lens Type Selector */}
                         <div style={{ marginBottom: 10 }}>
                             <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Lens Type</label>
@@ -2082,14 +1865,6 @@ export const Inspector: React.FC = () => {
                             />
                         </div>
 
-                        {/* Advanced: Material Selection */}
-                        <AdvancedMaterialSection
-                            component={components.find(c => c.id === selection[0])}
-                            components={components}
-                            selection={selection}
-                            setComponents={setComponents}
-                        />
-
                         {/* Surface Radii — scrubbable */}
                         <div style={{ borderTop: '1px solid #333', paddingTop: 8 }}>
                             <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Surface Radii (drag labels ↔ to scrub)</label>
@@ -2114,278 +1889,7 @@ export const Inspector: React.FC = () => {
                                 />
                             </div>
                         </div>
-                    </CollapsibleSection>
-                )}
-
-                {isDoublet && (
-                    <CollapsibleSection title="Achromatic Doublet">
-                        <div style={{ fontSize: '10px', color: '#888', marginBottom: 8 }}>
-                            f = {(selectedComponent as AchromaticDoublet).focalLength.toFixed(1)} mm
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-                            <ScrubInput
-                                label="R1 (Front)"
-                                value={String((selectedComponent as AchromaticDoublet).r1.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.setSurfaceRadius(0, val);
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={2.0}
-                                allowInfinity
-                                title="Front surface radius of curvature"
-                            />
-                            <ScrubInput
-                                label="R2 (Cement)"
-                                value={String((selectedComponent as AchromaticDoublet).r2.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.setSurfaceRadius(1, val);
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={2.0}
-                                allowInfinity
-                                title="Cement interface radius"
-                            />
-                            <ScrubInput
-                                label="R3 (Back)"
-                                value={String((selectedComponent as AchromaticDoublet).r3.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.setSurfaceRadius(2, val);
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={2.0}
-                                allowInfinity
-                                title="Back surface radius of curvature"
-                            />
-                            <ScrubInput
-                                label="Aperture"
-                                suffix="mm"
-                                value={String((selectedComponent as AchromaticDoublet).apertureRadius.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.apertureRadius = val;
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.5}
-                                min={1}
-                                max={50}
-                            />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-                            <ScrubInput
-                                label="Crown t"
-                                suffix="mm"
-                                value={String((selectedComponent as AchromaticDoublet).thickness1.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.thickness1 = val;
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.2}
-                                min={0.5}
-                                max={20}
-                            />
-                            <ScrubInput
-                                label="Flint t"
-                                suffix="mm"
-                                value={String((selectedComponent as AchromaticDoublet).thickness2.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AchromaticDoublet) {
-                                            c.thickness2 = val;
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.2}
-                                min={0.5}
-                                max={20}
-                            />
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#666', marginTop: 4 }}>
-                            Crown: {(selectedComponent as AchromaticDoublet).material1.name} •
-                            Flint: {(selectedComponent as AchromaticDoublet).material2.name}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {isAspheric && (
-                    <CollapsibleSection title="Aspheric Lens">
-                        <div style={{ fontSize: '10px', color: '#888', marginBottom: 8 }}>
-                            f = {(selectedComponent as AsphericLens).focalLength.toFixed(1)} mm
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-                            <ScrubInput
-                                label="Front R"
-                                value={String((selectedComponent as AsphericLens).front.R.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.front = { ...c.front, R: val };
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={2.0}
-                                allowInfinity
-                                title="Front surface radius of curvature"
-                            />
-                            <ScrubInput
-                                label="Back R"
-                                value={String((selectedComponent as AsphericLens).back.R.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.back = { ...c.back, R: val };
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={2.0}
-                                allowInfinity
-                                title="Back surface radius of curvature"
-                            />
-                            <ScrubInput
-                                label="Front k"
-                                value={String((selectedComponent as AsphericLens).front.k.toFixed(2))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.front = { ...c.front, k: val };
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.1}
-                                title="Conic constant: 0=sphere, -1=parabola"
-                            />
-                            <ScrubInput
-                                label="Back k"
-                                value={String((selectedComponent as AsphericLens).back.k.toFixed(2))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.back = { ...c.back, k: val };
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.1}
-                                title="Conic constant: 0=sphere, -1=parabola"
-                            />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-                            <ScrubInput
-                                label="Aperture"
-                                suffix="mm"
-                                value={String((selectedComponent as AsphericLens).apertureRadius.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.apertureRadius = val;
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.5}
-                                min={1}
-                                max={50}
-                            />
-                            <ScrubInput
-                                label="Thickness"
-                                suffix="mm"
-                                value={String((selectedComponent as AsphericLens).thickness.toFixed(1))}
-                                onChange={() => {}}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof AsphericLens) {
-                                            c.thickness = val;
-                                            c.invalidateMesh();
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.2}
-                                min={0.5}
-                                max={20}
-                            />
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#666', marginTop: 4 }}>
-                            {(selectedComponent as AsphericLens).materialName}
-                        </div>
-                    </CollapsibleSection>
+                    </div>
                 )}
 
                 {isPrism && (
@@ -2674,11 +2178,14 @@ export const Inspector: React.FC = () => {
                                     onChange={(e) => {
                                         const newWavelength = parseInt(e.target.value);
                                         setLocalWavelength(newWavelength);
-
-                                        if (selectedComponent && selectedComponent instanceof Laser) {
-                                            selectedComponent.wavelength = newWavelength;
-                                            setComponents([...components]);
-                                        }
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof Laser) {
+                                                c.wavelength = newWavelength;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
                                     }}
                                     style={{ flex: 1 }}
                                 />
@@ -2792,10 +2299,10 @@ export const Inspector: React.FC = () => {
                                 onChange={setLocalApertureDiameter}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
+                                    if (isNaN(val) || val < 0) return;
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Aperture) {
-                                            c.openingDiameter = Math.min(val, c.housingDiameter - 1);
+                                            c.openingDiameter = Math.max(0, Math.min(val, c.housingDiameter - 1));
                                             c.version++;
                                             return c;
                                         }
@@ -2804,7 +2311,7 @@ export const Inspector: React.FC = () => {
                                     setComponents([...newComponents]);
                                 }}
                                 speed={0.5}
-                                min={0.5}
+                                min={0}
                                 max={24}
                                 title="Opening diameter of the iris aperture"
                             />
@@ -2823,10 +2330,10 @@ export const Inspector: React.FC = () => {
                                 onChange={setLocalSlitWidth}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
+                                    if (isNaN(val) || val < 0) return;
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof SlitAperture) {
-                                            c.slitWidth = Math.min(val, c.housingDiameter - 1);
+                                            c.slitWidth = Math.max(0, Math.min(val, c.housingDiameter - 1));
                                             c.version++;
                                             return c;
                                         }
@@ -2835,7 +2342,7 @@ export const Inspector: React.FC = () => {
                                     setComponents([...newComponents]);
                                 }}
                                 speed={0.3}
-                                min={0.1}
+                                min={0}
                                 max={24}
                                 title="Width of the slit opening"
                             />
@@ -3235,7 +2742,7 @@ export const Inspector: React.FC = () => {
                     );
                 })()}
 
-                {/* ── Piezo Scan — for Sample and LXSampleHolder ── */}
+                {/* ── Piezo Scan — for Sample and SampleChamber ── */}
                 {isSample && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Piezo Scan</label>
@@ -3339,7 +2846,7 @@ export const Inspector: React.FC = () => {
                                                     if (animator.channels.length === 0) setAnimPlaying(false);
                                                     setChannelVersion(v => v + 1);
                                                 } else {
-                                                    const comp = selectedComponent as (Sample | LXSampleHolder);
+                                                    const comp = selectedComponent as (Sample | SampleChamber);
                                                     const axis = currentProp.split('.')[1] as 'x' | 'y' | 'z';
                                                     const center = comp.specimenOffset[axis];
                                                     const halfMm = parseFloat(localPiezoHalfMm) || 1;
@@ -3647,8 +3154,12 @@ export const Inspector: React.FC = () => {
                 })()}
 
 
-                {/* Card Viewer: E&M beam cross-section + polarization */}
-                {selectedComponent instanceof Card && (
+                {/* Card Viewer: beam cross-section + polarization */}
+                {supportsLensProfileEditor(selectedComponent) && (
+                    <LensProfileEditor component={selectedComponent} />
+                )}
+
+                {isCard && (
                     <CardViewerWithPin
                         card={selectedComponent as Card}
                         pinnedIds={pinnedIds}
@@ -3657,7 +3168,7 @@ export const Inspector: React.FC = () => {
                 )}
 
                 {/* Camera Viewer: Solver 3 render output */}
-                {selectedComponent instanceof Camera && (
+                {isCamera && (
                     <div style={{ marginTop: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ fontSize: '11px', color: '#aaa' }}>Camera Image</span>
@@ -3687,9 +3198,6 @@ export const Inspector: React.FC = () => {
                             camera={selectedComponent as Camera}
                             isRendering={isRendering}
                             onRefresh={() => {
-                                if (!rayConfig.solver2Enabled) {
-                                    setRayConfig({ ...rayConfig, solver2Enabled: true });
-                                }
                                 setSolver3Trigger(n => n + 1);
                             }}
                         />
@@ -3886,9 +3394,6 @@ export const Inspector: React.FC = () => {
                                         <div style={{ display: 'flex', gap: '4px' }}>
                                             <button
                                                 onClick={() => {
-                                                    if (!rayConfig.solver2Enabled) {
-                                                        setRayConfig({ ...rayConfig, solver2Enabled: true });
-                                                    }
                                                     // Trigger the PMT raster scan effect
                                                     setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
                                                 }}
@@ -4001,5 +3506,3 @@ const inputStyle: React.CSSProperties = {
     width: '100%',
     boxSizing: 'border-box'
 };
-
-

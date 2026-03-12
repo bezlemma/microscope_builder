@@ -1,12 +1,14 @@
 import { Vector3 } from 'three';
 import { Ray, JonesVector, Coherence } from './types';
 import { OpticalComponent } from './Component';
-import { Laser } from '../parts/Laser';
-import { Lamp } from '../parts/Lamp';
-import { Complex, cAdd, cMul, cDiv, cReal, cInv } from './complex';
+import { Complex, cInv } from './complex';
+import { Solver1 } from './Solver1';
 
-
-// ─── Gaussian Beam Physics ────────────────────────────────────────────
+// ─── Legacy q-Parameter Helpers ───────────────────────────────────────
+//
+// Solver 2 now builds beamlet envelopes directly from Solver 1 ray paths.
+// These helpers remain as a compatibility path for tests, fixtures, and any
+// callers that still construct analytic q-based segments by hand.
 
 /**
  * Compute beam radius w(z) from the q-parameter.
@@ -16,7 +18,7 @@ import { Complex, cAdd, cMul, cDiv, cReal, cInv } from './complex';
 export function beamRadius(q: Complex, wavelengthMm: number): number {
     const invQ = cInv(q);
     const imInvQ = invQ.im;
-    if (imInvQ >= 0) return 100; // Fallback: shouldn't happen for valid q
+    if (imInvQ >= 0) return 100;
     return Math.sqrt(-wavelengthMm / (Math.PI * imInvQ));
 }
 
@@ -31,26 +33,6 @@ export function wavefrontRadius(q: Complex): number {
 }
 
 /**
- * Apply ABCD matrix to q-parameter:
- *   q_out = (A·q + B) / (C·q + D)
- */
-function applyABCD(q: Complex, abcd: [number, number, number, number]): Complex {
-    const [A, B, C, D] = abcd;
-    const numerator = cAdd(cMul(cReal(A), q), cReal(B));
-    const denominator = cAdd(cMul(cReal(C), q), cReal(D));
-    return cDiv(numerator, denominator);
-}
-
-/**
- * Free-space propagation of q-parameter:
- *   q_out = q_in + d
- * (d is the physical distance in mm)
- */
-function propagateFreeSpace(q: Complex, distance: number): Complex {
-    return cAdd(q, cReal(distance));
-}
-
-/**
  * Initialize q-parameter from beam waist:
  *   q₀ = i · π · w₀² / λ
  * where w₀ is beam waist radius and λ is wavelength (both in mm).
@@ -62,301 +44,109 @@ export function initialQ(waistRadius: number, wavelengthMm: number): Complex {
 // ─── Data Structures ──────────────────────────────────────────────────
 
 /**
- * A single segment of the Gaussian beam, between two interaction points.
- * The beam is sampled along this segment to build the envelope mesh.
+ * A single Solver 2 beam segment.
+ *
+ * The production path uses `footprintStart`/`footprintEnd`, estimated from the
+ * neighboring Solver 1 rays in the same beamlet cohort. The q fields remain for
+ * legacy callers that still construct analytic Gaussian segments directly.
  */
 export interface GaussianBeamSegment {
     start: Vector3;
     end: Vector3;
     direction: Vector3;
     wavelength: number;     // meters (SI, matching Ray.wavelength)
-    power: number;          // Axial power P(z)
+    power: number;          // Beam power carried by this beamlet segment
+    sourceId?: string;
+    bundleKey?: string;
 
-    // q-parameter at start and end (tangential / X-plane)
+    // Legacy q-parameter data retained for fallback/tests.
     qx_start: Complex;
     qx_end: Complex;
-    // q-parameter at start and end (sagittal / Y-plane)
     qy_start: Complex;
     qy_end: Complex;
 
-    // Polarization state at the start of this segment (from Solver 1 ray data)
+    // Beamlet footprint estimate [mm] at the segment start/end.
+    footprintStart?: number;
+    footprintEnd?: number;
+
     polarization: JonesVector;
-    // Accumulated optical path length at segment start (mm)
     opticalPathLength: number;
-    // Refractive index of the medium (1.0 for air, >1 for glass)
     refractiveIndex: number;
-    // Coherence of the source (propagated for interference logic)
     coherenceMode: Coherence;
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getSegmentLength(segment: GaussianBeamSegment): number {
+    return segment.start.distanceTo(segment.end);
+}
+
+function legacySegmentBeamRadii(
+    segment: GaussianBeamSegment,
+    distanceAlong: number
+): { wx: number; wy: number } {
+    const wavelengthMm = segment.wavelength * 1e3;
+    const effectiveWavelength = wavelengthMm / (segment.refractiveIndex || 1.0);
+    const qx: Complex = { re: segment.qx_start.re + distanceAlong, im: segment.qx_start.im };
+    const qy: Complex = { re: segment.qy_start.re + distanceAlong, im: segment.qy_start.im };
+    return {
+        wx: beamRadius(qx, effectiveWavelength),
+        wy: beamRadius(qy, effectiveWavelength),
+    };
+}
+
+/**
+ * Beam radii at a point along a segment.
+ *
+ * Production segments use beamlet footprints from Solver 1 geometry.
+ * Legacy/manual segments fall back to q-parameter evaluation.
+ */
+export function segmentBeamRadii(
+    segment: GaussianBeamSegment,
+    distanceAlong: number
+): { wx: number; wy: number } {
+    const segLength = getSegmentLength(segment);
+    const clampedDistance = clamp(distanceAlong, 0, segLength);
+
+    if (segment.footprintStart !== undefined || segment.footprintEnd !== undefined) {
+        const start = Math.max(segment.footprintStart ?? segment.footprintEnd ?? 0.05, 0.05);
+        const end = Math.max(segment.footprintEnd ?? segment.footprintStart ?? start, 0.05);
+        const frac = segLength > 1e-9 ? clampedDistance / segLength : 0;
+        const radius = start + (end - start) * frac;
+        return { wx: radius, wy: radius };
+    }
+
+    return legacySegmentBeamRadii(segment, clampedDistance);
+}
+
+export function segmentBeamRadiiAtFraction(
+    segment: GaussianBeamSegment,
+    fraction: number
+): { wx: number; wy: number } {
+    const segLength = getSegmentLength(segment);
+    return segmentBeamRadii(segment, clamp(fraction, 0, 1) * segLength);
 }
 
 // ─── Solver 2 ─────────────────────────────────────────────────────────
 
 export class Solver2 {
     /**
-     * Propagate Gaussian beams along the Solver 1 main ray skeleton.
-     * 
-     * @param allPaths All ray paths from Solver 1
-     * @param components Scene components (for ABCD lookup)
-     * @returns Array of beam segment arrays (one per main ray branch)
+     * Compatibility wrapper: beamlet construction now lives in Solver 1.
      */
     propagate(
         allPaths: Ray[][],
         components: OpticalComponent[]
     ): GaussianBeamSegment[][] {
-        // 1. Filter to main ray paths only
-        const mainPaths = allPaths.filter(
-            p => p.length > 0 && p[0].isMainRay === true
-        );
-
-        if (mainPaths.length === 0) return [];
-
-        // Build a component lookup by ID for fast matching
-        const componentById = new Map<string, OpticalComponent>();
-        for (const c of components) {
-            componentById.set(c.id, c);
-        }
-
-        // 2. Find the source for each main path to get initial q.
-        //    Both Laser and Lamp components have beamRadius and power properties.
-        const sourceComponents = components.filter(
-            c => c instanceof Laser || c instanceof Lamp
-        ) as (Laser | Lamp)[];
-
-        const allSegments: GaussianBeamSegment[][] = [];
-
-        for (const path of mainPaths) {
-            if (path.length < 1) continue;
-
-            const wavelengthSI = path[0].wavelength; // meters
-            const wavelengthMm = wavelengthSI * 1e3; // Convert m → mm (world units)
-
-            // Find source by sourceId (works for both Laser and Lamp)
-            const sourceId = path[0].sourceId;
-            const source = sourceComponents.find(s => s.id === sourceId);
-            const waist = source ? source.beamRadius : 2; // mm default
-
-            // Initialize q-parameter (symmetric beam: qx = qy)
-            let qx = initialQ(waist, wavelengthMm);
-            let qy = initialQ(waist, wavelengthMm);
-            let power = source ? source.power : 1.0;
-
-            const segments: GaussianBeamSegment[] = [];
-
-            // 3. Walk the ray tree segment by segment
-            for (let i = 0; i < path.length; i++) {
-                const ray = path[i];
-
-                // Update power from ray intensity (polarizers, beam splitters, etc.)
-                power = ray.intensity;
-
-                // If beam is fully extinct, stop generating segments
-                if (power < 1e-6) break;
-
-                // Determine segment length
-                let segmentLength: number;
-                if (i < path.length - 1) {
-                    // Distance to next interaction point
-                    segmentLength = ray.interactionDistance ??
-                        path[i + 1].origin.clone().sub(ray.origin).length();
-                } else {
-                    // Last segment: use interactionDistance or extend to reasonable distance
-                    segmentLength = ray.interactionDistance ?? 200;
-                }
-
-                if (segmentLength < 1e-6) continue;
-
-                // Generate segments for internal path through glass (if any)
-                // The ray's entryPoint and internalPath describe the path through
-                // a refractive component (prism, lens). The path is:
-                //   entryPoint → [internalPath bounce points] → ray.origin
-                if (ray.entryPoint) {
-                    const internalPts: Vector3[] = [ray.entryPoint.clone()];
-                    if (ray.internalPath) {
-                        for (const p of ray.internalPath) internalPts.push(p.clone());
-                    }
-                    internalPts.push(ray.origin.clone());
-
-                    // Look up the refractive index of the component at the entry point
-                    const glassComponent = this.findComponentAt(ray.entryPoint, components);
-                    const glassIOR = (glassComponent && 'ior' in glassComponent)
-                        ? (glassComponent as any).ior as number : 1.5;
-                    const glassAbsorption = glassComponent
-                        ? glassComponent.absorptionCoeff : 0;
-
-                    for (let ip = 0; ip < internalPts.length - 1; ip++) {
-                        const iStart = internalPts[ip];
-                        const iEnd = internalPts[ip + 1];
-                        const iDir = iEnd.clone().sub(iStart);
-                        const iLen = iDir.length();
-                        if (iLen < 1e-6) continue;
-                        iDir.normalize();
-
-                        // Propagate q through this internal leg using reduced distance d/n.
-                        // Inside a medium of index n, the q-parameter advances as q' = q + d/n.
-                        // This makes the beam envelope render correctly inside glass
-                        // (gradual width change rather than flat constant).
-                        const reducedDist = iLen / glassIOR;
-                        const qx_int_end = propagateFreeSpace(qx, reducedDist);
-                        const qy_int_end = propagateFreeSpace(qy, reducedDist);
-
-                        segments.push({
-                            start: iStart,
-                            end: iEnd,
-                            direction: iDir,
-                            wavelength: wavelengthSI,
-                            power,
-                            qx_start: { ...qx },
-                            qx_end: { ...qx_int_end },
-                            qy_start: { ...qy },
-                            qy_end: { ...qy_int_end },
-                            polarization: {
-                                x: { ...ray.polarization.x },
-                                y: { ...ray.polarization.y }
-                            },
-                            opticalPathLength: ray.opticalPathLength,
-                            refractiveIndex: glassIOR,
-                            coherenceMode: ray.coherenceMode
-                        });
-
-                        // Beer-Lambert absorption: P(z) = P₀ · exp(-μ · Δz)
-                        if (glassAbsorption > 0) {
-                            power *= Math.exp(-glassAbsorption * iLen);
-                        }
-
-                        qx = qx_int_end;
-                        qy = qy_int_end;
-                    }
-                }
-
-                // Propagate q through free space for this segment
-                const qx_end = propagateFreeSpace(qx, segmentLength);
-                const qy_end = propagateFreeSpace(qy, segmentLength);
-
-                // Record the segment
-                const endPoint = ray.origin.clone().add(
-                    ray.direction.clone().multiplyScalar(segmentLength)
-                );
-
-                segments.push({
-                    start: ray.origin.clone(),
-                    end: endPoint,
-                    direction: ray.direction.clone(),
-                    wavelength: wavelengthSI,
-                    power,
-                    qx_start: { ...qx },
-                    qx_end: { ...qx_end },
-                    qy_start: { ...qy },
-                    qy_end: { ...qy_end },
-                    polarization: {
-                        x: { ...ray.polarization.x },
-                        y: { ...ray.polarization.y }
-                    },
-                    opticalPathLength: ray.opticalPathLength,
-                    refractiveIndex: 1.0,
-                    coherenceMode: ray.coherenceMode
-                });
-
-                // Update q for the next iteration (after free-space propagation)
-                qx = qx_end;
-                qy = qy_end;
-
-                // 4. Apply component ABCD at the interaction point (if not last segment)
-                if (i < path.length - 1) {
-                    // Use Solver 1's interaction tag for exact component match
-                    const interactingComponent = ray.interactionComponentId
-                        ? componentById.get(ray.interactionComponentId) ?? null
-                        : null;
-
-                    if (interactingComponent) {
-                        // Get ABCD and apply (pass ray direction for prism)
-                        const { abcdX, abcdY, apertureRadius } =
-                            this.getComponentABCD(interactingComponent, ray.direction, wavelengthSI);
-
-                        // Aperture clipping check
-                        const wx = beamRadius(qx, wavelengthMm);
-                        const wy = beamRadius(qy, wavelengthMm);
-                        const wMax = Math.max(wx, wy);
-
-                        if (apertureRadius > 0) {
-                            const truncation = apertureRadius / wMax;
-                            if (truncation < 2.0) {
-                                // Beam is clipped — reset to aperture size
-                                qx = initialQ(apertureRadius, wavelengthMm);
-                                qy = initialQ(apertureRadius, wavelengthMm);
-                            } else {
-                                // Normal ABCD transform
-                                qx = applyABCD(qx, abcdX);
-                                qy = applyABCD(qy, abcdY);
-                            }
-                        } else {
-                            // No aperture info — just apply ABCD
-                            qx = applyABCD(qx, abcdX);
-                            qy = applyABCD(qy, abcdY);
-                        }
-                    }
-                }
-            }
-
-            if (segments.length > 0) {
-                allSegments.push(segments);
-            }
-        }
-
-        return allSegments;
+        return new Solver1(components).buildBeamSegments(allPaths);
     }
 
-    /**
-     * Find which component is at a given world-space point.
-     * Uses proximity check against component positions.
-     */
-    private findComponentAt(
-        point: Vector3,
-        components: OpticalComponent[]
-    ): OpticalComponent | null {
-        let bestDist = Infinity;
-        let best: OpticalComponent | null = null;
-
-        for (const c of components) {
-            // Skip non-optical components (lasers, point sources)
-            if (c instanceof Laser) continue;
-
-            const dist = c.position.distanceTo(point);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = c;
-            }
-        }
-
-        // Must be reasonably close (within aperture + thickness allowance)
-        if (!best) return null;
-        const maxDist = (best as any).apertureRadius ?? 50;
-        return bestDist < maxDist + 20 ? best : null;
-    }
+    // ─── Solver Handshake: E-field Query ──────────────────────────────
 
     /**
-     * Extract ABCD matrices from a component.
-     * Returns separate tangential (X) and sagittal (Y) matrices,
-     * plus aperture radius for clipping checks.
-     */
-    private getComponentABCD(component: OpticalComponent, rayDirection?: Vector3, wavelengthSI?: number): {
-        abcdX: [number, number, number, number];
-        abcdY: [number, number, number, number];
-        apertureRadius: number;
-    } {
-        // Polymorphic dispatch — each component type overrides getComponentABCD
-        // with its own tangential/sagittal mapping logic.
-        return component.getComponentABCD(rayDirection, wavelengthSI);
-    }
-
-    // ─── Solver Handshake: E-field Query (PhysicsPlan §3.G) ───────────
-
-    /**
-     * Query the Gaussian beam intensity at any 3D point from a single branch.
+     * Query the beam intensity at any 3D point from a single beamlet branch.
      * Returns intensity [W/mm²], polarization, and accumulated phase.
-     *
-     * @param point  Query position in world coordinates (mm)
-     * @param segments  Segments from a single beam branch (one element of propagate()'s output)
-     * @returns {intensity, polarization, phase} or null if point is outside all beams
      */
     static queryIntensity(
         point: Vector3,
@@ -364,23 +154,21 @@ export class Solver2 {
     ): { intensity: number; polarization: JonesVector; phase: number } | null {
         if (segments.length === 0) return null;
 
-        // Find the nearest segment to the query point
         let bestSeg: GaussianBeamSegment | null = null;
         let bestDist = Infinity;
-        let bestT = 0; // fraction along segment
+        let bestT = 0;
 
         const toPoint = new Vector3();
         const closest = new Vector3();
 
         for (const seg of segments) {
             const segDir = seg.direction;
-            const segLen = seg.start.distanceTo(seg.end);
+            const segLen = getSegmentLength(seg);
             if (segLen < 1e-6) continue;
 
-            // Project point onto segment axis
             toPoint.subVectors(point, seg.start);
             const along = toPoint.dot(segDir);
-            const t = Math.max(0, Math.min(segLen, along));
+            const t = clamp(along, 0, segLen);
 
             closest.copy(seg.start).addScaledVector(segDir, t);
             const dist = point.distanceTo(closest);
@@ -396,28 +184,17 @@ export class Solver2 {
 
         const seg = bestSeg;
         const segDir = seg.direction;
-        const wavelengthMm = seg.wavelength * 1e3;
-        const n = seg.refractiveIndex || 1.0;
-        const effectiveWl = wavelengthMm / n;
-
-        // q-parameter at the projected point
-        const qx: Complex = { re: seg.qx_start.re + bestT, im: seg.qx_start.im };
-        const qy: Complex = { re: seg.qy_start.re + bestT, im: seg.qy_start.im };
-
-        const wx = beamRadius(qx, effectiveWl);
-        const wy = beamRadius(qy, effectiveWl);
+        const { wx, wy } = segmentBeamRadii(seg, bestT);
 
         if (wx <= 0 || wy <= 0) return null;
 
         const maxBeamRadius = Math.max(wx, wy);
         if (bestDist > maxBeamRadius * 10) return null;
 
-        // Decompose displacement into transverse coordinates
         toPoint.subVectors(point, seg.start);
         const along = toPoint.dot(segDir);
         const transverse = toPoint.clone().sub(segDir.clone().multiplyScalar(along));
 
-        // Build local frame
         const up = new Vector3(0, 1, 0);
         if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
         const right = new Vector3().crossVectors(segDir, up).normalize();
@@ -426,14 +203,13 @@ export class Solver2 {
         const x = transverse.dot(right);
         const y = transverse.dot(localUp);
 
-        // Astigmatic Gaussian intensity
         const gaussArg = 2 * (x * x / (wx * wx) + y * y / (wy * wy));
         const gaussFactor = Math.exp(-gaussArg);
         const intensity = (seg.power / (Math.PI * wx * wy)) * gaussFactor;
 
-        // Phase: accumulated OPL + local propagation
-        const k = 2 * Math.PI / wavelengthMm; 
-        const phase = k * (seg.opticalPathLength + bestT * n);
+        const wavelengthMm = seg.wavelength * 1e3;
+        const n = seg.refractiveIndex || 1.0;
+        const phase = (2 * Math.PI / wavelengthMm) * (seg.opticalPathLength + bestT * n);
 
         return {
             intensity,
@@ -443,26 +219,21 @@ export class Solver2 {
     }
 
     /**
-     * Query the total intensity at a 3D point from ALL beam branches,
-     * coherently summing E-fields for interference.
-     *
-     * @param point  Query position (mm)
-     * @param allSegments  All beam branches from propagate()
-     * @returns total intensity [W/mm²]
+     * Query the total intensity at a 3D point from all beamlet branches,
+     * coherently summing E-fields for coherent sources.
      */
     static queryIntensityMultiBeam(
         point: Vector3,
         allSegments: GaussianBeamSegment[][],
         targetWavelength?: number
     ): number {
-        // Collect contributions from each branch
         let ex_re = 0, ex_im = 0;
         let ey_re = 0, ey_im = 0;
         let incoherentSum = 0;
 
         for (const branch of allSegments) {
             if (branch.length === 0) continue;
-            
+
             if (targetWavelength !== undefined) {
                 const branchWl = branch[0].wavelength;
                 if (Math.abs(branchWl - targetWavelength) > 15e-9) {
@@ -475,9 +246,7 @@ export class Solver2 {
 
             const mode = branch[0].coherenceMode;
 
-            // Default to Coherent if mode is missing (for older tests/data)
             if (mode === Coherence.Coherent || mode === undefined) {
-                // Coherent: add to E-field sum
                 const amplitude = Math.sqrt(result.intensity);
                 const phi = result.phase;
                 const cosPhi = Math.cos(phi);
@@ -491,7 +260,6 @@ export class Solver2 {
                 ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
                 ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
             } else {
-                // Incoherent: add intensity directly
                 incoherentSum += result.intensity;
             }
         }
@@ -511,32 +279,13 @@ export function sampleBeamProfile(
     segment: GaussianBeamSegment,
     numSamples: number = 20
 ): { z: number; wx: number; wy: number }[] {
-    const wavelengthMm = segment.wavelength * 1e3;
-    // In a medium with index n, the effective wavelength is λ/n
-    const effectiveWavelength = wavelengthMm / (segment.refractiveIndex || 1.0);
-    const segLength = segment.start.distanceTo(segment.end);
-
+    const segLength = getSegmentLength(segment);
     const samples: { z: number; wx: number; wy: number }[] = [];
 
     for (let i = 0; i <= numSamples; i++) {
         const t = i / numSamples;
         const z = t * segLength;
-
-        // q at position z along segment (linear interpolation of free-space)
-        // q(z) = q_start + z  (free-space propagation is just adding distance)
-        // But since q_end = q_start + segLength, we can interpolate:
-        const qx: Complex = {
-            re: segment.qx_start.re + z,
-            im: segment.qx_start.im
-        };
-        const qy: Complex = {
-            re: segment.qy_start.re + z,
-            im: segment.qy_start.im
-        };
-
-        const wx = beamRadius(qx, effectiveWavelength);
-        const wy = beamRadius(qy, effectiveWavelength);
-
+        const { wx, wy } = segmentBeamRadii(segment, z);
         samples.push({ z, wx, wy });
     }
 

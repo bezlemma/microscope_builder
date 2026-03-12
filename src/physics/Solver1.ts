@@ -1,6 +1,41 @@
+import { Vector3 } from 'three';
 import { Ray, InteractionResult } from './types';
 import { OpticalComponent } from './Component';
-import { Laser } from '../parts/Laser';
+import { Laser } from './components/Laser';
+import { Lamp } from './components/Lamp';
+import type { GaussianBeamSegment } from './Solver2';
+
+interface BeamletDraft extends GaussianBeamSegment {
+    bundleKey: string;
+    fallbackRadius: number;
+}
+
+export interface ForwardTraceResult {
+    paths: Ray[][];
+    beamSegments: GaussianBeamSegment[][];
+}
+
+function initialQ(waistRadius: number, wavelengthMm: number): { re: number; im: number } {
+    return { re: 0, im: Math.PI * waistRadius * waistRadius / wavelengthMm };
+}
+
+function propagateFreeSpace(q: { re: number; im: number }, distance: number): { re: number; im: number } {
+    return { re: q.re + distance, im: q.im };
+}
+
+function createLegacyQPair(
+    beamRadiusMm: number,
+    wavelengthSI: number,
+    segmentLength: number,
+    refractiveIndex: number
+): { qStart: { re: number; im: number }; qEnd: { re: number; im: number } } {
+    const wavelengthMm = wavelengthSI * 1e3;
+    const effectiveWavelength = wavelengthMm / Math.max(refractiveIndex, 1e-6);
+    const qStart = initialQ(beamRadiusMm, effectiveWavelength);
+    const reducedDistance = refractiveIndex > 1 ? segmentLength / refractiveIndex : segmentLength;
+    const qEnd = propagateFreeSpace(qStart, reducedDistance);
+    return { qStart, qEnd };
+}
 
 export class Solver1 {
     maxDepth: number = 20;
@@ -14,7 +49,6 @@ export class Solver1 {
         const allPaths: Ray[][] = [];
 
         for (const sourceRay of sources) {
-
             if (isNaN(sourceRay.origin.x) || isNaN(sourceRay.direction.x)) {
                 console.warn("Solver1: Skipping invalid source ray (NaN values)", sourceRay);
                 continue;
@@ -27,8 +61,64 @@ export class Solver1 {
         return allPaths;
     }
 
-    private traceRecursive(currentRay: Ray, currentPath: Ray[], depth: number, allPaths: Ray[][]) {
+    traceWithBeamSegments(sources: Ray[]): ForwardTraceResult {
+        const paths = this.trace(sources);
+        const beamSegments = this.buildBeamSegments(paths);
+        return { paths, beamSegments };
+    }
 
+    buildBeamSegments(allPaths: Ray[][]): GaussianBeamSegment[][] {
+        const beamletPaths = allPaths.filter(path => {
+            const source = path[0];
+            if (!source) return false;
+            if (source.isBackward) return false;
+            if (source.sourceId?.startsWith('pmt_preview_')) return false;
+            return true;
+        });
+
+        if (beamletPaths.length === 0) return [];
+
+        const sourceTargets = this.resolveSourceTargets(beamletPaths);
+        const sourceRadii = this.resolveSourceRadii();
+        const sourceWeightSums = new Map<string, number>();
+
+        for (let pathIndex = 0; pathIndex < beamletPaths.length; pathIndex++) {
+            const path = beamletPaths[pathIndex];
+            const sourceKey = this.getSourceKey(path, pathIndex);
+            sourceWeightSums.set(
+                sourceKey,
+                (sourceWeightSums.get(sourceKey) ?? 0) + Math.max(path[0].intensity, 0)
+            );
+        }
+
+        const sourceScales = new Map<string, number>();
+        for (const [sourceKey, weightSum] of sourceWeightSums) {
+            const target = sourceTargets.get(sourceKey) ?? weightSum;
+            sourceScales.set(sourceKey, weightSum > 1e-12 ? target / weightSum : 0);
+        }
+
+        const draftBranches: BeamletDraft[][] = [];
+        const allDrafts: BeamletDraft[] = [];
+
+        for (let pathIndex = 0; pathIndex < beamletPaths.length; pathIndex++) {
+            const path = beamletPaths[pathIndex];
+            const sourceKey = this.getSourceKey(path, pathIndex);
+            const powerScale = sourceScales.get(sourceKey) ?? 1;
+            const sourceRadius = sourceRadii.get(sourceKey);
+            const branch = this.buildBeamletBranch(path, sourceKey, powerScale, sourceRadius);
+            if (branch.length === 0) continue;
+            draftBranches.push(branch);
+            allDrafts.push(...branch);
+        }
+
+        this.estimateBeamletFootprints(allDrafts);
+
+        return draftBranches.map(branch =>
+            branch.map(({ fallbackRadius: _fallbackRadius, ...segment }) => segment)
+        );
+    }
+
+    private traceRecursive(currentRay: Ray, currentPath: Ray[], depth: number, allPaths: Ray[][]) {
         if (depth >= this.maxDepth) {
             allPaths.push([...currentPath]);
             return;
@@ -44,10 +134,8 @@ export class Solver1 {
         let nearestHit = null;
         let nearestComponent = null;
 
-
         for (const component of this.scene) {
             const hit = component.chkIntersection(currentRay);
-
 
             if (hit && hit.t < nearestT && hit.t > 0.001) {
                 nearestT = hit.t;
@@ -55,7 +143,6 @@ export class Solver1 {
                 nearestComponent = component;
             }
         }
-
 
         if (!nearestHit || !nearestComponent) {
             allPaths.push([...currentPath]);
@@ -65,33 +152,27 @@ export class Solver1 {
         currentRay.interactionDistance = nearestT;
         currentRay.interactionComponentId = nearestComponent.id;
 
-        // Terminate rays that re-enter a Laser housing
         if (nearestComponent instanceof Laser) {
             allPaths.push([...currentPath]);
             return;
         }
 
-
         const result: InteractionResult = nearestComponent.interact(currentRay, nearestHit);
-
 
         if (result.rays.length === 0) {
             allPaths.push([...currentPath]);
             return;
         }
 
-        // Passthrough components (e.g., card) don't break the ray path visually
         if (result.passthrough && result.rays.length === 1) {
             const nextRay = result.rays[0];
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
-            
-            // Critical! Pushing the current ray preserves the interaction line
+
             const nextPath = [...currentPath, nextRay];
             this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
             return;
         }
-
 
         for (let i = 0; i < result.rays.length; i++) {
             const nextRay = result.rays[i];
@@ -102,16 +183,253 @@ export class Solver1 {
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
 
-
             if (nextRay.intensity < 1e-6) {
                 allPaths.push([...currentPath, nextRay]);
                 continue;
             }
 
-
             const nextPath = [...currentPath, nextRay];
-
             this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
         }
+    }
+
+    private getSourceKey(path: Ray[], pathIndex: number): string {
+        return path[0]?.sourceId ?? `path_${pathIndex}`;
+    }
+
+    private resolveSourceTargets(allPaths: Ray[][]): Map<string, number> {
+        const targets = new Map<string, number>();
+
+        for (const component of this.scene) {
+            if (component instanceof Laser) {
+                targets.set(component.id, component.power);
+                continue;
+            }
+
+            if (component instanceof Lamp) {
+                for (const wavelengthNm of component.spectralWavelengths) {
+                    targets.set(`${component.id}_${wavelengthNm}nm`, component.additiveOpacity);
+                }
+            }
+        }
+
+        for (const path of allPaths) {
+            const sourceKey = path[0]?.sourceId;
+            if (!sourceKey || targets.has(sourceKey)) continue;
+            targets.set(sourceKey, path[0].intensity);
+        }
+
+        return targets;
+    }
+
+    private resolveSourceRadii(): Map<string, number> {
+        const radii = new Map<string, number>();
+
+        for (const component of this.scene) {
+            if (component instanceof Laser) {
+                radii.set(component.id, component.beamRadius);
+                continue;
+            }
+
+            if (component instanceof Lamp) {
+                radii.set(component.id, component.beamRadius);
+                for (const wavelengthNm of component.spectralWavelengths) {
+                    radii.set(`${component.id}_${wavelengthNm}nm`, component.beamRadius);
+                }
+            }
+        }
+
+        return radii;
+    }
+
+    private buildBeamletBranch(
+        path: Ray[],
+        sourceKey: string,
+        powerScale: number,
+        sourceRadius?: number
+    ): BeamletDraft[] {
+        const segments: BeamletDraft[] = [];
+
+        for (let i = 0; i < path.length; i++) {
+            const ray = path[i];
+            let power = ray.intensity * powerScale;
+            if (power < 1e-6) break;
+
+            const fallbackRadius = Math.max(ray.footprintRadius || sourceRadius || 0.05, 0.05);
+
+            if (ray.entryPoint) {
+                const internalPoints: Vector3[] = [ray.entryPoint.clone()];
+                if (ray.internalPath) {
+                    for (const p of ray.internalPath) internalPoints.push(p.clone());
+                }
+                internalPoints.push(ray.origin.clone());
+
+                const glassComponent = this.findComponentAt(ray.entryPoint);
+                const glassId = glassComponent?.id ?? 'glass';
+                const glassIOR = (glassComponent && 'ior' in glassComponent)
+                    ? (glassComponent as any).ior as number
+                    : 1.5;
+                const glassAbsorption = glassComponent?.absorptionCoeff ?? 0;
+
+                let totalInternalLength = 0;
+                for (let ip = 0; ip < internalPoints.length - 1; ip++) {
+                    totalInternalLength += internalPoints[ip].distanceTo(internalPoints[ip + 1]);
+                }
+
+                let traversed = 0;
+                for (let ip = 0; ip < internalPoints.length - 1; ip++) {
+                    const start = internalPoints[ip];
+                    const end = internalPoints[ip + 1];
+                    const direction = end.clone().sub(start);
+                    const length = direction.length();
+                    if (length < 1e-6) continue;
+                    direction.normalize();
+
+                    const remainingAfterStart = totalInternalLength - traversed;
+                    const opticalPathStart = ray.opticalPathLength - remainingAfterStart * glassIOR;
+
+                    const qPair = createLegacyQPair(fallbackRadius, ray.wavelength, length, glassIOR);
+                    segments.push({
+                        start,
+                        end,
+                        direction,
+                        wavelength: ray.wavelength,
+                        power,
+                        qx_start: { ...qPair.qStart },
+                        qx_end: { ...qPair.qEnd },
+                        qy_start: { ...qPair.qStart },
+                        qy_end: { ...qPair.qEnd },
+                        footprintStart: fallbackRadius,
+                        footprintEnd: fallbackRadius,
+                        polarization: {
+                            x: { ...ray.polarization.x },
+                            y: { ...ray.polarization.y }
+                        },
+                        opticalPathLength: opticalPathStart,
+                        refractiveIndex: glassIOR,
+                        coherenceMode: ray.coherenceMode,
+                        sourceId: sourceKey,
+                        bundleKey: `${sourceKey}|glass|${i}|${glassId}|${ip}`,
+                        fallbackRadius,
+                    });
+
+                    if (glassAbsorption > 0) {
+                        power *= Math.exp(-glassAbsorption * length);
+                    }
+                    traversed += length;
+                }
+            }
+
+            const segmentLength = this.resolveAirSegmentLength(path, i);
+            if (segmentLength < 1e-6) continue;
+
+            const end = ray.origin.clone().add(ray.direction.clone().multiplyScalar(segmentLength));
+            const qPair = createLegacyQPair(fallbackRadius, ray.wavelength, segmentLength, 1.0);
+
+            segments.push({
+                start: ray.origin.clone(),
+                end,
+                direction: ray.direction.clone(),
+                wavelength: ray.wavelength,
+                power,
+                qx_start: { ...qPair.qStart },
+                qx_end: { ...qPair.qEnd },
+                qy_start: { ...qPair.qStart },
+                qy_end: { ...qPair.qEnd },
+                footprintStart: fallbackRadius,
+                footprintEnd: fallbackRadius,
+                polarization: {
+                    x: { ...ray.polarization.x },
+                    y: { ...ray.polarization.y }
+                },
+                opticalPathLength: ray.opticalPathLength,
+                refractiveIndex: 1.0,
+                coherenceMode: ray.coherenceMode,
+                sourceId: sourceKey,
+                bundleKey: `${sourceKey}|air|${i}|${ray.interactionComponentId ?? ray.exitSurfaceId ?? 'exit'}`,
+                fallbackRadius,
+            });
+        }
+
+        return segments;
+    }
+
+    private resolveAirSegmentLength(path: Ray[], index: number): number {
+        const ray = path[index];
+        if (ray.interactionDistance !== undefined) {
+            return ray.interactionDistance;
+        }
+
+        if (ray.terminationPoint) {
+            return ray.origin.distanceTo(ray.terminationPoint);
+        }
+
+        if (index < path.length - 1) {
+            return path[index + 1].origin.clone().sub(ray.origin).length();
+        }
+
+        return 200;
+    }
+
+    private estimateBeamletFootprints(drafts: BeamletDraft[]): void {
+        const groups = new Map<string, BeamletDraft[]>();
+
+        for (const draft of drafts) {
+            if (!groups.has(draft.bundleKey)) groups.set(draft.bundleKey, []);
+            groups.get(draft.bundleKey)!.push(draft);
+        }
+
+        for (const group of groups.values()) {
+            for (const draft of group) {
+                draft.footprintStart = this.estimateLocalRadius(draft, group, 'start');
+                draft.footprintEnd = this.estimateLocalRadius(draft, group, 'end');
+            }
+        }
+    }
+
+    private estimateLocalRadius(
+        target: BeamletDraft,
+        cohort: BeamletDraft[],
+        endpoint: 'start' | 'end'
+    ): number {
+        const point = endpoint === 'start' ? target.start : target.end;
+        let nearest = Infinity;
+
+        for (const other of cohort) {
+            if (other === target) continue;
+            const dirDot = Math.abs(target.direction.dot(other.direction));
+            if (dirDot < 0.5) continue;
+
+            const otherPoint = endpoint === 'start' ? other.start : other.end;
+            const distance = point.distanceTo(otherPoint);
+            if (distance > 1e-6 && distance < nearest) {
+                nearest = distance;
+            }
+        }
+
+        if (!Number.isFinite(nearest)) {
+            return target.fallbackRadius;
+        }
+
+        return Math.max(nearest * 0.5, 0.05);
+    }
+
+    private findComponentAt(point: Vector3): OpticalComponent | null {
+        let bestDist = Infinity;
+        let best: OpticalComponent | null = null;
+
+        for (const c of this.scene) {
+            if (c instanceof Laser || c instanceof Lamp) continue;
+
+            const dist = c.position.distanceTo(point);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = c;
+            }
+        }
+
+        if (!best) return null;
+        const maxDist = (best as any).apertureRadius ?? 50;
+        return bestDist < maxDist + 20 ? best : null;
     }
 }

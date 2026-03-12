@@ -1,8 +1,8 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../parts/Laser';
-import { Lamp } from '../parts/Lamp';
-import { SphericalLens } from '../parts/SphericalLens';
-import { PrismLens } from '../parts/PrismLens';
+import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
+import { SphericalLens } from '../physics/components/SphericalLens';
+import { PrismLens } from '../physics/components/PrismLens';
 import { Quaternion, Vector3 } from 'three';
 
 /**
@@ -22,11 +22,12 @@ export function createPrismDebugScene(): OpticalComponent[] {
     laser.pointAlong(1, 0, 0);  // emit along +X
     scene.push(laser);
 
-    // Prism with Z-axis tilt (X-forward: triangle already in XY plane)
+    // Prism with compound rotation: base +X orientation + 30° Z-axis tilt
     const prism1 = new PrismLens(Math.PI / 3, 25, 25, "60° Prism", 1.5168);
     prism1.setPosition(-50, -40, 0);
+    const baseQuat1 = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
     const tiltQuat1 = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 30 * Math.PI / 180);
-    prism1.rotation.copy(tiltQuat1);
+    prism1.rotation.copy(tiltQuat1.multiply(baseQuat1));
     prism1.version++;
     scene.push(prism1);
 
@@ -44,11 +45,12 @@ export function createPrismDebugScene(): OpticalComponent[] {
     lamp.pointAlong(1, 0, 0);  // emit along +X
     scene.push(lamp);
 
-    // Prism with Z-axis tilt (X-forward: triangle already in XY plane)
+    // Prism with compound rotation: base +X orientation + -45° Z-axis tilt
     const prism2 = new PrismLens(Math.PI / 3, 30, 25, "Rainbow Prism", 1.65);
     prism2.setPosition(-128, -130, 0);
+    const baseQuat2 = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
     const tiltQuat2 = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -45 * Math.PI / 180);
-    prism2.rotation.copy(tiltQuat2);
+    prism2.rotation.copy(tiltQuat2.multiply(baseQuat2));
     prism2.version++;
     scene.push(prism2);
 

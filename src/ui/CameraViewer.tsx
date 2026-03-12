@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera } from '../parts/Camera';
+import { Camera } from '../physics/components/Camera';
 
 
 /**

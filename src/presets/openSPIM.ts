@@ -1,13 +1,12 @@
-import { Quaternion, Vector3 } from 'three';
-import { Laser } from '../parts/Laser';
-import { Mirror } from '../parts/Mirror';
-import { SphericalLens } from '../parts/SphericalLens';
-import { CylindricalLens } from '../parts/CylindricalLens';
-import { SlitAperture } from '../parts/SlitAperture';
-import { Objective } from '../parts/Objective';
-import { Filter } from '../parts/Filter';
-import { Camera } from '../parts/Camera';
-import { LXSampleHolder } from '../parts/LXSampleHolder';
+import { Laser } from '../physics/components/Laser';
+import { Mirror } from '../physics/components/Mirror';
+import { SphericalLens } from '../physics/components/SphericalLens';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { SlitAperture } from '../physics/components/SlitAperture';
+import { Objective } from '../physics/components/Objective';
+import { Filter } from '../physics/components/Filter';
+import { Camera } from '../physics/components/Camera';
+import { SampleChamber } from '../physics/components/SampleChamber';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { OpticalComponent } from '../physics/Component';
 
@@ -77,7 +76,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     const [m1x, m1y] = mirrorAtHole(hole(C.B, 4).x, hole(C.B, 4).y, t1, r1);
     const m1 = new Mirror(25.4, t1, "Steering Mirror 1");
     m1.setPosition(m1x, m1y, 0);
-    m1.pointAlong(-1, 1, 0);  // fires -X
+    m1.setRotation(Math.PI / 2, Math.PI / 4, 0);
     components.push(m1);
 
     // 3. Steering Mirror 2 at B2 — redirects -Y → +X
@@ -87,7 +86,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     const [m2x, m2y] = mirrorAtHole(hole(C.B, 1).x, hole(C.B, 1).y, t2, r2);
     const m2 = new Mirror(25.4, t2, "Steering Mirror 2");
     m2.setPosition(m2x, m2y, 0);
-    m2.pointAlong(1, 1, 0);  // fires -X
+    m2.setRotation(Math.PI / 2, 3 * Math.PI / 4, 0);
     components.push(m2);
 
     // ── Bottom rail optics (row 2, beam going +X) ──
@@ -121,10 +120,6 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     );
     cylLens.setPosition(hole(C.K, 1).x, hole(C.K, 1).y, 0);
     cylLens.pointAlong(1, 0, 0);  // optical axis along +X
-    // Roll 90° around optical axis so curvature acts in world Z (vertical)
-    // This makes the light sheet tall (wide in Z) rather than wide in Y.
-    const roll90 = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
-    cylLens.rotation.multiply(roll90);
     components.push(cylLens);
 
     // 8. 1" Turn Mirror at N2 — redirects +X → +Y (up)
@@ -134,7 +129,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     const [m3x, m3y] = mirrorAtHole(hole(C.N, 1).x, hole(C.N, 1).y, t3, r3);
     const bigMirror = new Mirror(25.4, t3, "1\" Turn Mirror");
     bigMirror.setPosition(m3x, m3y, 0);
-    bigMirror.pointAlong(-1, 1, 0);  // fires -X
+    bigMirror.setRotation(Math.PI / 2, -3 * Math.PI / 4, 0);
     components.push(bigMirror);
 
     // ── Vertical arm (col N, beam going +Y, up) ──
@@ -168,14 +163,15 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     // Position along Y axis: chamber center is at hole(C.N,9).y = 237.5
     // Objective principal plane at sample center - (200/10) = 20mm
     illumObj.setPosition(hole(C.N, 9).x, hole(C.N, 9).y - 20, 0);
-    illumObj.pointAlong(0, -1, 0);  // barrel faces +Y, nosepiece faces -Y (toward sample)
+    illumObj.pointAlong(0, -1, 0);  // faces -Y (toward sample)
     components.push(illumObj);
 
     // ═══════════════════════════════════════
     //  SAMPLE HOLDER at N10
     // ═══════════════════════════════════════
-    const chamber = new LXSampleHolder(75, 3, 30, "L/X Sample Holder");
+    const chamber = new SampleChamber(75, 3, 30, "X Sample Holder");
     chamber.setPosition(hole(C.N, 9).x, hole(C.N, 9).y, 0);
+    chamber.specimenRotation.set(Math.PI / 2, Math.PI / 2, 0);
     components.push(chamber);
 
     // Detection Objective (Nikon 10×/0.3W)
@@ -191,7 +187,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     // Position along X axis: chamber center is at hole(C.N,9).x = 337.5
     // Place 20mm from center (f=200/10)
     detObj.setPosition(hole(C.N, 9).x - 20, hole(C.N, 9).y, 0);
-    detObj.pointAlong(-1, 0, 0);  // barrel faces +X, nosepiece faces -X (toward sample)
+    detObj.pointAlong(-1, 0, 0);  // faces -X (toward sample)
     components.push(detObj);
 
     // 13. Emission Filter (LP 500nm) at J10

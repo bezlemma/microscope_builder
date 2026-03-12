@@ -1,6 +1,6 @@
 import { OpticalComponent } from './Component';
 import { Euler } from 'three';
-import { Sample } from '../parts/Sample';
+import { Sample } from './components/Sample';
 
 /**
  * PropertyAnimator — generic animation system for optical components.

@@ -1,11 +1,11 @@
 import { OpticalComponent } from '../physics/Component';
-import { SphericalLens } from '../parts/SphericalLens';
-import { Aperture } from '../parts/Aperture';
-import { Camera } from '../parts/Camera';
-import { Laser } from '../parts/Laser';
-import { Filter } from '../parts/Filter';
-import { Objective } from '../parts/Objective';
-import { Sample } from '../parts/Sample';
+import { SphericalLens } from '../physics/components/SphericalLens';
+import { Aperture } from '../physics/components/Aperture';
+import { Camera } from '../physics/components/Camera';
+import { Laser } from '../physics/components/Laser';
+import { Filter } from '../physics/components/Filter';
+import { Objective } from '../physics/components/Objective';
+import { Sample } from '../physics/components/Sample';
 import { SpectralProfile } from '../physics/SpectralProfile';
 
 /**
@@ -31,7 +31,7 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     scene.push(laser);
 
     // 2. Focusing Lens — a plano-convex lens (f=25mm) to create a point source for Köhler illumination
-    const focusingLens = new SphericalLens(1/25, 12.7, 5.3, "Focusing Lens (LA1560-A eq)", 12.9, 1e9, 1.517);
+    const focusingLens = new SphericalLens(1/25, 25.4, 5.3, "Focusing Lens (LA1560-A eq)", 12.9, 1e9, 1.517);
     focusingLens.setPosition(-53.32, 0, 0);
     focusingLens.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(focusingLens);
@@ -45,13 +45,13 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     scene.push(aperture);
 
     //   B. Condenser Lens 1 (Rear) - flat surface faces laser, curved surface faces sample
-    const condenser1 = new SphericalLens(1/30, 12.7, 5.0, "Condenser Element 1", 1e9, -15, 1.5);
+    const condenser1 = new SphericalLens(1/30, 25.4, 5.0, "Condenser Element 1", 1e9, -15, 1.5);
     condenser1.setPosition(-25, 0, 0);
     condenser1.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(condenser1);
 
     //   C. Condenser Lens 2 (Front) - curved surface faces laser, flat surface faces sample
-    const condenser2 = new SphericalLens(1/15, 12.7, 5.0, "Condenser Element 2", 7.5, 1e9, 1.5);
+    const condenser2 = new SphericalLens(1/15, 25.4, 5.0, "Condenser Element 2", 7.5, 1e9, 1.5);
     condenser2.setPosition(-15, 0, 0);
     condenser2.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(condenser2);
@@ -79,7 +79,7 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     // A true Nikon tube lens is an extensive multi-element achromatic/apochromatic array.
     // We represent this using a standard 200mm Achromatic Doublet (Thorlabs AC254-200-A eq)
     // Element 1: Crown Glass (N-SSK5, n=1.658)
-    const tubeLensCrown = new SphericalLens(0, 12.7, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
+    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
     tubeLensCrown.setPosition(220, 0, 0); 
     tubeLensCrown.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(tubeLensCrown);
@@ -89,7 +89,7 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     // Element 2: Flint Glass (N-SF7, n=1.750)
     // Crown center is 220. Thickness 4.0. Back vertex is 222.
     // Gap 0.01. Flint front is 222.01. Thickness 2.5. Center is 223.26.
-    const tubeLensFlint = new SphericalLens(0, 12.7, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
+    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
     tubeLensFlint.setPosition(223.26, 0, 0); 
     tubeLensFlint.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(tubeLensFlint);

@@ -33,18 +33,11 @@ export abstract class OpticalComponent implements Surface {
     private _matrixVersion: number = -1;
     private static readonly UNIT_SCALE = new Vector3(1, 1, 1);
 
-    /**
-     * The local-space forward axis (optical axis / w).
-     * All component geometry is defined with +X as the optical axis.
-     * Use `getForwardDirection()` to get this in world space.
-     */
-    static readonly LOCAL_FORWARD = Object.freeze(new Vector3(1, 0, 0));
-
     constructor(name: string = "Unnamed Component") {
         this.id = uuidv4();
         this.name = name;
         this.position = new Vector3(0, 0, 0);
-        this.rotation = new Quaternion(); // Identity — geometry is X-forward by definition
+        this.rotation = new Quaternion();
         this.worldToLocal = new Matrix4();
         this.localToWorld = new Matrix4();
         this.bounds = new Box3(new Vector3(-10, -10, -10), new Vector3(10, 10, 10)); // Default bounds
@@ -56,11 +49,6 @@ export abstract class OpticalComponent implements Surface {
         this.version++;
     }
 
-    /** Returns the component's forward direction (optical axis) in world space. */
-    getForwardDirection(): Vector3 {
-        return OpticalComponent.LOCAL_FORWARD.clone().applyQuaternion(this.rotation).normalize();
-    }
-
     /**
      * Recompute the quaternion from panAngle and tiltAngle.
      * q = Ry(tilt) · Rz(pan) · Rx(π/2)
@@ -69,20 +57,20 @@ export abstract class OpticalComponent implements Surface {
      * All animation and galvo scan code sets panAngle/tiltAngle then calls this.
      */
     recomputeRotation(): void {
-        // X-forward convention: pan rotates around Z, tilt rotates around Y.
-        // Identity = optical axis along +X.
+        const qx = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
         const qz = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), this.panAngle);
         const qy = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), this.tiltAngle);
-        // q = Ry(tilt) · Rz(pan)
-        this.rotation.copy(qy.multiply(qz));
+        // q = Ry · Rz · Rx
+        this.rotation.copy(qy.multiply(qz).multiply(qx));
         this.version++;
     }
 
     setRotation(x: number, y: number, z: number) {
-        // Build quaternion from Euler
+        // Build quaternion from Euler (preserves exact backward compat)
         this.rotation.setFromEuler(new Euler(x, y, z));
-        // Extract panAngle/tiltAngle from local +X (forward axis)
-        const forward = new Vector3(1, 0, 0).applyQuaternion(this.rotation);
+        // Extract panAngle/tiltAngle from the resulting forward direction
+        // (same logic as pointAlong — works for all orientations)
+        const forward = new Vector3(0, 0, 1).applyQuaternion(this.rotation);
         this.panAngle = Math.atan2(forward.y, forward.x);
         const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
         this.tiltAngle = Math.atan2(forward.z, xyLen);
@@ -90,21 +78,20 @@ export abstract class OpticalComponent implements Surface {
     }
 
     /**
-     * Orient this component so its local +X axis points along the given
-     * world-space direction. This is the "forward" / optical axis for all optics.
+     * Orient this component so its local +Z axis points along the given
+     * world-space direction. This is the "forward" direction for all optics:
+     *   - Lasers/Lamps emit along local +Z
+     *   - Cameras/Cards detect on local Z=0 plane, facing +Z
+     *   - Lenses/Mirrors have their optical axis along local Z
      *
-     * GEOMETRY CONVENTION (X-forward):
-     *   - Local +X = optical axis / forward direction
-     *   - Local +Y = "right" on the table (perpendicular to beam, horizontal)
-     *   - Local +Z = "up" (toward viewer in top-down scene)
-     *
-     * With IDENTITY rotation (no pointAlong), local = world:
-     *   - Optical axis along world +X (horizontal on table)
-     *   - Component extends in YZ plane
-     *   - Correct default orientation for all components
+     * SCENE CONVENTION: The scene is viewed top-down from +Z.
+     *   - Local Y ("up" on the component, where labels are) maps to world +Z
+     *     (toward the viewer), so labels are always readable from the default view.
+     *   - When pointing along the Z axis, local Y falls back to world +Y.
      *
      * RULES FOR PRESET AUTHORS:
-     *   - "emits along +X"     → pointAlong(1, 0, 0) — or just use identity
+     *   - "faces toward beam"  → pointAlong opposite to beam travel direction
+     *   - "emits along +X"     → pointAlong(1, 0, 0)
      *   - "sensor faces left"  → pointAlong(-1, 0, 0)
      *   - "objective faces -Y" → pointAlong(0, -1, 0)
      */
@@ -119,9 +106,8 @@ export abstract class OpticalComponent implements Surface {
         const right = new Vector3().crossVectors(upHint, forward).normalize();
         const up = new Vector3().crossVectors(forward, right).normalize();
 
-        // Build rotation matrix: columns = [forward, right, up]
-        // local X → forward, local Y → right, local Z → up
-        const m = new Matrix4().makeBasis(forward, right, up);
+        // Build rotation matrix: columns = [right, up, forward]
+        const m = new Matrix4().makeBasis(right, up, forward);
         this.rotation.setFromRotationMatrix(m);
 
         // Extract panAngle from the forward direction projected to XY plane
@@ -139,12 +125,12 @@ export abstract class OpticalComponent implements Surface {
         this._matrixVersion = this.version;
     }
 
-    // ── Solver 2 Interface (Gaussian Beam ABCD) ──────────────────────
-    // Default implementations return identity / zero. Components override
-    // these to provide their own optical transfer properties.
+    // ── Solver 2 Legacy q-Fallback Interface ─────────────────────────
+    // Production Solver 2 now uses Solver 1 beamlets directly. These hooks
+    // remain for legacy analytic segments and compatibility code paths.
 
-    /** ABCD ray transfer matrix [A, B, C, D]. Default: identity (no optical effect). */
-    getABCD(_rayDirection?: Vector3, _wavelengthSI?: number): [number, number, number, number] {
+    /** Legacy q-fallback paraxial transform [A, B, C, D]. Default: identity. */
+    getParaxialTransform(_rayDirection?: Vector3, _wavelengthSI?: number): [number, number, number, number] {
         return [1, 0, 0, 1];
     }
 
@@ -154,16 +140,16 @@ export abstract class OpticalComponent implements Surface {
     }
 
     /**
-     * Full ABCD descriptor for Solver 2 with separate tangential/sagittal matrices.
+     * Full legacy q-fallback descriptor with separate tangential/sagittal transforms.
      * Override in components with astigmatic behavior (CylindricalLens, SlitAperture, PrismLens).
      */
-    getComponentABCD(_rayDirection?: Vector3, _wavelengthSI?: number): {
-        abcdX: [number, number, number, number];
-        abcdY: [number, number, number, number];
+    getParaxialProfile(_rayDirection?: Vector3, _wavelengthSI?: number): {
+        transformX: [number, number, number, number];
+        transformY: [number, number, number, number];
         apertureRadius: number;
     } {
-        const abcd = this.getABCD(_rayDirection, _wavelengthSI);
-        return { abcdX: abcd, abcdY: abcd, apertureRadius: this.getApertureRadius() };
+        const transform = this.getParaxialTransform(_rayDirection, _wavelengthSI);
+        return { transformX: transform, transformY: transform, apertureRadius: this.getApertureRadius() };
     }
 
     abstract intersect(rayLocal: Ray): HitRecord | null;

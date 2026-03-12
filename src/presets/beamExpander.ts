@@ -1,6 +1,6 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../parts/Laser';
-import { SphericalLens } from '../parts/SphericalLens';
+import { Laser } from '../physics/components/Laser';
+import { SphericalLens } from '../physics/components/SphericalLens';
 
 /**
  * Beam Expander — Galilean 2× beam expander.

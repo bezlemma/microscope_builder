@@ -1,14 +1,14 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../parts/Laser';
-import { Mirror } from '../parts/Mirror';
-import { Blocker } from '../parts/Blocker';
-import { Filter } from '../parts/Filter';
-import { DichroicMirror } from '../parts/DichroicMirror';
-import { Objective } from '../parts/Objective';
-import { Sample } from '../parts/Sample';
-import { IdealLens } from '../parts/IdealLens';
-import { PMT } from '../parts/PMT';
-import { Aperture } from '../parts/Aperture';
+import { Laser } from '../physics/components/Laser';
+import { Mirror } from '../physics/components/Mirror';
+import { Blocker } from '../physics/components/Blocker';
+import { Filter } from '../physics/components/Filter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { Objective } from '../physics/components/Objective';
+import { Sample } from '../physics/components/Sample';
+import { IdealLens } from '../physics/components/IdealLens';
+import { PMT } from '../physics/components/PMT';
+import { Aperture } from '../physics/components/Aperture';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { AnimationChannel, generateChannelId } from '../physics/PropertyAnimator';
 
@@ -24,8 +24,9 @@ export interface ConfocalPresetResult {
  * Confocal Laser-Scanning Microscope — Compact folded U-shape layout.
  *
  * GALVO PAIR: Two separate galvo mirrors (M1 fast X, M2 slow Y) create a
- * two-bounce 90° turn. Beam enters +X, exits -Y.  Each mirror animates
- * panAngle for scanning.
+ * two-bounce 90° turn. Beam enters +X, exits -Y. The preset loads at the
+ * nominal non-scanning angles so the excitation path is valid before any
+ * animation is started.
  *
  * 4f RELAY: scan lens (f₁=50mm) →[250mm]→ tube lens (f₂=200mm)
  *
@@ -151,7 +152,7 @@ export function createConfocalScene(): ConfocalPresetResult {
         name: '10×/0.5W Objective'
     });
     objective.setPosition(-175, -90, 0);
-    objective.pointAlong(0, 1, 0);  // barrel faces +Y, nosepiece faces -Y (toward sample)
+    objective.pointAlong(0, -1, 0);
     scene.push(objective);
 
     // ── Fluorescent Sample ──
@@ -244,7 +245,7 @@ export function createConfocalScene(): ConfocalPresetResult {
     return {
         scene,
         channels,
-        animationPlaying: true,
+        animationPlaying: false,
         animationSpeed: 0.1,
     };
 }

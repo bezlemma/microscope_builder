@@ -1,8 +1,8 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../parts/Laser';
-import { SphericalLens } from '../parts/SphericalLens';
-import { CylindricalLens } from '../parts/CylindricalLens';
-import { PrismLens } from '../parts/PrismLens';
+import { Laser } from '../physics/components/Laser';
+import { SphericalLens } from '../physics/components/SphericalLens';
+import { CylindricalLens } from '../physics/components/CylindricalLens';
+import { PrismLens } from '../physics/components/PrismLens';
 
 /**
  * Lens Zoo — A showcase preset with multiple lens types and lasers.
@@ -61,7 +61,7 @@ export function createLensZooScene(): OpticalComponent[] {
 
     const prism = new PrismLens(Math.PI / 3, 25, 25, "60° Prism", 1.5168);
     prism.setPosition(-50, -40, 0);
-    prism.pointAlong(1, 0, 0);  // optical axis along +X
+    prism.setRotation(0, Math.PI / 2, 0);  // optical axis along +X, apex stays upright in-table
     scene.push(prism);
 
     return scene;

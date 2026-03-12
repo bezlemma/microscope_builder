@@ -27,5 +27,5 @@ canvas {
 
 /* Vendor-prefixed user-select for Firefox & older Safari */
 ::selection {
-  background: rgba(0, 127, 255, 0.3);
+  background: rgba(100, 255, 218, 0.3);
 }

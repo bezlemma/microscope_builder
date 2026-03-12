@@ -1,78 +1,41 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vector3 } from 'three';
 import { useAtom } from 'jotai';
-import { componentsAtom, rayConfigAtom, solver3RenderTriggerAtom, solver3RenderingAtom, animatorAtom, animationPlayingAtom, animationSpeedAtom, scanAccumTriggerAtom, scanAccumProgressAtom } from '../state/store';
-import { setProperty, getProperty } from '../physics/PropertyAnimator';
+import {
+    componentsAtom,
+    rayConfigAtom,
+    solver3RenderTriggerAtom,
+    solver3RenderingAtom,
+    animatorAtom,
+    animationPlayingAtom,
+    animationSpeedAtom,
+    scanAccumTriggerAtom,
+    scanAccumProgressAtom,
+    MAX_FORWARD_RAY_COUNT,
+    MAX_REVERSE_PATH_COUNT,
+    MIN_FORWARD_RAY_COUNT,
+    MIN_REVERSE_PATH_COUNT,
+} from '../state/store';
+import { setProperty } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
 
 import { Ray, Coherence } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
-import { Mirror } from '../parts/Mirror';
-import { GalvoScanHead } from '../parts/GalvoScanHead';
-import { DualGalvoScanHead } from '../parts/DualGalvoScanHead';
-import { SphericalLens } from '../parts/SphericalLens';
-import { AchromaticDoublet } from '../parts/AchromaticDoublet';
-import { AsphericLens } from '../parts/AsphericLens';
-import { Laser } from '../parts/Laser';
-import { Lamp } from '../parts/Lamp';
-import { Blocker } from '../parts/Blocker';
-import { Card } from '../parts/Card';
-import { Sample } from '../parts/Sample';
-import { Objective } from '../parts/Objective';
-import { ObjectiveCasing } from '../parts/ObjectiveCasing';
-import { IdealLens } from '../parts/IdealLens';
-import { Camera } from '../parts/Camera';
-import { CylindricalLens } from '../parts/CylindricalLens';
-import { PrismLens } from '../parts/PrismLens';
-import { Waveplate } from '../parts/Waveplate';
-import { BeamSplitter } from '../parts/BeamSplitter';
-import { Aperture } from '../parts/Aperture';
-import { SlitAperture } from '../parts/SlitAperture';
-import { LXSampleHolder } from '../parts/LXSampleHolder';
-import { Filter } from '../parts/Filter';
-import { DichroicMirror } from '../parts/DichroicMirror';
-import { CurvedMirror } from '../parts/CurvedMirror';
-import { PolygonScanner } from '../parts/PolygonScanner';
-import { PMT } from '../parts/PMT';
+import { Card } from '../physics/components/Card';
+import { Sample } from '../physics/components/Sample';
+import { Camera } from '../physics/components/Camera';
+import { PMT } from '../physics/components/PMT';
 
 import { RayVisualizer } from './RayVisualizer';
 
-import { EFieldVisualizer } from './EFieldVisualizer';
-import { Solver2, GaussianBeamSegment } from '../physics/Solver2';
+import { BundleWaveVisualizer } from './BundleWaveVisualizer';
+import { GaussianBeamSegment, segmentBeamRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays } from '../physics/SourceRayFactory';
 import { Draggable } from './Draggable';
-// ─── Visualizers (extracted) ─────────────────────────────────────────
-import {
-    CasingVisualizer,
-    SampleVisualizer,
-    ObjectiveVisualizer,
-    CameraVisualizer,
-    PMTVisualizer,
-    MirrorVisualizer,
-    PolygonScannerVisualizer,
-    CurvedMirrorVisualizer,
-    BeamSplitterVisualizer,
-    ApertureVisualizer,
-    SlitApertureVisualizer,
-    FilterVisualizer,
-    DichroicVisualizer,
-    BlockerVisualizer,
-    LXSampleHolderVisualizer,
-    WaveplateVisualizer,
-    CardVisualizer,
-    LensVisualizer,
-    SourceVisualizer,
-    LampVisualizer,
-    IdealLensVisualizer,
-    CylindricalLensVisualizer,
-    PrismVisualizer,
-    GalvoScanHeadVisualizer,
-    DualGalvoScanHeadVisualizer,
-    AchromaticDoubletVisualizer,
-    AsphericLensVisualizer,
-} from './visualizers/ComponentVisualizers';
+import { getComponentVisualizer } from './componentPresentation';
+import { captureAnimatedValues, createScheduledRenderJob } from './renderJob';
 
 
 export const OpticalTable: React.FC = () => {
@@ -83,6 +46,7 @@ export const OpticalTable: React.FC = () => {
     const [solver3Paths, setSolver3Paths] = useState<Ray[][]>([]);
     const [solver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
+    const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
 
     // ─── Animation System ───
     const [animator] = useAtom(animatorAtom);
@@ -118,28 +82,39 @@ export const OpticalTable: React.FC = () => {
     // Cards are passive detectors and don't affect the optical path, so moving
     // them should NOT trigger the expensive Solver1/Solver2 re-computation.
     // Uses component.version which is bumped on every property mutation.
-    //
-    // IMPORTANT: Animated components (e.g. specimens with piezo scan) are excluded
-    // from the fingerprint because their version changes every animation frame
-    // (from specimenOffset updates). Including them would cause an infinite
-    // re-render loop: useFrame→setProperty→version++→fingerprint→Effect1a→setState→render→useFrame
-    const animatedIds = useMemo(() => new Set(animator.channels.map(ch => ch.targetId)), [animator.channels.length]);
     const opticsFingerprint = useMemo(() => {
         if (!components) return '';
         return components
-            .filter(c => !(c instanceof Card) && !animatedIds.has(c.id))
+            .filter(c => !(c instanceof Card))
             .map(c => `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`)
             .join('|');
-    }, [components, animTick, animatedIds]);
+    }, [components, animTick]);
 
     // Refs to hold expensive solver results for card sampling effect
     const solverPathsRef = useRef<Ray[][]>([]);
     const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
     const solver3PathsRef = useRef<Ray[][]>([]);
+    const lastOpticsFingerprintRef = useRef<string>('');
+    const clampedForwardRayCount = Math.max(MIN_FORWARD_RAY_COUNT, Math.min(MAX_FORWARD_RAY_COUNT, rayConfig.rayCount));
+    const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
+
+    const traceCenterBeamSegments = () => {
+        const solver1 = new Solver1(components);
+        const sourceRays = createSourceRays(components, 1, 'center');
+        return solver1.traceWithBeamSegments(sourceRays).beamSegments;
+    };
+
+    const traceFullBeamSegments = () => {
+        const solver1 = new Solver1(components);
+        const sourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
+        return solver1.traceWithBeamSegments(sourceRays).beamSegments;
+    };
 
     useEffect(() => {
         if (!components) return;
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
+        const sceneChanged = lastOpticsFingerprintRef.current !== opticsFingerprint;
+        lastOpticsFingerprintRef.current = opticsFingerprint;
 
 
         const cardsToReset = components.filter(c => c instanceof Card) as Card[];
@@ -148,7 +123,7 @@ export const OpticalTable: React.FC = () => {
         }
 
         const solver = new Solver1(components);
-        const sourceRays = createSourceRays(components, rayConfig.rayCount, 'full');
+        const sourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
 
         const calculatedPaths = solver.trace(sourceRays);
 
@@ -396,8 +371,7 @@ export const OpticalTable: React.FC = () => {
         let beamSegs: GaussianBeamSegment[][] = [];
         if (rayConfig.solver2Enabled) {
             try {
-                const solver2 = new Solver2();
-                beamSegs = solver2.propagate(calculatedPaths, components);
+                beamSegs = solver.buildBeamSegments(calculatedPaths);
             } catch (e) {
                 console.warn('Solver 2 error:', e);
             }
@@ -405,42 +379,39 @@ export const OpticalTable: React.FC = () => {
         setBeamSegments(beamSegs);
         beamSegsRef.current = beamSegs;
 
-
-        for (const comp of components) {
-            if (comp instanceof Camera) {
-                comp.markSolver3Stale();
+        if (sceneChanged) {
+            for (const comp of components) {
+                if (comp instanceof Camera) {
+                    comp.markSolver3Stale();
+                }
             }
-        }
-        // Check if scan results should be invalidated:
-        // Only clear if a NON-ANIMATED component changed since scan completed
-        const animatedIds = new Set(animator.channels.map(ch => ch.targetId));
-        let shouldClearScan = false;
-        for (const comp of components) {
-            if (comp instanceof Camera && (comp as Camera).scanFrames) {
-                const cam = comp as Camera;
-                const snapshot = cam.scanVersionSnapshot;
-                if (snapshot) {
-                    // Check if any non-animated component version changed
-                    for (const c of components) {
-                        if (animatedIds.has(c.id)) continue; // skip animated components
-                        const savedVersion = snapshot.get(c.id);
-                        if (savedVersion === undefined || c.version !== savedVersion) {
-                            shouldClearScan = true;
-                            break;
+            // Check if scan results should be invalidated:
+            // Only clear if a NON-ANIMATED component changed since scan completed
+            const animatedIds = new Set(animator.channels.map(ch => ch.targetId));
+            let shouldClearScan = false;
+            for (const comp of components) {
+                if (comp instanceof Camera && (comp as Camera).scanFrames) {
+                    const cam = comp as Camera;
+                    const snapshot = cam.scanVersionSnapshot;
+                    if (snapshot) {
+                        // Check if any non-animated component version changed
+                        for (const c of components) {
+                            if (animatedIds.has(c.id)) continue; // skip animated components
+                            const savedVersion = snapshot.get(c.id);
+                            if (savedVersion === undefined || c.version !== savedVersion) {
+                                shouldClearScan = true;
+                                break;
+                            }
                         }
-                    }
-                    if (shouldClearScan) {
-                        cam.clearScanFrames();
-                        cam.solver3Image = null;
-                        cam.forwardImage = null;
-                        cam.solver3Paths = null;
+                        if (shouldClearScan) {
+                            cam.clearScanFrames();
+                            cam.solver3Image = null;
+                            cam.forwardImage = null;
+                            cam.solver3Paths = null;
+                        }
                     }
                 }
             }
-        }
-        const hasAnyScanResults = components.some(c => c instanceof Camera && (c as Camera).scanFrames)
-            || components.some(c => c instanceof PMT && (c as PMT).scanImage);
-        if (shouldClearScan || !hasAnyScanResults) {
             setSolver3Paths([]);
             solver3PathsRef.current = [];
         }
@@ -457,8 +428,8 @@ export const OpticalTable: React.FC = () => {
         const pmts = components.filter(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT[];
         if (cameras.length === 0 && pmts.length === 0) return;
 
-        const beamSegs = beamSegsRef.current;
         setSolver3Rendering(true);
+        setScanAccumProgress(0);
 
         // Use requestAnimationFrame-driven generator for non-blocking rendering.
         // Each animation frame processes rows for up to ~16ms, then yields to the browser.
@@ -466,25 +437,40 @@ export const OpticalTable: React.FC = () => {
 
         const runAsync = () => {
             try {
+                const beamSegs = rayConfig.solver2Enabled && beamSegsRef.current.length > 0
+                    ? beamSegsRef.current
+                    : traceFullBeamSegments();
                 const solver3 = new Solver3(components, beamSegs);
                 const allPaths: Ray[][] = [];
 
                 // Build a list of camera generators to process sequentially
                 const cameraGens = cameras.map(cam => ({
                     camera: cam,
-                    gen: solver3.renderGenerator(cam, rayConfig.rayCount),
+                    gen: solver3.renderGenerator(cam, clampedReversePathCount),
                 }));
 
                 let camIdx = 0;
+                const totalWorkUnits = Math.max(cameras.length + pmts.length, 1);
+                const updateRenderProgress = (completedUnits: number, unitProgress: number = 0) => {
+                    const normalized = Math.max(0, Math.min(1, (completedUnits + unitProgress) / totalWorkUnits));
+                    setScanAccumProgress(normalized);
+                };
 
                 const step = () => {
-                    if (cancelled) { setSolver3Rendering(false); return; }
+                    if (cancelled) {
+                        setSolver3Rendering(false);
+                        setScanAccumProgress(0);
+                        return;
+                    }
 
                     const frameStart = performance.now();
                     // Process rows for up to 16ms per animation frame
                     while (camIdx < cameraGens.length && performance.now() - frameStart < 16) {
                         const { camera, gen } = cameraGens[camIdx];
                         const { value, done } = gen.next();
+                        if (!done && value) {
+                            updateRenderProgress(camIdx, value.progress);
+                        }
                         if (done) {
                             // Generator returned the final Solver3Result
                             const result = value as import('../physics/Solver3').Solver3Result;
@@ -494,6 +480,7 @@ export const OpticalTable: React.FC = () => {
                             camera.solver3Stale = false;
                             allPaths.push(...result.paths);
                             camIdx++;
+                            updateRenderProgress(camIdx, 0);
                         }
                         // If not done, the generator yielded a progress update — continue in this frame
                     }
@@ -509,14 +496,15 @@ export const OpticalTable: React.FC = () => {
                         const sample = components.find(c => c instanceof Sample) as Sample | undefined;
                         const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
 
-                        for (const pmt of pmts) {
+                        for (let pmtIdx = 0; pmtIdx < pmts.length; pmtIdx++) {
+                            const pmt = pmts[pmtIdx];
                             pmt.updateMatrices();
                             const pmtPos = pmt.position.clone();
                             const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
                             const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
                             const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
 
-                            const numRays = Math.min(rayConfig.rayCount, 32);
+                            const numRays = clampedReversePathCount;
                             const sinThetaMax = 0.3;
 
                             for (let i = 0; i < numRays; i++) {
@@ -547,6 +535,7 @@ export const OpticalTable: React.FC = () => {
                                     allPaths.push(result.path);
                                 }
                             }
+                            updateRenderProgress(cameras.length + pmtIdx + 1, 0);
                         }
                     }
 
@@ -554,25 +543,29 @@ export const OpticalTable: React.FC = () => {
                     setSolver3Paths(allPaths);
                     solver3PathsRef.current = allPaths;
                     setSolver3Rendering(false);
+                    setScanAccumProgress(1);
                 };
 
                 requestAnimationFrame(step);
             } catch (e) {
                 console.warn('Solver 3 error:', e);
                 setSolver3Rendering(false);
+                setScanAccumProgress(0);
             }
         };
 
         // Kick off on next frame to let the "rendering" state update paint first
         requestAnimationFrame(runAsync);
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+            setScanAccumProgress(0);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [solver3Trigger]);
 
     // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
     const [scanAccumConfig] = useAtom(scanAccumTriggerAtom);
-    const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
 
     useEffect(() => {
@@ -596,22 +589,19 @@ export const OpticalTable: React.FC = () => {
         const pixelCount = camera.sensorResX * camera.sensorResY;
 
         // Save the original property values for all animated channels
-        const savedValues = activeChannels.map(ch => ({
-            channel: ch,
-            target: byId.get(ch.targetId)!,
-            originalValue: getProperty(byId.get(ch.targetId)!, ch.property),
-        }));
+        const savedValues = captureAnimatedValues(activeChannels, byId);
 
         console.log(`[ScanAccum] Starting ${steps}-step sweep (${activeChannels.length} channels, from→to linear)`);
 
-        // Lock out the animation loop and Solver 1 re-trace
-        scanAccumActiveRef.current = true;
-        setAnimPlaying(false);
-        animator.playing = false;
-        setSolver3Rendering(true);
-        setScanAccumProgress(0);
-
-        const savedPlaying = animStateRef.current.playing;
+        const job = createScheduledRenderJob({
+            animator,
+            savedValues,
+            scanAccumActiveRef,
+            animStateRef,
+            setAnimPlaying,
+            setSolver3Rendering,
+            setProgress: setScanAccumProgress,
+        });
 
         // Clear previous scan frames and prepare fresh storage
         camera.clearScanFrames();
@@ -621,14 +611,9 @@ export const OpticalTable: React.FC = () => {
         const accumulatedExcitation = new Float32Array(pixelCount);
         let lastPaths: Ray[][] = [];
 
-        /** Restore all animated properties to their original values. */
-        const restoreProperties = () => {
-            for (const sv of savedValues) {
-                setProperty(sv.target, sv.channel.property, sv.originalValue);
-            }
-        };
-
         const runStep = (step: number) => {
+            if (job.isCancelled()) return;
+
             if (step >= steps) {
                 // All steps done — normalize the accumulated average
                 const N = steps;
@@ -657,18 +642,9 @@ export const OpticalTable: React.FC = () => {
                 camera.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
 
                 // Restore properties to original state (so rays stay put)
-                restoreProperties();
-
                 setSolver3Paths(lastPaths);
                 solver3PathsRef.current = lastPaths;
-                setSolver3Rendering(false);
-                setScanAccumProgress(1);
-
-                // Unlock animation loop and Solver 1
-                scanAccumActiveRef.current = false;
-                if (savedPlaying) {
-                    setAnimPlaying(true);
-                }
+                job.finish(1);
                 return;
             }
 
@@ -679,32 +655,16 @@ export const OpticalTable: React.FC = () => {
 
             try {
                 // ── Solver 1: Forward trace ──
-                const solver1 = new Solver1(components);
-                const sourceRays = createSourceRays(components, 1, 'center');
-                const paths = solver1.trace(sourceRays);
-
-                // ── Solver 2: Gaussian beam propagation ──
-                let beamSegs: GaussianBeamSegment[][] = [];
-                try {
-                    const solver2 = new Solver2();
-                    beamSegs = solver2.propagate(paths, components);
-                } catch (e) {
-                    console.warn('Scan accum Solver 2 error:', e);
-                }
+                const beamSegs = traceCenterBeamSegments();
 
                 // ── Solver 3: Backward render ──
                 const solver3 = new Solver3(components, beamSegs);
                 const result = solver3.render(camera, 8);
 
-                {
+                if (step === 0 || step === steps - 1) {
                     let stepEmission = 0;
-                    let stepNonZero = 0;
-                    for (let i = 0; i < result.emissionImage.length; i++) {
-                        stepEmission += result.emissionImage[i];
-                        if (result.emissionImage[i] > 0) stepNonZero++;
-                    }
-                    const totalPx = camera.sensorResX * camera.sensorResY;
-                    console.log(`[ScanAccum] Step ${step}/${steps}: frac=${fraction.toFixed(3)}, beamSegs=${beamSegs.length}, paths=${result.paths.length}, res=${camera.sensorResX}×${camera.sensorResY}, spp=${camera.samplesPerPixel}, nonZero=${stepNonZero}/${totalPx}, emission=${stepEmission.toFixed(6)}`);
+                    for (let i = 0; i < result.emissionImage.length; i++) stepEmission += result.emissionImage[i];
+                    console.log(`[ScanAccum] Step ${step}/${steps}: frac=${fraction.toFixed(3)}, beamSegs=${beamSegs.length}, paths=${result.paths.length}, emission=${stepEmission.toFixed(6)}`);
                 }
 
                 // Store this frame's individual images
@@ -732,16 +692,18 @@ export const OpticalTable: React.FC = () => {
             }
 
             // Restore properties before yielding — keeps rays stable on the optical table
-            restoreProperties();
+            job.restoreProperties();
 
             setScanAccumProgress((step + 1) / steps);
 
             // Schedule next step (yield to UI for progress update)
-            setTimeout(() => runStep(step + 1), 0);
+            job.schedule(() => runStep(step + 1), 0);
         };
 
         // Start step 0 after a brief delay (let UI update)
-        setTimeout(() => runStep(0), 50);
+        job.schedule(() => runStep(0), 50);
+
+        return () => { job.cancel(0); };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scanAccumConfig.trigger]);
@@ -774,41 +736,34 @@ export const OpticalTable: React.FC = () => {
         const totalPixels = resX * resY;
 
         // Save all animated channel values for restoration
-        const allSaved = animator.channels.map(ch => ({
-            channel: ch,
-            target: byId.get(ch.targetId)!,
-            originalValue: getProperty(byId.get(ch.targetId)!, ch.property),
-        })).filter(sv => sv.target);
+        const allSaved = captureAnimatedValues(animator.channels, byId);
 
         console.log(`[PMT Raster] Starting ${resX}×${resY} raster scan (${totalPixels} pixels)`);
 
-        // Lock animation loop
-        scanAccumActiveRef.current = true;
-        setAnimPlaying(false);
-        animator.playing = false;
-        setSolver3Rendering(true);
-        setScanAccumProgress(0);
-
-        const savedPlaying = animStateRef.current.playing;
+        const job = createScheduledRenderJob({
+            animator,
+            savedValues: allSaved,
+            scanAccumActiveRef,
+            animStateRef,
+            setAnimPlaying,
+            setSolver3Rendering,
+            setProgress: setScanAccumProgress,
+        });
 
         // Clear previous scan
         pmt.clearScan();
         const scanImage = new Float32Array(totalPixels);
 
-        const restoreAll = () => {
-            for (const sv of allSaved) {
-                setProperty(sv.target, sv.channel.property, sv.originalValue);
-            }
-        };
-
         // Raster scan: Y slow (outer), X fast (inner)
         // Backward rays accumulate throughout the scan for visualization
         let pixelsDone = 0;
         const accumulatedPaths: Ray[][] = [];
-        const maxVisPaths = 128; // Cap total visualization paths
+        const maxVisPaths = clampedReversePathCount;
 
 
         const runRow = (yIdx: number) => {
+            if (job.isCancelled()) return;
+
             if (yIdx >= resY) {
                 // Done — store results
                 console.log(`[PMT Raster] Done. ${totalPixels} pixels scanned, ${accumulatedPaths.length} backward paths.`);
@@ -816,16 +771,11 @@ export const OpticalTable: React.FC = () => {
                 pmt.scanStale = false;
                 pmt.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
 
-                restoreAll();
-
                 // Final update of visualization paths
                 setSolver3Paths([...accumulatedPaths]);
                 solver3PathsRef.current = accumulatedPaths;
 
-                setSolver3Rendering(false);
-                setScanAccumProgress(1);
-                scanAccumActiveRef.current = false;
-                if (savedPlaying) setAnimPlaying(true);
+                job.finish(1);
                 return;
             }
 
@@ -834,31 +784,23 @@ export const OpticalTable: React.FC = () => {
             setProperty(yTarget, yCh.property, yVal);
 
             const runPixel = (xIdx: number) => {
+                if (job.isCancelled()) return;
+
                 if (xIdx >= resX) {
                     // Row done, schedule next row
                     setScanAccumProgress(pixelsDone / totalPixels);
-                    setTimeout(() => runRow(yIdx + 1), 0);
+                    job.schedule(() => runRow(yIdx + 1), 0);
                     return;
                 }
 
                 const xFrac = resX > 1 ? xIdx / (resX - 1) : 0.5;
                 const xVal = xCh.from + (xCh.to - xCh.from) * xFrac;
+                setProperty(yTarget, yCh.property, yVal);
                 setProperty(xTarget, xCh.property, xVal);
 
                 try {
                     // Solver 1: Forward trace
-                    const solver1 = new Solver1(components);
-                    const sourceRays = createSourceRays(components, 1, 'center');
-                    const paths = solver1.trace(sourceRays);
-
-                    // Solver 2: Gaussian beam propagation
-                    let beamSegs: GaussianBeamSegment[][] = [];
-                    try {
-                        const solver2 = new Solver2();
-                        beamSegs = solver2.propagate(paths, components);
-                    } catch (e) {
-                        console.warn('[PMT Raster] Solver2 FAILED:', e);
-                    }
+                    const beamSegs = traceCenterBeamSegments();
 
                     // Debug: log beam focus position at corner/center pixels
                     const isCornerOrCenter = (xIdx === 0 && yIdx === 0) ||
@@ -891,16 +833,18 @@ export const OpticalTable: React.FC = () => {
                 pixelsDone++;
 
                 // Restore properties between pixels to keep rays stable visually
-                restoreAll();
+                job.restoreProperties();
 
                 // Schedule next pixel (yield to UI every pixel for responsiveness)
-                setTimeout(() => runPixel(xIdx + 1), 0);
+                job.schedule(() => runPixel(xIdx + 1), 0);
             };
 
             runPixel(0);
         };
 
-        setTimeout(() => runRow(0), 50);
+        job.schedule(() => runRow(0), 50);
+
+        return () => { job.cancel(0); };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scanAccumConfig.trigger]);
@@ -956,7 +900,7 @@ export const OpticalTable: React.FC = () => {
             const fallbackHits: { ray: Ray; hitLocalPoint: Vector3 }[] = [];
 
             for (const { ray: mainHitRay, hitLocalPoint } of hitRays) {
-                // Skip Gaussian beam matching if no beam segments available
+                // Skip beam-envelope matching if no beam segments available
                 if (beamSegs.length === 0) {
                     fallbackHits.push({ ray: mainHitRay, hitLocalPoint });
                     continue;
@@ -997,15 +941,7 @@ export const OpticalTable: React.FC = () => {
                     continue;
                 }
 
-                const wavelengthMm = bestSeg.wavelength * 1e3;
-                const qx = { re: bestSeg.qx_start.re + bestZ, im: bestSeg.qx_start.im };
-                const qy = { re: bestSeg.qy_start.re + bestZ, im: bestSeg.qy_start.im };
-
-                const invQx = { re: qx.re / (qx.re * qx.re + qx.im * qx.im), im: -qx.im / (qx.re * qx.re + qx.im * qx.im) };
-                const invQy = { re: qy.re / (qy.re * qy.re + qy.im * qy.im), im: -qy.im / (qy.re * qy.re + qy.im * qy.im) };
-
-                const beamWx = invQx.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQx.im)) : 10;
-                const beamWy = invQy.im < 0 ? Math.sqrt(-wavelengthMm / (Math.PI * invQy.im)) : 10;
+                const { wx: beamWx, wy: beamWy } = segmentBeamRadii(bestSeg, bestZ);
 
 
                 const beamDir = bestSeg.direction.clone().normalize();
@@ -1137,40 +1073,25 @@ export const OpticalTable: React.FC = () => {
             {/* Beams render at z=0 (default), components at z=2.
                 In the top-down view the Z offset is invisible, but the depth buffer
                 ensures components appear in front of beam lines. */}
-            <RayVisualizer paths={rays} glowEnabled={rayConfig.solver2Enabled} hideAll={rayConfig.emFieldVisible} />
-            {solver3Paths.length > 0 && <RayVisualizer paths={solver3Paths} glowEnabled={false} hideAll={false} />}
-            {rayConfig.solver2Enabled && rayConfig.emFieldVisible && <EFieldVisualizer beamSegments={beamSegments} />}
+            <RayVisualizer
+                paths={rays}
+                glowEnabled={rayConfig.solver2Enabled}
+                hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+            />
+            {solver3Paths.length > 0 && (
+                <RayVisualizer
+                    paths={solver3Paths}
+                    glowEnabled={false}
+                    hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+                />
+            )}
+            {rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave' && (
+                <BundleWaveVisualizer beamSegments={beamSegments} reversePaths={solver3Paths} />
+            )}
 
             <group>
                 {components.map(c => {
-                    let visual = null;
-                    if (c instanceof GalvoScanHead) visual = <GalvoScanHeadVisualizer component={c} />;
-                    else if (c instanceof DualGalvoScanHead) visual = <DualGalvoScanHeadVisualizer component={c} />;
-                    else if (c instanceof Mirror) visual = <MirrorVisualizer component={c} />;
-                    else if (c instanceof CurvedMirror) visual = <CurvedMirrorVisualizer component={c} />;
-                    else if (c instanceof ObjectiveCasing) visual = <CasingVisualizer component={c} />;
-                    else if (c instanceof Objective) visual = <ObjectiveVisualizer component={c} />;
-                    else if (c instanceof IdealLens) visual = <IdealLensVisualizer component={c} />;
-                    else if (c instanceof SphericalLens) visual = <LensVisualizer component={c} />;
-                    else if (c instanceof AchromaticDoublet) visual = <AchromaticDoubletVisualizer component={c} />;
-                    else if (c instanceof AsphericLens) visual = <AsphericLensVisualizer component={c} />;
-                    else if (c instanceof Laser) visual = <SourceVisualizer component={c} />;
-                    else if (c instanceof Lamp) visual = <LampVisualizer component={c} />;
-                    else if (c instanceof Blocker) visual = <BlockerVisualizer component={c} />;
-                    else if (c instanceof Card) visual = <CardVisualizer component={c} />;
-                    else if (c instanceof LXSampleHolder) visual = <LXSampleHolderVisualizer component={c} />;
-                    else if (c instanceof Sample) visual = <SampleVisualizer component={c} />;
-                    else if (c instanceof Camera) visual = <CameraVisualizer component={c} />;
-                    else if (c instanceof PMT) visual = <PMTVisualizer component={c} />;
-                    else if (c instanceof CylindricalLens) visual = <CylindricalLensVisualizer component={c} />;
-                    else if (c instanceof PrismLens) visual = <PrismVisualizer component={c} />;
-                    else if (c instanceof Waveplate) visual = <WaveplateVisualizer component={c} />;
-                    else if (c instanceof BeamSplitter) visual = <BeamSplitterVisualizer component={c} />;
-                    else if (c instanceof SlitAperture) visual = <SlitApertureVisualizer component={c} />;
-                    else if (c instanceof Aperture) visual = <ApertureVisualizer component={c} />;
-                    else if (c instanceof Filter) visual = <FilterVisualizer component={c} />;
-                    else if (c instanceof DichroicMirror) visual = <DichroicVisualizer component={c} />;
-                    else if (c instanceof PolygonScanner) visual = <PolygonScannerVisualizer component={c} />;
+                    const visual = getComponentVisualizer(c);
 
                     if (visual) {
                         return (

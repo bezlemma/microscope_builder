@@ -1,8 +1,8 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../parts/Laser';
-import { Mirror } from '../parts/Mirror';
-import { BeamSplitter } from '../parts/BeamSplitter';
-import { Card } from '../parts/Card';
+import { Laser } from '../physics/components/Laser';
+import { Mirror } from '../physics/components/Mirror';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { Card } from '../physics/components/Card';
 
 /**
  * Mach-Zehnder Interferometer
@@ -29,24 +29,26 @@ export function createMZInterferometerScene(): OpticalComponent[] {
     laser.pointAlong(1, 0, 0);  // emit along +X
     scene.push(laser);
 
+    // Use explicit surface normals so the optics stay correct under the current
+    // component orientation convention.
     const bs1 = new BeamSplitter(20, 2, 0.5, "BS1 (50/50)");
     bs1.setPosition(-100, 0, 0);
-    bs1.pointAlong(1, -1, 0)
+    bs1.pointAlong(1, -1, 0);  // reflects +X -> +Y, transmits +X
     scene.push(bs1);
 
     const mirrorA = new Mirror(20, 2, "Mirror A");
     mirrorA.setPosition(-100, 80, 0);
-    mirrorA.pointAlong(-1, 1, 0); 
+    mirrorA.pointAlong(-1, 1, 0);  // reflects +Y -> +X
     scene.push(mirrorA);
 
     const mirrorB = new Mirror(20, 2, "Mirror B");
     mirrorB.setPosition(0, 0, 0);
-    mirrorB.pointAlong(1, -1, 0);
+    mirrorB.pointAlong(1, -1, 0);  // reflects +X -> +Y
     scene.push(mirrorB);
 
     const bs2 = new BeamSplitter(20, 2, 0.5, "BS2 (50/50)");
     bs2.setPosition(0, 80, 0);
-    bs2.pointAlong(1, 1, 0); 
+    bs2.pointAlong(-1, 1, 0);  // reflects +Y -> +X, transmits +X
     scene.push(bs2);
 
     const card = new Card(30, 30, "MZ Detector");

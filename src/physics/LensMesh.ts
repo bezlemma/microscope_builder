@@ -76,14 +76,14 @@ export class LensMesh {
      * using barycentric interpolation of vertex normals.
      */
     private computeSmoothNormal(faceIndex: number, hitPoint: Vector3): Vector3 {
-        if (!this.geometry) return new Vector3(1, 0, 0);
+        if (!this.geometry) return new Vector3(0, 0, 1);
 
         const index = this.geometry.index;
         const posAttr = this.geometry.getAttribute('position') as BufferAttribute;
         const normAttr = this.geometry.getAttribute('normal') as BufferAttribute;
 
         if (!index || !posAttr || !normAttr) {
-            return new Vector3(1, 0, 0);
+            return new Vector3(0, 0, 1);
         }
 
         // Get vertex indices for this face

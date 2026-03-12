@@ -1,11 +1,7 @@
 import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
+import { serializeScene, deserializeScene } from './ubzSerializer';
 import { PropertyAnimator } from '../physics/PropertyAnimator';
-
-// Re-export atoms that component visualizers need (from cycle-free standalone file)
-export { selectionAtom, subElementIndexAtom } from './selectionAtom';
-// Also import locally for use within this file
-import { selectionAtom } from './selectionAtom';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
@@ -18,15 +14,28 @@ import { createMZInterferometerScene } from '../presets/mzInterferometer';
 import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
 import { createConfocalScene } from '../presets/confocal';
-import { serializeScene, deserializeScene } from './ubzSerializer';
 
 // --- State Types ---
 export interface RayConfig {
     rayCount: number; // Number of intermediate rays
+    reversePathCount: number; // Backward paths retained for rod/wave visualization
     showFootprint: boolean;
-    solver2Enabled: boolean; // E&M (Gaussian beam) solver toggle
-    emFieldVisible: boolean; // 3D E-field visualization mode
+    solver2Enabled: boolean; // Beamlet/bundle data toggle
+    viewerMode: 'rods' | 'wave';
 }
+
+export const MIN_FORWARD_RAY_COUNT = 4;
+export const MAX_FORWARD_RAY_COUNT = 30000;
+export const MIN_REVERSE_PATH_COUNT = 32;
+export const MAX_REVERSE_PATH_COUNT = 30000;
+
+export const DEFAULT_RAY_CONFIG: RayConfig = {
+    rayCount: 32,
+    reversePathCount: 320,
+    showFootprint: false,
+    solver2Enabled: false,
+    viewerMode: 'rods',
+};
 
 // 1. Component List (The Scene Graph)
 
@@ -44,7 +53,7 @@ export enum PresetName {
     Confocal = "Confocal Scanning"
 }
 
-export const activePresetAtom = atom<PresetName>(PresetName.BeamExpander);
+export const activePresetAtom = atom<PresetName | null>(PresetName.BeamExpander);
 
 export const componentsAtom = atom<OpticalComponent[]>(createBeamExpanderScene());
 
@@ -74,8 +83,8 @@ export const loadPresetAtom = atom(
     null,
     (get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
-        // Reset E&M state for fresh preset
-        set(rayConfigAtom, { rayCount: 32, showFootprint: false, solver2Enabled: false, emFieldVisible: false });
+        // Reset bundle-view state for fresh preset
+        set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(undoStackAtom, []); // Clear undo history on preset load
 
         const factory = presetFactories.get(presetName);
@@ -103,15 +112,55 @@ export const loadPresetAtom = atom(
     }
 );
 
-// 2. Selection State — re-exported from ./selectionAtom.ts (see above)
+// 2. Selection State (supports multi-select via Ctrl+Click)
+export const selectionAtom = atom<string[]>([]);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
-    rayCount: 32,
-    showFootprint: false,
-    solver2Enabled: false,
-    emFieldVisible: false
+    ...DEFAULT_RAY_CONFIG
 });
+
+export const resetRayConfigAtom = atom(
+    null,
+    (_get, set) => {
+        set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
+    }
+);
+
+export const setBundleDataEnabledAtom = atom(
+    null,
+    (get, set, enabled: boolean) => {
+        const current = get(rayConfigAtom);
+        set(rayConfigAtom, {
+            ...current,
+            solver2Enabled: enabled,
+            viewerMode: enabled ? current.viewerMode : 'rods',
+        });
+    }
+);
+
+export const setViewerModeAtom = atom(
+    null,
+    (get, set, mode: RayConfig['viewerMode']) => {
+        const current = get(rayConfigAtom);
+        set(rayConfigAtom, {
+            ...current,
+            viewerMode: mode,
+        });
+    }
+);
+
+export const setVisualizationModeAtom = atom(
+    null,
+    (get, set, mode: RayConfig['viewerMode']) => {
+        const current = get(rayConfigAtom);
+        set(rayConfigAtom, {
+            ...current,
+            solver2Enabled: mode === 'wave' ? true : current.solver2Enabled,
+            viewerMode: mode,
+        });
+    }
+);
 
 // 4. Interaction State
 export const isDraggingAtom = atom<boolean>(false);
@@ -131,11 +180,20 @@ export const solver3RenderingAtom = atom<boolean>(false);
 // 9. Load scene from deserialized components (e.g. from .ubz file)
 export const loadSceneAtom = atom(
     null,
-    (_get, set, components: OpticalComponent[]) => {
+    (get, set, components: OpticalComponent[]) => {
+        const animator = get(animatorAtom);
+        animator.clearAll();
+        animator.reset();
+
         set(componentsAtom, components);
-        set(rayConfigAtom, { rayCount: 32, showFootprint: false, solver2Enabled: false, emFieldVisible: false });
+        set(activePresetAtom, null);
+        set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(selectionAtom, []);
         set(undoStackAtom, []); // Clear undo history on scene load
+        set(animationPlayingAtom, false);
+        set(animationSpeedAtom, 1.0);
+        set(solver3RenderingAtom, false);
+        set(scanAccumProgressAtom, 0);
     }
 );
 
@@ -184,33 +242,10 @@ export const animationPlayingAtom = atom<boolean>(false);
 export const animationSpeedAtom = atom<number>(1.0);
 
 // ════════════════════════════════════════════════════════════
-//  12. SCAN ACCUMULATION — Solver 3 multi-step batch render
-//  Steps through N scan positions, runs Solver 1→2→3 at each,
-//  and accumulates the resulting images on the Camera.
+//  12. Imaging progress + scan accumulation
+//  scanAccumProgressAtom is the shared 0..1 progress value for
+//  Solver 3 image renders, scan accumulation, and PMT raster scans.
+//  scanAccumTriggerAtom starts the animated scan/raster jobs.
 // ════════════════════════════════════════════════════════════
 export const scanAccumTriggerAtom = atom<{ steps: number; trigger: number }>({ steps: 16, trigger: 0 });
 export const scanAccumProgressAtom = atom<number>(0);  // 0..1 progress
-
-// ════════════════════════════════════════════════════════════
-//  13. VIEW MODE — 2D/3D camera snap
-//  '2D' when camera is top-down, '3D' when rotated.
-// ════════════════════════════════════════════════════════════
-export const viewModeAtom = atom<'2D' | '3D'>('2D');
-
-// ════════════════════════════════════════════════════════════
-//  14. DRAG AXIS LOCK — constrains component drag to one axis
-// ════════════════════════════════════════════════════════════
-export const dragAxisLockAtom = atom<'free' | 'x' | 'y'>('free');
-
-// ════════════════════════════════════════════════════════════
-//  15. SUB-ELEMENT SELECTION — select individual surfaces within compound
-// ════════════════════════════════════════════════════════════
-// Index into a compound component's surfaces. null = whole component selected.
-// subElementIndexAtom — re-exported from ./selectionAtom.ts (see top of file)
-
-// ════════════════════════════════════════════════════════════
-//  16. DEFAULT ROTATION PLANE — constrains component rotation
-// ════════════════════════════════════════════════════════════
-// 'xy' = rotate in optical table plane (default), 'xz' = vertical tilt, 'yz' = lateral tilt
-export const rotationPlaneAtom = atom<'xy' | 'xz' | 'yz'>('xy');
-
