@@ -1,0 +1,1 @@
+C:\Users\Bez\Documents\GitHub\microscope_builder_4\native\solver3_kernel\target\wasm32-unknown-unknown\release\solver3_kernel.wasm: C:\Users\Bez\Documents\GitHub\microscope_builder_4\native\solver3_kernel\src\lib.rs

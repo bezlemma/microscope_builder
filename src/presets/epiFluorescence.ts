@@ -6,7 +6,9 @@ import { Sample } from '../physics/components/Sample';
 import { Camera } from '../physics/components/Camera';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Filter } from '../physics/components/Filter';
+import { Blocker } from '../physics/components/Blocker';
 
 /**
  * Epi-Fluorescence Microscope — widefield fluorescence via back-illumination.
@@ -25,8 +27,8 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
     const laser = new Laser("488 nm Laser");
     laser.setPosition(-350, -125, 0);
     laser.pointAlong(1, 0, 0);  // emit along +X
-    laser.beamRadius = 2;       
-    laser.wavelength = 488;   
+    laser.beamRadius = 2;
+    laser.wavelength = 488;
     laser.power = 1.0;
     scene.push(laser);
 
@@ -47,7 +49,7 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
     // To achieve widefield illumination, the laser must be focused onto the Back Focal Plane (BFP)
     // of the objective.
     const exLens = new SphericalLens(1/100, 12.7, 3.6, "Focusing Lens", 51.5, 1e9, 1.517);
-    exLens.setPosition(-83.2, -125, 0);
+    exLens.setPosition(-85, -125, 0);
     exLens.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(exLens);
 
@@ -66,9 +68,15 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
     const sample = new Sample("Specimen (GFP)");
     sample.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
     sample.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
-    sample.setPosition(0, -180, 0); 
+    sample.setPosition(0, -180, 0);
     sample.pointAlong(0, 1, 0);  // faces +Y (towards objective above)
     scene.push(sample);
+
+    // Beam stop below sample — catches excitation light that passes through
+    const beamStop = new Blocker(30, 3, "Beam Stop");
+    beamStop.setPosition(0, -195, 0);
+    beamStop.pointAlong(0, 1, 0);
+    scene.push(beamStop);
 
     const objective = new Objective({
         magnification: 10,
@@ -78,7 +86,7 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
         name: '10×/0.30 Objective'
     });
     objective.setPosition(0, -160, 0);
-    objective.pointAlong(0, -1, 0);  // faces -Y (towards sample below)
+    objective.pointAlong(0, 1, 0);  // optical axis points +Y so the sample-side nose faces -Y toward the sample below
     scene.push(objective);
 
    const emissionFilter = new Filter(
@@ -92,22 +100,20 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
     scene.push(emissionFilter);
 
 
-    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
-    tubeLensCrown.setPosition(0, 30, 0); 
-    tubeLensCrown.pointAlong(0, 1, 0);  // optical axis along +Y
-    scene.push(tubeLensCrown);
-    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
-    tubeLensFlint.setPosition(0, 33.26, 0); 
-    tubeLensFlint.pointAlong(0, 1, 0);  // optical axis along +Y
-    scene.push(tubeLensFlint);
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    tubeLens.setPosition(0, 31.25, 0);
+    tubeLens.pointAlong(0, 1, 0);  // optical axis along +Y
+    scene.push(tubeLens);
 
     const camera = new Camera(13, 13, "CMOS Sensor");
-    camera.setPosition(0, 230.91, 0); 
+    camera.setPosition(0, 230.91, 0);
     camera.pointAlong(0, -1, 0);  // faces -Y (toward emission coming from below)
-    
-    // Tube lens aperture = 15mm, distance = 200mm. tan(theta) = 15/200 = 0.075. NA ~ 0.075.
-    camera.sensorNA = 0.075;
-    camera.samplesPerPixel = 64; // High sample count for a clean focused image
+
+    // Sensor NA = objective NA / magnification. Without this, backward rays
+    // from each camera pixel would all be collimated along the optical axis
+    // and never converge onto the sample (so the Mickey image stays blank).
+    camera.sensorNA = 0.30 / 10;
+    camera.samplesPerPixel = 16;
 
     scene.push(camera);
 

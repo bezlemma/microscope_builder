@@ -1,10 +1,11 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, activeZLevelAtom, mobileSnapEnabledAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
+import { Rail } from '../physics/components/Rail';
 
 interface DraggableProps {
     component: OpticalComponent;
@@ -15,9 +16,11 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const [components, setComponents] = useAtom(componentsAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
-    const { controls } = useThree();
+    const { controls, camera } = useThree();
     const [isDragging, setIsDragging] = useState(false);
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
+    const [activeZ] = useAtom(activeZLevelAtom);
+    const [mobileSnap] = useAtom(mobileSnapEnabledAtom);
 
     // Store offset from center to click point to prevent jumping
     const dragOffset = useRef(new Vector3(0, 0, 0));
@@ -36,11 +39,29 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
     };
 
+    // Intersect ray with a vertical plane through the component (for Z dragging).
+    // Uses camera forward vector projected onto XY to define the plane normal,
+    // so vertical mouse movement maps to Z.
+    const getRayIntersectionVertical = (e: any) => {
+        const ray = e.ray;
+        // Build a vertical plane through the component position.
+        // Normal = camera forward projected onto XY (horizontal), so the plane
+        // faces the camera and vertical mouse movement -> Z.
+        const camFwd = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const planeNormal = new Vector3(camFwd.x, camFwd.y, 0).normalize();
+        if (planeNormal.length() < 1e-6) return new Vector3(component.position.x, component.position.y, component.position.z);
+        const planeD = planeNormal.dot(component.position);
+        const denom = planeNormal.dot(ray.direction);
+        if (Math.abs(denom) < 1e-6) return new Vector3(component.position.x, component.position.y, component.position.z);
+        const t = (planeD - planeNormal.dot(ray.origin)) / denom;
+        return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
+    };
+
     const handlePointerDown = (e: any) => {
         e.stopPropagation();
 
         // Shift+Click: toggle this component in the multi-selection
-        // (Can't use Ctrl/Cmd — OrbitControls intercepts those for panning)
+        // (Can't use Ctrl/Cmd -- OrbitControls intercepts those for panning)
         if (e.shiftKey) {
             if (selection.includes(component.id)) {
                 // Remove from selection
@@ -58,16 +79,20 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
         try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari/mobile may not support pointer capture */ }
         pushUndo();  // snapshot before drag
+        if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+            window.navigator.vibrate(50);
+        }
         setIsDragging(true);
         setGlobalDragging(true);
 
         // Calculate offset: Component Center - Click Point
         const hitPoint = getRayIntersection(e);
-        // Z-up world: XY is table surface, Z is fixed at 0
+        const hitPointV = !component.axisLock.z ? getRayIntersectionVertical(e) : null;
+        // Z-up world: XY is table surface, Z from vertical plane when unlocked
         dragOffset.current.set(
             component.position.x - hitPoint.x,
             component.position.y - hitPoint.y,
-            0
+            hitPointV ? component.position.z - hitPointV.z : 0
         );
 
         // Disable Orbit Controls
@@ -94,14 +119,27 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         const targetX = hitPoint.x + dragOffset.current.x;
         const targetY = hitPoint.y + dragOffset.current.y;
 
+        // Z dragging: intersect vertical plane when Z is unlocked
+        let targetZ = component.position.z;
+        if (!component.axisLock.z) {
+            const hitPointV = getRayIntersectionVertical(e);
+            targetZ = hitPointV.z + dragOffset.current.z;
+        }
+
         let finalX = targetX;
         let finalY = targetY;
+        let finalZ = targetZ;
+
+        // Axis lock enforcement: prevent movement on locked axes
+        if (component.axisLock.x) finalX = component.position.x;
+        if (component.axisLock.y) finalY = component.position.y;
+        if (component.axisLock.z) finalZ = activeZ; // Z-locked components use the active Z level
 
 
-        // Snapping (Only if ALT key is held)
-        if (e.altKey) {
-            const AXIS_SNAP_THRESHOLD = 15;  // mm — perpendicular distance to trigger snap
-            const AXIS_RANGE_LIMIT = 12.5;   // mm — max distance from box face along axis
+        // Snapping (If ALT key is held OR mobile snap is active)
+        if (e.altKey || mobileSnap) {
+            const AXIS_SNAP_THRESHOLD = 15;  // mm -- perpendicular distance to trigger snap
+            const AXIS_RANGE_LIMIT = 12.5;   // mm -- max distance from box face along axis
             let bestAxisDist = Infinity;
             let snappedEuler: [number, number, number] | null = null;
 
@@ -116,10 +154,10 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
                         const py = c.position.y + port.y;
 
                         if (port.axisDir === 'x') {
-                            // Axis runs along X — snap Y, limit X range
+                            // Axis runs along X -- snap Y, limit X range
                             const perpDist = Math.abs(targetY - py);
                             // Check axis range: target must be within AXIS_RANGE_LIMIT of the face edge
-                            const faceX = c.position.x + port.x; // port.x is ±half
+                            const faceX = c.position.x + port.x; // port.x is +/-half
                             const sign = port.x > 0 ? 1 : -1;    // outward direction
                             const axisDistFromFace = (targetX - faceX) * sign;
                             const half = c.cubeSize / 2;
@@ -131,7 +169,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
                                 snappedEuler = [port.rx, port.ry, port.rz];
                             }
                         } else {
-                            // Axis runs along Y — snap X, limit Y range
+                            // Axis runs along Y -- snap X, limit Y range
                             const perpDist = Math.abs(targetX - px);
                             const faceY = c.position.y + port.y;
                             const sign = port.y > 0 ? 1 : -1;
@@ -149,23 +187,67 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
                 }
             }
 
+            // Check Rail axes (snap to rail line segment)
+            for (const c of components) {
+                if (c instanceof Rail && c.id !== component.id) {
+                    const a = c.holeA;
+                    const b = c.holeB;
+                    const ab = new Vector3(b.x - a.x, b.y - a.y, 0);
+                    const abLenSq = ab.lengthSq();
+                    if (abLenSq < 1e-6) continue;
+                    const at = new Vector3(targetX - a.x, targetY - a.y, 0);
+                    const t = Math.max(0, Math.min(1, at.dot(ab) / abLenSq));
+                    const projX = a.x + t * ab.x;
+                    const projY = a.y + t * ab.y;
+                    const perpDist = Math.sqrt((targetX - projX) ** 2 + (targetY - projY) ** 2);
+                    if (perpDist < AXIS_SNAP_THRESHOLD && perpDist < bestAxisDist) {
+                        bestAxisDist = perpDist;
+                        finalX = projX;
+                        finalY = projY;
+                        snappedEuler = null;
+                    }
+                }
+            }
+
             // Fall back to grid snapping if no axis snap was triggered
             if (bestAxisDist >= AXIS_SNAP_THRESHOLD) {
-                const offset = 12.5;
-                finalX = Math.round((targetX - offset) / gridSize) * gridSize + offset;
-                finalY = Math.round((targetY - offset) / gridSize) * gridSize + offset;
+                // First check if we can snap to a Ghost component
+                let snappedToGhost = false;
+                for (const c of components) {
+                    if (c.isGhost && c.id !== component.id) {
+                        const dist = Math.sqrt((targetX - c.position.x) ** 2 + (targetY - c.position.y) ** 2);
+                        if (dist < 15) { // Within 15mm of ghost center
+                            finalX = c.position.x;
+                            finalY = c.position.y;
+                            snappedEuler = null; // Just snap position
+                            snappedToGhost = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!snappedToGhost) {
+                    const offset = 12.5;
+                    finalX = Math.round((targetX - offset) / gridSize) * gridSize + offset;
+                    finalY = Math.round((targetY - offset) / gridSize) * gridSize + offset;
+                }
             }
+
+            // Re-apply axis locks after snapping
+            if (component.axisLock.x) finalX = component.position.x;
+            if (component.axisLock.y) finalY = component.position.y;
 
             // Compute delta from current dragged component position
             const deltaX = finalX - component.position.x;
             const deltaY = finalY - component.position.y;
+            const deltaZ = finalZ - component.position.z;
 
             // Get the set of IDs to move (all selected, including this one)
             const idsToMove = new Set(selection.includes(component.id) ? selection : [component.id]);
 
             const newComponents = components.map(c => {
                 if (idsToMove.has(c.id)) {
-                    c.setPosition(c.position.x + deltaX, c.position.y + deltaY, 0);
+                    c.setPosition(c.position.x + deltaX, c.position.y + deltaY, c.position.z + deltaZ);
                     // Apply 3D rotation if component was snapped to a port axis
                     if (snappedEuler && idsToMove.size === 1) {
                         c.setRotation(snappedEuler[0], snappedEuler[1], snappedEuler[2]);
@@ -176,19 +258,20 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             });
 
             setComponents(newComponents);
-            return; // early return — alt path handles its own setComponents
+            return; // early return -- alt path handles its own setComponents
         }
 
         // Compute delta from current dragged component position
         const deltaX = finalX - component.position.x;
         const deltaY = finalY - component.position.y;
+        const deltaZ = finalZ - component.position.z;
 
         // Get the set of IDs to move (all selected, including this one)
         const idsToMove = new Set(selection.includes(component.id) ? selection : [component.id]);
 
         const newComponents = components.map(c => {
             if (idsToMove.has(c.id)) {
-                c.setPosition(c.position.x + deltaX, c.position.y + deltaY, 0);
+                c.setPosition(c.position.x + deltaX, c.position.y + deltaY, c.position.z + deltaZ);
                 return c;
             }
             return c;
@@ -197,7 +280,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         setComponents(newComponents);
     };
 
-    // Selection highlight ring radius — proportional to component bounds
+    // Selection highlight ring radius -- proportional to component bounds
     const ringRadius = useMemo(() => {
         const b = component.bounds;
         if (b) {
@@ -207,6 +290,10 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         return 15;
     }, [component.bounds]);
 
+    if (component.isGhost) {
+        return <group>{children}</group>;
+    }
+
     return (
         <group
             onPointerDown={handlePointerDown}
@@ -215,7 +302,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         >
             {children}
 
-            {/* Selection highlight ring — glowing torus on the table surface */}
+            {/* Selection highlight ring -- glowing torus on the table surface */}
             {isSelected && (
                 <mesh
                     position={[component.position.x, component.position.y, component.position.z + 0.5]}

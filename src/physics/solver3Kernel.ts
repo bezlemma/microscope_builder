@@ -1,13 +1,15 @@
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { BeamFieldSnapshot, CameraKernelSnapshot, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
 import { HitRecord, Ray, Coherence, childRay } from './types';
 import { Solver2 } from './Solver2';
 import { type FirstHitHintCandidate, type PackedFirstHitHints, unpackFirstHitHintCandidates } from './solver3FirstHitHints';
 import { createJsPackedCameraSamples, type PackedCameraSamples, unpackCameraSample } from './solver3Sampling';
+import { type AnalyticHit, type PackedAnalyticHits, unpackAnalyticHit } from './solver3AnalyticNarrowPhase';
 
 export interface Solver3Result {
     emissionImage: Float32Array;
     excitationImage: Float32Array;
+    sampleCountsImage: Uint32Array;
     paths: Ray[][];
     resX: number;
     resY: number;
@@ -59,6 +61,36 @@ function buildSampleTerminatedPath(path: Ray[], rayAtSample: Ray, samplePoint: V
     return [...path, terminalRay];
 }
 
+/**
+ * Drawn reverse-ray paths should end at (or near) the sample — never continue
+ * past it through the excitation-side optics or into the source. For any path
+ * where the kernel didn't already clip at the sample AABB, walk the segments
+ * and truncate the first one that crosses (or is already past) the sample's
+ * centre plane projected onto the ray. Returns a truncated copy suitable for
+ * visualisation; the physics result is unaffected.
+ */
+function truncatePathAtSample(path: Ray[], samplePos: { x: number; y: number; z: number }): Ray[] {
+    if (path.length === 0) return path;
+    for (let i = 0; i < path.length; i++) {
+        const ray = path[i];
+        const dx = samplePos.x - ray.origin.x;
+        const dy = samplePos.y - ray.origin.y;
+        const dz = samplePos.z - ray.origin.z;
+        const tProj = dx * ray.direction.x + dy * ray.direction.y + dz * ray.direction.z;
+        if (tProj < -0.001) {
+            // Origin is already past the sample — drop this segment and the rest.
+            return path.slice(0, i);
+        }
+        const rayDist = ray.interactionDistance ?? Infinity;
+        if (tProj <= rayDist) {
+            // Ray crosses the sample plane — clip it here.
+            const clipped: Ray = { ...ray, interactionDistance: tProj };
+            return [...path.slice(0, i), clipped];
+        }
+    }
+    return path;
+}
+
 export class Solver3Kernel {
     private traceScene: TraceSceneSnapshot;
     private beamField: BeamFieldSnapshot;
@@ -70,11 +102,11 @@ export class Solver3Kernel {
     }
 
     render(camera: CameraKernelSnapshot, maxVisPaths: number = 32): Solver3Result {
-        return this.renderPackedCameraSamples(camera, createJsPackedCameraSamples(camera), maxVisPaths);
+        return this.renderPackedCameraSamples(camera, createJsPackedCameraSamples(camera, null, camera.sensorResX * camera.sensorResY * Math.max(1, camera.samplesPerPixel)), maxVisPaths);
     }
 
     *renderGenerator(camera: CameraKernelSnapshot, maxVisPaths: number = 32): Generator<{ progress: number }, Solver3Result, void> {
-        return yield* this.renderPackedCameraSamplesGenerator(camera, createJsPackedCameraSamples(camera), maxVisPaths);
+        return yield* this.renderPackedCameraSamplesGenerator(camera, createJsPackedCameraSamples(camera, null, camera.sensorResX * camera.sensorResY * Math.max(1, camera.samplesPerPixel)), maxVisPaths);
     }
 
     renderPackedCameraSamples(
@@ -82,16 +114,17 @@ export class Solver3Kernel {
         samples: PackedCameraSamples,
         maxVisPaths: number = 32,
         firstHitHints?: PackedFirstHitHints,
+        analyticHits?: PackedAnalyticHits,
     ): Solver3Result {
         const resX = camera.sensorResX;
         const resY = camera.sensorResY;
         const emissionImage = new Float32Array(resX * resY);
         const excitationImage = new Float32Array(resX * resY);
+        const sampleCountsImage = new Uint32Array(resX * resY);
         const reservoir = createPathBundleReservoir(maxVisPaths);
 
         const wlList = this.getActiveWavelengths();
         const wlNorm = Math.max(1, wlList.length);
-        const sampleNorm = Math.max(1, camera.samplesPerPixel);
 
         for (let py = 0; py < resY; py++) {
             for (let sampleIndex = samples.rowOffsets[py]; sampleIndex < samples.rowOffsets[py + 1]; sampleIndex++) {
@@ -99,9 +132,11 @@ export class Solver3Kernel {
                 const sampleHintCandidates = firstHitHints
                     ? unpackFirstHitHintCandidates(firstHitHints, sampleIndex)
                     : undefined;
+                const analyticHit = analyticHits ? unpackAnalyticHit(analyticHits, sampleIndex) : undefined;
                 const px = Math.max(0, Math.min(resX - 1, Math.round(sample.px)));
                 const bundle: Ray[][] = [];
                 let sampleRadiance = 0;
+                let sampleExcitation = 0;
 
                 for (const wl of wlList) {
                     const backwardRay: Ray = {
@@ -117,27 +152,27 @@ export class Solver3Kernel {
                         sourceId: `solver3_cam_${camera.id}_px${px}_py${py}_s${sampleIndex - samples.rowOffsets[py]}_wl${Math.round(wl * 1e9)}`,
                     };
 
-                    const result = this.traceBackward(backwardRay, camera.id, sampleHintCandidates);
+                    const result = this.traceBackward(backwardRay, camera.id, sampleHintCandidates, analyticHit);
                     sampleRadiance += result.radiance;
+                    sampleExcitation += result.excitation;
                     if (result.radiance > 0 && result.path.length > 1) {
                         bundle.push(result.path);
                     }
                 }
 
                 emissionImage[py * resX + px] += sampleRadiance / wlNorm;
+                excitationImage[py * resX + px] += sampleExcitation / wlNorm;
+                sampleCountsImage[py * resX + px] += 1;
                 if (bundle.length > 0) {
                     considerPathBundle(reservoir, bundle);
                 }
             }
         }
 
-        for (let i = 0; i < emissionImage.length; i++) {
-            emissionImage[i] /= sampleNorm;
-        }
-
         return {
             emissionImage,
             excitationImage,
+            sampleCountsImage,
             paths: materializeReservoirPaths(reservoir),
             resX,
             resY,
@@ -149,15 +184,16 @@ export class Solver3Kernel {
         samples: PackedCameraSamples,
         maxVisPaths: number = 32,
         firstHitHints?: PackedFirstHitHints,
+        analyticHits?: PackedAnalyticHits,
     ): Generator<{ progress: number }, Solver3Result, void> {
         const resX = camera.sensorResX;
         const resY = camera.sensorResY;
         const emissionImage = new Float32Array(resX * resY);
         const excitationImage = new Float32Array(resX * resY);
+        const sampleCountsImage = new Uint32Array(resX * resY);
         const reservoir = createPathBundleReservoir(maxVisPaths);
         const wlList = this.getActiveWavelengths();
         const wlNorm = Math.max(1, wlList.length);
-        const sampleNorm = Math.max(1, camera.samplesPerPixel);
 
         for (let py = 0; py < resY; py++) {
             for (let sampleIndex = samples.rowOffsets[py]; sampleIndex < samples.rowOffsets[py + 1]; sampleIndex++) {
@@ -165,10 +201,12 @@ export class Solver3Kernel {
                 const sampleHintCandidates = firstHitHints
                     ? unpackFirstHitHintCandidates(firstHitHints, sampleIndex)
                     : undefined;
+                const analyticHit = analyticHits ? unpackAnalyticHit(analyticHits, sampleIndex) : undefined;
                 const px = Math.max(0, Math.min(resX - 1, Math.round(sample.px)));
                 const bundle: Ray[][] = [];
                 let sampleRadiance = 0;
 
+                let sampleExcitation = 0;
                 for (const wl of wlList) {
                     const backwardRay: Ray = {
                         origin: sample.origin.clone(),
@@ -183,14 +221,17 @@ export class Solver3Kernel {
                         sourceId: `solver3_cam_${camera.id}_px${px}_py${py}_s${sampleIndex - samples.rowOffsets[py]}_wl${Math.round(wl * 1e9)}`,
                     };
 
-                    const result = this.traceBackward(backwardRay, camera.id, sampleHintCandidates);
+                    const result = this.traceBackward(backwardRay, camera.id, sampleHintCandidates, analyticHit);
                     sampleRadiance += result.radiance;
+                    sampleExcitation += result.excitation;
                     if (result.radiance > 0 && result.path.length > 1) {
                         bundle.push(result.path);
                     }
                 }
 
                 emissionImage[py * resX + px] += sampleRadiance / wlNorm;
+                excitationImage[py * resX + px] += sampleExcitation / wlNorm;
+                sampleCountsImage[py * resX + px] += 1;
                 if (bundle.length > 0) {
                     considerPathBundle(reservoir, bundle);
                 }
@@ -199,13 +240,10 @@ export class Solver3Kernel {
             yield { progress: (py + 1) / resY };
         }
 
-        for (let i = 0; i < emissionImage.length; i++) {
-            emissionImage[i] /= sampleNorm;
-        }
-
         return {
             emissionImage,
             excitationImage,
+            sampleCountsImage,
             paths: materializeReservoirPaths(reservoir),
             resX,
             resY,
@@ -302,22 +340,56 @@ export class Solver3Kernel {
         startRay: Ray,
         originatorId?: string,
         firstHitHintCandidates?: FirstHitHintCandidate[],
-    ): { radiance: number; path: Ray[]; absorbed: boolean } {
+        analyticHit?: AnalyticHit,
+    ): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean } {
         const path: Ray[] = [startRay];
         let visualPathAtSample: Ray[] | null = null;
         let currentRay = startRay;
         let throughput = 1.0;
         let fluorescenceRadiance = 0;
+        let excitationAtSample = 0;
         let absorbed = false;
         const sample = this.traceScene.sample;
 
         for (let depth = 0; depth < this.maxDepth; depth++) {
             let nearestT = Infinity;
-            let nearestHit = null;
-            let nearestComponent = null;
+            let nearestHit: HitRecord | null = null;
+            let nearestComponent: (typeof this.traceScene.components)[number] | null = null;
             let skipHintedComponents: Set<number> | undefined;
 
-            if (depth === 0 && firstHitHintCandidates && firstHitHintCandidates.length > 0) {
+            // At depth=0, prefer a Rust-computed analytic hit when the kernel
+            // was able to prove the nearest hit without calling JS intersects.
+            // componentIndex >= 0 = valid hit; -1 = no hit found; -2 = Rust saw
+            // an unsupported candidate and cannot be trusted, fall back to JS.
+            if (depth === 0 && analyticHit && analyticHit.componentIndex >= 0) {
+                const comp = this.traceScene.components[analyticHit.componentIndex];
+                if (comp && comp.id !== originatorId) {
+                    const localPoint = new Vector3(
+                        analyticHit.localPoint[0],
+                        analyticHit.localPoint[1],
+                        analyticHit.localPoint[2],
+                    );
+                    const localNormal = new Vector3(
+                        analyticHit.localNormal[0],
+                        analyticHit.localNormal[1],
+                        analyticHit.localNormal[2],
+                    );
+                    const localToWorld = (comp as unknown as { localToWorld: Matrix4 }).localToWorld;
+                    const worldPoint = localPoint.clone().applyMatrix4(localToWorld);
+                    const worldNormal = localNormal.clone().transformDirection(localToWorld).normalize();
+                    nearestT = analyticHit.t;
+                    nearestHit = {
+                        t: analyticHit.t,
+                        point: worldPoint,
+                        normal: worldNormal,
+                        localPoint,
+                        isBlocked: analyticHit.isBlocked,
+                    };
+                    nearestComponent = comp;
+                }
+            }
+
+            if (nearestHit === null && depth === 0 && firstHitHintCandidates && firstHitHintCandidates.length > 0) {
                 const hinted = this.findNearestIntersectionFromHints(currentRay, originatorId, firstHitHintCandidates);
                 nearestT = hinted.nearestT;
                 nearestHit = hinted.nearestHit;
@@ -364,7 +436,7 @@ export class Solver3Kernel {
 
             if (nearestComponent.kind === 'laser' || nearestComponent.kind === 'lamp') {
                 const backgroundIntensity = Solver2.queryIntensityMultiBeam(
-                    nearestHit.point, this.beamField.branches, currentRay.wavelength
+                    nearestHit.point.x, nearestHit.point.y, nearestHit.point.z, this.beamField.branches, currentRay.wavelength
                 );
                 const terminalRay: Ray = {
                     origin: nearestHit.point,
@@ -381,7 +453,8 @@ export class Solver3Kernel {
                 path.push(terminalRay);
                 return {
                     radiance: backgroundIntensity * throughput + fluorescenceRadiance,
-                    path: visualPathAtSample ?? path,
+                    excitation: excitationAtSample,
+                    path: visualPathAtSample ?? (sample ? truncatePathAtSample(path, sample.position) : path),
                     absorbed: false,
                 };
             }
@@ -393,30 +466,56 @@ export class Solver3Kernel {
                     visualPathAtSample = buildSampleTerminatedPath(path, currentRay, nearestHit.point);
                 }
 
-                if (sample.fluorescenceEfficiency > 0) {
-                    const emitsAtThisWl = sample.emissionTransmission(currentRay.wavelength * 1e9);
-                    if (emitsAtThisWl > 0.5) {
-                        const chordSegments = sample.computeChordSegments(currentRay);
-                        let fluorescenceSum = 0;
-                        for (const segment of chordSegments) {
-                            const segLen = segment.tEnd - segment.tStart;
-                            if (segLen <= 0) continue;
-                            const numSamples = Math.max(4, Math.ceil(segLen * 10));
-                            let segRadianceSum = 0;
-                            for (let i = 0; i < numSamples; i++) {
-                                const fraction = (i + Math.random()) / numSamples;
-                                const t = segment.tStart + fraction * segLen;
-                                const samplePoint = currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(t));
-                                segRadianceSum += Solver2.queryIntensityMultiBeam(
-                                    samplePoint,
-                                    this.beamField.branches,
-                                    sample.getExcitationWavelength() * 1e-9
-                                );
-                            }
-                            fluorescenceSum += (segRadianceSum / numSamples) * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
-                        }
-                        fluorescenceRadiance += fluorescenceSum * throughput;
+                // Single chord traversal that accumulates BOTH the mean excitation
+                // intensity (for the excitation channel of the image) and the
+                // fluorescence contribution (for the emission channel) per sample.
+                // Previously these were two separate passes, which doubled the
+                // number of expensive Solver-2 field queries per reverse ray.
+                // Inlined vector math avoids ~O(10*segments) Vector3 allocations
+                // per reverse ray (significant GC pressure at 65k rays/frame).
+                const chordSegments = sample.computeChordSegments(currentRay);
+                const emitsAtThisWl = sample.fluorescenceEfficiency > 0
+                    ? sample.emissionTransmission(currentRay.wavelength * 1e9)
+                    : 0;
+                const doesFluoresce = emitsAtThisWl > 0.5;
+                const excitationWl = sample.getExcitationWavelength() * 1e-9;
+                const ox = currentRay.origin.x;
+                const oy = currentRay.origin.y;
+                const oz = currentRay.origin.z;
+                const dx = currentRay.direction.x;
+                const dy = currentRay.direction.y;
+                const dz = currentRay.direction.z;
+                const branches = this.beamField.branches;
+                let excitationSum = 0;
+                let excitationSamples = 0;
+                let fluorescenceSum = 0;
+                for (const segment of chordSegments) {
+                    const segLen = segment.tEnd - segment.tStart;
+                    if (segLen <= 0) continue;
+                    const numSamples = Math.max(4, Math.ceil(segLen * 10));
+                    const invNumSamples = 1 / numSamples;
+                    let segRadianceSum = 0;
+                    for (let i = 0; i < numSamples; i++) {
+                        const fraction = (i + Math.random()) * invNumSamples;
+                        const t = segment.tStart + fraction * segLen;
+                        const intensity = Solver2.queryIntensityMultiBeam(
+                            ox + dx * t, oy + dy * t, oz + dz * t,
+                            branches,
+                            excitationWl,
+                        );
+                        segRadianceSum += intensity;
+                        excitationSum += intensity;
+                        excitationSamples++;
                     }
+                    if (doesFluoresce) {
+                        fluorescenceSum += segRadianceSum * invNumSamples * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
+                    }
+                }
+                if (excitationSamples > 0) {
+                    excitationAtSample += excitationSum / excitationSamples;
+                }
+                if (doesFluoresce) {
+                    fluorescenceRadiance += fluorescenceSum * throughput;
                 }
 
                 const bounds = sample.getVolumeIntersection(currentRay);
@@ -486,7 +585,11 @@ export class Solver3Kernel {
             }
         }
 
-        return { radiance: fluorescenceRadiance, path: visualPathAtSample ?? path, absorbed };
+        // Reverse-ray visualization preference: the drawn path should end at
+        // the sample, never continue past it through the condenser / aperture
+        // / laser on the far side. See `truncatePathAtSample` for details.
+        const visualPath = visualPathAtSample ?? (sample ? truncatePathAtSample(path, sample.position) : path);
+        return { radiance: fluorescenceRadiance, excitation: excitationAtSample, path: visualPath, absorbed };
     }
 
     private getActiveWavelengths(): number[] {

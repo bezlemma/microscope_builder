@@ -55,7 +55,7 @@ export class Solver3 {
         startRay: Ray,
         _sample?: Sample,
         originator?: OpticalComponent,
-    ): { radiance: number; path: Ray[]; absorbed: boolean } {
+    ): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean } {
         return this.backend.traceBackward(startRay, originator?.id);
     }
 

@@ -23,8 +23,19 @@ export class SphericalLens extends OpticalComponent {
     public r1?: number; 
     public r2?: number;
 
-    // Computed property for internal engine
+    // Computed property for internal engine.
+    // When explicit R1/R2 are set, the focal length is derived from the
+    // thin-lens lensmaker equation 1/f = (n-1)(1/R1 - 1/R2) so the reported
+    // value matches the actual optical power. Otherwise, fall back to the
+    // legacy `curvature` default (f = 1/curvature for a symmetric lens).
     public get focalLength(): number {
+        if (this.r1 !== undefined && this.r2 !== undefined) {
+            const invR1 = Math.abs(this.r1) > 1e8 ? 0 : 1 / this.r1;
+            const invR2 = Math.abs(this.r2) > 1e8 ? 0 : 1 / this.r2;
+            const inv = (this.ior - 1) * (invR1 - invR2);
+            if (Math.abs(inv) < 1e-12) return 1000;
+            return 1 / inv;
+        }
         return Math.abs(this.curvature) > 1e-9 ? 1 / this.curvature : 1000;
     }
 
@@ -39,6 +50,10 @@ export class SphericalLens extends OpticalComponent {
         this.r1 = r1;
         this.r2 = r2;
         this.ior = ior;
+        this.bounds.set(
+            new Vector3(-aperture, -aperture, -thickness / 2),
+            new Vector3(aperture, aperture, thickness / 2),
+        );
     }
 
     /** Get or build the physics mesh. Cached until parameters change. */

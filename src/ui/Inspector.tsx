@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useAtom } from 'jotai';
@@ -16,16 +16,24 @@ import {
     animationSpeedAtom,
     scanAccumTriggerAtom,
     scanAccumProgressAtom,
+    solverDiagnosticsAtom,
+    selectedRodAtom,
+    rodPathsAtom,
     MAX_FORWARD_RAY_COUNT,
     MAX_REVERSE_PATH_COUNT,
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
+    reverseRayCounterAtom,
+    drawnRayCountsAtom,
 } from '../state/store';
+import { RodPropertiesPanel } from './RodPropertiesPanel';
 import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
-import { Euler, Quaternion, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Mirror } from '../physics/components/Mirror';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
+import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
@@ -34,30 +42,85 @@ import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
 import { IdealLens } from '../physics/components/IdealLens';
 import { Objective } from '../physics/components/Objective';
-import { PolygonScanner } from '../physics/components/PolygonScanner';
-import { PrismLens } from '../physics/components/PrismLens';
+import { AbstractPolygonOptic } from '../physics/components/AbstractPolygonOptic';
 import { Waveplate } from '../physics/components/Waveplate';
 import { Aperture } from '../physics/components/Aperture';
 import { SlitAperture } from '../physics/components/SlitAperture';
+import { Diffuser } from '../physics/components/Diffuser';
+import { DoubleSlit } from '../physics/components/DoubleSlit';
+import { Annotation } from '../physics/components/Annotation';
 import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
-import { PMT } from '../physics/components/PMT';
+import { PMT, derivePMTScanResolution } from '../physics/components/PMT';
+import { PupilMaskElement } from '../physics/components/PupilMaskElement';
+import { MediumVolume } from '../physics/components/MediumVolume';
+import { PointSourceBase } from '../physics/components/PointSourceBase';
+import { ConeSource3D } from '../physics/components/ConeSource3D';
+import { WedgeSource2D } from '../physics/components/WedgeSource2D';
+import { StructuredSource } from '../physics/components/StructuredSource';
+import { FaradayIsolator } from '../physics/components/FaradayIsolator';
+import { QPD } from '../physics/components/QPD';
+import { AOD } from '../physics/components/AOD';
 import { SpectralProfile, ProfilePreset } from '../physics/SpectralProfile';
 import { ScrubInput } from './ScrubInput';
+import { SpectrumChart } from './SpectrumChart';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
+import { PMTViewer } from './PMTViewer';
 import { LensProfileEditor, supportsLensProfileEditor } from './LensProfileEditor';
 import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
 import { snapToRingBoundary } from '../physics/SourceRayFactory';
+import { ZLevelBar } from './ZLevelBar';
+import { findMaxUnclippedScanHalfAngleDeg, measureChiefRayForScan } from '../physics/confocalScanDiagnostics';
+import { resolutionFromPixelPitch } from '../physics/cardFieldSynthesis';
 
 function clampValue(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
+}
+
+const COUNT_SLIDER_STEPS = 1000;
+const MEDIUM_INDEX_PRESETS = [
+    { label: 'Air', value: 1.0 },
+    { label: 'Water', value: 1.33 },
+    { label: 'Oil', value: 1.515 },
+] as const;
+
+function countToSliderPosition(value: number, min: number, max: number): number {
+    const clamped = clampValue(value, min, max);
+    const minLog = Math.log(min);
+    const maxLog = Math.log(max);
+    if (maxLog - minLog < 1e-9) return 0;
+    const t = (Math.log(clamped) - minLog) / (maxLog - minLog);
+    return Math.round(t * COUNT_SLIDER_STEPS);
+}
+
+function sliderPositionToCount(position: number, min: number, max: number): number {
+    const clamped = clampValue(position, 0, COUNT_SLIDER_STEPS);
+    const minLog = Math.log(min);
+    const maxLog = Math.log(max);
+    const t = clamped / COUNT_SLIDER_STEPS;
+    return Math.round(Math.exp(minLog + (maxLog - minLog) * t));
+}
+
+function stickyForwardRodCount(value: number): number {
+    const clamped = clampValue(value, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT);
+    const nice = snapToRingBoundary(clamped);
+    const threshold = nice >= 24 ? 2 : 1;
+    return Math.abs(clamped - nice) <= threshold ? nice : clamped;
+}
+
+function opacityToPercent(value: number): number {
+    return Math.round(clampValue(value, 0, 1) * 100);
+}
+
+function percentToOpacity(value: number): number {
+    return clampValue(value / 100, 0, 1);
 }
 
 // ─── CardViewer with pin toggle ─────────────────────────────────────
@@ -68,57 +131,135 @@ const CardViewerWithPin: React.FC<{
     setPinnedIds: (s: Set<string>) => void;
 }> = ({ card, pinnedIds, setPinnedIds }) => {
     const isPinned = pinnedIds.has(card.id);
+    const [autoFitNonce, setAutoFitNonce] = useState(0);
     return (
         <div style={{ marginTop: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#aaa' }}>Beam Profile</span>
-                <button
-                    onClick={() => {
-                        const next = new Set(pinnedIds);
-                        if (isPinned) next.delete(card.id);
-                        else next.add(card.id);
-                        setPinnedIds(next);
-                    }}
-                    title={isPinned ? 'Unpin viewer' : 'Pin viewer (keep visible when deselected)'}
-                    style={{
-                        background: isPinned ? '#333' : 'none',
-                        border: isPinned ? '1px solid #555' : '1px solid #444',
-                        borderRadius: '3px',
-                        color: isPinned ? '#fff' : '#888',
-                        cursor: 'pointer',
-                        fontSize: '11px',
-                        padding: '1px 5px',
-                        lineHeight: 1.2,
-                    }}
-                >
-                    📌
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                        onClick={() => setAutoFitNonce(n => n + 1)}
+                        title="Auto-fit card view to current beam/field footprint"
+                        style={{
+                            background: 'none',
+                            border: '1px solid #444',
+                            borderRadius: '3px',
+                            color: '#888',
+                            cursor: 'pointer',
+                            fontSize: '10px',
+                            padding: '1px 5px',
+                            lineHeight: 1.2,
+                        }}
+                    >
+                        Fit
+                    </button>
+                    <button
+                        onClick={() => {
+                            const next = new Set(pinnedIds);
+                            if (isPinned) next.delete(card.id);
+                            else next.add(card.id);
+                            setPinnedIds(next);
+                        }}
+                        title={isPinned ? 'Unpin viewer' : 'Pin viewer (keep visible when deselected)'}
+                        style={{
+                            background: isPinned ? '#333' : 'none',
+                            border: isPinned ? '1px solid #555' : '1px solid #444',
+                            borderRadius: '3px',
+                            color: isPinned ? '#fff' : '#888',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            padding: '1px 5px',
+                            lineHeight: 1.2,
+                        }}
+                    >
+                        📌
+                    </button>
+                </div>
             </div>
-            <CardViewer card={card} />
+            <CardViewer card={card} autoFitNonce={autoFitNonce} />
         </div>
     );
 };
 
 const SolverPanel: React.FC<{
     rayConfig: any;
-    setRayConfig: (v: any) => void;
+    setrayConfig: (v: any) => void;
     setVisualizationMode: (mode: 'rods' | 'wave') => void;
     isRendering: boolean;
-    setSolver3Trigger: (fn: (prev: number) => number) => void;
+    setImageFormationTrigger: (fn: (prev: number) => number) => void;
     animator: PropertyAnimator;
     animPlaying: boolean;
     setAnimPlaying: (v: boolean) => void;
-}> = ({ rayConfig, setRayConfig, setVisualizationMode, isRendering, setSolver3Trigger, animator, animPlaying, setAnimPlaying }) => {
+}> = ({ rayConfig, setrayConfig, setVisualizationMode, isRendering, setImageFormationTrigger, animator, animPlaying, setAnimPlaying }) => {
     const isMobile = useIsMobile();
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
     const hasChannels = animator.channels.length > 0;
     const [components] = useAtom(componentsAtom);
+    const [rayCounter] = useAtom(reverseRayCounterAtom);
+    const isChannelBoundToPMT = React.useCallback((channelId: string, property: string) => {
+        return components.some(c => {
+            const pmt = c as any;
+            if (pmt && typeof pmt.hasValidAxes === 'function' && pmt.hasValidAxes()) {
+                if (pmt.xAxisComponentId === channelId && pmt.xAxisProperty === property) return true;
+                if (pmt.yAxisComponentId === channelId && pmt.yAxisProperty === property) return true;
+            }
+            return false;
+        });
+    }, [components]);
+    const hasFreeChannels = animator.channels.some(ch => !isChannelBoundToPMT(ch.targetId, ch.property));
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
+    const [solverDiag] = useAtom(solverDiagnosticsAtom);
+    const [drawnRayCounts] = useAtom(drawnRayCountsAtom);
+    const opacityTrackRef = React.useRef<HTMLDivElement | null>(null);
+    const [activeOpacityHandle, setActiveOpacityHandle] = React.useState<'min' | 'max' | null>(null);
+    // newVisualStyleAtom removed — new style is always on
 
     // Scan accumulation UI state
     const [localScanSteps, setLocalScanSteps] = React.useState<string>('16');
+
+    React.useEffect(() => {
+        if (!activeOpacityHandle) return;
+
+        const updateFromClientX = (clientX: number) => {
+            const track = opacityTrackRef.current;
+            if (!track) return;
+            const rect = track.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            const percent = clampValue(((clientX - rect.left) / rect.width) * 100, 0, 100);
+            const opacity = percentToOpacity(percent);
+
+            if (activeOpacityHandle === 'min') {
+                setrayConfig({
+                    ...rayConfig,
+                    minRayOpacity: Math.min(opacity, rayConfig.maxRayOpacity),
+                });
+                return;
+            }
+
+            setrayConfig({
+                ...rayConfig,
+                maxRayOpacity: Math.max(opacity, rayConfig.minRayOpacity),
+            });
+        };
+
+        const handlePointerMove = (event: PointerEvent) => {
+            updateFromClientX(event.clientX);
+        };
+
+        const handlePointerUp = () => {
+            setActiveOpacityHandle(null);
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [activeOpacityHandle, rayConfig, setrayConfig]);
 
     return (
         <>
@@ -147,8 +288,8 @@ const SolverPanel: React.FC<{
                         top: 10,
                         right: 10,
                         zIndex: 20,
-                        width: 40,
-                        height: 40,
+                        width: 44,
+                        height: 44,
                         borderRadius: '8px',
                         border: '1px solid #444',
                         backgroundColor: '#1a1a1a',
@@ -168,11 +309,15 @@ const SolverPanel: React.FC<{
 
             {/* Panel */}
             <div style={{
-                position: isMobile ? 'fixed' : 'absolute',
-                top: 20,
-                right: 20,
-                width: 'min(280px, calc(100% - 40px))',
-                maxWidth: 'calc(100% - 40px)',
+                position: 'fixed',
+                top: isMobile ? undefined : 20,
+                bottom: isMobile ? 0 : undefined,
+                left: isMobile ? 0 : undefined,
+                right: isMobile ? 0 : 20,
+                width: isMobile ? '100vw' : 'min(280px, calc(100% - 40px))',
+                maxWidth: isMobile ? '100vw' : 'calc(100% - 40px)',
+                borderBottomLeftRadius: isMobile ? 0 : undefined,
+                borderBottomRightRadius: isMobile ? 0 : undefined,
                 backgroundColor: 'rgba(30, 30, 30, 0.95)',
                 color: 'white',
                 padding: 15,
@@ -181,7 +326,9 @@ const SolverPanel: React.FC<{
                 fontFamily: 'sans-serif',
                 fontSize: '12px',
                 zIndex: 15,
-                transform: isVisible ? 'translateX(0)' : 'translateX(calc(100% + 40px))',
+                transform: isVisible
+                    ? (isMobile ? 'translateY(0)' : 'translateX(0)')
+                    : (isMobile ? 'translateY(100%)' : 'translateX(calc(100% + 40px))'),
                 transition: 'transform 0.25s ease',
             }}>
                     {isMobile && (
@@ -203,7 +350,14 @@ const SolverPanel: React.FC<{
                     )}
                 {/* Header row — title + play/pause inline */}
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 'bold', flex: 1 }}>Physics Solvers</span>
+                    <span style={{ fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>
+                        Physics Solvers
+                        {rayCounter > 0 && (
+                            <span style={{ marginLeft: '8px', fontSize: '10px', color: '#aaa', background: '#222', border: '1px solid #444', padding: '1px 6px', borderRadius: '10px', fontWeight: 'normal' }}>
+                                {(rayCounter / 1000).toFixed(1)}k rays
+                            </span>
+                        )}
+                    </span>
                     {hasChannels && (
                         <button
                             onClick={() => {
@@ -235,59 +389,139 @@ const SolverPanel: React.FC<{
                     )}
                 </div>
 
-                    {/* Ray Tracer (always on) */}
+                    {/* Rod Tracer (always on) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
-                        <span>Ray Tracer</span>
+                        <span>Rod Tracer</span>
                     </div>
                     <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
                         <input
                             type="range"
-                            min={String(MIN_FORWARD_RAY_COUNT)}
-                            max={String(MAX_FORWARD_RAY_COUNT)}
+                            min="0"
+                            max={String(COUNT_SLIDER_STEPS)}
                             step="1"
-                            value={clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)}
-                            onChange={(e) => setRayConfig({
+                            value={countToSliderPosition(
+                                clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                MIN_FORWARD_RAY_COUNT,
+                                MAX_FORWARD_RAY_COUNT,
+                            )}
+                            onChange={(e) => setrayConfig({
                                 ...rayConfig,
-                                rayCount: clampValue(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                rayCount: stickyForwardRodCount(
+                                    sliderPositionToCount(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                ),
                             })}
-                            style={{ width: '80px' }}
+                            style={{ width: '120px' }}
                         />
-                        <span style={{ minWidth: '20px' }}>
-                            {snapToRingBoundary(clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT))} Rays
+                        <input
+                            type="number"
+                            min={MIN_FORWARD_RAY_COUNT}
+                            max={MAX_FORWARD_RAY_COUNT}
+                            step={1}
+                            value={rayConfig.rayCount}
+                            onChange={(e) => setrayConfig({
+                                ...rayConfig,
+                                rayCount: parseInt(e.target.value, 10) || rayConfig.rayCount,
+                            })}
+                            onBlur={(e) => setrayConfig({
+                                ...rayConfig,
+                                rayCount: clampValue(parseInt(e.target.value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                            })}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    setrayConfig({
+                                        ...rayConfig,
+                                        rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                    });
+                                    (e.target as HTMLInputElement).blur();
+                                }
+                            }}
+                            style={{
+                                width: '64px',
+                                background: '#111',
+                                color: '#ddd',
+                                border: '1px solid #444',
+                                borderRadius: '3px',
+                                padding: '1px 4px',
+                            }}
+                            title="Exact forward source rods per source. Slider sticks near symmetric shell counts."
+                        />
+                        <span style={{ minWidth: '92px' }} title="Exact rods per source. Slider sticks near symmetric shell counts.">
+                            {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)} rods/source
                         </span>
                     </div>
                     <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
                         <input
                             type="range"
-                            min={String(MIN_REVERSE_PATH_COUNT)}
-                            max={String(MAX_REVERSE_PATH_COUNT)}
+                            min="0"
+                            max={String(COUNT_SLIDER_STEPS)}
                             step="1"
-                            value={clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)}
-                            onChange={(e) => setRayConfig({
+                            value={countToSliderPosition(
+                                clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                                MIN_REVERSE_PATH_COUNT,
+                                MAX_REVERSE_PATH_COUNT,
+                            )}
+                            onChange={(e) => setrayConfig({
                                 ...rayConfig,
-                                reversePathCount: clampValue(parseInt(e.target.value), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                                reversePathCount: clampValue(
+                                    sliderPositionToCount(parseInt(e.target.value), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                                    MIN_REVERSE_PATH_COUNT,
+                                    MAX_REVERSE_PATH_COUNT,
+                                ),
                             })}
                             style={{ width: '80px' }}
                         />
+                        <input
+                            type="number"
+                            min={MIN_REVERSE_PATH_COUNT}
+                            max={MAX_REVERSE_PATH_COUNT}
+                            step={1}
+                            value={rayConfig.reversePathCount}
+                            onChange={(e) => setrayConfig({
+                                ...rayConfig,
+                                reversePathCount: parseInt(e.target.value, 10) || rayConfig.reversePathCount,
+                            })}
+                            onBlur={(e) => setrayConfig({
+                                ...rayConfig,
+                                reversePathCount: clampValue(parseInt(e.target.value || String(MIN_REVERSE_PATH_COUNT), 10), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                            })}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    setrayConfig({
+                                        ...rayConfig,
+                                        reversePathCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_REVERSE_PATH_COUNT), 10), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
+                                    });
+                                    (e.target as HTMLInputElement).blur();
+                                }
+                            }}
+                            style={{
+                                width: '64px',
+                                background: '#111',
+                                color: '#ddd',
+                                border: '1px solid #444',
+                                borderRadius: '3px',
+                                padding: '1px 4px',
+                            }}
+                            title="Actual reverse detector rods. For cameras this is rods per pixel."
+                        />
                         <span
                             style={{ minWidth: '74px', color: '#aaa', fontSize: '10px' }}
-                            title="Backward ray paths retained for rod and wave view after Calculate Emission and Image"
+                            title="Actual reverse detector rods. For cameras this is rods per pixel."
                         >
-                            {clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)} Reverse
+                            {clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)} Reverse/Px
                         </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: '6px', marginTop: 8 }}>
                         {(['rods', 'wave'] as const).map(mode => {
                             const active = rayConfig.viewerMode === mode;
-                            const label = mode === 'rods' ? 'Rod View' : 'Wave View';
+                            const label = mode === 'rods' ? 'Ray View' : 'Wave View';
                             return (
                                 <button
                                     key={mode}
                                     onClick={() => setVisualizationMode(mode)}
                                     title={mode === 'rods'
-                                        ? 'Draw individual rods'
+                                        ? 'Draw individual traced rods'
                                         : 'Draw grouped bundles with a representative wave'}
                                     style={{
                                         padding: '2px 8px',
@@ -306,7 +540,81 @@ const SolverPanel: React.FC<{
                         })}
                     </div>
 
-                    {/* Solver 3: Calculate Emission and Image */}
+                    <div style={{ marginTop: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: '10px', color: '#aaa' }}>Ray Opacity</span>
+                            <span style={{ fontSize: '10px', color: '#777' }}>
+                                {opacityToPercent(rayConfig.minRayOpacity)}% .. {opacityToPercent(rayConfig.maxRayOpacity)}%
+                            </span>
+                        </div>
+                        <div
+                            ref={opacityTrackRef}
+                            style={{ position: 'relative', height: '24px', display: 'flex', alignItems: 'center' }}
+                        >
+                            <div style={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                height: '4px',
+                                background: '#333',
+                                borderRadius: '999px',
+                            }} />
+                            <div style={{
+                                position: 'absolute',
+                                left: `${opacityToPercent(rayConfig.minRayOpacity)}%`,
+                                width: `${Math.max(0, opacityToPercent(rayConfig.maxRayOpacity) - opacityToPercent(rayConfig.minRayOpacity))}%`,
+                                height: '4px',
+                                background: '#4af',
+                                borderRadius: '999px',
+                            }} />
+                            <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                    e.preventDefault();
+                                    setActiveOpacityHandle('min');
+                                }}
+                                style={{
+                                    position: 'absolute',
+                                    left: `calc(${opacityToPercent(rayConfig.minRayOpacity)}% - 7px)`,
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '50%',
+                                    border: '1px solid #9fd8ff',
+                                    background: activeOpacityHandle === 'min' ? '#9fd8ff' : '#d7ecff',
+                                    boxShadow: activeOpacityHandle === 'min' ? '0 0 0 2px rgba(74, 170, 255, 0.25)' : 'none',
+                                    cursor: 'ew-resize',
+                                    padding: 0,
+                                }}
+                                title="Minimum opacity for the dimmest visible rods"
+                            />
+                            <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                    e.preventDefault();
+                                    setActiveOpacityHandle('max');
+                                }}
+                                style={{
+                                    position: 'absolute',
+                                    left: `calc(${opacityToPercent(rayConfig.maxRayOpacity)}% - 7px)`,
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '50%',
+                                    border: '1px solid #4af',
+                                    background: activeOpacityHandle === 'max' ? '#4af' : '#8fd6ff',
+                                    boxShadow: activeOpacityHandle === 'max' ? '0 0 0 2px rgba(74, 170, 255, 0.25)' : 'none',
+                                    cursor: 'ew-resize',
+                                    padding: 0,
+                                }}
+                                title="Maximum opacity for the brightest rods"
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#666', marginTop: 2 }}>
+                            <span>Dimmest</span>
+                            <span>Brightest</span>
+                        </div>
+                    </div>
+
+                    {/* Image Formation: Calculate Emission and Image */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: 4 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
@@ -317,36 +625,39 @@ const SolverPanel: React.FC<{
                                 transition: 'background-color 0.2s'
                             }}></div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <button
-                                    onClick={() => {
-                                        const steps = parseInt(localScanSteps) || 16;
-                                        if (hasChannels) {
-                                            // Animation channels present — auto scan accumulation
+                                {hasChannels ? (
+                                    <button
+                                        onClick={() => {
+                                            if (isRendering) return;
+                                            const steps = parseInt(localScanSteps) || 16;
                                             setScanAccumConfig({ steps, trigger: scanAccumConfig.trigger + 1 });
-                                        } else {
-                                            // No animation — single Solver 3 render
-                                            setSolver3Trigger((prev: number) => prev + 1);
-                                        }
-                                    }}
-                                    disabled={isRendering}
-                                    title={hasChannels ? 'Scan accumulation: cycle through animation and render' : 'Backward-trace rays from camera through optics to sample'}
-                                    style={{
-                                        padding: '3px 10px',
-                                        background: isRendering ? '#333' : '#1a5a2a',
-                                        border: '1px solid #444',
-                                        borderRadius: '4px',
-                                        color: isRendering ? '#666' : '#8f8',
-                                        cursor: isRendering ? 'not-allowed' : 'pointer',
-                                        fontSize: '11px',
-                                        fontFamily: 'monospace',
-                                        transition: 'background 0.2s',
-                                    }}
-                                >
-                                    {isRendering && scanProgress > 0 && scanProgress < 1
-                                        ? `⏳ ${Math.round(scanProgress * 100)}%`
-                                        : isRendering ? '⏳ Calculating...' : 'Calculate Emission and Image'}
-                                </button>
-                                {hasChannels && (
+                                        }}
+                                        disabled={isRendering}
+                                        title='Scan accumulation: cycle through animation and render'
+                                        style={{
+                                            padding: '3px 10px',
+                                            background: isRendering ? '#333' : '#1a5a2a',
+                                            border: '1px solid #444',
+                                            borderRadius: '4px',
+                                            color: isRendering ? '#666' : '#8f8',
+                                            cursor: isRendering ? 'not-allowed' : 'pointer',
+                                            fontSize: '11px',
+                                            fontFamily: 'monospace',
+                                            transition: 'background 0.2s',
+                                        }}
+                                    >
+                                        {isRendering && scanProgress > 0 && scanProgress < 1
+                                            ? `⏳ Scanning ${Math.round(scanProgress * 100)}%`
+                                            : isRendering ? '⏳ Scanning…' : 'Scan & Accumulate'}
+                                    </button>
+                                ) : (
+                                    <span style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace' }}>
+                                        {isRendering
+                                            ? `Reverse Tracing Image… ${Math.round(scanProgress * 100)}%`
+                                            : `${drawnRayCounts.forward}↦ forward · ${drawnRayCounts.reverse}↤ reverse rays drawn`}
+                                    </span>
+                                )}
+                                {hasFreeChannels && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
                                         <span style={{ fontSize: '10px', color: '#888' }}>Steps</span>
                                         <input
@@ -386,19 +697,201 @@ const SolverPanel: React.FC<{
                                 }} />
                             </div>
                         )}
+                        {isRendering && solverDiag && (
+                            <div style={{
+                                marginLeft: '16px',
+                                marginTop: '4px',
+                                fontSize: '9px',
+                                color: '#888',
+                                fontFamily: 'monospace',
+                                display: 'flex',
+                                gap: '8px',
+                            }}>
+                                {solverDiag.totalSteps > 0 && (
+                                    <span>{solverDiag.label}</span>
+                                )}
+                                <span>{(solverDiag.elapsedMs / 1000).toFixed(1)}s</span>
+                            </div>
+                        )}
                     </div>
+
             </div>
         </>
     );
 };
 
+// ─── Dual Galvo Scan Controls ─────────────────────────────────────────
+// Extracted as a proper component so it can use useState for controlled inputs.
+const DualGalvoControls: React.FC<{
+    component: DualGalvoScanHead;
+    channelX: AnimationChannel | undefined;
+    channelY: AnimationChannel | undefined;
+    savedSettings: { halfDeg: number; halfDegY?: number; periodMs: number; periodMsY?: number; axis: string } | undefined;
+    animator: PropertyAnimator;
+    animPlaying: boolean;
+    setGalvoAngles: React.Dispatch<React.SetStateAction<Map<string, any>>>;
+    setAnimPlaying: (v: boolean) => void;
+    setChannelVersion: React.Dispatch<React.SetStateAction<number>>;
+}> = ({ component, channelX, channelY, savedSettings, animator, animPlaying, setGalvoAngles, setAnimPlaying, setChannelVersion }) => {
+    const hasScanChannels = !!(channelX || channelY);
+    const isScanning = hasScanChannels && animPlaying;
+
+    const initHalfX = channelX ? Math.round((channelX.to - channelX.from) * 90 / Math.PI * 10) / 10 : (savedSettings?.halfDeg ?? 5);
+    const initHalfY = channelY ? Math.round((channelY.to - channelY.from) * 90 / Math.PI * 10) / 10 : (savedSettings?.halfDegY ?? 5);
+    const initHzX = channelX ? Math.round(1000 / channelX.periodMs * 10) / 10 : Math.round(1000 / (savedSettings?.periodMs ?? 2000) * 10) / 10;
+    const initHzY = channelY ? Math.round(1000 / channelY.periodMs * 10) / 10 : Math.round(1000 / (savedSettings?.periodMsY ?? 500) * 10) / 10;
+
+    const [rangeX, setRangeX] = useState(String(initHalfX));
+    const [rangeY, setRangeY] = useState(String(initHalfY));
+    const [hzX, setHzX] = useState(String(initHzX));
+    const [hzY, setHzY] = useState(String(initHzY));
+
+    // Persist to galvoAngles on every change
+    const persist = useCallback((patch: { halfDeg?: number; halfDegY?: number; periodMs?: number; periodMsY?: number }) => {
+        setGalvoAngles(prev => {
+            const old = prev.get(component.id);
+            const next = new Map(prev);
+            next.set(component.id, {
+                halfDeg: patch.halfDeg ?? old?.halfDeg ?? initHalfX,
+                halfDegY: patch.halfDegY ?? old?.halfDegY ?? initHalfY,
+                periodMs: patch.periodMs ?? old?.periodMs ?? (savedSettings?.periodMs ?? 2000),
+                periodMsY: patch.periodMsY ?? old?.periodMsY ?? (savedSettings?.periodMsY ?? 500),
+                axis: 'V',
+            });
+            return next;
+        });
+    }, [component.id, setGalvoAngles, initHalfX, initHalfY, savedSettings]);
+
+    const inputStyle10: React.CSSProperties = {
+        width: '40px', background: 'transparent', color: '#fff', fontWeight: 500,
+        border: 'none', borderBottom: '1px solid rgba(255,255,255,0.2)', borderRadius: '0px',
+        fontSize: '11px', padding: '2px 4px', textAlign: 'center', outline: 'none',
+        transition: 'border-color 0.2s',
+    };
+    return (
+        <>
+            {/* Pan (scanX) row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '10px', color: '#888', minWidth: '26px' }}>Pan</span>
+                <span style={{ fontSize: '10px', color: '#888' }}>±</span>
+                <input type="number" value={rangeX} min={0} max={45} step={0.5}
+                    onChange={e => {
+                        setRangeX(e.target.value);
+                        const hd = parseFloat(e.target.value);
+                        if (isNaN(hd) || hd < 0) return;
+                        persist({ halfDeg: hd });
+                        if (channelX) {
+                            const hr = hd * Math.PI / 180;
+                            const c = channelX.restoreValue ?? (channelX.from + channelX.to) / 2;
+                            channelX.from = c - hr; channelX.to = c + hr;
+                        }
+                    }}
+                    style={inputStyle10}
+                />
+                <span style={{ fontSize: '10px', color: '#888' }}>°</span>
+                <span style={{ fontSize: '10px', color: '#888', marginLeft: 4 }}>Hz</span>
+                <input type="number" value={hzX} min={0.1} max={10000} step={0.1}
+                    onChange={e => {
+                        setHzX(e.target.value);
+                        const hz = parseFloat(e.target.value);
+                        if (isNaN(hz) || hz <= 0) return;
+                        persist({ periodMs: 1000 / hz });
+                        if (channelX) channelX.periodMs = 1000 / hz;
+                    }}
+                    style={inputStyle10}
+                />
+            </div>
+            {/* Tilt (scanY) row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#888', minWidth: '26px' }}>Tilt</span>
+                <span style={{ fontSize: '10px', color: '#888' }}>±</span>
+                <input type="number" value={rangeY} min={0} max={45} step={0.5}
+                    onChange={e => {
+                        setRangeY(e.target.value);
+                        const hd = parseFloat(e.target.value);
+                        if (isNaN(hd) || hd < 0) return;
+                        persist({ halfDegY: hd });
+                        if (channelY) {
+                            const hr = hd * Math.PI / 180;
+                            const c = channelY.restoreValue ?? (channelY.from + channelY.to) / 2;
+                            channelY.from = c - hr; channelY.to = c + hr;
+                        }
+                    }}
+                    style={inputStyle10}
+                />
+                <span style={{ fontSize: '10px', color: '#888' }}>°</span>
+                <span style={{ fontSize: '10px', color: '#888', marginLeft: 4 }}>Hz</span>
+                <input type="number" value={hzY} min={0.1} max={10000} step={0.1}
+                    onChange={e => {
+                        setHzY(e.target.value);
+                        const hz = parseFloat(e.target.value);
+                        if (isNaN(hz) || hz <= 0) return;
+                        persist({ periodMsY: 1000 / hz });
+                        if (channelY) channelY.periodMs = 1000 / hz;
+                    }}
+                    style={inputStyle10}
+                />
+            </div>
+            {/* Start / Stop button */}
+            <button
+                onClick={() => {
+                    if (hasScanChannels) {
+                        setAnimPlaying(!isScanning);
+                        setChannelVersion(v => v + 1);
+                    } else {
+                        const halfX = (parseFloat(rangeX) || 0) * Math.PI / 180;
+                        const halfY = (parseFloat(rangeY) || 0) * Math.PI / 180;
+                        const periodX = 1000 / (parseFloat(hzX) || 0.5);
+                        const periodY = 1000 / (parseFloat(hzY) || 2);
+                        const centerX = component.scanX;
+                        const centerY = component.scanY;
+                        animator.addChannel({
+                            id: generateChannelId(), targetId: component.id, property: 'scanX',
+                            from: centerX - halfX, to: centerX + halfX,
+                            easing: 'sinusoidal', periodMs: periodX, repeat: true, restoreValue: centerX,
+                        });
+                        animator.addChannel({
+                            id: generateChannelId(), targetId: component.id, property: 'scanY',
+                            from: centerY - halfY, to: centerY + halfY,
+                            easing: 'sinusoidal', periodMs: periodY, repeat: true, restoreValue: centerY,
+                        });
+                        setAnimPlaying(true);
+                        setChannelVersion(v => v + 1);
+                    }
+                }}
+                style={{
+                    width: '100%', padding: '6px 0',
+                    background: isScanning ? '#3a1a1a' : '#1a2a3a',
+                    border: `1px solid ${isScanning ? '#8a3a3a' : '#3a6a8a'}`,
+                    borderRadius: '5px',
+                    color: isScanning ? '#ff7b7b' : '#74b9ff',
+                    cursor: 'pointer', fontSize: '11px', fontWeight: 600,
+                    letterSpacing: '0.3px', transition: 'all 0.15s',
+                }}
+                onMouseOver={e => {
+                    e.currentTarget.style.background = isScanning ? '#4a2a2a' : '#253a4a';
+                    e.currentTarget.style.borderColor = isScanning ? '#f44' : '#64b5f6';
+                }}
+                onMouseOut={e => {
+                    e.currentTarget.style.background = isScanning ? '#3a1a1a' : '#1a2a3a';
+                    e.currentTarget.style.borderColor = isScanning ? '#8a3a3a' : '#3a6a8a';
+                }}
+            >
+                {isScanning ? '⏹ Stop Scan' : '⏵ Start Scan'}
+            </button>
+        </>
+    );
+};
+
 export const Inspector: React.FC = () => {
+    const isMobile = useIsMobile();
+    const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
-    const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
+    const [rayConfig, setrayConfig] = useAtom(rayConfigAtom);
     const [, setVisualizationMode] = useAtom(setVisualizationModeAtom);
-    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [, setImageFormationTrigger] = useAtom(solver3RenderTriggerAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [animator] = useAtom(animatorAtom);
@@ -406,27 +899,48 @@ export const Inspector: React.FC = () => {
     const [animPlaying] = useAtom(animationPlayingAtom);
     const [animSpeed, setAnimSpeed] = useAtom(animationSpeedAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    const [selectedRodRef, setSelectedRodRef] = useAtom(selectedRodAtom);
+    const [rodPaths] = useAtom(rodPathsAtom);
     // Bumped on channel add/remove to force re-render of galvo scan UI
     const [_channelVersion, setChannelVersion] = useState(0);
     // Remembers the last-used galvo settings per component, persists across stop/start
-    const [galvoAngles, setGalvoAngles] = useState<Map<string, { halfDeg: number; periodMs: number; axis: string }>>(new Map());
+    const [galvoAngles, setGalvoAngles] = useState<Map<string, { halfDeg: number; periodMs: number; axis: string; halfDegY?: number; periodMsY?: number }>>(new Map());
     // Remembers the last-used piezo settings per sample component
     const [piezoSettings, setPiezoSettings] = useState<Map<string, { halfMm: number; periodMs: number; axis: string }>>(new Map());
 
+    // Resolve the selected rod pointer → (path, rod). Rebuilds whenever the
+    // atom or the published rod paths (via generation bump) change.
+    const resolvedRodSelection = useMemo(() => {
+        if (!selectedRodRef) return null;
+        const arr = selectedRodRef.source === 'forward' ? rodPaths.forward : rodPaths.imageFormation;
+        const path = arr[selectedRodRef.pathIndex];
+        if (!path) return null;
+        const rod = path[selectedRodRef.segmentIndex];
+        if (!rod) return null;
+        return { path, rod, segmentIndex: selectedRodRef.segmentIndex };
+    }, [selectedRodRef, rodPaths]);
 
-    const selectedComponent = selection.length === 1
+    // A cone selection takes precedence over a component selection.
+    const selectedComponent = !resolvedRodSelection && selection.length === 1
         ? components.find(c => c.id === selection[0])
         : undefined;
 
+    // Close mobile properties panel when selection changes
+    useEffect(() => { setMobilePropsOpen(false); }, [selection[0]]);
 
     const [localX, setLocalX] = useState<string>('0');
     const [localY, setLocalY] = useState<string>('0');
     const [localZ, setLocalZ] = useState<string>('0');
-    const [localRot, setLocalRot] = useState<string>('0');
+    const [localRotX, setLocalRotX] = useState<string>('0');  // pan (U)
+    const [localRotY, setLocalRotY] = useState<string>('0');  // tilt (V)
+    const [localRotZ, setLocalRotZ] = useState<string>('0');  // roll (W)
 
 
     const [localWidth, setLocalWidth] = useState<string>('0');
     const [localHeight, setLocalHeight] = useState<string>('0');
+    const [localOpaque, setLocalOpaque] = useState<boolean>(false);
+    const [localCardDx, setLocalCardDx] = useState<string>('');
+    const [localCardDy, setLocalCardDy] = useState<string>('');
 
 
     const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
@@ -451,19 +965,72 @@ export const Inspector: React.FC = () => {
     const [localObjNA, setLocalObjNA] = useState<string>('0.25');
     const [localObjMag, setLocalObjMag] = useState<string>('10');
     const [localObjImmersion, setLocalObjImmersion] = useState<string>('1.0');
+    const [localObjImmersionKind, setLocalObjImmersionKind] = useState<'air' | 'water' | 'oil' | 'silicone' | 'custom'>('air');
     const [localObjWD, setLocalObjWD] = useState<string>('10');
     const [localObjDiameter, setLocalObjDiameter] = useState<string>('20');
+    const [localObjTubeLensFocal, setLocalObjTubeLensFocal] = useState<string>('200');
+    const [localObjCoverslipThickness, setLocalObjCoverslipThickness] = useState<string>('0.17');
+    const [localObjFieldNumber, setLocalObjFieldNumber] = useState<string>('0');
+    const [localObjPupilRefNm, setLocalObjPupilRefNm] = useState<string>('550');
+    const [localObjDefocus, setLocalObjDefocus] = useState<string>('0');
+    const [localObjAstig45, setLocalObjAstig45] = useState<string>('0');
+    const [localObjAstig0, setLocalObjAstig0] = useState<string>('0');
+    const [localObjComaY, setLocalObjComaY] = useState<string>('0');
+    const [localObjComaX, setLocalObjComaX] = useState<string>('0');
+    const [localObjSpherical, setLocalObjSpherical] = useState<string>('0');
+    const [localCameraResX, setLocalCameraResX] = useState<string>('32');
+    const [localCameraResY, setLocalCameraResY] = useState<string>('32');
+    const [localCameraSensorNA, setLocalCameraSensorNA] = useState<string>('0');
+    const [localCameraLaunchModel, setLocalCameraLaunchModel] = useState<'stochastic' | 'packet'>('stochastic');
 
     const [localPolyFaces, setLocalPolyFaces] = useState<string>('6');
     const [localPolyRadius, setLocalPolyRadius] = useState<string>('10');
     const [localPolyHeight, setLocalPolyHeight] = useState<string>('10');
     const [localPolyScanAngle, setLocalPolyScanAngle] = useState<string>('0');
+    const [localPolyIor, setLocalPolyIor] = useState<string>('1.5168');
+    const [localPolyMode, setLocalPolyMode] = useState<'refractive' | 'reflective'>('refractive');
 
+    // Achromatic Doublet
+    const [localDoubletR1, setLocalDoubletR1] = useState<string>('77.4');
+    const [localDoubletR2, setLocalDoubletR2] = useState<string>('-87.6');
+    const [localDoubletR3, setLocalDoubletR3] = useState<string>('291.1');
+    const [localDoubletT1, setLocalDoubletT1] = useState<string>('4.0');
+    const [localDoubletT2, setLocalDoubletT2] = useState<string>('2.5');
+    const [localDoubletAperture, setLocalDoubletAperture] = useState<string>('25.4');
+    const [localDoubletIor1, setLocalDoubletIor1] = useState<string>('1.658');
+    const [localDoubletIor2, setLocalDoubletIor2] = useState<string>('1.750');
 
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
-    const [localLaserPower, setLocalLaserPower] = useState<string>('1');
+    const [localLaserPower, setLocalLaserPower] = useState<string>('0.1');
     const [localLampPower, setLocalLampPower] = useState<string>('1');
+    const [localSourcePointCount, setLocalSourcePointCount] = useState<string>('5');
+    const [localEmitterRadius, setLocalEmitterRadius] = useState<string>('0.9');
+
+    // Diffuser state
+    const [localDiffuserDiameter, setLocalDiffuserDiameter] = useState<string>('25.4');
+    const [localDiffuserConeAngle, setLocalDiffuserConeAngle] = useState<string>('60');
+
+    // Double slit state
+    const [localDoubleSlitWidth, setLocalDoubleSlitWidth] = useState<string>('0.5');
+    const [localDoubleSlitSep, setLocalDoubleSlitSep] = useState<string>('2');
+
+    // Point / Cone / Wedge / Structured source state
+    const [localHalfAngle, setLocalHalfAngle] = useState<string>('30');
+    const [localSubtendedAngle, setLocalSubtendedAngle] = useState<string>('60');
+    const [localAsciiChar, setLocalAsciiChar] = useState<string>('A');
+
+    // Faraday Isolator
+    const [localInsertionLoss, setLocalInsertionLoss] = useState<string>('0.95');
+    const [localExtinctionDB, setLocalExtinctionDB] = useState<string>('35');
+
+    // QPD
+    const [localQPDDiameter, setLocalQPDDiameter] = useState<string>('5');
+
+    // AOD
+    const [localDeflectionAngle, setLocalDeflectionAngle] = useState<string>('0');
+    const [localAODEfficiency, setLocalAODEfficiency] = useState<string>('0.85');
+    const [localAODMaxAngle, setLocalAODMaxAngle] = useState<string>('50');
 
     // Cylindrical Lens
     const [localCylR1, setLocalCylR1] = useState<string>('40');
@@ -479,15 +1046,12 @@ export const Inspector: React.FC = () => {
     const [localCurvedMirrorThickness, setLocalCurvedMirrorThickness] = useState<string>('3');
 
 
-    const [localApexAngle, setLocalApexAngle] = useState<string>('60');
-    const [localPrismHeight, setLocalPrismHeight] = useState<string>('20');
-    const [localPrismIor, setLocalPrismIor] = useState<string>('1.5168');
+    // Old prism local state removed — unified under localPoly* above
 
 
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
     const [localSlitWidth, setLocalSlitWidth] = useState<string>('5');
     const [localSlitRotation, setLocalSlitRotation] = useState<string>('0');
-    const [localCylClocking, setLocalCylClocking] = useState<string>('0');
 
 
 
@@ -504,6 +1068,22 @@ export const Inspector: React.FC = () => {
     const [localEmBands, setLocalEmBands] = useState<{ center: string; width: string }[]>([{ center: '520', width: '40' }]);
     const [localFluorEff, setLocalFluorEff] = useState<string>('0.0001');
     const [localAbsorption, setLocalAbsorption] = useState<string>('3');
+    const [localRefractiveIndexDelta, setLocalRefractiveIndexDelta] = useState<string>('0');
+    const [localChamberFillMediumIndex, setLocalChamberFillMediumIndex] = useState<string>('1.33');
+    const [localPupilMaskRadius, setLocalPupilMaskRadius] = useState<string>('4');
+    const [localPupilMaskInner, setLocalPupilMaskInner] = useState<string>('0.55');
+    const [localPupilMaskOuter, setLocalPupilMaskOuter] = useState<string>('0.8');
+    const [localPupilMaskRingTransmission, setLocalPupilMaskRingTransmission] = useState<string>('1');
+    const [localPupilMaskRingPhase, setLocalPupilMaskRingPhase] = useState<string>('1.5708');
+    const [localPupilMaskBackgroundTransmission, setLocalPupilMaskBackgroundTransmission] = useState<string>('1');
+    const [localPupilMaskBackgroundPhase, setLocalPupilMaskBackgroundPhase] = useState<string>('0');
+    const [localPupilMaskResolution, setLocalPupilMaskResolution] = useState<string>('64');
+    const [localPupilMaskMode, setLocalPupilMaskMode] = useState<'uniform' | 'annulus' | 'phaseRing'>('phaseRing');
+    const [localMediumWidth, setLocalMediumWidth] = useState<string>('10');
+    const [localMediumHeight, setLocalMediumHeight] = useState<string>('10');
+    const [localMediumDepth, setLocalMediumDepth] = useState<string>('10');
+    const [localMediumIndex, setLocalMediumIndex] = useState<string>('1.33');
+    const [localMediumExteriorIndex, setLocalMediumExteriorIndex] = useState<string>('1');
 
     // Specimen orientation (Euler degrees) and offset (mm, ±5)
     const [localSpecRotX, setLocalSpecRotX] = useState<string>('0');
@@ -517,6 +1097,56 @@ export const Inspector: React.FC = () => {
     const [localPiezoHalfMm, setLocalPiezoHalfMm] = useState<string>('1');
     const [localPiezoHz, setLocalPiezoHz] = useState<string>('0.5');
 
+    const buildObjectivePupilFromEditor = (
+        overrides: Partial<{
+            refNm: string;
+            defocus: string;
+            astig45: string;
+            astig0: string;
+            comaY: string;
+            comaX: string;
+            spherical: string;
+        }> = {},
+    ) => {
+        const refNm = parseFloat(overrides.refNm ?? localObjPupilRefNm);
+        const coefficients = [
+            { index: 4, raw: overrides.defocus ?? localObjDefocus },
+            { index: 5, raw: overrides.astig45 ?? localObjAstig45 },
+            { index: 6, raw: overrides.astig0 ?? localObjAstig0 },
+            { index: 7, raw: overrides.comaY ?? localObjComaY },
+            { index: 8, raw: overrides.comaX ?? localObjComaX },
+            { index: 11, raw: overrides.spherical ?? localObjSpherical },
+        ]
+            .map(entry => ({ index: entry.index, coefficient: parseFloat(entry.raw) }))
+            .filter(entry => Number.isFinite(entry.coefficient) && Math.abs(entry.coefficient) > 1e-9);
+
+        if (coefficients.length === 0) {
+            return null;
+        }
+
+        return {
+            aberrations: {
+                coefficients,
+                referenceWavelengthNm: Number.isFinite(refNm) && refNm > 0 ? refNm : 550,
+            },
+            apodization: null,
+        };
+    };
+
+    const applyObjectivePupilEditor = (
+        overrides: Parameters<typeof buildObjectivePupilFromEditor>[0] = {},
+    ) => {
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof Objective) {
+                c.pupil = buildObjectivePupilFromEditor(overrides);
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
 
     useEffect(() => {
         if (selectedComponent) {
@@ -525,20 +1155,22 @@ export const Inspector: React.FC = () => {
                 setLocalY(String(Math.round(selectedComponent.position.y * 100) / 100));
                 setLocalZ(String(Math.round(selectedComponent.position.z * 100) / 100));
 
-                // Rotation around Z (World Up) - extract via ZYX Euler decomposition
-                // The Z component in ZYX order IS the world-Z rotation, regardless of
-                // the component's base rotation (works for Laser, Mirror, Lens, etc.)
-                if (selectedComponent.rotation) {
-                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation, 'ZYX');
-                    const zDeg = Math.round(euler.z * 180 / Math.PI);
-                    setLocalRot(String(zDeg));
-                }
+                // Pan = rotation in XY table plane = rotation around Z axis.
+                // Tilt = tip out of table plane = rotation around a horizontal axis.
+                // Pan = rotation in XY table plane (around W/Z axis)
+                // Tilt = tip out of table plane
+                setLocalRotX(String(Math.round(selectedComponent.panAngle * 180 / Math.PI)));
+                setLocalRotY(String(Math.round(selectedComponent.tiltAngle * 180 / Math.PI)));
+                setLocalRotZ(String(Math.round(selectedComponent.rollAngle * 180 / Math.PI)));
 
 
                 if (selectedComponent instanceof Card) {
                     const c = selectedComponent as any;
                     if (c.width != null) setLocalWidth(String(c.width));
                     if (c.height != null) setLocalHeight(String(c.height));
+                    setLocalOpaque(Boolean(c.opaque));
+                    setLocalCardDx(c.fieldPixelPitchOverrideX != null ? String(c.fieldPixelPitchOverrideX) : '');
+                    setLocalCardDy(c.fieldPixelPitchOverrideY != null ? String(c.fieldPixelPitchOverrideY) : '');
                 }
                 if (selectedComponent instanceof Mirror) {
                     setLocalMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
@@ -579,14 +1211,46 @@ export const Inspector: React.FC = () => {
                     setLocalObjNA(String(selectedComponent.NA));
                     setLocalObjMag(String(selectedComponent.magnification));
                     setLocalObjImmersion(String(selectedComponent.immersionIndex));
+                    setLocalObjImmersionKind(selectedComponent.immersionMediumKind);
                     setLocalObjWD(String(Math.round(selectedComponent.workingDistance * 100) / 100));
                     setLocalObjDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalObjTubeLensFocal(String(Math.round(selectedComponent.tubeLensFocal * 100) / 100));
+                    setLocalObjCoverslipThickness(String(Math.round(selectedComponent.coverslipThickness * 1000) / 1000));
+                    setLocalObjFieldNumber(String(Math.round(selectedComponent.fieldNumber * 100) / 100));
+                    const coeffs = new Map<number, number>(
+                        selectedComponent.pupil?.aberrations?.coefficients.map(entry => [entry.index, entry.coefficient]) ?? [],
+                    );
+                    setLocalObjPupilRefNm(String(selectedComponent.pupil?.aberrations?.referenceWavelengthNm ?? 550));
+                    setLocalObjDefocus(String(coeffs.get(4) ?? 0));
+                    setLocalObjAstig45(String(coeffs.get(5) ?? 0));
+                    setLocalObjAstig0(String(coeffs.get(6) ?? 0));
+                    setLocalObjComaY(String(coeffs.get(7) ?? 0));
+                    setLocalObjComaX(String(coeffs.get(8) ?? 0));
+                    setLocalObjSpherical(String(coeffs.get(11) ?? 0));
                 }
-                if (selectedComponent instanceof PolygonScanner) {
+                if (selectedComponent instanceof Camera) {
+                    setLocalCameraResX(String(selectedComponent.sensorResX));
+                    setLocalCameraResY(String(selectedComponent.sensorResY));
+                    setLocalCameraSensorNA(String(selectedComponent.sensorNA));
+                    setLocalCameraLaunchModel(selectedComponent.detectorLaunchModel);
+                }
+                if (selectedComponent instanceof AchromatDoublet) {
+                    setLocalDoubletR1(String(Math.round(selectedComponent.r1 * 100) / 100));
+                    setLocalDoubletR2(String(Math.round(selectedComponent.r2 * 100) / 100));
+                    setLocalDoubletR3(String(Math.round(selectedComponent.r3 * 100) / 100));
+                    setLocalDoubletT1(String(Math.round(selectedComponent.t1 * 100) / 100));
+                    setLocalDoubletT2(String(Math.round(selectedComponent.t2 * 100) / 100));
+                    setLocalDoubletAperture(String(Math.round(selectedComponent.apertureRadius * 100) / 100));
+                    setLocalDoubletIor1(String(selectedComponent.ior1));
+                    setLocalDoubletIor2(String(selectedComponent.ior2));
+                }
+                if (selectedComponent instanceof AbstractPolygonOptic) {
                     setLocalPolyFaces(String(selectedComponent.numFaces));
-                    setLocalPolyRadius(String(selectedComponent.inscribedRadius));
-                    setLocalPolyHeight(String(selectedComponent.faceHeight));
+                    setLocalPolyRadius(String(Math.round(selectedComponent.inscribedRadius * 100) / 100));
+                    setLocalPolyHeight(String(Math.round(selectedComponent.width * 100) / 100));
                     setLocalPolyScanAngle(String(Math.round(selectedComponent.scanAngle * 180 / Math.PI * 100) / 100));
+                    setLocalPolyIor(String(selectedComponent.ior));
+                    setLocalPolyMode(selectedComponent.faceModes.some(m => m === 'refractive') ? 'refractive' : 'reflective');
                 }
                 if (selectedComponent instanceof Laser) {
                     setLocalWavelength(selectedComponent.wavelength);
@@ -596,6 +1260,36 @@ export const Inspector: React.FC = () => {
                 if (selectedComponent instanceof Lamp) {
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
                     setLocalLampPower(String(selectedComponent.power));
+                    setLocalSourcePointCount(String(selectedComponent.sourcePointCount));
+                    setLocalEmitterRadius(String(selectedComponent.emitterRadius));
+                }
+                if (selectedComponent instanceof PointSourceBase) {
+                    setLocalWavelength(selectedComponent.wavelength);
+                    setLocalLaserPower(String(selectedComponent.power));
+                }
+                if (selectedComponent instanceof ConeSource3D) {
+                    setLocalHalfAngle(String(Math.round(selectedComponent.halfAngle * 180 / Math.PI * 100) / 100));
+                }
+                if (selectedComponent instanceof WedgeSource2D) {
+                    setLocalSubtendedAngle(String(Math.round(selectedComponent.subtendedAngle * 180 / Math.PI * 100) / 100));
+                }
+                if (selectedComponent instanceof StructuredSource) {
+                    setLocalWavelength(selectedComponent.wavelength);
+                    setLocalBeamRadius(String(selectedComponent.beamRadius));
+                    setLocalLaserPower(String(selectedComponent.power));
+                    setLocalAsciiChar(selectedComponent.asciiChar);
+                }
+                if (selectedComponent instanceof FaradayIsolator) {
+                    setLocalInsertionLoss(String(selectedComponent.insertionLoss));
+                    setLocalExtinctionDB(String(selectedComponent.extinctionDB));
+                }
+                if (selectedComponent instanceof QPD) {
+                    setLocalQPDDiameter(String(selectedComponent.activeDiameter));
+                }
+                if (selectedComponent instanceof AOD) {
+                    setLocalDeflectionAngle(String(Math.round(selectedComponent.deflectionAngle * 1000 * 100) / 100));
+                    setLocalAODEfficiency(String(selectedComponent.efficiency));
+                    setLocalAODMaxAngle(String(Math.round(selectedComponent.maxAngle * 1000 * 100) / 100));
                 }
                 if (selectedComponent instanceof CylindricalLens) {
                     setLocalCylR1(Math.abs(selectedComponent.r1) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.r1 * 100) / 100));
@@ -610,24 +1304,42 @@ export const Inspector: React.FC = () => {
                     setLocalCurvedMirrorRoC(Math.abs(selectedComponent.radiusOfCurvature) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.radiusOfCurvature * 100) / 100));
                     setLocalCurvedMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
-                if (selectedComponent instanceof PrismLens && !(selectedComponent instanceof PolygonScanner)) {
-                    setLocalApexAngle(String(Math.round(selectedComponent.apexAngle * 180 / Math.PI * 100) / 100));
-                    setLocalPrismHeight(String(selectedComponent.height));
-                    setLocalPrismIor(String(selectedComponent.ior));
-                }
+                // PrismLens sync removed — unified under AbstractPolygonOptic above
                 if (selectedComponent instanceof Aperture) {
                     setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
                 }
                 if (selectedComponent instanceof SlitAperture) {
                     setLocalSlitWidth(String(Math.round(selectedComponent.slitWidth * 100) / 100));
-                    // Extract rotation around local X (optical axis) from Euler
-                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
-                    setLocalSlitRotation(String(Math.round(euler.x * 180 / Math.PI * 100) / 100));
+                    // Read the roll angle (rotation around the slit's optical axis).
+                    setLocalSlitRotation(String(Math.round(selectedComponent.rollAngle * 180 / Math.PI * 100) / 100));
                 }
-                if (selectedComponent instanceof CylindricalLens) {
-                    // Extract clocking angle: rotation around local Z (optical axis)
-                    const euler = new Euler().setFromQuaternion(selectedComponent.rotation);
-                    setLocalCylClocking(String(Math.round(euler.x * 180 / Math.PI * 100) / 100));
+                if (selectedComponent instanceof PupilMaskElement) {
+                    setLocalPupilMaskRadius(String(selectedComponent.radius));
+                    setLocalPupilMaskInner(String(selectedComponent.innerRadius));
+                    setLocalPupilMaskOuter(String(selectedComponent.outerRadius));
+                    setLocalPupilMaskRingTransmission(String(selectedComponent.ringTransmission));
+                    setLocalPupilMaskRingPhase(String(selectedComponent.ringPhaseShift));
+                    setLocalPupilMaskBackgroundTransmission(String(selectedComponent.backgroundTransmission));
+                    setLocalPupilMaskBackgroundPhase(String(selectedComponent.backgroundPhaseShift));
+                    setLocalPupilMaskResolution(String(selectedComponent.resolution));
+                    setLocalPupilMaskMode(selectedComponent.mode);
+                }
+                if (selectedComponent instanceof MediumVolume) {
+                    setLocalMediumWidth(String(selectedComponent.width));
+                    setLocalMediumHeight(String(selectedComponent.height));
+                    setLocalMediumDepth(String(selectedComponent.depth));
+                    setLocalMediumIndex(String(selectedComponent.refractiveIndex));
+                    setLocalMediumExteriorIndex(String(selectedComponent.exteriorRefractiveIndex));
+                }
+
+                if (selectedComponent instanceof Diffuser) {
+                    setLocalDiffuserDiameter(String(selectedComponent.diameter));
+                    setLocalDiffuserConeAngle(String(Math.round(selectedComponent.coneHalfAngle * 180 / Math.PI)));
+                }
+
+                if (selectedComponent instanceof DoubleSlit) {
+                    setLocalDoubleSlitWidth(String(selectedComponent.slitWidth));
+                    setLocalDoubleSlitSep(String(selectedComponent.slitSeparation));
                 }
 
                 if (selectedComponent instanceof Filter) {
@@ -660,6 +1372,7 @@ export const Inspector: React.FC = () => {
                     setLocalEmBands(comp.emissionSpectrum.bands.map(b => ({ center: String(b.center), width: String(b.width) })));
                     setLocalFluorEff(comp.fluorescenceEfficiency.toPrecision(3));
                     setLocalAbsorption(String(comp.absorption));
+                    setLocalRefractiveIndexDelta(String(comp.refractiveIndexDelta));
                     // Specimen rotation (radians → degrees)
                     setLocalSpecRotX(String(Math.round(comp.specimenRotation.x * 180 / Math.PI * 100) / 100));
                     setLocalSpecRotY(String(Math.round(comp.specimenRotation.y * 180 / Math.PI * 100) / 100));
@@ -674,6 +1387,9 @@ export const Inspector: React.FC = () => {
                         setLocalPiezoHalfMm(String(savedPiezo.halfMm));
                         setLocalPiezoHz(String(Math.round(1000 / savedPiezo.periodMs * 10) / 10));
                     }
+                }
+                if (selectedComponent instanceof SampleChamber) {
+                    setLocalChamberFillMediumIndex(String(selectedComponent.fillMediumIndex));
                 }
             } catch (err) {
                 console.error("Inspector Update Error:", err);
@@ -700,27 +1416,17 @@ export const Inspector: React.FC = () => {
     };
 
 
-    const commitRotation = (valueStr: string) => {
+    const commitRotation = (axis: 'x' | 'y' | 'z', valueStr: string) => {
         if (!selectedComponent) return;
         const val = parseFloat(valueStr);
         if (isNaN(val)) return;
 
         const newComponents = components.map(c => {
             if (c.id === selection[0]) {
-                // Unified rotation: same approach as Q/E keys and Shift+scroll.
-                // Extract current world-Z angle, compute delta to desired, premultiply.
-                // This preserves each component's base rotation (Y-axis for lenses,
-                // identity for blockers/cards, etc.) regardless of component type.
-                const currentEuler = new Euler().setFromQuaternion(c.rotation, 'ZYX');
-                const currentZRad = currentEuler.z;
-                const desiredZRad = val * Math.PI / 180;
-                const deltaZ = desiredZRad - currentZRad;
-
-                const qStep = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), deltaZ);
-                c.rotation.premultiply(qStep);
-
-                const euler = new Euler().setFromQuaternion(c.rotation);
-                c.setRotation(euler.x, euler.y, euler.z);
+                if (axis === 'x') c.panAngle = val * Math.PI / 180;
+                if (axis === 'y') c.tiltAngle = val * Math.PI / 180;
+                if (axis === 'z') c.rollAngle = val * Math.PI / 180;
+                c.recomputeRotation();
                 return c;
             }
             return c;
@@ -788,6 +1494,18 @@ export const Inspector: React.FC = () => {
         setComponents([...newComponents]);
     };
 
+    const commitOpaque = (val: boolean) => {
+        if (!selectedComponent) return;
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof Card) {
+                (c as any).opaque = val;
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent, commitFn: () => void) => {
         if (e.key === 'Enter') {
@@ -796,12 +1514,148 @@ export const Inspector: React.FC = () => {
         }
     };
 
+    const commitCardPixelPitch = (axis: 'x' | 'y', valueStr: string) => {
+        if (!(selectedComponent instanceof Card)) return;
+        const trimmed = valueStr.trim();
+        // Empty input clears the override (stored as 0 per Card's definition).
+        const parsed = trimmed === '' ? 0 : parseFloat(trimmed);
+        if (trimmed !== '' && (!Number.isFinite(parsed) || parsed <= 0)) return;
+
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof Card) {
+                if (axis === 'x') c.fieldPixelPitchOverrideX = parsed;
+                else c.fieldPixelPitchOverrideY = parsed;
+                c.version++;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
     const [localName, setLocalName] = useState(selectedComponent?.name ?? '');
     useEffect(() => { setLocalName(selectedComponent?.name ?? ''); }, [selectedComponent?.id]);
 
-    if (!selectedComponent) {
-        return <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setSolver3Trigger={setSolver3Trigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />;
+    const objectiveScanReadout = useMemo(() => {
+        if (!(selectedComponent instanceof Objective)) return null;
+
+        const scanHead = components.find(component => component instanceof DualGalvoScanHead) as DualGalvoScanHead | undefined;
+        const sample = components.find(component => component instanceof Sample || component instanceof SampleChamber) as (Sample | SampleChamber | undefined);
+        const laser = components.find(component => component instanceof Laser) as Laser | undefined;
+        if (!scanHead || !sample || !laser) return null;
+
+        try {
+            const measurement = measureChiefRayForScan(components, scanHead.scanX, scanHead.scanY);
+            if (!measurement.pupilCoordinates) return null;
+
+            const maxHalfAngleDeg = findMaxUnclippedScanHalfAngleDeg(components, 5, 18);
+            const currentBeamRadiusMm = measurement.pupilCoordinates.radius;
+            const objectiveOpeningRadiusMm = selectedComponent.pupilRadius;
+            const usedPercent = objectiveOpeningRadiusMm > 1e-9
+                ? (currentBeamRadiusMm / objectiveOpeningRadiusMm) * 100
+                : 0;
+            const edgeMarginPercent = Math.max(0, 100 - usedPercent);
+
+            const targetHalfFieldMm = 0.5;
+            const sampleAngle = Math.atan2(targetHalfFieldMm, selectedComponent.focalLength);
+            const requiredPupilShiftMm = selectedComponent.immersionIndex * selectedComponent.focalLength * Math.sin(sampleAngle);
+
+            const sampleOffset = measurement.sampleWorldHit
+                ? measurement.sampleWorldHit.clone().sub(sample.position)
+                : null;
+
+            return {
+                currentBeamRadiusMm,
+                objectiveOpeningRadiusMm,
+                usedPercent,
+                edgeMarginPercent,
+                maxHalfAngleDeg,
+                requiredPupilShiftMm,
+                sampleOffsetXmm: sampleOffset?.x ?? null,
+                sampleOffsetZmm: sampleOffset?.z ?? null,
+            };
+        } catch {
+            return null;
+        }
+    }, [components, selectedComponent]);
+
+    const cardFieldGridSummary = (() => {
+        if (!(selectedComponent instanceof Card)) return null;
+        const card = selectedComponent;
+        if (card.fieldData) {
+            return {
+                resX: card.fieldData.resX,
+                resY: card.fieldData.resY,
+                dx: card.fieldData.extentWidth / Math.max(card.fieldData.resX, 1),
+                dy: card.fieldData.extentHeight / Math.max(card.fieldData.resY, 1),
+                mode: (card.fieldPixelPitchOverrideX || card.fieldPixelPitchOverrideY) ? 'Manual' : 'Auto',
+            };
+        }
+
+        const pitchX = card.fieldPixelPitchOverrideX || null;
+        const pitchY = card.fieldPixelPitchOverrideY || null;
+        if (!pitchX && !pitchY) return null;
+
+        // When only one axis has an override, use that pitch on the other axis
+        // too so resolutionFromPixelPitch can compute a full grid.
+        const effectivePitch = pitchX ?? pitchY ?? 0;
+        const res = resolutionFromPixelPitch(card.width, card.height, effectivePitch);
+        return {
+            resX: res.resX,
+            resY: res.resY,
+            dx: res.resX > 0 ? card.width / res.resX : null,
+            dy: res.resY > 0 ? card.height / res.resY : null,
+            mode: 'Manual',
+        };
+    })();
+
+    // If a cone is selected, render the rod properties panel instead of
+    // the component properties panel. The solver panel stays visible so the
+    // user can still switch viewer modes and adjust rod count.
+    if (resolvedRodSelection && selectedRodRef) {
+        const { path, rod, segmentIndex } = resolvedRodSelection;
+        // Resolve source component from the path's first segment
+        const sourceRod = path[0];
+        const sourceComponent = sourceRod?.sourceId
+            ? components.find(c => c.id === sourceRod.sourceId || c.name === sourceRod.sourceId)
+            : undefined;
+        // Per-segment interaction component names (what each segment hit)
+        const interactionNames = path.map(seg => {
+            if (!seg.interactionComponentId) return undefined;
+            const c = components.find(cc => cc.id === seg.interactionComponentId);
+            return c?.name;
+        });
+        return (
+            <>
+                {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
+                <ZLevelBar />
+                <RodPropertiesPanel
+                    rod={rod}
+                    path={path}
+                    segmentIndex={segmentIndex}
+                    sourceComponentName={sourceComponent?.name}
+                    interactionComponentNames={interactionNames}
+                    onClose={() => setSelectedRodRef(null)}
+                    onSelectSegment={(i: number) => setSelectedRodRef({
+                        pathIndex: selectedRodRef.pathIndex,
+                        segmentIndex: i,
+                        source: selectedRodRef.source,
+                    })}
+                />
+            </>
+        );
     }
+
+    if (!selectedComponent) {
+        return (
+            <>
+                <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />
+                <ZLevelBar />
+            </>
+        );
+    }
+
+    // The toggle button and solver panel are now rendered unconditionally at the bottom
+    // so the properties panel can animate naturally
 
     const {
         isCard,
@@ -812,19 +1666,33 @@ export const Inspector: React.FC = () => {
         isObjective,
         isLaser,
         isLamp,
-        isPrism,
+        isPolygonOptic,
         isWaveplate,
         isAperture,
         isSlitAperture,
         isDichroic,
         isCylindrical,
         isCurvedMirror,
-        isPolygonScanner,
         isSample,
         isScanHead,
+        isDualGalvo,
         isGalvoOrScanHead,
         isPMT,
         isCamera,
+        isAchromatDoublet,
+        isPupilMask,
+        isMediumVolume,
+        isPointSource2D,
+        isPointSource3D,
+        isConeSource3D,
+        isWedgeSource2D,
+        isStructuredSource,
+        isFaradayIsolator,
+        isQPD,
+        isAOD,
+        isDiffuser,
+        isDoubleSlit,
+        isAnnotation,
         hasSpectralProfile,
     } = getComponentCapabilities(selectedComponent);
 
@@ -851,12 +1719,150 @@ export const Inspector: React.FC = () => {
         if (!selectedComponent || !(selectedComponent instanceof Lamp)) return;
         const radius = parseFloat(localBeamRadius);
         const power = parseFloat(localLampPower);
+        const sourcePoints = parseInt(localSourcePointCount);
+        const emitterR = parseFloat(localEmitterRadius);
         if (isNaN(radius)) return;
 
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Lamp) {
                 c.beamRadius = radius;
                 if (!isNaN(power) && power > 0) c.power = power;
+                if (!isNaN(sourcePoints) && sourcePoints >= 1) c.sourcePointCount = Math.round(sourcePoints);
+                if (!isNaN(emitterR) && emitterR > 0) c.emitterRadius = emitterR;
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitPointSourceParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof PointSourceBase)) return;
+        const power = parseFloat(localLaserPower);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof PointSourceBase) {
+                c.wavelength = localWavelength;
+                if (!isNaN(power) && power > 0) c.power = power;
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitConeSourceParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof ConeSource3D)) return;
+        const power = parseFloat(localLaserPower);
+        const halfAngleDeg = parseFloat(localHalfAngle);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof ConeSource3D) {
+                c.wavelength = localWavelength;
+                if (!isNaN(power) && power > 0) c.power = power;
+                if (!isNaN(halfAngleDeg) && halfAngleDeg > 0 && halfAngleDeg <= 90) {
+                    c.halfAngle = halfAngleDeg * Math.PI / 180;
+                }
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitWedgeSourceParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof WedgeSource2D)) return;
+        const power = parseFloat(localLaserPower);
+        const subtendedDeg = parseFloat(localSubtendedAngle);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof WedgeSource2D) {
+                c.wavelength = localWavelength;
+                if (!isNaN(power) && power > 0) c.power = power;
+                if (!isNaN(subtendedDeg) && subtendedDeg > 0 && subtendedDeg <= 360) {
+                    c.subtendedAngle = subtendedDeg * Math.PI / 180;
+                }
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitStructuredSourceParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof StructuredSource)) return;
+        const radius = parseFloat(localBeamRadius);
+        const power = parseFloat(localLaserPower);
+        if (isNaN(radius)) return;
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof StructuredSource) {
+                c.wavelength = localWavelength;
+                c.beamRadius = radius;
+                if (!isNaN(power) && power > 0) c.power = power;
+                if (localAsciiChar.length > 0) c.asciiChar = localAsciiChar.charAt(0);
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitFaradayParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof FaradayIsolator)) return;
+        const loss = parseFloat(localInsertionLoss);
+        const ext = parseFloat(localExtinctionDB);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof FaradayIsolator) {
+                if (!isNaN(loss) && loss >= 0 && loss <= 1) c.insertionLoss = loss;
+                if (!isNaN(ext) && ext > 0) c.extinctionDB = ext;
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitQPDParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof QPD)) return;
+        const diam = parseFloat(localQPDDiameter);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof QPD) {
+                if (!isNaN(diam) && diam > 0) c.activeDiameter = diam;
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const commitAODParams = () => {
+        if (!selectedComponent || !(selectedComponent instanceof AOD)) return;
+        const deflMrad = parseFloat(localDeflectionAngle);
+        const eff = parseFloat(localAODEfficiency);
+        const maxMrad = parseFloat(localAODMaxAngle);
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof AOD) {
+                if (!isNaN(deflMrad)) c.deflectionAngle = deflMrad / 1000; // mrad → rad
+                if (!isNaN(eff) && eff >= 0 && eff <= 1) c.efficiency = eff;
+                if (!isNaN(maxMrad) && maxMrad > 0) c.maxAngle = maxMrad / 1000; // mrad → rad
+                c.version++;
+                return c;
+            }
+            return c;
+        });
+        setComponents([...newComponents]);
+    };
+
+    const updateSelectedCamera = (mutate: (camera: Camera) => void) => {
+        if (!selectedComponent || !(selectedComponent instanceof Camera)) return;
+        const newComponents = components.map(c => {
+            if (c.id === selection[0] && c instanceof Camera) {
+                mutate(c);
+                c.markSolver3Stale();
                 c.version++;
                 return c;
             }
@@ -876,22 +1882,99 @@ export const Inspector: React.FC = () => {
     };
 
     return (
+        <>
+        {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
+        <ZLevelBar />
+
+        {isMobile && (
+            <button
+                onClick={() => setMobilePropsOpen(!mobilePropsOpen)}
+                style={{
+                    position: 'fixed',
+                    top: 60,
+                    right: 10,
+                    zIndex: 20,
+                    width: 44,
+                    height: 44,
+                    borderRadius: '8px',
+                    border: '1px solid #444',
+                    backgroundColor: '#1a1a1a',
+                    color: '#aaa',
+                    fontSize: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    transition: 'all 0.3s ease',
+                    opacity: mobilePropsOpen ? 0 : 1,
+                    pointerEvents: mobilePropsOpen ? 'none' : 'auto'
+                }}
+                title="Open properties"
+            >
+                &#9776;
+            </button>
+        )}
+
+        {/* Mobile backdrop */}
+        {isMobile && mobilePropsOpen && (
+            <div
+                onClick={() => setMobilePropsOpen(false)}
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    backgroundColor: 'rgba(0,0,0,0.4)',
+                    zIndex: 14,
+                    transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+            />
+        )}
         <div style={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-            width: 'min(280px, calc(100% - 40px))',
-            maxWidth: 'calc(100% - 40px)',
-            maxHeight: 'calc(100% - 40px)',
-            backgroundColor: 'rgba(30, 30, 30, 0.95)',
+            position: 'fixed',
+            top: isMobile ? undefined : 20,
+            bottom: isMobile ? 0 : undefined,
+            left: isMobile ? 0 : undefined,
+            right: isMobile ? 0 : 20,
+            width: isMobile ? '100vw' : 'min(280px, calc(100% - 40px))',
+            maxWidth: isMobile ? '100vw' : 'calc(100% - 40px)',
+            maxHeight: isMobile ? '45vh' : 'calc(100% - 40px)',
+            borderBottomLeftRadius: isMobile ? 0 : 16,
+            borderBottomRightRadius: isMobile ? 0 : 16,
+            borderTopLeftRadius: isMobile ? 24 : 16,
+            borderTopRightRadius: isMobile ? 24 : 16,
+            backgroundColor: 'rgba(10, 12, 16, 0.65)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             color: '#eee',
-            padding: 14,
-            borderRadius: 8,
-            border: '1px solid #444',
+            padding: 16,
+            border: '1px solid rgba(255,255,255,0.06)',
             fontFamily: 'Inter, sans-serif',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            boxShadow: '0 12px 60px rgba(0,0,0,0.8)',
             overflowY: 'auto',
+            zIndex: isMobile ? 15 : undefined,
+            transform: isMobile ? (mobilePropsOpen ? 'translateY(0)' : 'translateY(110%)') : undefined,
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            pointerEvents: isMobile && !mobilePropsOpen ? 'none' : 'auto'
         }}>
+            {/* iOS Style Notch for Mobile */}
+            {isMobile && (
+                <div 
+                    onClick={() => setMobilePropsOpen(false)}
+                    style={{
+                        width: '100%', 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        paddingBottom: '12px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <div style={{ width: '40px', height: '4px', backgroundColor: '#555', borderRadius: '2px' }} />
+                </div>
+            )}
+
             {/* Editable name + delete trash icon */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, borderBottom: '1px solid #555', paddingBottom: 8 }}>
                 <input
@@ -922,6 +2005,7 @@ export const Inspector: React.FC = () => {
                         setComponents(components.filter(c => c.id !== selection[0]));
                         setSelection([]);
                     }}
+                    className="cyber-btn danger"
                     title="Delete component"
                     style={{
                         background: 'none',
@@ -931,7 +2015,6 @@ export const Inspector: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         color: '#888',
-                        transition: 'color 0.15s',
                         flexShrink: 0,
                     }}
                     onMouseOver={e => { e.currentTarget.style.color = '#ef4444'; }}
@@ -942,46 +2025,77 @@ export const Inspector: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* X / Y / Z / Rotation — compact single row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 70px', gap: 6 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>X (mm)</label>
-                        <input
-                            type="text"
-                            value={localX}
-                            onChange={(e) => setLocalX(e.target.value)}
-                            onBlur={() => commitPosition('x', localX)}
-                            onKeyDown={(e) => handleKeyDown(e, () => commitPosition('x', localX))}
-                            style={inputStyle}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '10px', color: '#888', marginBottom: 2 }}>Y (mm)</label>
-                        <input
-                            type="text"
-                            value={localY}
-                            onChange={(e) => setLocalY(e.target.value)}
-                            onBlur={() => commitPosition('y', localY)}
-                            onKeyDown={(e) => handleKeyDown(e, () => commitPosition('y', localY))}
-                            style={inputStyle}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <ScrubInput
-                            label="Z"
-                            suffix="mm"
-                            value={localZ}
-                            onChange={setLocalZ}
-                            onCommit={() => commitPosition('z', localZ)}
-                            speed={0.5}
-                        />
-                    </div>
+                {/* Position — X / Y / Z */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                    {(['x', 'y', 'z'] as const).map((axis, i) => {
+                        const locked = selectedComponent?.axisLock?.[axis] ?? (axis === 'z');
+                        const values = [localX, localY, localZ];
+                        const setters = [setLocalX, setLocalY, setLocalZ];
+                        return (
+                            <div key={axis} style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                                    <label style={{ fontSize: '10px', color: '#888' }}>{axis.toUpperCase()} (mm)</label>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedComponent) return;
+                                            pushUndo();
+                                            selectedComponent.axisLock[axis] = !locked;
+                                            selectedComponent.version++;
+                                            setComponents(prev => [...prev]);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            padding: 0,
+                                            cursor: 'pointer',
+                                            fontSize: '10px',
+                                            lineHeight: 1,
+                                            opacity: locked ? 1 : 0.4,
+                                            transition: 'opacity 0.2s',
+                                        }}
+                                        title={locked ? `Unlock ${axis.toUpperCase()} axis` : `Lock ${axis.toUpperCase()} axis`}
+                                    >
+                                        {locked ? '🔒' : '🔓'}
+                                    </button>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={values[i]}
+                                    onChange={(e) => setters[i](e.target.value)}
+                                    onBlur={() => commitPosition(axis, values[i])}
+                                    onKeyDown={(e) => handleKeyDown(e, () => commitPosition(axis, values[i]))}
+                                    style={inputStyle}
+                                />
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                     <ScrubInput
-                        label="Rot"
+                        label="U"
                         suffix="°"
-                        value={localRot}
-                        onChange={setLocalRot}
-                        onCommit={(v: string) => commitRotation(v)}
+                        value={localRotX}
+                        onChange={setLocalRotX}
+                        onCommit={(v: string) => commitRotation('x', v)}
+                        speed={1}
+                        step={1}
+                    />
+                    <ScrubInput
+                        label="V"
+                        suffix="°"
+                        value={localRotY}
+                        onChange={setLocalRotY}
+                        onCommit={(v: string) => commitRotation('y', v)}
+                        speed={1}
+                        step={1}
+                    />
+                    <ScrubInput
+                        label="W"
+                        suffix="°"
+                        value={localRotZ}
+                        onChange={setLocalRotZ}
+                        onCommit={(v: string) => commitRotation('z', v)}
                         speed={1}
                         step={1}
                     />
@@ -1012,6 +2126,55 @@ export const Inspector: React.FC = () => {
                                 style={inputStyle}
                             />
                         </div>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <input
+                                type="checkbox"
+                                id={`card-opaque-${selectedComponent.id}`}
+                                checked={localOpaque}
+                                onChange={(e) => {
+                                    setLocalOpaque(e.target.checked);
+                                    commitOpaque(e.target.checked);
+                                }}
+                                style={{ margin: 0, cursor: 'pointer' }}
+                            />
+                            <label htmlFor={`card-opaque-${selectedComponent.id}`} style={{ fontSize: '11px', color: '#ccc', cursor: 'pointer', userSelect: 'none' }}>
+                                Opaque (Stop Light)
+                            </label>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1', marginTop: 4, padding: '8px', background: '#181818', border: '1px solid #333', borderRadius: 4 }}>
+                            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: 6 }}>Wave Grid</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{ fontSize: '11px', color: '#888', marginBottom: 4 }}>Target dx (mm)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="auto"
+                                        value={localCardDx}
+                                        onChange={(e) => setLocalCardDx(e.target.value)}
+                                        onBlur={() => commitCardPixelPitch('x', localCardDx)}
+                                        onKeyDown={(e) => handleKeyDown(e, () => commitCardPixelPitch('x', localCardDx))}
+                                        style={inputStyle}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{ fontSize: '11px', color: '#888', marginBottom: 4 }}>Target dy (mm)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="auto"
+                                        value={localCardDy}
+                                        onChange={(e) => setLocalCardDy(e.target.value)}
+                                        onBlur={() => commitCardPixelPitch('y', localCardDy)}
+                                        onKeyDown={(e) => handleKeyDown(e, () => commitCardPixelPitch('y', localCardDy))}
+                                        style={inputStyle}
+                                    />
+                                </div>
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: '10px', color: '#777', lineHeight: 1.5 }}>
+                                <div>Mode: {cardFieldGridSummary?.mode ?? 'Auto'}</div>
+                                <div>Grid: {cardFieldGridSummary ? `${cardFieldGridSummary.resX || '—'} × ${cardFieldGridSummary.resY || '—'} px` : '—'}</div>
+                                <div>Actual dx/dy: {cardFieldGridSummary && cardFieldGridSummary.dx != null && cardFieldGridSummary.dy != null ? `${cardFieldGridSummary.dx.toFixed(4)} × ${cardFieldGridSummary.dy.toFixed(4)} mm` : '—'}</div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1030,6 +2193,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Blocker) {
                                             c.diameter = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -1051,6 +2215,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Blocker) {
                                             c.thickness = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -1080,6 +2245,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Mirror) {
                                             c.diameter = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -1101,6 +2267,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Mirror) {
                                             c.thickness = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -1200,14 +2367,35 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                {/* Galvo Scan — for Mirror and CurvedMirror */}
+                {/* Galvo Scan — for Mirror, CurvedMirror, and ScanHeads */}
                 {isGalvoOrScanHead && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Galvo Scan</label>
                         {(() => {
-                            const activeChannel = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'tiltAngle' || ch.property === 'panAngle' || ch.property === 'scanX' || ch.property === 'scanY'));
-                            const isScanning = !!activeChannel;
+                            // For DualGalvo: find BOTH channels; for single: find one
+                            const channelX = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'scanX' || ch.property === 'panAngle'));
+                            const channelY = animator.channels.find(ch => ch.targetId === selectedComponent.id && (ch.property === 'scanY' || ch.property === 'tiltAngle'));
+                            const activeChannel = channelX || channelY;
+                            const isScanning = isDualGalvo ? !!(channelX || channelY) : !!activeChannel;
                             const savedSettings = galvoAngles.get(selectedComponent.id);
+
+                            if (isDualGalvo) {
+                                return (
+                                    <DualGalvoControls
+                                        component={selectedComponent as DualGalvoScanHead}
+                                        channelX={channelX}
+                                        channelY={channelY}
+                                        savedSettings={savedSettings}
+                                        animator={animator}
+                                        animPlaying={animPlaying}
+                                        setGalvoAngles={setGalvoAngles}
+                                        setAnimPlaying={setAnimPlaying}
+                                        setChannelVersion={setChannelVersion}
+                                    />
+                                );
+                            }
+
+                            // ── Single-axis galvo (Mirror, CurvedMirror, GalvoScanHead) ──
                             const currentAxis = activeChannel
                                 ? (activeChannel.property === 'tiltAngle' || activeChannel.property === 'scanY' ? 'U' : 'V')
                                 : (savedSettings?.axis ?? 'V');
@@ -1231,10 +2419,8 @@ export const Inspector: React.FC = () => {
                                                     ? (newAxisLabel === 'U' ? 'scanY' : 'scanX')
                                                     : (newAxisLabel === 'U' ? 'tiltAngle' : 'panAngle');
                                                 if (isScanning) {
-                                                    // Switching axis while animating: remove old channel, create new on the new axis
                                                     const oldPeriodMs = activeChannel!.periodMs;
                                                     animator.removeChannel(activeChannel!.id, components);
-                                                    // Compute center from the NEW axis's current rotation (not the old axis!)
                                                     const newCenter = isScanHead
                                                         ? ((selectedComponent as GalvoScanHead)[newAxisProp === 'scanY' ? 'scanY' : 'scanX'])
                                                         : (newAxisProp === 'tiltAngle' ? selectedComponent.tiltAngle : selectedComponent.panAngle);
@@ -1255,7 +2441,6 @@ export const Inspector: React.FC = () => {
                                                     setAnimPlaying(true);
                                                     setChannelVersion(v => v + 1);
                                                 } else {
-                                                    // Not scanning — just remember the new axis for when Scan is clicked
                                                     setGalvoAngles(prev => {
                                                         const old = prev.get(selectedComponent.id);
                                                         const next = new Map(prev);
@@ -1283,22 +2468,30 @@ export const Inspector: React.FC = () => {
                                         </select>
                                         <span style={{ fontSize: '10px', color: '#888', marginLeft: '6px', minWidth: '24px' }}>±</span>
                                         <input
-                                            id={'galvo-range-' + selectedComponent.id}
                                             type="number"
                                             defaultValue={currentHalfDeg}
-                                            key={activeChannel?.id ?? `galvo-idle-${selectedComponent.id}`}
+                                            key={`galvo-range-${selectedComponent.id}`}
                                             min={0.1}
                                             max={45}
                                             step={0.5}
                                             onChange={e => {
-                                                if (isScanning) {
-                                                    // Dynamically update the channel range
-                                                    const halfAngleDeg = parseFloat(e.target.value);
-                                                    if (isNaN(halfAngleDeg) || halfAngleDeg <= 0) return;
+                                                const halfAngleDeg = parseFloat(e.target.value);
+                                                if (isNaN(halfAngleDeg) || halfAngleDeg <= 0) return;
+                                                setGalvoAngles(prev => {
+                                                    const old = prev.get(selectedComponent.id);
+                                                    const next = new Map(prev);
+                                                    next.set(selectedComponent.id, {
+                                                        halfDeg: halfAngleDeg,
+                                                        periodMs: old?.periodMs ?? 2000,
+                                                        axis: old?.axis ?? currentAxis,
+                                                    });
+                                                    return next;
+                                                });
+                                                if (isScanning && activeChannel) {
                                                     const halfAngleRad = halfAngleDeg * Math.PI / 180;
-                                                    const center = activeChannel!.restoreValue ?? (activeChannel!.from + activeChannel!.to) / 2;
-                                                    activeChannel!.from = center - halfAngleRad;
-                                                    activeChannel!.to = center + halfAngleRad;
+                                                    const center = activeChannel.restoreValue ?? (activeChannel.from + activeChannel.to) / 2;
+                                                    activeChannel.from = center - halfAngleRad;
+                                                    activeChannel.to = center + halfAngleRad;
                                                 }
                                             }}
                                             style={{
@@ -1318,23 +2511,17 @@ export const Inspector: React.FC = () => {
                                         <button
                                             onClick={() => {
                                                 if (isScanning) {
-                                                    // Remember angle, Hz, and axis before removing
-                                                    const halfDeg = Math.round((activeChannel!.to - activeChannel!.from) * 90 / Math.PI * 10) / 10;
-                                                    const periodMs = activeChannel!.periodMs;
-                                                    const axis = currentAxis;
-                                                    setGalvoAngles(prev => new Map(prev).set(selectedComponent.id, { halfDeg, periodMs, axis }));
+                                                    // galvoAngles is already up-to-date from onChange handlers
                                                     animator.removeChannel(activeChannel!.id, components);
                                                     if (animator.channels.length === 0) setAnimPlaying(false);
-                                                    setChannelVersion(v => v + 1);  // force re-render
+                                                    setChannelVersion(v => v + 1);
                                                 } else {
-                                                    const axisEl = document.getElementById('galvo-axis-' + selectedComponent.id) as HTMLSelectElement;
-                                                    const rangeEl = document.getElementById('galvo-range-' + selectedComponent.id) as HTMLInputElement;
+                                                    // Read from galvoAngles (always current)
                                                     const axis = isScanHead
-                                                        ? (axisEl?.value === 'U' ? 'scanY' : 'scanX')
-                                                        : (axisEl?.value === 'U' ? 'tiltAngle' : 'panAngle');
-                                                    const halfAngleDeg = parseFloat(rangeEl?.value || '5');
-                                                    const halfAngleRad = halfAngleDeg * Math.PI / 180;
-                                                    // Use restoreValue if coming from an existing channel, else current rotation
+                                                        ? (currentAxis === 'U' ? 'scanY' : 'scanX')
+                                                        : (currentAxis === 'U' ? 'tiltAngle' : 'panAngle');
+                                                    const halfAngleRad = (savedSettings?.halfDeg ?? currentHalfDeg) * Math.PI / 180;
+                                                    const periodMs = savedSettings?.periodMs ?? 2000;
                                                     const currentRotVal = isScanHead
                                                         ? ((selectedComponent as GalvoScanHead)[axis === 'scanY' ? 'scanY' : 'scanX'])
                                                         : (axis === 'tiltAngle' ? selectedComponent.tiltAngle : selectedComponent.panAngle);
@@ -1346,13 +2533,13 @@ export const Inspector: React.FC = () => {
                                                         from: center - halfAngleRad,
                                                         to: center + halfAngleRad,
                                                         easing: 'sinusoidal',
-                                                        periodMs: savedSettings?.periodMs ?? 2000,
+                                                        periodMs,
                                                         repeat: true,
                                                         restoreValue: center,
                                                     };
                                                     animator.addChannel(ch);
                                                     setAnimPlaying(true);
-                                                    setChannelVersion(v => v + 1);  // force re-render
+                                                    setChannelVersion(v => v + 1);
                                                 }
                                             }}
                                             style={{
@@ -1379,34 +2566,40 @@ export const Inspector: React.FC = () => {
                                         >
                                             {isScanning ? `⏹ Stop (${currentAxis})` : '⏵ Scan Galvo'}
                                         </button>
-                                        {isScanning && (
-                                            <>
-                                                <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
-                                                <input
-                                                    type="number"
-                                                    defaultValue={Math.round(1000 / activeChannel!.periodMs * 10) / 10}
-                                                    key={activeChannel!.id}
-                                                    min={0.1}
-                                                    max={10000}
-                                                    step={0.1}
-                                                    onChange={e => {
-                                                        const hz = parseFloat(e.target.value);
-                                                        if (isNaN(hz) || hz <= 0) return;
-                                                        activeChannel!.periodMs = 1000 / hz;
-                                                    }}
-                                                    style={{
-                                                        width: '48px',
-                                                        background: '#222',
-                                                        color: '#ccc',
-                                                        border: '1px solid #555',
-                                                        borderRadius: '3px',
-                                                        fontSize: '10px',
-                                                        padding: '2px 4px',
-                                                        textAlign: 'center',
-                                                    }}
-                                                />
-                                            </>
-                                        )}
+                                        <span style={{ fontSize: '10px', color: '#888', marginLeft: 6 }}>Hz</span>
+                                        <input
+                                            type="number"
+                                            defaultValue={isScanning ? Math.round(1000 / activeChannel!.periodMs * 10) / 10 : Math.round(1000 / (savedSettings?.periodMs ?? 2000) * 10) / 10}
+                                            key={`galvo-hz-${selectedComponent.id}`}
+                                            min={0.1}
+                                            max={10000}
+                                            step={0.1}
+                                            onChange={e => {
+                                                const hz = parseFloat(e.target.value);
+                                                if (isNaN(hz) || hz <= 0) return;
+                                                setGalvoAngles(prev => {
+                                                    const old = prev.get(selectedComponent.id);
+                                                    const next = new Map(prev);
+                                                    next.set(selectedComponent.id, {
+                                                        halfDeg: old?.halfDeg ?? currentHalfDeg,
+                                                        periodMs: 1000 / hz,
+                                                        axis: old?.axis ?? currentAxis,
+                                                    });
+                                                    return next;
+                                                });
+                                                if (activeChannel) activeChannel.periodMs = 1000 / hz;
+                                            }}
+                                            style={{
+                                                width: '48px',
+                                                background: '#222',
+                                                color: '#ccc',
+                                                border: '1px solid #555',
+                                                borderRadius: '3px',
+                                                fontSize: '10px',
+                                                padding: '2px 4px',
+                                                textAlign: 'center',
+                                            }}
+                                        />
                                     </div>
                                     {isScanning && (
                                         <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>
@@ -1419,12 +2612,45 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                {isPolygonScanner && (
+                {isPolygonOptic && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Polygon Scan Mirror</label>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Polygon Optic</label>
+                        {/* Surface mode toggle */}
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                            {(['refractive', 'reflective'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => {
+                                        setLocalPolyMode(mode);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                                c.faceModes = c.faceModes.map(() => mode);
+                                                c.invalidateMesh();
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        padding: '4px 8px',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        background: localPolyMode === mode ? (mode === 'refractive' ? '#1a2a3a' : '#2a2a3a') : '#222',
+                                        border: `1px solid ${localPolyMode === mode ? (mode === 'refractive' ? '#3a6a8a' : '#6a5a8a') : '#444'}`,
+                                        borderRadius: '4px',
+                                        color: localPolyMode === mode ? (mode === 'refractive' ? '#74b9ff' : '#b9a0ff') : '#666',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {mode === 'refractive' ? 'Glass' : 'Mirror'}
+                                </button>
+                            ))}
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <ScrubInput
-                                label="Faces"
+                                label="Sides"
                                 suffix=""
                                 value={localPolyFaces}
                                 onChange={setLocalPolyFaces}
@@ -1432,9 +2658,9 @@ export const Inspector: React.FC = () => {
                                     const val = Math.max(3, Math.round(parseFloat(v)));
                                     if (isNaN(val)) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
-                                            c.numFaces = val;
-                                            c.recalculate();
+                                        if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                            c.setRegularPolygon(val, c.inscribedRadius);
+                                            c.invalidateMesh();
                                             return c;
                                         }
                                         return c;
@@ -1454,9 +2680,9 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
-                                            c.inscribedRadius = val;
-                                            c.recalculate();
+                                        if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                            c.setRegularPolygon(c.numFaces, val);
+                                            c.invalidateMesh();
                                             return c;
                                         }
                                         return c;
@@ -1468,9 +2694,9 @@ export const Inspector: React.FC = () => {
                                 max={50}
                             />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: localPolyMode === 'refractive' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 10, marginTop: 8 }}>
                             <ScrubInput
-                                label="Height"
+                                label="Width"
                                 suffix="mm"
                                 value={localPolyHeight}
                                 onChange={setLocalPolyHeight}
@@ -1478,9 +2704,9 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
-                                            c.faceHeight = val;
-                                            c.recalculate();
+                                        if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                            c.width = val;
+                                            c.invalidateMesh();
                                             return c;
                                         }
                                         return c;
@@ -1489,7 +2715,7 @@ export const Inspector: React.FC = () => {
                                 }}
                                 speed={0.5}
                                 min={1}
-                                max={30}
+                                max={100}
                             />
                             <ScrubInput
                                 label="Scan ∠"
@@ -1500,8 +2726,8 @@ export const Inspector: React.FC = () => {
                                     const val = parseFloat(v);
                                     if (isNaN(val)) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PolygonScanner) {
-                                            c.scanAngle = val * Math.PI / 180;
+                                        if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                            c.applyScanAngle(val * Math.PI / 180);
                                             return c;
                                         }
                                         return c;
@@ -1512,11 +2738,40 @@ export const Inspector: React.FC = () => {
                                 min={0}
                                 max={360}
                             />
+                            {localPolyMode === 'refractive' && (
+                                <ScrubInput
+                                    label="IoR"
+                                    value={localPolyIor}
+                                    onChange={setLocalPolyIor}
+                                    onCommit={(v: string) => {
+                                        const val = parseFloat(v);
+                                        if (isNaN(val) || val < 1.0 || val > 3.0) return;
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof AbstractPolygonOptic) {
+                                                c.ior = val;
+                                                c.invalidateMesh();
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    speed={0.005}
+                                    min={1.0}
+                                    max={3.0}
+                                    step={0.001}
+                                    title="Index of Refraction"
+                                />
+                            )}
                         </div>
                         <div style={{ marginTop: 6, fontSize: '10px', color: '#555' }}>
-                            Scan per facet = {selectedComponent instanceof PolygonScanner ? Math.round(4 * 180 / selectedComponent.numFaces * 100) / 100 : '—'}°
-                            {' · '}
-                            R = {selectedComponent instanceof PolygonScanner ? Math.round(selectedComponent.circumRadius * 100) / 100 : '—'} mm
+                            {selectedComponent instanceof AbstractPolygonOptic && (
+                                <>
+                                    Scan/facet = {Math.round(4 * 180 / selectedComponent.numFaces * 100) / 100}°
+                                    {' · '}
+                                    R = {Math.round(selectedComponent.inscribedRadius / Math.cos(Math.PI / selectedComponent.numFaces) * 100) / 100} mm
+                                </>
+                            )}
                         </div>
                         {/* Animate Scan button + speed */}
                         {(() => {
@@ -1528,7 +2783,6 @@ export const Inspector: React.FC = () => {
                                         onClick={() => {
                                             if (isAnimating) {
                                                 animator.removeChannel(activeChannel!.id);
-                                                // If no channels left, stop playing
                                                 if (animator.channels.length === 0) setAnimPlaying(false);
                                             } else {
                                                 const ch: AnimationChannel = {
@@ -1751,37 +3005,97 @@ export const Inspector: React.FC = () => {
                                 step={0.001}
                             />
                         </div>
-                        {/* Clocking (rotation around optical axis W) */}
-                        <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginTop: 8 }}>
-                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Lens Clocking (W-axis rotation)</label>
-                            <ScrubInput
-                                label="Clock"
-                                suffix="°"
-                                value={localCylClocking}
-                                onChange={setLocalCylClocking}
-                                onCommit={(v: string) => {
-                                    const deg = parseFloat(v);
-                                    if (isNaN(deg)) return;
-                                    const rad = deg * Math.PI / 180;
-                                    const oldDeg = parseFloat(localCylClocking);
-                                    const oldRad = isNaN(oldDeg) ? 0 : oldDeg * Math.PI / 180;
-                                    const deltaRad = rad - oldRad;
+                    </div>
+                )}
 
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
-                                            const q = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), deltaRad);
-                                            c.rotation.multiply(q);
-                                            c.updateMatrices();
-                                            c.version++;
-                                            return c;
-                                        }
+                {isAchromatDoublet && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Achromatic Doublet</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                            <ScrubInput label="R1" suffix="mm" value={localDoubletR1} onChange={setLocalDoubletR1}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.r1 = val; c.invalidateMesh(); return c; }
                                         return c;
                                     });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={1}
-                                title="Rotation of the cylindrical axis around the optical axis (W)"
-                            />
+                                    setComponents([...newC]);
+                                }} speed={1} title="Surface 1 radius (front)" />
+                            <ScrubInput label="R2" suffix="mm" value={localDoubletR2} onChange={setLocalDoubletR2}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.r2 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={1} title="Surface 2 radius (cemented interface)" />
+                            <ScrubInput label="R3" suffix="mm" value={localDoubletR3} onChange={setLocalDoubletR3}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.r3 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={1} title="Surface 3 radius (back)" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="t₁" suffix="mm" value={localDoubletT1} onChange={setLocalDoubletT1}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.t1 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={0.2} min={0.1} max={50} title="Element 1 thickness (crown)" />
+                            <ScrubInput label="t₂" suffix="mm" value={localDoubletT2} onChange={setLocalDoubletT2}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.t2 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={0.2} min={0.1} max={50} title="Element 2 thickness (flint)" />
+                            <ScrubInput label="Aperture" suffix="mm" value={localDoubletAperture} onChange={setLocalDoubletAperture}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.apertureRadius = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={0.5} min={1} max={100} title="Clear aperture radius" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="n₁ (crown)" suffix="" value={localDoubletIor1} onChange={setLocalDoubletIor1}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1 || val > 3) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.ior1 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={0.005} min={1.0} max={3.0} step={0.001} title="Element 1 refractive index" />
+                            <ScrubInput label="n₂ (flint)" suffix="" value={localDoubletIor2} onChange={setLocalDoubletIor2}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1 || val > 3) return;
+                                    const newC = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof AchromatDoublet) { c.ior2 = val; c.invalidateMesh(); return c; }
+                                        return c;
+                                    });
+                                    setComponents([...newC]);
+                                }} speed={0.005} min={1.0} max={3.0} step={0.001} title="Element 2 refractive index" />
                         </div>
                     </div>
                 )}
@@ -1853,7 +3167,6 @@ export const Inspector: React.FC = () => {
                             />
                             <ScrubInput
                                 label="IoR"
-                                suffix="n"
                                 value={localIor}
                                 onChange={setLocalIor}
                                 onCommit={(v) => commitGeometry('ior', v)}
@@ -1871,6 +3184,7 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 <ScrubInput
                                     label="R1 (Front)"
+                                    suffix="mm"
                                     value={localR1}
                                     onChange={setLocalR1}
                                     onCommit={(v) => commitGeometry('r1', v)}
@@ -1880,6 +3194,7 @@ export const Inspector: React.FC = () => {
                                 />
                                 <ScrubInput
                                     label="R2 (Back)"
+                                    suffix="mm"
                                     value={localR2}
                                     onChange={setLocalR2}
                                     onCommit={(v) => commitGeometry('r2', v)}
@@ -1892,81 +3207,7 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                {isPrism && (
-                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Prism Geometry</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
-                            <ScrubInput
-                                label="Apex Angle"
-                                suffix="°"
-                                value={localApexAngle}
-                                onChange={setLocalApexAngle}
-                                onCommit={(v: string) => {
-                                    const deg = parseFloat(v);
-                                    if (isNaN(deg) || deg <= 0 || deg >= 180) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PrismLens) {
-                                            c.apexAngle = deg * Math.PI / 180;
-                                            c.invalidateMesh();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={1.0}
-                                min={5}
-                                max={170}
-                                title="Apex angle of the prism triangle"
-                            />
-                            <ScrubInput
-                                label="IoR"
-                                suffix="n"
-                                value={localPrismIor}
-                                onChange={setLocalPrismIor}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val < 1.0 || val > 3.0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PrismLens) {
-                                            c.ior = val;
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.005}
-                                min={1.0}
-                                max={3.0}
-                                step={0.001}
-                                title="Index of Refraction"
-                            />
-                            <ScrubInput
-                                label="Edge Length"
-                                suffix="mm"
-                                value={localPrismHeight}
-                                onChange={setLocalPrismHeight}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val <= 0) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PrismLens) {
-                                            c.height = val;
-                                            c.invalidateMesh();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                speed={0.5}
-                                min={1}
-                                max={200}
-                            />
-                        </div>
-                    </div>
-                )}
+                {/* Old PrismLens panel removed — unified under isPolygonOptic above */}
 
                 {isIdealLens && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
@@ -1983,6 +3224,7 @@ export const Inspector: React.FC = () => {
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof IdealLens) {
                                             c.focalLength = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -2007,6 +3249,7 @@ export const Inspector: React.FC = () => {
                                                 new Vector3(-val, -val, -0.01),
                                                 new Vector3(val, val, 0.01)
                                             );
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -2035,8 +3278,7 @@ export const Inspector: React.FC = () => {
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof Objective) {
-                                            c.magnification = val;
-                                            c.recalculate();
+                                            c.setMagnificationPreserveSampleSide(val);
                                             return c;
                                         }
                                         return c;
@@ -2072,16 +3314,16 @@ export const Inspector: React.FC = () => {
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
                             <div>
-                                <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 4 }}>Immersion</label>
+                                <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 4 }}>Immersion Medium</label>
                                 <select
-                                    value={localObjImmersion}
+                                    value={localObjImmersionKind}
                                     onChange={(e) => {
-                                        const val = parseFloat(e.target.value);
-                                        setLocalObjImmersion(e.target.value);
+                                        const kind = e.target.value as Objective['immersionMediumKind'];
+                                        setLocalObjImmersionKind(kind);
                                         const newComponents = components.map(c => {
                                             if (c.id === selection[0] && c instanceof Objective) {
-                                                c.immersionIndex = val;
-                                                c.recalculate();
+                                                c.setImmersionMedium(kind);
+                                                setLocalObjImmersion(String(c.immersionIndex));
                                                 return c;
                                             }
                                             return c;
@@ -2098,11 +3340,38 @@ export const Inspector: React.FC = () => {
                                         fontSize: '12px'
                                     }}
                                 >
-                                    <option value="1.0">Air (1.0)</option>
-                                    <option value="1.33">Water (1.33)</option>
-                                    <option value="1.515">Oil (1.515)</option>
+                                    <option value="air">Air</option>
+                                    <option value="water">Water</option>
+                                    <option value="oil">Oil</option>
+                                    <option value="silicone">Silicone</option>
+                                    <option value="custom">Custom</option>
                                 </select>
                             </div>
+                            <ScrubInput
+                                label="n"
+                                value={localObjImmersion}
+                                onChange={setLocalObjImmersion}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Objective) {
+                                            c.immersionIndex = val;
+                                            c.immersionMediumKind = 'custom';
+                                            c.recalculate();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setLocalObjImmersionKind('custom');
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.005}
+                                min={1}
+                                max={2}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
                             <ScrubInput
                                 label="WD"
                                 suffix="mm"
@@ -2152,11 +3421,254 @@ export const Inspector: React.FC = () => {
                                 max={50}
                             />
                         </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput
+                                label="Tube Lens"
+                                suffix="mm"
+                                value={localObjTubeLensFocal}
+                                onChange={setLocalObjTubeLensFocal}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Objective) {
+                                            c.tubeLensFocal = val;
+                                            c.recalculate();
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                min={50}
+                                max={300}
+                            />
+                            <ScrubInput
+                                label="Coverslip"
+                                suffix="mm"
+                                value={localObjCoverslipThickness}
+                                onChange={setLocalObjCoverslipThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Objective) {
+                                            c.coverslipThickness = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.01}
+                                min={0}
+                                max={1}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput
+                                label="Field #"
+                                suffix="mm"
+                                value={localObjFieldNumber}
+                                onChange={setLocalObjFieldNumber}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Objective) {
+                                            c.fieldNumber = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={0}
+                                max={50}
+                                title="0 = unlimited usable image circle"
+                            />
+                            <div style={{
+                                border: '1px solid #333',
+                                borderRadius: 4,
+                                padding: '6px 8px',
+                                background: '#1a1a1a',
+                                alignSelf: 'end',
+                            }}>
+                                <div style={{ fontSize: '10px', color: '#666', marginBottom: 2 }}>Pupil</div>
+                                <div style={{ fontSize: '11px', color: '#aaa' }}>
+                                    {selectedComponent instanceof Objective
+                                        ? (selectedComponent.pupil ? 'custom aberration' : 'diffraction-limited')
+                                        : '—'}
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: 10, borderTop: '1px solid #333', paddingTop: 8 }}>
+                            <label style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: 8 }}>
+                                Pupil Aberration (waves)
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                <ScrubInput
+                                    label="Ref λ"
+                                    suffix="nm"
+                                    value={localObjPupilRefNm}
+                                    onChange={setLocalObjPupilRefNm}
+                                    onCommit={(v: string) => {
+                                        const val = parseFloat(v);
+                                        if (isNaN(val) || val <= 0) return;
+                                        applyObjectivePupilEditor({ refNm: v });
+                                    }}
+                                    speed={5}
+                                    min={350}
+                                    max={800}
+                                />
+                                <ScrubInput
+                                    label="Defocus"
+                                    suffix=""
+                                    value={localObjDefocus}
+                                    onChange={setLocalObjDefocus}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ defocus: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                                <ScrubInput
+                                    label="Astig 45"
+                                    suffix=""
+                                    value={localObjAstig45}
+                                    onChange={setLocalObjAstig45}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ astig45: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                                <ScrubInput
+                                    label="Astig 0"
+                                    suffix=""
+                                    value={localObjAstig0}
+                                    onChange={setLocalObjAstig0}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ astig0: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                                <ScrubInput
+                                    label="Coma Y"
+                                    suffix=""
+                                    value={localObjComaY}
+                                    onChange={setLocalObjComaY}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ comaY: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                                <ScrubInput
+                                    label="Coma X"
+                                    suffix=""
+                                    value={localObjComaX}
+                                    onChange={setLocalObjComaX}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ comaX: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                                <ScrubInput
+                                    label="Spherical"
+                                    suffix=""
+                                    value={localObjSpherical}
+                                    onChange={setLocalObjSpherical}
+                                    onCommit={(v: string) => applyObjectivePupilEditor({ spherical: v })}
+                                    speed={0.01}
+                                    min={-2}
+                                    max={2}
+                                />
+                                <button
+                                    onClick={() => {
+                                        setLocalObjPupilRefNm('550');
+                                        setLocalObjDefocus('0');
+                                        setLocalObjAstig45('0');
+                                        setLocalObjAstig0('0');
+                                        setLocalObjComaY('0');
+                                        setLocalObjComaX('0');
+                                        setLocalObjSpherical('0');
+                                        applyObjectivePupilEditor({
+                                            refNm: '550',
+                                            defocus: '0',
+                                            astig45: '0',
+                                            astig0: '0',
+                                            comaY: '0',
+                                            comaX: '0',
+                                            spherical: '0',
+                                        });
+                                    }}
+                                    style={{
+                                        background: '#222',
+                                        color: '#bbb',
+                                        border: '1px solid #444',
+                                        borderRadius: 4,
+                                        fontSize: '11px',
+                                        cursor: 'pointer',
+                                        padding: '4px 6px',
+                                        alignSelf: 'end',
+                                    }}
+                                    title="Reset objective pupil aberrations to diffraction-limited"
+                                >
+                                    Clear Pupil
+                                </button>
+                            </div>
+                        </div>
                         <div style={{ marginTop: 6, fontSize: '10px', color: '#555' }}>
                             f = {selectedComponent instanceof Objective ? Math.round(selectedComponent.focalLength * 100) / 100 : '—'} mm
                             {' · '}
                             optical ∅ = {selectedComponent instanceof Objective ? Math.round(selectedComponent.apertureRadius * 2 * 100) / 100 : '—'} mm
+                            {' · '}
+                            pupil R = {selectedComponent instanceof Objective ? Math.round(selectedComponent.pupilRadius * 100) / 100 : '—'} mm
                         </div>
+                        <div style={{ marginTop: 4, fontSize: '10px', color: '#555' }}>
+                            coverslip = {selectedComponent instanceof Objective ? Math.round(selectedComponent.coverslipThickness * 1000) / 1000 : '—'} mm
+                            {' · '}
+                            field # = {selectedComponent instanceof Objective
+                                ? (selectedComponent.fieldNumber > 0 ? Math.round(selectedComponent.fieldNumber * 100) / 100 : 'unlimited')
+                                : '—'}
+                        </div>
+                        {objectiveScanReadout && (
+                            <div style={{
+                                marginTop: 10,
+                                borderTop: '1px solid #333',
+                                paddingTop: 8,
+                                display: 'grid',
+                                gap: 4,
+                            }}>
+                                <div style={{ fontSize: '10px', color: '#666' }}>Scan In Objective Opening</div>
+                                <div style={{ fontSize: '11px', color: '#bbb' }}>
+                                    Beam is {objectiveScanReadout.currentBeamRadiusMm.toFixed(3)} mm from the center of the objective opening.
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                    That uses {objectiveScanReadout.usedPercent.toFixed(1)}% of the opening and leaves {objectiveScanReadout.edgeMarginPercent.toFixed(1)}% margin before clipping.
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                    For a 1.0 mm total scan field at 10×, this relay would need to move the beam about {objectiveScanReadout.requiredPupilShiftMm.toFixed(3)} mm from center.
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                    Largest unclipped scan with the current relay: +/-{objectiveScanReadout.maxHalfAngleDeg.toFixed(3)} deg mechanical per axis.
+                                </div>
+                                {objectiveScanReadout.sampleOffsetXmm !== null && objectiveScanReadout.sampleOffsetZmm !== null && (
+                                    <div style={{ fontSize: '11px', color: '#888' }}>
+                                        Current scan spot at sample: x {objectiveScanReadout.sampleOffsetXmm >= 0 ? '+' : ''}{objectiveScanReadout.sampleOffsetXmm.toFixed(3)} mm, z {objectiveScanReadout.sampleOffsetZmm >= 0 ? '+' : ''}{objectiveScanReadout.sampleOffsetZmm.toFixed(3)} mm from sample center.
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -2250,8 +3762,470 @@ export const Inspector: React.FC = () => {
                                 max={100}
                             />
                         </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                            <ScrubInput
+                                label="Source Points"
+                                suffix=""
+                                value={localSourcePointCount}
+                                onChange={setLocalSourcePointCount}
+                                onCommit={() => commitLampParams()}
+                                speed={0.2}
+                                min={1}
+                                max={32}
+                            />
+                            <ScrubInput
+                                label="Emitter Radius"
+                                suffix="mm"
+                                value={localEmitterRadius}
+                                onChange={setLocalEmitterRadius}
+                                onCommit={() => commitLampParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={50}
+                            />
+                        </div>
                         <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
                             13-band spectrum (340–820 nm)
+                        </div>
+                    </div>
+                )}
+
+                {(isPointSource2D || isPointSource3D) && !isConeSource3D && !isWedgeSource2D && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>
+                            {isPointSource2D ? 'Point Source 2D' : 'Point Source 3D'} Settings
+                        </label>
+
+                        {/* Wavelength Slider */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Wavelength: {localWavelength} nm
+                                {!isVisibleSpectrum(localWavelength) && <span style={{ color: '#888' }}> (IR/UV)</span>}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="range"
+                                    min="200"
+                                    max="1000"
+                                    step="1"
+                                    value={localWavelength}
+                                    onChange={(e) => {
+                                        const newWavelength = parseInt(e.target.value);
+                                        setLocalWavelength(newWavelength);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof PointSourceBase) {
+                                                c.wavelength = newWavelength;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                                <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 4,
+                                    backgroundColor: wavelengthToColor(localWavelength),
+                                    border: '1px solid #555'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Power */}
+                        <ScrubInput
+                            label="Power"
+                            suffix="W"
+                            value={localLaserPower}
+                            onChange={setLocalLaserPower}
+                            onCommit={() => commitPointSourceParams()}
+                            speed={0.1}
+                            min={0.01}
+                            max={100}
+                        />
+                    </div>
+                )}
+
+                {isConeSource3D && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Cone Source 3D Settings</label>
+
+                        {/* Wavelength Slider */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Wavelength: {localWavelength} nm
+                                {!isVisibleSpectrum(localWavelength) && <span style={{ color: '#888' }}> (IR/UV)</span>}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="range"
+                                    min="200"
+                                    max="1000"
+                                    step="1"
+                                    value={localWavelength}
+                                    onChange={(e) => {
+                                        const newWavelength = parseInt(e.target.value);
+                                        setLocalWavelength(newWavelength);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof ConeSource3D) {
+                                                c.wavelength = newWavelength;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                                <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 4,
+                                    backgroundColor: wavelengthToColor(localWavelength),
+                                    border: '1px solid #555'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Power + Half Angle */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Power"
+                                suffix="W"
+                                value={localLaserPower}
+                                onChange={setLocalLaserPower}
+                                onCommit={() => commitConeSourceParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="Half Angle"
+                                suffix="°"
+                                value={localHalfAngle}
+                                onChange={setLocalHalfAngle}
+                                onCommit={() => commitConeSourceParams()}
+                                speed={1}
+                                min={1}
+                                max={90}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isWedgeSource2D && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Wedge Source 2D Settings</label>
+
+                        {/* Wavelength Slider */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Wavelength: {localWavelength} nm
+                                {!isVisibleSpectrum(localWavelength) && <span style={{ color: '#888' }}> (IR/UV)</span>}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="range"
+                                    min="200"
+                                    max="1000"
+                                    step="1"
+                                    value={localWavelength}
+                                    onChange={(e) => {
+                                        const newWavelength = parseInt(e.target.value);
+                                        setLocalWavelength(newWavelength);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof WedgeSource2D) {
+                                                c.wavelength = newWavelength;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                                <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 4,
+                                    backgroundColor: wavelengthToColor(localWavelength),
+                                    border: '1px solid #555'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Power + Subtended Angle */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Power"
+                                suffix="W"
+                                value={localLaserPower}
+                                onChange={setLocalLaserPower}
+                                onCommit={() => commitWedgeSourceParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="Subtended Angle"
+                                suffix="°"
+                                value={localSubtendedAngle}
+                                onChange={setLocalSubtendedAngle}
+                                onCommit={() => commitWedgeSourceParams()}
+                                speed={1}
+                                min={1}
+                                max={360}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isStructuredSource && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Structured Source Settings</label>
+
+                        {/* Wavelength Slider */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Wavelength: {localWavelength} nm
+                                {!isVisibleSpectrum(localWavelength) && <span style={{ color: '#888' }}> (IR/UV)</span>}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="range"
+                                    min="200"
+                                    max="1000"
+                                    step="1"
+                                    value={localWavelength}
+                                    onChange={(e) => {
+                                        const newWavelength = parseInt(e.target.value);
+                                        setLocalWavelength(newWavelength);
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof StructuredSource) {
+                                                c.wavelength = newWavelength;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                                <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 4,
+                                    backgroundColor: wavelengthToColor(localWavelength),
+                                    border: '1px solid #555'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Beam Radius + Power */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <ScrubInput
+                                label="Beam Radius"
+                                suffix="mm"
+                                value={localBeamRadius}
+                                onChange={setLocalBeamRadius}
+                                onCommit={() => commitStructuredSourceParams()}
+                                speed={0.5}
+                                min={0.1}
+                                max={50}
+                            />
+                            <ScrubInput
+                                label="Power"
+                                suffix="W"
+                                value={localLaserPower}
+                                onChange={setLocalLaserPower}
+                                onCommit={() => commitStructuredSourceParams()}
+                                speed={0.1}
+                                min={0.01}
+                                max={100}
+                            />
+                        </div>
+
+                        {/* ASCII Character */}
+                        <div>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                ASCII Character
+                            </label>
+                            <input
+                                type="text"
+                                maxLength={1}
+                                value={localAsciiChar}
+                                onChange={(e) => {
+                                    setLocalAsciiChar(e.target.value);
+                                }}
+                                onBlur={() => commitStructuredSourceParams()}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') commitStructuredSourceParams();
+                                }}
+                                style={{
+                                    width: 40,
+                                    textAlign: 'center',
+                                    fontSize: '18px',
+                                    fontFamily: 'monospace',
+                                    background: '#333',
+                                    color: '#fff',
+                                    border: '1px solid #555',
+                                    borderRadius: 4,
+                                    padding: '4px',
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isFaradayIsolator && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Faraday Isolator Settings</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Insertion Loss"
+                                suffix=""
+                                value={localInsertionLoss}
+                                onChange={setLocalInsertionLoss}
+                                onCommit={() => commitFaradayParams()}
+                                speed={0.01}
+                                min={0}
+                                max={1}
+                            />
+                            <ScrubInput
+                                label="Extinction"
+                                suffix="dB"
+                                value={localExtinctionDB}
+                                onChange={setLocalExtinctionDB}
+                                onCommit={() => commitFaradayParams()}
+                                speed={1}
+                                min={10}
+                                max={60}
+                            />
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
+                            Forward: {(parseFloat(localInsertionLoss) * 100).toFixed(0)}% transmission · Reverse: {parseFloat(localExtinctionDB)}dB isolation
+                        </div>
+                    </div>
+                )}
+
+                {isQPD && (() => {
+                    const qpd = selectedComponent as QPD;
+                    const sum = qpd.signalSum;
+                    const hasSignal = sum > 1e-15;
+                    return (
+                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>QPD Settings</label>
+                            <ScrubInput
+                                label="Active Diameter"
+                                suffix="mm"
+                                value={localQPDDiameter}
+                                onChange={setLocalQPDDiameter}
+                                onCommit={() => commitQPDParams()}
+                                speed={0.5}
+                                min={0.5}
+                                max={25}
+                            />
+
+                            {/* Quadrant readout */}
+                            <div style={{ marginTop: 10, padding: 8, background: '#1a1a1a', borderRadius: 4, border: '1px solid #333' }}>
+                                <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>Quadrant Signals</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: '11px', fontFamily: 'monospace' }}>
+                                    <div style={{ textAlign: 'center', color: '#4ecdc4', padding: 4, background: '#222', borderRadius: 2 }}>
+                                        A: {qpd.quadrants[0].toFixed(4)}
+                                    </div>
+                                    <div style={{ textAlign: 'center', color: '#45b7aa', padding: 4, background: '#222', borderRadius: 2 }}>
+                                        B: {qpd.quadrants[1].toFixed(4)}
+                                    </div>
+                                    <div style={{ textAlign: 'center', color: '#3ea99d', padding: 4, background: '#222', borderRadius: 2 }}>
+                                        C: {qpd.quadrants[2].toFixed(4)}
+                                    </div>
+                                    <div style={{ textAlign: 'center', color: '#378f85', padding: 4, background: '#222', borderRadius: 2 }}>
+                                        D: {qpd.quadrants[3].toFixed(4)}
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: 6, fontSize: '11px', fontFamily: 'monospace', color: '#ccc' }}>
+                                    <div>Sum: {sum.toFixed(4)}</div>
+                                    <div>X: {hasSignal ? qpd.signalX.toFixed(4) : '—'}</div>
+                                    <div>Y: {hasSignal ? qpd.signalY.toFixed(4) : '—'}</div>
+                                </div>
+                                {hasSignal && (
+                                    <div style={{ marginTop: 6, position: 'relative', width: 80, height: 80, margin: '6px auto 0', background: '#111', borderRadius: 4, border: '1px solid #333' }}>
+                                        {/* Cross hair at beam position */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: `${50 + qpd.signalX * 45}%`,
+                                            top: `${50 - qpd.signalY * 45}%`,
+                                            width: 6, height: 6,
+                                            borderRadius: '50%',
+                                            background: '#ff4444',
+                                            transform: 'translate(-50%, -50%)',
+                                        }} />
+                                        {/* Center cross */}
+                                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#333' }} />
+                                        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: '#333' }} />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {isAOD && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>AOD Settings</label>
+
+                        {/* Deflection angle slider — primary control */}
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>
+                                Deflection: {localDeflectionAngle} mrad
+                            </label>
+                            <input
+                                type="range"
+                                min={-parseFloat(localAODMaxAngle)}
+                                max={parseFloat(localAODMaxAngle)}
+                                step="0.1"
+                                value={parseFloat(localDeflectionAngle) || 0}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setLocalDeflectionAngle(val);
+                                    const mrad = parseFloat(val);
+                                    if (!isNaN(mrad)) {
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof AOD) {
+                                                c.deflectionAngle = mrad / 1000;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }
+                                }}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Efficiency"
+                                suffix=""
+                                value={localAODEfficiency}
+                                onChange={setLocalAODEfficiency}
+                                onCommit={() => commitAODParams()}
+                                speed={0.01}
+                                min={0}
+                                max={1}
+                            />
+                            <ScrubInput
+                                label="Max Angle"
+                                suffix="mrad"
+                                value={localAODMaxAngle}
+                                onChange={setLocalAODMaxAngle}
+                                onCommit={() => commitAODParams()}
+                                speed={1}
+                                min={1}
+                                max={200}
+                            />
                         </div>
                     </div>
                 )}
@@ -2279,11 +4253,243 @@ export const Inspector: React.FC = () => {
                                     const newAngle = parseInt(e.target.value) * Math.PI / 180;
                                     if (selectedComponent instanceof Waveplate) {
                                         selectedComponent.fastAxisAngle = newAngle;
+                                        selectedComponent.version++;
                                         setComponents([...components]);
                                     }
                                 }}
                                 style={{ width: '100%' }}
                             />
+                        </div>
+                    </div>
+                )}
+
+                {isPupilMask && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Pupil Mask</label>
+                        <div style={{ marginBottom: 8 }}>
+                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Mode</label>
+                            <select
+                                value={localPupilMaskMode}
+                                onChange={(e) => {
+                                    const mode = e.target.value as 'uniform' | 'annulus' | 'phaseRing';
+                                    setLocalPupilMaskMode(mode);
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.mode = mode;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                style={{ ...inputStyle, cursor: 'pointer' }}
+                            >
+                                <option value="uniform">Uniform</option>
+                                <option value="annulus">Annulus</option>
+                                <option value="phaseRing">Phase Ring</option>
+                            </select>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput label="Radius" suffix="mm" value={localPupilMaskRadius} onChange={setLocalPupilMaskRadius}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.radius = val;
+                                            c.updateBounds();
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.2} min={0.1} max={100} />
+                            <ScrubInput label="Res" suffix="" value={localPupilMaskResolution} onChange={setLocalPupilMaskResolution}
+                                onCommit={(v: string) => {
+                                    const val = Math.round(parseFloat(v));
+                                    if (!Number.isFinite(val) || val < 8) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.resolution = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={1} min={8} max={256} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="Inner ρ" suffix="" value={localPupilMaskInner} onChange={setLocalPupilMaskInner}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.innerRadius = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.01} min={0} max={1} />
+                            <ScrubInput label="Outer ρ" suffix="" value={localPupilMaskOuter} onChange={setLocalPupilMaskOuter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.outerRadius = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.01} min={0} max={1} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="Ring T" suffix="" value={localPupilMaskRingTransmission} onChange={setLocalPupilMaskRingTransmission}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.ringTransmission = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.01} min={0} max={1} />
+                            <ScrubInput label="Ring φ" suffix="rad" value={localPupilMaskRingPhase} onChange={setLocalPupilMaskRingPhase}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.ringPhaseShift = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.05} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="Bg T" suffix="" value={localPupilMaskBackgroundTransmission} onChange={setLocalPupilMaskBackgroundTransmission}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.backgroundTransmission = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.01} min={0} max={1} />
+                            <ScrubInput label="Bg φ" suffix="rad" value={localPupilMaskBackgroundPhase} onChange={setLocalPupilMaskBackgroundPhase}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
+                                            c.backgroundPhaseShift = val;
+                                            c.rebuildMask();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.05} />
+                        </div>
+                    </div>
+                )}
+
+                {isMediumVolume && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Medium Volume</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                            <ScrubInput label="W" suffix="mm" value={localMediumWidth} onChange={setLocalMediumWidth}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof MediumVolume) {
+                                            c.width = val;
+                                            c.updateBounds();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.5} min={0.1} max={200} />
+                            <ScrubInput label="H" suffix="mm" value={localMediumHeight} onChange={setLocalMediumHeight}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof MediumVolume) {
+                                            c.height = val;
+                                            c.updateBounds();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.5} min={0.1} max={200} />
+                            <ScrubInput label="D" suffix="mm" value={localMediumDepth} onChange={setLocalMediumDepth}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof MediumVolume) {
+                                            c.depth = val;
+                                            c.updateBounds();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.5} min={0.1} max={200} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <ScrubInput label="n inside" suffix="" value={localMediumIndex} onChange={setLocalMediumIndex}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1 || val > 3) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof MediumVolume) {
+                                            c.refractiveIndex = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.005} min={1} max={3} step={0.001} />
+                            <ScrubInput label="n outside" suffix="" value={localMediumExteriorIndex} onChange={setLocalMediumExteriorIndex}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val < 1 || val > 3) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof MediumVolume) {
+                                            c.exteriorRefractiveIndex = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }} speed={0.005} min={1} max={3} step={0.001} />
                         </div>
                     </div>
                 )}
@@ -2357,12 +4563,12 @@ export const Inspector: React.FC = () => {
                                     const rad = deg * Math.PI / 180;
                                     const newComponents = components.map(c => {
                                         if (c.id === selection[0] && c instanceof SlitAperture) {
-                                            // Rotate around the optical axis (local X)
-                                            const euler = new Euler().setFromQuaternion(c.rotation, 'ZYX');
-                                            euler.x = rad;
-                                            c.rotation.setFromEuler(euler);
-                                            c.updateMatrices();
-                                            c.version++;
+                                            // Rotate around the slit's optical axis = roll about local +Z.
+                                            // Using rollAngle keeps the scalar (pan, tilt, roll) state in
+                                            // sync with the quaternion so subsequent edits in the general
+                                            // rotation panel don't silently discard the slit orientation.
+                                            c.rollAngle = rad;
+                                            c.recomputeRotation();
                                             return c;
                                         }
                                         return c;
@@ -2378,40 +4584,220 @@ export const Inspector: React.FC = () => {
 
 
 
+                {isAnnotation && selectedComponent instanceof Annotation && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Annotation</label>
+                        <div style={{ marginBottom: 8 }}>
+                            <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: 4 }}>Text</label>
+                            <input
+                                type="text"
+                                value={selectedComponent.text}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Annotation) {
+                                            c.text = value;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '6px 8px',
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #444',
+                                    borderRadius: 4,
+                                    color: '#ddd',
+                                    fontSize: 12,
+                                }}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
+                            {selectedComponent.kind !== 'text' && (
+                                <div>
+                                    <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: 4 }}>Length (mm)</label>
+                                    <input
+                                        type="number"
+                                        value={selectedComponent.length}
+                                        min={5}
+                                        max={500}
+                                        step={1}
+                                        onChange={(e) => {
+                                            const v = parseFloat(e.target.value);
+                                            if (!Number.isFinite(v) || v <= 0) return;
+                                            const newComponents = components.map(c => {
+                                                if (c.id === selection[0] && c instanceof Annotation) {
+                                                    c.length = v;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            });
+                                            setComponents([...newComponents]);
+                                        }}
+                                        style={{
+                                            width: '100%', padding: '6px 8px', backgroundColor: '#1a1a1a',
+                                            border: '1px solid #444', borderRadius: 4, color: '#ddd', fontSize: 12,
+                                        }}
+                                    />
+                                </div>
+                            )}
+                            <div>
+                                <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: 4 }}>Font Size</label>
+                                <input
+                                    type="number"
+                                    value={selectedComponent.fontSize}
+                                    min={2}
+                                    max={80}
+                                    step={1}
+                                    onChange={(e) => {
+                                        const v = parseFloat(e.target.value);
+                                        if (!Number.isFinite(v) || v <= 0) return;
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof Annotation) {
+                                                c.fontSize = v;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{
+                                        width: '100%', padding: '6px 8px', backgroundColor: '#1a1a1a',
+                                        border: '1px solid #444', borderRadius: 4, color: '#ddd', fontSize: 12,
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: 4 }}>Color</label>
+                                <input
+                                    type="color"
+                                    value={selectedComponent.color}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof Annotation) {
+                                                c.color = value;
+                                                c.version++;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    style={{
+                                        width: '100%', height: 28, padding: 0, backgroundColor: '#1a1a1a',
+                                        border: '1px solid #444', borderRadius: 4, cursor: 'pointer',
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isDoubleSlit && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Double Slit Settings</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Slit Width"
+                                suffix="mm"
+                                value={localDoubleSlitWidth}
+                                onChange={setLocalDoubleSlitWidth}
+                                onCommit={() => {
+                                    const w = parseFloat(localDoubleSlitWidth);
+                                    if (isNaN(w) || w <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof DoubleSlit) {
+                                            c.slitWidth = w;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.05}
+                                min={0.01}
+                                max={10}
+                            />
+                            <ScrubInput
+                                label="Separation"
+                                suffix="mm"
+                                value={localDoubleSlitSep}
+                                onChange={setLocalDoubleSlitSep}
+                                onCommit={() => {
+                                    const s = parseFloat(localDoubleSlitSep);
+                                    if (isNaN(s) || s <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof DoubleSlit) {
+                                            c.slitSeparation = s;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.1}
+                                min={0.1}
+                                max={20}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isDiffuser && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Diffuser Settings</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Diameter"
+                                suffix="mm"
+                                value={localDiffuserDiameter}
+                                onChange={setLocalDiffuserDiameter}
+                                onCommit={() => {
+                                    const diameter = parseFloat(localDiffuserDiameter);
+                                    if (isNaN(diameter) || diameter <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Diffuser) {
+                                            c.diameter = diameter;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={100}
+                            />
+                            <ScrubInput
+                                label="Cone Angle"
+                                suffix="°"
+                                value={localDiffuserConeAngle}
+                                onChange={setLocalDiffuserConeAngle}
+                                onCommit={() => {
+                                    const angleDeg = parseFloat(localDiffuserConeAngle);
+                                    if (isNaN(angleDeg) || angleDeg <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Diffuser) {
+                                            c.coneHalfAngle = angleDeg * Math.PI / 180;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1}
+                                min={1}
+                                max={90}
+                            />
+                        </div>
+                    </div>
+                )}
+
                 {hasSpectralProfile && (() => {
                     const comp = selectedComponent as (Filter | DichroicMirror);
                     const profile = comp.spectralProfile;
-                    const curveData = profile.getSampleCurve(180);
-                    const chartW = 250;
-                    const chartH = 100;
-                    const padL = 0;
-                    const padR = 0;
-                    const plotW = chartW - padL - padR;
-
-                    // Build the SVG path for the transmission curve
-                    const pathPoints = curveData.map((pt, i) => {
-                        const x = padL + (i / (curveData.length - 1)) * plotW;
-                        const y = chartH - pt.t * chartH;
-                        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-                    }).join(' ');
-
-                    // Rainbow gradient stops for visible spectrum background
-                    const spectrumStops = [
-                        { nm: 350, color: '#1a0020' },
-                        { nm: 380, color: '#2a0040' },
-                        { nm: 420, color: '#4400aa' },
-                        { nm: 450, color: '#0000ff' },
-                        { nm: 480, color: '#0066ff' },
-                        { nm: 500, color: '#00cccc' },
-                        { nm: 520, color: '#00ff00' },
-                        { nm: 560, color: '#aaff00' },
-                        { nm: 580, color: '#ffff00' },
-                        { nm: 600, color: '#ff8800' },
-                        { nm: 640, color: '#ff0000' },
-                        { nm: 700, color: '#aa0000' },
-                        { nm: 780, color: '#400000' },
-                        { nm: 850, color: '#1a0000' },
-                    ];
 
                     const commitSpectral = (overrideBands?: { center: string; width: string }[]) => {
                         const cutoff = parseFloat(localSpectralCutoff) || 500;
@@ -2482,34 +4868,9 @@ export const Inspector: React.FC = () => {
                                 {isDichroic ? 'Dichroic Spectrum' : 'Filter Spectrum'}: {profile.getLabel()}
                             </label>
 
-                            {/* Chroma-style Transmission Chart */}
-                            <div style={{ marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '1px solid #333' }}>
-                                <svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: 'block' }}>
-                                    <defs>
-                                        <linearGradient id="spectrumGrad" x1="0" x2="1" y1="0" y2="0">
-                                            {spectrumStops.map((s, i) => (
-                                                <stop key={i} offset={`${((s.nm - 350) / 500) * 100}%`} stopColor={s.color} />
-                                            ))}
-                                        </linearGradient>
-                                    </defs>
-                                    {/* Rainbow background */}
-                                    <rect x={padL} y="0" width={plotW} height={chartH} fill="url(#spectrumGrad)" opacity="0.4" />
-                                    {/* Grid lines */}
-                                    {[0.25, 0.5, 0.75].map(t => (
-                                        <line key={t} x1={padL} x2={padL + plotW} y1={chartH - t * chartH} y2={chartH - t * chartH} stroke="#555" strokeWidth="0.5" strokeDasharray="2,2" />
-                                    ))}
-                                    {/* Filled area under curve */}
-                                    <path
-                                        d={`${pathPoints} L${(padL + plotW).toFixed(1)},${chartH} L${padL},${chartH} Z`}
-                                        fill="white" fillOpacity="0.15"
-                                    />
-                                    {/* Transmission curve */}
-                                    <path d={pathPoints} fill="none" stroke="#fff" strokeWidth="2" />
-                                    {/* Axis labels */}
-                                    <text x={padL + 2} y={chartH - 2} fill="#888" fontSize="8">350</text>
-                                    <text x={padL + plotW - 20} y={chartH - 2} fill="#888" fontSize="8">850nm</text>
-                                    <text x={padL + 2} y={10} fill="#888" fontSize="8">100%</text>
-                                </svg>
+                            {/* Chroma-style Transmission Chart — canvas-based for smooth scrubbing */}
+                            <div style={{ marginBottom: 10 }}>
+                                <SpectrumChart profile={profile} width={250} height={100} />
                             </div>
 
                             {/* Preset Selector */}
@@ -2741,6 +5102,72 @@ export const Inspector: React.FC = () => {
                         </div>
                     );
                 })()}
+
+                {selectedComponent instanceof SampleChamber && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>
+                            Holder Cavity Medium
+                        </label>
+                        <div style={{ marginBottom: 6 }}>
+                            <ScrubInput
+                                label="n"
+                                value={localChamberFillMediumIndex}
+                                onChange={setLocalChamberFillMediumIndex}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val)) return;
+                                    const clamped = clampValue(val, 1, 2);
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof SampleChamber) {
+                                            c.fillMediumIndex = clamped;
+                                            c.version++;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.005}
+                                min={1}
+                                max={2}
+                                title="Refractive index of the medium filling the sample-holder cavity"
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {MEDIUM_INDEX_PRESETS.map((preset) => {
+                                const active = Math.abs(selectedComponent.fillMediumIndex - preset.value) < 5e-4;
+                                return (
+                                    <button
+                                        key={preset.label}
+                                        onClick={() => {
+                                            setLocalChamberFillMediumIndex(String(preset.value));
+                                            const newComponents = components.map(c => {
+                                                if (c.id === selection[0] && c instanceof SampleChamber) {
+                                                    c.fillMediumIndex = preset.value;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            });
+                                            setComponents([...newComponents]);
+                                        }}
+                                        style={{
+                                            padding: '2px 8px',
+                                            background: active ? '#24415c' : '#1a1a1a',
+                                            border: active ? '1px solid #4af' : '1px solid #444',
+                                            borderRadius: '999px',
+                                            color: active ? '#d7ecff' : '#888',
+                                            cursor: 'pointer',
+                                            fontSize: '10px',
+                                            transition: 'all 0.2s',
+                                        }}
+                                        title={`Set chamber cavity medium to n=${preset.value}`}
+                                    >
+                                        {preset.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Piezo Scan — for Sample and SampleChamber ── */}
                 {isSample && (
@@ -3101,7 +5528,7 @@ export const Inspector: React.FC = () => {
                             {renderPeakList('excitation')}
                             {renderPeakList('emission')}
 
-                            {/* Fluorescence efficiency & absorption */}
+                            {/* Fluorescence, absorption, and sample phase response */}
                             <div style={{ marginTop: 10, borderTop: '1px solid #333', paddingTop: 8 }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                                     <ScrubInput
@@ -3112,7 +5539,7 @@ export const Inspector: React.FC = () => {
                                             const val = parseFloat(v);
                                             if (isNaN(val)) return;
                                             const newComponents = components.map(c => {
-                                                if (c.id === selection[0] && c instanceof Sample) {
+                                                if (c.id === selection[0] && (c instanceof Sample || c instanceof SampleChamber)) {
                                                     c.fluorescenceEfficiency = val;
                                                     c.version++;
                                                 }
@@ -3134,7 +5561,7 @@ export const Inspector: React.FC = () => {
                                             const val = parseFloat(v);
                                             if (isNaN(val)) return;
                                             const newComponents = components.map(c => {
-                                                if (c.id === selection[0] && c instanceof Sample) {
+                                                if (c.id === selection[0] && (c instanceof Sample || c instanceof SampleChamber)) {
                                                     c.absorption = val;
                                                     c.version++;
                                                 }
@@ -3146,6 +5573,27 @@ export const Inspector: React.FC = () => {
                                         min={0}
                                         max={50}
                                         title="Beer-Lambert absorption coefficient (mm⁻¹)"
+                                    />
+                                    <ScrubInput
+                                        label="Phase dN"
+                                        value={localRefractiveIndexDelta}
+                                        onChange={setLocalRefractiveIndexDelta}
+                                        onCommit={(v: string) => {
+                                            const val = parseFloat(v);
+                                            if (isNaN(val)) return;
+                                            const newComponents = components.map(c => {
+                                                if (c.id === selection[0] && (c instanceof Sample || c instanceof SampleChamber)) {
+                                                    c.refractiveIndexDelta = val;
+                                                    c.version++;
+                                                }
+                                                return c;
+                                            });
+                                            setComponents([...newComponents]);
+                                        }}
+                                        speed={0.001}
+                                        min={-0.2}
+                                        max={0.2}
+                                        title="Uniform specimen refractive-index delta used by forward PPS phase propagation"
                                     />
                                 </div>
                             </div>
@@ -3167,7 +5615,86 @@ export const Inspector: React.FC = () => {
                     />
                 )}
 
-                {/* Camera Viewer: Solver 3 render output */}
+                {isCamera && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Detector Sampling</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Res X"
+                                suffix="px"
+                                value={localCameraResX}
+                                onChange={setLocalCameraResX}
+                                onCommit={(v: string) => {
+                                    const val = Math.max(1, Math.round(parseFloat(v)));
+                                    if (!Number.isFinite(val)) return;
+                                    updateSelectedCamera(camera => { camera.sensorResX = val; });
+                                }}
+                                speed={1}
+                                min={1}
+                                max={2048}
+                            />
+                            <ScrubInput
+                                label="Res Y"
+                                suffix="px"
+                                value={localCameraResY}
+                                onChange={setLocalCameraResY}
+                                onCommit={(v: string) => {
+                                    const val = Math.max(1, Math.round(parseFloat(v)));
+                                    if (!Number.isFinite(val)) return;
+                                    updateSelectedCamera(camera => { camera.sensorResY = val; });
+                                }}
+                                speed={1}
+                                min={1}
+                                max={2048}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <div>
+                                <label style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: 4 }}>Launch</label>
+                                <select
+                                    value={localCameraLaunchModel}
+                                    onChange={(e) => {
+                                        const value = e.target.value === 'packet' ? 'packet' : 'stochastic';
+                                        setLocalCameraLaunchModel(value);
+                                        updateSelectedCamera(camera => { camera.detectorLaunchModel = value; });
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        background: '#111',
+                                        color: '#ddd',
+                                        border: '1px solid #444',
+                                        borderRadius: 4,
+                                        padding: '4px 6px',
+                                        fontSize: '11px',
+                                    }}
+                                >
+                                    <option value="stochastic">stochastic</option>
+                                    <option value="packet">packet</option>
+                                </select>
+                            </div>
+                            <ScrubInput
+                                label="Sensor NA"
+                                value={localCameraSensorNA}
+                                onChange={setLocalCameraSensorNA}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (!Number.isFinite(val) || val < 0) return;
+                                    updateSelectedCamera(camera => { camera.sensorNA = val; });
+                                }}
+                                speed={0.01}
+                                min={0}
+                                max={1}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', fontSize: '10px', color: '#777' }}>
+                                Uses global Reverse/Px
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Camera Viewer: Image Formation render output */}
                 {isCamera && (
                     <div style={{ marginTop: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -3198,7 +5725,8 @@ export const Inspector: React.FC = () => {
                             camera={selectedComponent as Camera}
                             isRendering={isRendering}
                             onRefresh={() => {
-                                setSolver3Trigger(n => n + 1);
+                                if (isRendering) return;
+                                setImageFormationTrigger(n => n + 1);
                             }}
                         />
                     </div>
@@ -3251,7 +5779,6 @@ export const Inspector: React.FC = () => {
                     };
 
                     const hasAxes = pmt.hasValidAxes();
-                    const hasScanImage = !!pmt.scanImage;
 
                     return (
                         <div style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: 10 }}>
@@ -3302,13 +5829,15 @@ export const Inspector: React.FC = () => {
                                 const yCh = animator.channels.find(ch => ch.targetId === pmt.yAxisComponentId && ch.property === pmt.yAxisProperty);
                                 const xHz = xCh ? Math.round(1000 / xCh.periodMs * 10) / 10 : 0;
                                 const yHz = yCh ? Math.round(1000 / yCh.periodMs * 10) / 10 : 0;
-                                const derivedResX = xHz > 0 ? Math.round(pmt.pmtSampleHz / xHz) : '—';
-                                const derivedResY = yHz > 0 && xHz > 0 ? Math.round(xHz / yHz) : '—';
+                                const derivedResolution = xHz > 0 && yHz > 0
+                                    ? derivePMTScanResolution(pmt.pmtSampleHz, xHz, yHz)
+                                    : null;
 
                                 const hzInputStyle: React.CSSProperties = {
-                                    width: '56px', background: '#222', color: '#ccc',
-                                    border: '1px solid #555', borderRadius: 3,
-                                    fontSize: '10px', padding: '2px 4px', textAlign: 'center',
+                                    width: '45px', background: 'transparent', color: '#fff', fontWeight: 500,
+                                    border: 'none', borderBottom: '1px solid rgba(255,255,255,0.2)', borderRadius: '0px',
+                                    fontSize: '11px', padding: '2px 4px', textAlign: 'center', outline: 'none',
+                                    transition: 'border-color 0.2s',
                                 };
 
                                 return (
@@ -3325,9 +5854,6 @@ export const Inspector: React.FC = () => {
                                                     const hz = parseFloat(e.target.value);
                                                     if (isNaN(hz) || hz <= 0 || !xCh) return;
                                                     xCh.periodMs = 1000 / hz;
-                                                    const yHzNow = yCh ? 1000 / yCh.periodMs : 1;
-                                                    pmt.scanResX = Math.max(2, Math.round(pmt.pmtSampleHz / hz));
-                                                    pmt.scanResY = Math.max(2, Math.round(hz / yHzNow));
                                                     pmt.markScanStale();
                                                     pmt.version++;
                                                     setComponents([...components]);
@@ -3348,8 +5874,6 @@ export const Inspector: React.FC = () => {
                                                     const hz = parseFloat(e.target.value);
                                                     if (isNaN(hz) || hz <= 0 || !yCh) return;
                                                     yCh.periodMs = 1000 / hz;
-                                                    const xHzNow = xCh ? 1000 / xCh.periodMs : 64;
-                                                    pmt.scanResY = Math.max(2, Math.round(xHzNow / hz));
                                                     pmt.markScanStale();
                                                     pmt.version++;
                                                     setComponents([...components]);
@@ -3370,8 +5894,6 @@ export const Inspector: React.FC = () => {
                                                     const hz = parseFloat(e.target.value);
                                                     if (isNaN(hz) || hz <= 0) return;
                                                     pmt.pmtSampleHz = hz;
-                                                    const xHzNow = xCh ? 1000 / xCh.periodMs : 64;
-                                                    pmt.scanResX = Math.max(2, Math.round(hz / xHzNow));
                                                     pmt.markScanStale();
                                                     pmt.version++;
                                                     setComponents([...components]);
@@ -3381,20 +5903,42 @@ export const Inspector: React.FC = () => {
                                             />
                                             <span style={{ fontSize: '9px', color: '#666' }}>Hz</span>
                                         </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <span style={{ fontSize: '10px', color: '#888', minWidth: 54 }}>Sensor NA</span>
+                                            <input
+                                                type="number"
+                                                defaultValue={pmt.sensorNA}
+                                                key={`pmtna-${pmt.version}`}
+                                                min={0} max={1} step={0.001}
+                                                onBlur={e => {
+                                                    const na = parseFloat(e.target.value);
+                                                    if (isNaN(na) || na < 0) return;
+                                                    pmt.sensorNA = Math.max(0, Math.min(1, na));
+                                                    pmt.markScanStale();
+                                                    pmt.version++;
+                                                    setComponents([...components]);
+                                                }}
+                                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                style={hzInputStyle}
+                                            />
+                                        </div>
+                                        <div style={{ fontSize: '9px', color: '#666', marginTop: 2 }}>
+                                            Reverse/Px: {clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)}
+                                        </div>
                                         <div style={{ fontSize: '9px', color: '#555', marginTop: 4 }}>
-                                            Resolution: {derivedResX} × {derivedResY} px
+                                            Resolution: {derivedResolution ? `${derivedResolution.resX} × ${derivedResolution.resY}` : '—'} px
                                         </div>
                                     </div>
                                 );
                             })()}
                             {hasAxes && (
-                                <div style={{ marginBottom: 8, position: 'relative' }}>
+                                <div style={{ marginBottom: 8 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                         <span style={{ fontSize: '11px', color: '#aaa' }}>Scan Image</span>
                                         <div style={{ display: 'flex', gap: '4px' }}>
                                             <button
                                                 onClick={() => {
-                                                    // Trigger the PMT raster scan effect
+                                                    if (isRendering) return;
                                                     setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
                                                 }}
                                                 disabled={isRendering}
@@ -3435,56 +5979,11 @@ export const Inspector: React.FC = () => {
                                             </button>
                                         </div>
                                     </div>
-                                    <canvas
-                                        ref={el => {
-                                            if (!el) return;
-                                            const ctx = el.getContext('2d');
-                                            if (!ctx) return;
-                                            const w = pmt.scanResX;
-                                            const h = pmt.scanResY;
-                                            if (pmt.scanImage) {
-                                                const img = pmt.scanImage;
-                                                let maxVal = 0;
-                                                for (let i = 0; i < img.length; i++) if (img[i] > maxVal) maxVal = img[i];
-                                                if (maxVal < 1e-12) maxVal = 1;
-                                                const imageData = ctx.createImageData(w, h);
-                                                for (let y = 0; y < h; y++) {
-                                                    for (let x = 0; x < w; x++) {
-                                                        const srcIdx = (h - 1 - y) * w + x;
-                                                        const v = Math.pow(Math.max(0, Math.min(1, img[srcIdx] / maxVal)), 0.45);
-                                                        const dstIdx = (y * w + x) * 4;
-                                                        imageData.data[dstIdx + 0] = Math.round(v * 80);
-                                                        imageData.data[dstIdx + 1] = Math.round(v * 255);
-                                                        imageData.data[dstIdx + 2] = Math.round(v * 80);
-                                                        imageData.data[dstIdx + 3] = 255;
-                                                    }
-                                                }
-                                                ctx.putImageData(imageData, 0, 0);
-                                            } else {
-                                                // Blank black canvas
-                                                ctx.fillStyle = '#000';
-                                                ctx.fillRect(0, 0, w, h);
-                                            }
-                                        }}
-                                        width={pmt.scanResX}
-                                        height={pmt.scanResY}
-                                        style={{ width: '100%', imageRendering: 'pixelated', borderRadius: 4, border: '1px solid #333' }}
+                                    <PMTViewer
+                                        pmt={pmt}
+                                        isRendering={isRendering}
+                                        onRefresh={() => setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 })}
                                     />
-                                    {!hasScanImage && !isRendering && (
-                                        <div style={{
-                                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            borderRadius: 4,
-                                            pointerEvents: 'none',
-                                        }}>
-                                            <span style={{ fontSize: '10px', color: '#555', fontStyle: 'italic' }}>
-                                                No scan data yet
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div style={{ fontSize: '9px', color: '#555', marginTop: 2 }}>
-                                        {pmt.scanResX}×{pmt.scanResY} raster scan
-                                    </div>
                                 </div>
                             )}
                         </div>
@@ -3494,15 +5993,21 @@ export const Inspector: React.FC = () => {
 
             </div>
         </div>
+        </>
     );
 };
 
 const inputStyle: React.CSSProperties = {
-    backgroundColor: '#222',
-    border: '1px solid #444',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderBottom: '1px solid rgba(255,255,255,0.2)',
     color: '#fff',
-    padding: '6px',
-    borderRadius: '4px',
+    fontWeight: 500,
+    outline: 'none',
+    padding: '4px 6px',
+    borderRadius: '0',
     width: '100%',
-    boxSizing: 'border-box'
+    minWidth: 0,
+    boxSizing: 'border-box',
+    transition: 'border-color 0.2s'
 };

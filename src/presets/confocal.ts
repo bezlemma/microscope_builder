@@ -6,13 +6,16 @@ import { Filter } from '../physics/components/Filter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
-import { IdealLens } from '../physics/components/IdealLens';
 import { PMT } from '../physics/components/PMT';
 import { Aperture } from '../physics/components/Aperture';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { SpectralProfile } from '../physics/SpectralProfile';
-import { AnimationChannel, generateChannelId } from '../physics/PropertyAnimator';
+import { AnimationChannel } from '../physics/PropertyAnimator';
+import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
+import { IdealLens } from '../physics/components/IdealLens';
 
-/** Rich preset result — scene + animation + playback config. */
+import { Vector3 } from 'three';
+
 export interface ConfocalPresetResult {
     scene: OpticalComponent[];
     channels: AnimationChannel[];
@@ -21,230 +24,173 @@ export interface ConfocalPresetResult {
 }
 
 /**
- * Confocal Laser-Scanning Microscope — Compact folded U-shape layout.
+ * Confocal Laser-Scanning Microscope — compact "backwards E" layout:
  *
- * GALVO PAIR: Two separate galvo mirrors (M1 fast X, M2 slow Y) create a
- * two-bounce 90° turn. Beam enters +X, exits -Y. The preset loads at the
- * nominal non-scanning angles so the excitation path is valid before any
- * animation is started.
+ * - top horizontal line: laser conditioning
+ * - middle horizontal line: PMT branch
+ * - vertical spine: feed mirror -> dichroic -> dual galvo
+ * - bottom horizontal line: galvo -> scan lens -> tube lens -> objective -> sample
  *
- * 4f RELAY: scan lens (f₁=50mm) →[250mm]→ tube lens (f₂=200mm)
- *
- * Beam path (compact U-shape, folds back on itself):
- *
- *   Laser(0,-50) fires +Y
- *     → Dichroic(0,0) reflects +Y→+X
- *     → Galvo M1(35,0) reflects +X → 45° down-right
- *     → Galvo M2(50,-15) reflects 45° → -Y
- *     → ScanLens(50,-65) ──[-Y 125mm]──
- *     → Fold1(50,-190) reflects -Y→-X
- *     ──[-X 125mm]── TubeLens(-75,-190) ──[-X 100mm]──
- *     → Fold2(-175,-190) reflects -X→+Y
- *     ──[+Y 100mm]──
- *     → Objective(-175,-90) pointAlong(0,-1,0)
- *     → Sample(-175,-70)
- *     → Blocker(-175,-40)
- *
- * Emission (de-scanned, transmitted through dichroic -X):
- *   → RelayLens(-50,0) → EmFilter(-100,0) → Pinhole(-150,0) → PMT(-200,0)
- *
- * Distance verification:
- *   M2→ScanLens     = 50mm  = f₁ (telecentric)
- *   ScanLens→TubeLens = 125+125 = 250mm = f₁+f₂
- *   TubeLens→Objective = 100+100 = 200mm = f₂
- *   Objective→Sample   = 20mm   = f_obj
+ * Excitation:
+ *   Laser -> telescope -> feed mirror -> dichroic (transmit) -> dual galvo -> microscope row
+ * Emission:
+ *   Sample -> microscope row -> dual galvo -> dichroic (reflect) -> PMT row
  */
 export function createConfocalScene(): ConfocalPresetResult {
     const scene: OpticalComponent[] = [];
 
     const mirrorThickness = 2;
+    const mirrorSpacing = 15;
+    const zExcitation = mirrorSpacing;
+    const sampleHolderGapMm = 0.25;
+    const achromat200 = {
+        r1: 77.4, r2: -87.6, r3: 291.1,
+        t1: 4.0, t2: 2.5,
+        ior1: 1.658, ior2: 1.750,
+    };
+    const makeScaledAchromat = (
+        focalScale: number, apertureRadius: number, name: string,
+    ) => new AchromatDoublet(
+        achromat200.r1 * focalScale, achromat200.r2 * focalScale, achromat200.r3 * focalScale,
+        achromat200.t1, achromat200.t2, apertureRadius,
+        achromat200.ior1, achromat200.ior2, name,
+    );
 
-    // Galvo mirror angles: two mirrors split the 90° turn equally.
-    // M1 deflects beam 45°, M2 deflects another 45°.
-    // Mirror normals bisect incoming and outgoing beam directions.
-    const a = Math.PI / 8;  // 22.5°
-
-    // ══════════════════════════════════════════════════════════════════
-    //  LASER (fires +Y toward dichroic)
-    // ══════════════════════════════════════════════════════════════════
-    const laser = new Laser("488 nm Laser");
-    laser.setPosition(0, -50, 0);
-    laser.pointAlong(0, 1, 0);  // fires +Y
-    laser.beamRadius = 0.5;
+    // ═══ Top horizontal line: laser conditioning ═══
+    const laser = new Laser('488 nm Laser');
+    laser.setPosition(-232.5, 112.5, 0);
+    laser.pointAlong(1, 0, 0);
+    laser.beamRadius = 0.1;
     laser.wavelength = 488;
     laser.power = 1.0;
     scene.push(laser);
 
-    // ══════════════════════════════════════════════════════════════════
-    //  DICHROIC — reflects 488nm (+Y→+X), transmits 520nm emission (-X)
-    // ══════════════════════════════════════════════════════════════════
+    const preLens20 = makeScaledAchromat(0.1, 5, 'Pre-Galvo Lens (f=20)');
+    preLens20.setPosition(-132.5, 112.5, 0);
+    preLens20.pointAlong(1, 0, 0);
+    scene.push(preLens20);
+
+    const preLens100 = makeScaledAchromat(0.5, 12.5, 'Pre-Galvo Lens (f=100)');
+    preLens100.setPosition(-12.5, 112.5, 0);
+    preLens100.pointAlong(1, 0, 0);
+    scene.push(preLens100);
+
+    const preIris = new Aperture(6, 25, 'Pre-Galvo Iris');
+    preIris.setPosition(37.5, 112.5, 0);
+    preIris.pointAlong(1, 0, 0);
+    scene.push(preIris);
+
+    // Feed mirror: reflects beam from +X to -Y
+    const feedMirror = new Mirror(25, mirrorThickness, 'Feed Mirror');
+    feedMirror.reflectAt(87.5, 112.5, 0, new Vector3(1, 0, 0), new Vector3(0, -1, 0));
+    scene.push(feedMirror);
+
+    // Three-way junction dichroic
     const dichroic = new DichroicMirror(
         25, mirrorThickness,
-        new SpectralProfile('longpass', 505, [], 5),
-        "Dichroic (LP 505)"
+        new SpectralProfile('shortpass', 505, [], 5),
+        'Dichroic (SP 505)'
     );
-    dichroic.setPosition(0, 0, 0);
-    dichroic.pointAlong(Math.sin(Math.PI / 4), -Math.cos(Math.PI / 4), 0);
+    dichroic.setPosition(87.5, 62.5, 0);
+    dichroic.pointAlong(1, 1, 0);
     scene.push(dichroic);
 
-    // ══════════════════════════════════════════════════════════════════
-    //  DUAL GALVO PAIR — two separate mirrors, two-bounce 90° turn
-    //  Beam: +X → M1 → (√2/2, -√2/2) → M2 → -Y
-    // ══════════════════════════════════════════════════════════════════
+    // Dual galvo scan head
+    const scanHead = new DualGalvoScanHead(mirrorSpacing, 12, 'Dual Galvo Scan Head');
+    scanHead.setPosition(87.5, 12.5, 0);
+    scanHead.pointAlong(0, -1, 0);
+    scene.push(scanHead, scanHead.mirror1, scanHead.mirror2);
 
-    // ── Galvo M1 (X scan, fast axis) ──
-    // Beam arrives +X, should exit (1,-1,0)/√2.
-    // Normal = (-sin(π/8), -cos(π/8), 0) — faces TOWARD incoming beam (dot < 0).
-    const galvoM1 = new Mirror(12, mirrorThickness, "Galvo M1 (X)");
-    galvoM1.setPosition(35, 0, 0);
-    galvoM1.pointAlong(-Math.sin(a), -Math.cos(a), 0);
-    scene.push(galvoM1);
-
-    // ── Galvo M2 (Y scan, slow axis) ──
-    // Beam arrives (1,-1,0)/√2, should exit (0,-1,0).
-    // Normal = (-cos(π/8), -sin(π/8), 0) — faces TOWARD incoming beam (dot < 0).
-    const galvoM2 = new Mirror(12, mirrorThickness, "Galvo M2 (Y)");
-    galvoM2.setPosition(50, -15, 0);
-    galvoM2.pointAlong(-Math.cos(a), -Math.sin(a), 0);
-    scene.push(galvoM2);
-
-    // ══════════════════════════════════════════════════════════════════
-    //  EXCITATION PATH: ScanLens → Fold1 → TubeLens → Fold2
-    //                   → Objective → Sample → Blocker
-    // ══════════════════════════════════════════════════════════════════
-
-    // ── Scan Lens (f₁ = 50mm, 50mm below M2) ──
-    const scanLens = new IdealLens(50, 12.5, "Scan Lens");
-    scanLens.setPosition(50, -65, 0);
-    scanLens.pointAlong(0, -1, 0);
+    // ═══ Bottom horizontal microscope row at z = mirrorSpacing ═══
+    const scanLens = new IdealLens(50, 12.5, 'Scan Lens (f=50)');
+    scanLens.setPosition(37.5, 12.5, zExcitation);
+    scanLens.pointAlong(-1, 0, 0);
     scene.push(scanLens);
 
-    // ── Fold Mirror 1 (125mm below scan lens) ──
-    // Reflects -Y → -X.
-    const fold1 = new Mirror(25, mirrorThickness, "Fold Mirror 1");
-    fold1.setPosition(50, -190, 0);
-    fold1.pointAlong(-1, 1, 0);  // normal bisects +Y and -X → reflects -Y→-X
-    scene.push(fold1);
-
-    // ── Tube Lens (f₂ = 200mm, 125mm left of fold1) ──
-    // Total scan lens → tube lens = 125+125 = 250 = f₁+f₂ ✓
-    const tubeLens = new IdealLens(200, 12.5, "Tube Lens");
-    tubeLens.setPosition(-75, -190, 0);
+    const tubeLens = new IdealLens(200, 12.5, 'Tube Lens (f=200)');
+    tubeLens.setPosition(-212.5, 12.5, zExcitation);
     tubeLens.pointAlong(-1, 0, 0);
     scene.push(tubeLens);
 
-    // ── Fold Mirror 2 (100mm left of tube lens) ──
-    // Reflects -X → +Y.
-    const fold2 = new Mirror(30, mirrorThickness, "Fold Mirror 2");
-    fold2.setPosition(-175, -190, 0);
-    fold2.pointAlong(1, 1, 0);  // normal bisects +X and +Y → reflects -X→+Y
-    scene.push(fold2);
-
-    // ── Objective (10×/0.5W) ──
-    // 100mm above fold2. Total tube→obj = 100+100 = 200mm = f₂ ✓
-    // pointAlong(0,-1,0) → nosepiece faces +Y toward sample.
     const objective = new Objective({
-        magnification: 10,
-        NA: 0.5,
-        immersionIndex: 1.33,
-        workingDistance: 5.0,
-        tubeLensFocal: 200,
-        name: '10×/0.5W Objective'
+        magnification: 10, NA: 0.5, immersionIndex: 1.33,
+        workingDistance: 5.0, tubeLensFocal: 200,
+        name: '10x/0.5W Objective',
     });
-    objective.setPosition(-175, -90, 0);
-    objective.pointAlong(0, -1, 0);
+    objective.setPosition(-412.5, 12.5, zExcitation);
+    objective.pointAlong(1, 0, 0);
     scene.push(objective);
 
-    // ── Fluorescent Sample ──
-    // f_obj = 200/10 = 20mm above objective.
-    const sample = new Sample("Specimen (Fluo)");
+    const sample = new Sample('Specimen (Fluo)');
     sample.excitationSpectrum = new SpectralProfile('bandpass', 500, [{ center: 488, width: 30 }]);
     sample.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
-    sample.setPosition(-175, -70, 0);
-    sample.pointAlong(0, -1, 0);
+    objective.updateMatrices();
+    const focusWorld = new Vector3(0, 0, -objective.focalLength).applyMatrix4(objective.localToWorld);
+    const sampleNormal = objective.getSampleSideNormalWorld();
+
+    const holderCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(sampleHolderGapMm));
+    sample.setPosition(holderCenter.x, holderCenter.y, holderCenter.z);
+    sample.pointAlong(1, 0, 0);
+    sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
     scene.push(sample);
 
-    // ── Blocker after sample — stops stray rays ──
-    const blocker = new Blocker(30, 2, "Beam Stop");
-    blocker.setPosition(-175, -40, 0);
-    blocker.pointAlong(0, 1, 0);
+    // Immersion bridge from objective to sample
+    // scene.push(createObjectiveBridgeToPoint(
+    //     objective, holderCenter,
+    //     'Objective Immersion Bridge', 0.8,
+    // ));
+
+    const blocker = new Blocker(30, 2, 'Beam Stop');
+    const blockerCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(25));
+    blocker.setPosition(blockerCenter.x, blockerCenter.y, blockerCenter.z);
+    blocker.pointAlong(-1, 0, 0);
     scene.push(blocker);
 
-    // ══════════════════════════════════════════════════════════════════
-    //  EMISSION PATH (de-scanned, transmitted through dichroic going -X)
-    // ══════════════════════════════════════════════════════════════════
-
-    const relayLens = new IdealLens(50, 12.5, "Relay Lens");
-    relayLens.setPosition(-50, 0, 0);
-    relayLens.pointAlong(-1, 0, 0);
-    scene.push(relayLens);
-
+    // ═══ Middle horizontal PMT row at z = 0 ═══
     const emFilter = new Filter(
         25, 2,
         new SpectralProfile('bandpass', 520, [{ center: 520, width: 40 }]),
-        "Em Filter (BP520/40)"
+        'Em Filter (BP520/40)'
     );
-    emFilter.setPosition(-100, 0, 0);
+    emFilter.setPosition(-12.5, 62.5, 0);
     emFilter.pointAlong(-1, 0, 0);
     scene.push(emFilter);
 
-    const pinhole = new Aperture(0.05, 12.5, "Confocal Pinhole");
-    pinhole.setPosition(-150, 0, 0);
+    const pmtLens = makeScaledAchromat(0.525, 12.5, 'PMT Lens (f=105)');
+    pmtLens.setPosition(-112.5, 62.5, 0);
+    pmtLens.pointAlong(-1, 0, 0);
+    scene.push(pmtLens);
+
+    const pinhole = new Aperture(0.05, 12.5, 'Confocal Pinhole');
+    pinhole.setPosition(-212.5, 62.5, 0);
     pinhole.pointAlong(-1, 0, 0);
     scene.push(pinhole);
 
-    const pmt = new PMT(10, 10, "PMT");
-    pmt.setPosition(-200, 0, 0);
+    const pmt = new PMT(10, 10, 'PMT');
+    pmt.setPosition(-287.5, 62.5, 0);
     pmt.pointAlong(1, 0, 0);
+    // Sensor NA matches the angular acceptance at the PMT after the tube lens:
+    // objective NA / magnification ≈ 0.05. Without a large enough acceptance
+    // cone, backward rays from the PMT miss the pinhole and never reach the
+    // sample, so the Mickey confocal image stays blank.
+    pmt.sensorNA = 0.05;
+    pmt.samplesPerPixel = 24;
+    pmt.pmtSampleHz = 1024;
     scene.push(pmt);
 
-    // ══════════════════════════════════════════════════════════════════
-    //  ANIMATION CHANNELS (galvo sweep — panAngle oscillation)
-    // ══════════════════════════════════════════════════════════════════
-    const halfAngle = 3.0 * Math.PI / 180;  // ±3° mechanical scan angle
+    // Galvo scan parameters
+    const CONFOCAL_SCAN_X_HALF_ANGLE_DEG = 6;
+    const CONFOCAL_SCAN_Y_HALF_ANGLE_DEG = 6;
+    scanHead.scanAmplitudeX = CONFOCAL_SCAN_X_HALF_ANGLE_DEG * Math.PI / 180;
+    scanHead.scanHzX = 32;
+    scanHead.scanAmplitudeY = CONFOCAL_SCAN_Y_HALF_ANGLE_DEG * Math.PI / 180;
+    scanHead.scanHzY = 1;
 
-    // Nominal panAngle values (extracted by pointAlong)
-    const m1NomPan = galvoM1.panAngle;
-    const m2NomPan = galvoM2.panAngle;
-
-    const channels: AnimationChannel[] = [
-        {
-            id: generateChannelId(),
-            targetId: galvoM1.id,
-            property: 'panAngle',
-            from: m1NomPan - halfAngle,
-            to: m1NomPan + halfAngle,
-            easing: 'sinusoidal',
-            periodMs: 1000 / 32,
-            repeat: true,
-            restoreValue: m1NomPan,
-        },
-        {
-            id: generateChannelId(),
-            targetId: galvoM2.id,
-            property: 'panAngle',
-            from: m2NomPan - halfAngle,
-            to: m2NomPan + halfAngle,
-            easing: 'sinusoidal',
-            periodMs: 1000 / 0.5,
-            repeat: true,
-            restoreValue: m2NomPan,
-        },
-    ];
-
-    // ── PMT axis bindings ──
-    pmt.xAxisComponentId = galvoM1.id;
-    pmt.xAxisProperty = 'panAngle';
-    pmt.yAxisComponentId = galvoM2.id;
-    pmt.yAxisProperty = 'panAngle';
-    pmt.pmtSampleHz = 2048;
-    pmt.samplesPerPixel = 4;
-    pmt.scanResX = 64;
-    pmt.scanResY = 64;
+    pmt.connectGalvo(scanHead);
 
     return {
         scene,
-        channels,
+        channels: scanHead.getAnimationChannels(),
         animationPlaying: false,
         animationSpeed: 0.1,
     };

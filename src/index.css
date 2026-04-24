@@ -10,7 +10,9 @@ html, body {
   overflow: hidden;
   background-color: #000;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
   /* Prevent pull-to-refresh / overscroll bounce on mobile */
   overscroll-behavior: none;
@@ -28,4 +30,54 @@ canvas {
 /* Vendor-prefixed user-select for Firefox & older Safari */
 ::selection {
   background: rgba(100, 255, 218, 0.3);
+}
+
+/* ─── Custom Scrollbars ────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #555 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─── Premium Mobile Gradients & Interactions ─── */
+
+.cyber-btn {
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Primary actions */
+.cyber-btn.primary:active {
+  background: linear-gradient(135deg, #64ffda 0%, #009688 100%) !important;
+  color: #000 !important;
+  transform: scale(0.92);
+  box-shadow: 0 0 16px rgba(100, 255, 218, 0.6);
+}
+
+/* Destructive actions */
+.cyber-btn.danger:active {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+  color: #fff !important;
+  transform: scale(0.92);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
 }

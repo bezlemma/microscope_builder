@@ -1,5 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card, BeamProfile } from '../physics/components/Card';
+
+// ─── Types ─────────────────────────────────────────────────────────
+
+type DisplayMapping = 'linear' | 'gamma' | 'log';
 
 // ─── Wavelength → Color helpers ─────────────────────────────────────
 
@@ -61,13 +65,54 @@ function complementaryCSS(wavelengthMeters: number): string {
     return `rgb(${Math.min(255, Math.round(cr * boost))},${Math.min(255, Math.round(cg * boost))},${Math.min(255, Math.round(cb * boost))})`;
 }
 
+// ─── Display mapping ───────────────────────────────────────────────
+
+function mapDisplayValue(normalized: number, mapping: DisplayMapping): number {
+    const safe = Math.max(0, Math.min(1, normalized));
+    if (mapping === 'linear') return safe;
+    if (mapping === 'gamma') return Math.pow(safe, 0.45);
+    // log: log10(1 + v*2047) / log10(2048)
+    return Math.log10(1 + safe * 2047) / Math.log10(2048);
+}
+
+function nextDisplayMapping(current: DisplayMapping): DisplayMapping {
+    if (current === 'linear') return 'gamma';
+    if (current === 'gamma') return 'log';
+    return 'linear';
+}
+
+function displayMappingLabel(mapping: DisplayMapping): string {
+    if (mapping === 'linear') return 'LIN';
+    if (mapping === 'gamma') return 'GAM';
+    return 'LOG';
+}
+
+function displayMappingTitle(mapping: DisplayMapping): string {
+    if (mapping === 'linear') return 'Switch to gamma intensity view';
+    if (mapping === 'gamma') return 'Switch to log intensity view';
+    return 'Switch to linear intensity view';
+}
+
+// ─── Power formatting ──────────────────────────────────────────────
+
+function fmtPower(watts: number): string {
+    if (watts >= 1) return `${watts.toFixed(2)} W`;
+    if (watts >= 1e-3) return `${(watts * 1e3).toFixed(2)} mW`;
+    if (watts >= 1e-6) return `${(watts * 1e6).toFixed(2)} uW`;
+    if (watts >= 1e-9) return `${(watts * 1e9).toFixed(2)} nW`;
+    if (watts >= 1e-12) return `${(watts * 1e12).toFixed(2)} pW`;
+    return `${watts.toExponential(2)} W`;
+}
+
 // ─── Multi-beam drawing with coherent interference ──────────────────
 
 /**
  * Draw multiple beam profiles with coherent interference.
- * Same-wavelength beams interfere (fringes), different-λ beams add incoherently.
+ * Same-wavelength beams interfere (fringes), different-wavelength beams add incoherently.
  * Tilt-based spatial fringes: beams at different angles create spatially varying
  * interference patterns across the card.
+ *
+ * The display mapping is applied after normalizing intensities to [0,1].
  */
 function drawMultiBeam(
     ctx: CanvasRenderingContext2D,
@@ -75,7 +120,8 @@ function drawMultiBeam(
     height: number,
     profiles: BeamProfile[],
     viewExtentMm: number,
-    time: number
+    time: number,
+    mapping: DisplayMapping
 ) {
     const imageData = ctx.createImageData(width, height);
     const data = imageData.data;
@@ -94,7 +140,7 @@ function drawMultiBeam(
     // Animation phase (for polarization ellipse overlay only, NOT for interference)
     const omega = time * 3.5;
 
-    // Detect broadband white light: 3+ distinct wavelength groups → render as white
+    // Detect broadband white light: 3+ distinct wavelength groups -> render as white
     const isBroadband = wavelengthGroups.size >= 3;
 
     // Normalize brightness: scale so the brightest beam's peak reaches full RGB
@@ -113,21 +159,22 @@ function drawMultiBeam(
                 const [R, G, B] = isBroadband ? [255, 255, 255] : wavelengthRGB(group[0].wavelength);
 
                 if (group.length === 1) {
-                    // Single beam — no interference, just Gaussian
+                    // Single beam -- no interference, just Gaussian
                     const p = group[0];
                     const dx = x - (p.centerU ?? 0);
                     const dy = y - (p.centerV ?? 0);
                     const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
                     if (gauss < 0.001) continue;
-                    const intensity = Math.sqrt(gauss) * p.power * powerScale;
-                    totalR += R * intensity;
-                    totalG += G * intensity;
-                    totalB += B * intensity;
+                    const rawIntensity = Math.sqrt(gauss) * p.power * powerScale;
+                    const mapped = mapDisplayValue(rawIntensity, mapping);
+                    totalR += R * mapped;
+                    totalG += G * mapped;
+                    totalB += B * mapped;
                 } else {
-                    // Multiple coherent beams — sum E-fields then compute intensity
-                    // Use REAL wavenumber k = 2π/λ for physically correct interference
-                    // ω cancels in |E|² = |ΣEᵢ|², so we omit it from pixel shading
-                    const wavelengthMm = group[0].wavelength * 1e3; // SI meters → mm
+                    // Multiple coherent beams -- sum E-fields then compute intensity
+                    // Use REAL wavenumber k = 2pi/lambda for physically correct interference
+                    // omega cancels in |E|^2 = |sum Ei|^2, so we omit it from pixel shading
+                    const wavelengthMm = group[0].wavelength * 1e3; // SI meters -> mm
                     const k_real = (2 * Math.PI) / wavelengthMm;
 
                     let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
@@ -158,10 +205,11 @@ function drawMultiBeam(
 
                     const intensity = exRe * exRe + exIm * exIm + eyRe * eyRe + eyIm * eyIm;
                     if (intensity < 0.001) continue;
-                    const bright = Math.sqrt(intensity);
-                    totalR += R * bright;
-                    totalG += G * bright;
-                    totalB += B * bright;
+                    const rawBright = Math.sqrt(intensity);
+                    const mapped = mapDisplayValue(rawBright, mapping);
+                    totalR += R * mapped;
+                    totalG += G * mapped;
+                    totalB += B * mapped;
                 }
             }
 
@@ -174,12 +222,12 @@ function drawMultiBeam(
     }
     ctx.putImageData(imageData, 0, 0);
 
-    // === Overlays: draw per-beam 1/e² rings and polarization for primary beam ===
+    // === Overlays: draw per-beam 1/e^2 rings and polarization for primary beam ===
     const primary = profiles[0];
     const beamCxPx = width / 2 + (primary.centerU ?? 0) / scaleX;
     const beamCyPx = height / 2 + (primary.centerV ?? 0) / scaleY;
 
-    // Draw 1/e² rings for each beam
+    // Draw 1/e^2 rings for each beam
     for (const p of profiles) {
         const cx = width / 2 + (p.centerU ?? 0) / scaleX;
         const cy = height / 2 + (p.centerV ?? 0) / scaleY;
@@ -297,9 +345,9 @@ function drawMultiBeam(
         ctx.font = '8px sans-serif';
         ctx.fillStyle = 'rgba(100, 180, 255, 0.5)';
         ctx.textAlign = 'center';
-        ctx.fillText('Eₓ', pCx + arrowScale + 10, pCy + 3);
+        ctx.fillText('Ex', pCx + arrowScale + 10, pCy + 3);
         ctx.fillStyle = 'rgba(255, 130, 100, 0.5)';
-        ctx.fillText('Eᵧ', pCx + 5, pCy - arrowScale - 5);
+        ctx.fillText('Ey', pCx + 5, pCy - arrowScale - 5);
         ctx.textAlign = 'start';
     }
 }
@@ -342,15 +390,147 @@ function drawArrow(
     ctx.fill();
 }
 
+// ─── Beam moment computation from Gaussian profiles ────────────────
+
+interface BeamMomentSummary {
+    totalPower: number;
+    groupCount: number;
+    majorDiameter: number;   // 1/e^2 major (mm)
+    minorDiameter: number;   // 1/e^2 minor (mm)
+}
+
+function computeBeamMoments(profiles: BeamProfile[]): BeamMomentSummary | null {
+    if (profiles.length === 0) return null;
+
+    // Count wavelength groups
+    const groups = new Set<number>();
+    let totalPower = 0;
+    for (const p of profiles) {
+        groups.add(Math.round(p.wavelength * 1e12));
+        totalPower += p.power;
+    }
+
+    if (profiles.length === 1) {
+        const p = profiles[0];
+        // For a single Gaussian, the 1/e^2 diameters are 2*wx, 2*wy
+        const diam1 = 2 * p.wx;
+        const diam2 = 2 * p.wy;
+        return {
+            totalPower,
+            groupCount: groups.size,
+            majorDiameter: Math.max(diam1, diam2),
+            minorDiameter: Math.min(diam1, diam2),
+        };
+    }
+
+    // For multiple beams, compute second-moment beam diameters from
+    // the composite intensity distribution using the analytical moments
+    // of a sum of Gaussians:
+    //   I(u,v) = sum_i A_i * exp(-2*((u - cu_i)^2/wx_i^2 + (v - cv_i)^2/wy_i^2))
+    // The weighted centroid and covariance can be computed analytically from
+    // the beam parameters since the integral of a Gaussian is known.
+
+    // Each beam's contribution weight = power * pi * wx * wy / 2
+    // (integral of Gaussian with exp(-2r^2/w^2) over the plane)
+    let weightSum = 0;
+    let meanU = 0;
+    let meanV = 0;
+    const weights: number[] = [];
+
+    for (const p of profiles) {
+        const w = p.power * p.wx * p.wy; // proportional to integrated power
+        weights.push(w);
+        weightSum += w;
+        meanU += w * (p.centerU ?? 0);
+        meanV += w * (p.centerV ?? 0);
+    }
+
+    if (weightSum < 1e-30) return null;
+    meanU /= weightSum;
+    meanV /= weightSum;
+
+    // Second moments: for each Gaussian, <(u - meanU)^2> = sigma_u^2 + (cu - meanU)^2
+    // where sigma_u = wx / 2 for 1/e^2 definition
+    let covUU = 0;
+    let covVV = 0;
+    let covUV = 0;
+    for (let i = 0; i < profiles.length; i++) {
+        const p = profiles[i];
+        const w = weights[i];
+        const du = (p.centerU ?? 0) - meanU;
+        const dv = (p.centerV ?? 0) - meanV;
+        // Variance of a single Gaussian: sigma^2 = w^2 / 4
+        const sigU2 = (p.wx * p.wx) / 4;
+        const sigV2 = (p.wy * p.wy) / 4;
+        covUU += w * (sigU2 + du * du);
+        covVV += w * (sigV2 + dv * dv);
+        covUV += w * du * dv;
+    }
+    covUU /= weightSum;
+    covVV /= weightSum;
+    covUV /= weightSum;
+
+    // Eigenvalues of the 2x2 covariance matrix
+    const trace = covUU + covVV;
+    const detTerm = Math.sqrt(Math.max((covUU - covVV) * (covUU - covVV) + 4 * covUV * covUV, 0));
+    const lambdaMajor = Math.max(0.5 * (trace + detTerm), 0);
+    const lambdaMinor = Math.max(0.5 * (trace - detTerm), 0);
+
+    // 4-sigma diameters (D4sigma = 4 * sqrt(variance)), the standard second-moment beam width
+    return {
+        totalPower,
+        groupCount: groups.size,
+        majorDiameter: 4 * Math.sqrt(lambdaMajor),
+        minorDiameter: 4 * Math.sqrt(lambdaMinor),
+    };
+}
+
+// ─── Control button style ──────────────────────────────────────────
+
+const controlButtonStyle: React.CSSProperties = {
+    background: '#171717',
+    border: '1px solid #333',
+    borderRadius: '4px',
+    color: '#ddd',
+    cursor: 'pointer',
+    fontSize: '10px',
+    fontFamily: 'monospace',
+    lineHeight: 1,
+    padding: '3px 5px',
+};
+
 // ─── Main CardViewer Component ──────────────────────────────────────
 
-export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, compact }) => {
+export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?: number }> = ({ card, compact, autoFitNonce }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animFrameRef = useRef<number>(0);
     const profiles = card.beamProfiles;
     const hasBeams = profiles.length > 0;
 
-    const canvasSize = compact ? 160 : 220;
+    const canvasSize = compact ? 80 : 220;
+
+    // Display mapping state
+    const [mapping, setMapping] = useState<DisplayMapping>('linear');
+
+    // View extent (mm): auto-sized to card by default; the user can click the
+    // "Fit" button in the parent wrapper to recompute from current beam data
+    // (bumps `autoFitNonce`).
+    const [viewExtentMm, setViewExtentMm] = useState<number>(() => Math.max(card.width, card.height));
+    useEffect(() => {
+        if (autoFitNonce === undefined) return;
+        if (!hasBeams) {
+            setViewExtentMm(Math.max(card.width, card.height));
+            return;
+        }
+        let maxExtent = 0;
+        for (const p of profiles) {
+            const cu = Math.abs(p.centerU) + 3 * Math.max(p.wx, 1e-6);
+            const cv = Math.abs(p.centerV) + 3 * Math.max(p.wy, 1e-6);
+            const e = 2 * Math.max(cu, cv);
+            if (e > maxExtent) maxExtent = e;
+        }
+        if (maxExtent > 0) setViewExtentMm(Math.max(maxExtent, 0.05));
+    }, [autoFitNonce, hasBeams, profiles, card.width, card.height]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -373,13 +553,13 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
             return;
         }
 
-        const viewExtent = Math.max(card.width, card.height);
+        const viewExtent = viewExtentMm;
         let running = true;
 
         const animate = () => {
             if (!running) return;
             const t = performance.now() / 1000;
-            drawMultiBeam(ctx, canvas.width, canvas.height, profiles, viewExtent, t);
+            drawMultiBeam(ctx, canvas.width, canvas.height, profiles, viewExtent, t, mapping);
             animFrameRef.current = requestAnimationFrame(animate);
         };
         animate();
@@ -388,12 +568,12 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
             running = false;
             cancelAnimationFrame(animFrameRef.current);
         };
-    }, [profiles, hasBeams, card.width, card.height, canvasSize]);
+    }, [profiles, hasBeams, card.width, card.height, canvasSize, mapping, viewExtentMm]);
 
     const primary = hasBeams ? profiles[0] : null;
     const beamStr = primary
-        ? `${(primary.wx * 2).toFixed(2)} × ${(primary.wy * 2).toFixed(2)} mm`
-        : '—';
+        ? `${(primary.wx * 2).toFixed(2)} x ${(primary.wy * 2).toFixed(2)} mm`
+        : '--';
 
     // Per-wavelength power breakdown
     const wavelengthPowers = new Map<number, number>();
@@ -404,33 +584,61 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
         totalPower += p.power;
     }
 
+    // Beam moment summary
+    const beamMoments = hasBeams ? computeBeamMoments(profiles) : null;
+
     const labelStyle: React.CSSProperties = { color: '#777', fontSize: '10px' };
     const valueStyle: React.CSSProperties = { color: '#ddd', fontSize: '11px', fontFamily: 'monospace' };
 
-    // Format power with appropriate unit
-    const fmtPower = (w: number) => {
-        if (w >= 1e-3) return `${(w * 1e3).toFixed(2)} mW`;
-        if (w >= 1e-6) return `${(w * 1e6).toFixed(2)} µW`;
-        if (w >= 1e-9) return `${(w * 1e9).toFixed(2)} nW`;
-        return `${w.toExponential(2)} W`;
-    };
-
     return (
         <div style={{ marginTop: '4px' }}>
+            <div style={{ width: canvasSize }}>
+                <canvas
+                    ref={canvasRef}
+                    width={canvasSize}
+                    height={canvasSize}
+                    style={{
+                        border: '1px solid #333',
+                        borderRadius: '4px',
+                        display: 'block',
+                        backgroundColor: '#000',
+                    }}
+                />
 
-            <canvas
-                ref={canvasRef}
-                width={canvasSize}
-                height={canvasSize}
-                style={{
-                    border: '1px solid #333',
-                    borderRadius: '4px',
-                    display: 'block',
-                    backgroundColor: '#000',
-                }}
-            />
+                {/* Control buttons row -- hidden in compact mode */}
+                {!compact && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        marginTop: '6px',
+                        padding: '4px 0 0 0',
+                        flexWrap: 'wrap',
+                    }}>
+                        <button
+                            onClick={() => setMapping(m => nextDisplayMapping(m))}
+                            title={displayMappingTitle(mapping)}
+                            style={controlButtonStyle}
+                        >
+                            {displayMappingLabel(mapping)}
+                        </button>
+                        <button
+                            onClick={() => {
+                                // Fit: reset mapping to linear (the "full card" default view).
+                                // The view extent is always card.width/height, so this just
+                                // resets the display mapping to show the full dynamic range.
+                                setMapping('linear');
+                            }}
+                            title="Reset view to show all beams (linear mapping)"
+                            style={controlButtonStyle}
+                        >
+                            Fit
+                        </button>
+                    </div>
+                )}
+            </div>
 
-            {/* Readout panel — hidden in compact mode */}
+            {/* Beam moment summary and readout panel -- hidden in compact mode */}
             {!compact && (
                 <div style={{
                     marginTop: '8px',
@@ -458,7 +666,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
                                             color: wavelengthToCSS(wlM),
                                             fontSize: '10px'
                                         }}>
-                                            ● {wlNm} nm
+                                            {'\u25CF'} {wlNm} nm
                                         </span>
                                         <span style={valueStyle}>{fmtPower(power)}</span>
                                     </div>
@@ -478,9 +686,46 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
                             )}
                         </div>
                     ) : (
-                        <div style={valueStyle}>—</div>
+                        <div style={valueStyle}>--</div>
                     )}
 
+                    {/* Beam moment summary */}
+                    {beamMoments && (
+                        <div style={{
+                            marginTop: '6px',
+                            paddingTop: '4px',
+                            borderTop: '1px solid #282828'
+                        }}>
+                            <div style={labelStyle}>Beam Moments</div>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 1fr',
+                                gap: '2px 12px',
+                                marginTop: '2px'
+                            }}>
+                                <div>
+                                    <div style={labelStyle}>Total Power</div>
+                                    <div style={valueStyle}>{fmtPower(beamMoments.totalPower)}</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Beam Groups</div>
+                                    <div style={valueStyle}>{beamMoments.groupCount}</div>
+                                </div>
+                                {profiles.length === 1 && (
+                                    <>
+                                        <div>
+                                            <div style={labelStyle}>1/e{'\u00B2'} Major</div>
+                                            <div style={valueStyle}>{beamMoments.majorDiameter.toFixed(3)} mm</div>
+                                        </div>
+                                        <div>
+                                            <div style={labelStyle}>1/e{'\u00B2'} Minor</div>
+                                            <div style={valueStyle}>{beamMoments.minorDiameter.toFixed(3)} mm</div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Beam diameter and Jones vector */}
                     <div style={{
@@ -492,13 +737,13 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean }> = ({ card, 
                         borderTop: '1px solid #282828'
                     }}>
                         <div>
-                            <div style={labelStyle}>Beam ⌀ (1/e²)</div>
+                            <div style={labelStyle}>Beam {'\u2300'} (1/e{'\u00B2'})</div>
                             <div style={valueStyle}>{beamStr}</div>
                         </div>
                         <div>
                             <div style={labelStyle}>Jones Vector</div>
                             <div style={{ ...valueStyle, fontSize: '9px' }}>
-                                {primary ? formatJones(primary.polarization) : '—'}
+                                {primary ? formatJones(primary.polarization) : '--'}
                             </div>
                         </div>
                     </div>
@@ -516,7 +761,7 @@ function formatJones(pol: { x: { re: number; im: number }; y: { re: number; im: 
         if (amp < 0.01) return '0';
         const phase = Math.atan2(c.im, c.re) * 180 / Math.PI;
         if (Math.abs(phase) < 1) return amp.toFixed(2);
-        return `${amp.toFixed(1)}∠${phase.toFixed(0)}°`;
+        return `${amp.toFixed(1)}\u2220${phase.toFixed(0)}\u00B0`;
     };
     return `(${formatC(pol.x)}, ${formatC(pol.y)})`;
 }

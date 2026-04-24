@@ -1,7 +1,9 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
-import { refractPhaseSurface } from '../math_solvers';
+import type { PupilFunction } from '../PupilFunction';
+
+export type ImmersionMediumKind = 'air' | 'oil' | 'water' | 'silicone' | 'custom';
 
 /**
  * Objective — Aplanatic Phase Surface (Ideal Microscope Objective)
@@ -59,6 +61,13 @@ export class Objective extends OpticalComponent {
     maxAngle: number;
     apertureRadius: number;     // Optical clear aperture from NA — used for ray clipping
 
+    // Extended properties (BOMB compatibility)
+    coverslipThickness: number = 0.17;  // mm — standard #1.5 coverslip
+    fieldNumber: number = 22;           // mm — field of view at the intermediate image plane
+    immersionMediumKind: ImmersionMediumKind = 'air';
+    pupil: PupilFunction | null = null; // null = diffraction-limited (no custom pupil)
+    pupilRadius: number = 0;            // Pupil plane radius (derived)
+
     constructor({
         NA = 0.25,
         magnification = 10,
@@ -88,8 +97,8 @@ export class Objective extends OpticalComponent {
         this.focalLength = tubeLensFocal / magnification;
         const indexRatio = Math.min(NA / immersionIndex, 1.0);
         this.maxAngle = Math.asin(indexRatio);
-        // Exact Abbe Sine Condition: h = f * n * sin(theta) => h = f * NA
-        this.apertureRadius = this.focalLength * indexRatio;
+        // Abbe Sine Condition: h = f * NA (back focal plane beam height)
+        this.apertureRadius = this.focalLength * NA;
 
         this._updateBounds();
     }
@@ -99,9 +108,27 @@ export class Objective extends OpticalComponent {
         this.focalLength = this.tubeLensFocal / this.magnification;
         const indexRatio = Math.min(this.NA / this.immersionIndex, 1.0);
         this.maxAngle = Math.asin(indexRatio);
-        this.apertureRadius = this.focalLength * indexRatio;
+        this.apertureRadius = this.focalLength * this.NA;
         this._updateBounds();
         this.version++;
+    }
+
+    /** Change magnification while preserving sample-side geometry. */
+    setMagnificationPreserveSampleSide(newMag: number): void {
+        this.magnification = newMag;
+        this.tubeLensFocal = this.focalLength * newMag;
+        this.recalculate();
+    }
+
+    /** Set immersion medium by kind name. */
+    setImmersionMedium(kind: ImmersionMediumKind): void {
+        this.immersionMediumKind = kind;
+        if (kind === 'oil') this.immersionIndex = 1.515;
+        else if (kind === 'water') this.immersionIndex = 1.33;
+        else if (kind === 'silicone') this.immersionIndex = 1.406;
+        else if (kind === 'custom') { /* leave existing index untouched */ }
+        else this.immersionIndex = 1.0;
+        this.recalculate();
     }
 
     private _updateBounds(): void {
@@ -257,7 +284,9 @@ export class Objective extends OpticalComponent {
         if (bboxHit.type === 'wall' || bboxHit.type === 'taper') {
             isBlocked = true; // Side walls and taper are solid metal
         } else if (bboxHit.type === 'front') {
-            if (bboxHit.r !== undefined && bboxHit.r <= opticalFrontRadius) {
+            // Allow rays to pass if they are within the physical clear aperture,
+            // which includes a buffer for the off-axis field of view (FOV).
+            if (bboxHit.r !== undefined && bboxHit.r <= frontRadius) {
                 isBlocked = false; // Entered clear aperture
             }
         } else if (bboxHit.type === 'back') {
@@ -353,9 +382,34 @@ export class Objective extends OpticalComponent {
     }
 
     /**
-     * Interact:
-     * Apply the objective's aplanatic phase sheet via generalized Snell's law
-     * on the Abbe reference surface.
+     * Interact: aplanatic redirection on the Abbe reference sphere.
+     *
+     * Abbe sine condition: a sample point at height h on the front focal plane
+     * (z = -f) corresponds to a parallel beam in image space whose angle θ to
+     * the optical axis satisfies h = f · sin(θ). Equivalently, in direction
+     * cosines, a unit parallel-beam direction d with optical-axis component
+     * d.z maps to the focal-plane point (f · d.x, f · d.y, -f).
+     *
+     * We support both propagation senses:
+     *   • FORWARD (ray from sample toward the pupil, dirInLocal.z > 0):
+     *     The sample point is the ray's CURRENT origin projected onto the FFP.
+     *     The outgoing direction is the parallel-beam direction determined by
+     *     the aplanatic mapping: d_out = (s.x/f, s.y/f, +sqrt(1 - (s.x/f)² - (s.y/f)²)).
+     *   • BACKWARD (ray from pupil toward sample, dirInLocal.z < 0):
+     *     The incoming direction IS the parallel-beam direction, so
+     *     sample_point = (f · d_in.x, f · d_in.y, -f). The outgoing direction
+     *     points from the hit point toward the sample point, converging to it.
+     *
+     * Because each pixel's backward rays all share the same parallel-beam
+     * direction (after the tube lens), they converge at the SAME sample point —
+     * which is the conjugate of the pixel. Different pixels → different sample
+     * points → an image forms. The earlier implementation pointed every
+     * backward ray at (0, 0, -f), collapsing all pixels to a single sample
+     * point and producing only noise.
+     *
+     * Because hit points lie on the Abbe reference sphere, the OPL from any
+     * hit point to the conjugate focal-plane point is constant (= f · n). No
+     * per-height phase correction is applied.
      */
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         if (hit.isBlocked) {
@@ -365,29 +419,74 @@ export class Objective extends OpticalComponent {
         const dirInLocal = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
         const hitLocal = hit.localPoint!;
         const opl = ray.opticalPathLength + hit.t;
-        const normalLocal = hit.localNormal?.clone().normalize() ?? hit.normal.clone().transformDirection(this.worldToLocal).normalize();
-        const phaseGradient = new Vector3(
-            -hitLocal.x / this.focalLength,
-            -hitLocal.y / this.focalLength,
-            0
-        );
-        const dirOutLocal = refractPhaseSurface(dirInLocal, normalLocal, phaseGradient);
-        if (!dirOutLocal) {
-            return { rays: [] };
+        const f = this.focalLength;
+
+        // Short-circuit when the hit point is essentially on the optical axis
+        // AND the ray is on-axis (no bend needed, avoids division-by-zero).
+        const hitRadSq = hitLocal.x * hitLocal.x + hitLocal.y * hitLocal.y;
+        const dirRadSq = dirInLocal.x * dirInLocal.x + dirInLocal.y * dirInLocal.y;
+        if (hitRadSq < 1e-14 && dirRadSq < 1e-14) {
+            return {
+                rays: [childRay(ray, {
+                    origin: hit.point,
+                    direction: ray.direction.clone(),
+                    opticalPathLength: opl,
+                })],
+            };
+        }
+
+        let dirOutLocal: Vector3;
+
+        if (dirInLocal.z < 0) {
+            // BACKWARD: incoming parallel beam; aplanatic map sends it to sample
+            // point (f · d.x, f · d.y, -f) on the front focal plane.
+            const sx = f * dirInLocal.x;
+            const sy = f * dirInLocal.y;
+            const sz = -f;
+            const vx = sx - hitLocal.x;
+            const vy = sy - hitLocal.y;
+            const vz = sz - hitLocal.z;
+            const vLen = Math.sqrt(vx * vx + vy * vy + vz * vz);
+            if (vLen < 1e-12) {
+                // Hit point coincides with sample point — preserve direction.
+                dirOutLocal = dirInLocal.clone();
+            } else {
+                dirOutLocal = new Vector3(vx / vLen, vy / vLen, vz / vLen);
+            }
+        } else {
+            // FORWARD: ray originated at or near the FFP. Take the sample point
+            // as the ray's intersection with z = -f. Outgoing direction is
+            // the parallel-beam direction determined by that sample point.
+            const originLocal = ray.origin.clone().applyMatrix4(this.worldToLocal);
+            let sx = originLocal.x;
+            let sy = originLocal.y;
+            
+            // Project along ray to the front focal plane (z = -f)
+            if (Math.abs(dirInLocal.z) > 1e-12) {
+                const tToFFP = (-f - originLocal.z) / dirInLocal.z;
+                sx = originLocal.x + tToFFP * dirInLocal.x;
+                sy = originLocal.y + tToFFP * dirInLocal.y;
+            }
+
+            const sinX = sx / f;
+            const sinY = sy / f;
+            const sinSq = sinX * sinX + sinY * sinY;
+            if (sinSq >= 1) {
+                // Outside the NA cone — treat as blocked.
+                return { rays: [] };
+            }
+            const cosZ = Math.sqrt(1 - sinSq);
+            dirOutLocal = new Vector3(sinX, sinY, cosZ);
         }
 
         const dirOutWorld = dirOutLocal.transformDirection(this.localToWorld).normalize();
-
-        // Exact OPL phase shift (Abbe Sine Condition OPL)
-        const h2 = hitLocal.x * hitLocal.x + hitLocal.y * hitLocal.y;
-        const deltaOPL = -h2 / (2 * this.focalLength);
 
         return {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: dirOutWorld,
-                opticalPathLength: opl + deltaOPL
-            })]
+                opticalPathLength: opl,
+            })],
         };
     }
 
@@ -407,5 +506,36 @@ export class Objective extends OpticalComponent {
             ? (this.immersionIndex > 1.4 ? ' Oil' : ' Water')
             : '';
         return `${this.magnification}x / ${this.NA}${immersionStr}`;
+    }
+
+    // ── Helper methods for immersion bridges ─────────────────────────────
+
+    /** Local Z coordinate of the sample-side principal plane. */
+    getSampleSideLocalZ(): number {
+        return -this.focalLength + this.workingDistance;
+    }
+
+    /** Optical aperture radius at the sample side based on NA and working distance. */
+    getOpticalFrontRadius(): number {
+        const maxSin = Math.min(this.NA / this.immersionIndex, 1.0);
+        const maxTan = maxSin / Math.sqrt(Math.max(1 - maxSin * maxSin, 1e-9));
+        return this.workingDistance * maxTan;
+    }
+
+    /** Physical front radius (optical + margin). */
+    getFrontRadius(): number {
+        return Math.max(this.getOpticalFrontRadius() + 0.5, 2);
+    }
+
+    /** World-space position of the sample-side center. */
+    getSampleSideCenterWorld(): Vector3 {
+        this.updateMatrices();
+        return new Vector3(0, 0, this.getSampleSideLocalZ()).applyMatrix4(this.localToWorld);
+    }
+
+    /** World-space normal pointing from sample toward objective. */
+    getSampleSideNormalWorld(): Vector3 {
+        this.updateMatrices();
+        return new Vector3(0, 0, -1).transformDirection(this.localToWorld).normalize();
     }
 }

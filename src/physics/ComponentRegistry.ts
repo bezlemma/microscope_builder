@@ -33,6 +33,22 @@ import { PolygonScanner } from './components/PolygonScanner';
 import { PMT } from './components/PMT';
 import { GalvoScanHead } from './components/GalvoScanHead';
 import { DualGalvoScanHead } from './components/DualGalvoScanHead';
+import { DoubleSlit } from './components/DoubleSlit';
+import { Diffuser } from './components/Diffuser';
+import { PolarizingBeamSplitter } from './components/PolarizingBeamSplitter';
+import { AchromatDoublet } from './components/AchromatDoublet';
+import { FaradayIsolator } from './components/FaradayIsolator';
+import { AOD } from './components/AOD';
+import { QPD } from './components/QPD';
+import { Rail } from './components/Rail';
+import { MediumVolume } from './components/MediumVolume';
+import { PupilMaskElement } from './components/PupilMaskElement';
+import { PointSource2D } from './components/PointSource2D';
+import { PointSource3D } from './components/PointSource3D';
+import { ConeSource3D } from './components/ConeSource3D';
+import { WedgeSource2D } from './components/WedgeSource2D';
+import { StructuredSource } from './components/StructuredSource';
+import { Annotation } from './components/Annotation';
 
 /** Registry entry for a component type. */
 export interface ComponentEntry {
@@ -70,6 +86,23 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['PMT',             { ctor: PMT }],
     ['GalvoScanHead',  { ctor: GalvoScanHead }],
     ['DualGalvoScanHead', { ctor: DualGalvoScanHead }],
+    ['DoubleSlit',      { ctor: DoubleSlit }],
+    ['Diffuser',        { ctor: Diffuser }],
+    ['PolarizingBeamSplitter', { ctor: PolarizingBeamSplitter }],
+    ['AchromatDoublet', { ctor: AchromatDoublet }],
+    ['FaradayIsolator', { ctor: FaradayIsolator }],
+    ['AOD',             { ctor: AOD }],
+    ['QPD',             { ctor: QPD }],
+    ['Rail',            { ctor: Rail }],
+    ['MediumVolume',    { ctor: MediumVolume }],
+    ['PupilMaskElement', { ctor: PupilMaskElement }],
+    // Source variants (must appear before any parent class checks; they're leaf classes)
+    ['PointSource2D',   { ctor: PointSource2D }],
+    ['PointSource3D',   { ctor: PointSource3D }],
+    ['ConeSource3D',    { ctor: ConeSource3D }],
+    ['WedgeSource2D',   { ctor: WedgeSource2D }],
+    ['StructuredSource', { ctor: StructuredSource }],
+    ['Annotation',       { ctor: Annotation }],
 ];
 
 /** Map from type name → entry. */

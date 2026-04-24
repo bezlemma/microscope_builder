@@ -19,6 +19,10 @@ export abstract class OpticalComponent implements Surface {
     version: number = 0; // Increments on every mutation — used by React to detect changes on mutable objects
     absorptionCoeff: number = 0; // Beer-Lambert absorption coefficient [mm⁻¹], 0 = transparent
 
+    /** Axis lock — prevents movement along locked axes during dragging.
+     *  Default: Z locked (components stay on the table surface). */
+    axisLock: { x: boolean; y: boolean; z: boolean } = { x: false, y: false, z: true };
+
     /**
      * Pan angle (radians) — direction the component faces in the XY plane.
      * Tilt angle (radians) — tip out of the XY plane (0 = vertical on table).
@@ -28,6 +32,15 @@ export abstract class OpticalComponent implements Surface {
      */
     panAngle: number = 0;
     tiltAngle: number = 0;
+    rollAngle: number = 0;  // Roll around the optical axis (radians)
+
+    /** True for managed sub-components (e.g. DualGalvoScanHead child mirrors).
+     *  Sub-components are hidden from the scene list and not independently selectable. */
+    isSubComponent: boolean = false;
+
+    /** True if this is a ghost component. Ghost components serve as visual reference markers
+     *  and are ignored by all ray tracers and wave solvers. */
+    isGhost?: boolean;
 
     /** Tracks last version for which matrices were computed (dirty-flag). */
     private _matrixVersion: number = -1;
@@ -50,30 +63,66 @@ export abstract class OpticalComponent implements Surface {
     }
 
     /**
-     * Recompute the quaternion from panAngle and tiltAngle.
-     * q = Ry(tilt) · Rz(pan) · Rx(π/2)
-     *
-     * This is the ONLY place the quaternion is derived from pan/tilt.
-     * All animation and galvo scan code sets panAngle/tiltAngle then calls this.
+     * Build the "no-roll" quaternion for a given pan/tilt. Canonical basis:
+     *   forward (local +Z)  = spherical(pan, tilt)
+     *   upHint              = world +Z (falls back to world +Y if forward is
+     *                         parallel to world +Z)
+     *   right               = upHint × forward
+     *   up                  = forward × right
+     * The returned quaternion maps local (X, Y, Z) → (right, up, forward).
+     * This matches pointAlong() EXACTLY, so the scalar representation and
+     * pointAlong's quaternion agree for the same pan/tilt.
+     */
+    private static buildBaseQuaternion(pan: number, tilt: number, out: Quaternion): Quaternion {
+        const forward = new Vector3(
+            Math.cos(tilt) * Math.cos(pan),
+            Math.cos(tilt) * Math.sin(pan),
+            Math.sin(tilt),
+        );
+        let upHint = new Vector3(0, 0, 1);
+        if (Math.abs(forward.dot(upHint)) > 0.99) upHint = new Vector3(0, 1, 0);
+        const right = new Vector3().crossVectors(upHint, forward).normalize();
+        const up = new Vector3().crossVectors(forward, right).normalize();
+        const m = new Matrix4().makeBasis(right, up, forward);
+        out.setFromRotationMatrix(m);
+        return out;
+    }
+
+    /**
+     * Recompute the quaternion from panAngle, tiltAngle, and rollAngle.
+     * Uses the same basis construction as pointAlong() so the scalar state
+     * round-trips to the same quaternion. Roll rotates about the local +Z
+     * (optical) axis after the base orientation is built.
      */
     recomputeRotation(): void {
-        const qx = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2);
-        const qz = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), this.panAngle);
-        const qy = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), this.tiltAngle);
-        // q = Ry · Rz · Rx
-        this.rotation.copy(qy.multiply(qz).multiply(qx));
+        OpticalComponent.buildBaseQuaternion(this.panAngle, this.tiltAngle, this.rotation);
+        if (this.rollAngle !== 0) {
+            const qRoll = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), this.rollAngle);
+            this.rotation.multiply(qRoll);
+        }
         this.version++;
     }
 
     setRotation(x: number, y: number, z: number) {
-        // Build quaternion from Euler (preserves exact backward compat)
+        // Build quaternion from Euler (preserves exact backward compat for
+        // callers that still pass Euler XYZ).
         this.rotation.setFromEuler(new Euler(x, y, z));
-        // Extract panAngle/tiltAngle from the resulting forward direction
-        // (same logic as pointAlong — works for all orientations)
+        // Extract pan/tilt from the resulting forward direction, and recover
+        // roll by comparing the actual "up" vector to the no-roll "up". Any
+        // subsequent recomputeRotation() will reproduce this exact quaternion.
         const forward = new Vector3(0, 0, 1).applyQuaternion(this.rotation);
         this.panAngle = Math.atan2(forward.y, forward.x);
         const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
         this.tiltAngle = Math.atan2(forward.z, xyLen);
+
+        const baseQ = OpticalComponent.buildBaseQuaternion(this.panAngle, this.tiltAngle, new Quaternion());
+        const upWithoutRoll = new Vector3(0, 1, 0).applyQuaternion(baseQ);
+        const upActual = new Vector3(0, 1, 0).applyQuaternion(this.rotation);
+        const cross = new Vector3().crossVectors(upWithoutRoll, upActual);
+        const sinRoll = cross.dot(forward);
+        const cosRoll = upWithoutRoll.dot(upActual);
+        this.rollAngle = Math.atan2(sinRoll, cosRoll);
+
         this.version++;
     }
 
@@ -97,25 +146,13 @@ export abstract class OpticalComponent implements Surface {
      */
     pointAlong(dx: number, dy: number, dz: number) {
         const forward = new Vector3(dx, dy, dz).normalize();
-        // Default up = world +Z (toward the viewer in top-down scene).
-        // Falls back to world +Y when pointing along the Z axis.
-        let upHint = new Vector3(0, 0, 1);
-        if (Math.abs(forward.dot(upHint)) > 0.99) {
-            upHint = new Vector3(0, 1, 0);
-        }
-        const right = new Vector3().crossVectors(upHint, forward).normalize();
-        const up = new Vector3().crossVectors(forward, right).normalize();
-
-        // Build rotation matrix: columns = [right, up, forward]
-        const m = new Matrix4().makeBasis(right, up, forward);
-        this.rotation.setFromRotationMatrix(m);
-
-        // Extract panAngle from the forward direction projected to XY plane
         this.panAngle = Math.atan2(forward.y, forward.x);
-        // tiltAngle = how much the forward direction is out of the XY plane
         const xyLen = Math.sqrt(forward.x * forward.x + forward.y * forward.y);
         this.tiltAngle = Math.atan2(forward.z, xyLen);
-        this.version++;
+        this.rollAngle = 0;
+        // recomputeRotation() builds the quaternion via the same canonical basis
+        // construction, keeping scalar pan/tilt/roll in sync with the quaternion.
+        this.recomputeRotation();
     }
 
     updateMatrices() {

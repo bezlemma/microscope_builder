@@ -4,11 +4,12 @@
  * Each visualizer renders the 3D representation of an optical component.
  * Grouped here to keep OpticalTable.tsx focused on the solver/render loop.
  */
-import React, { useMemo } from 'react';
-import { Vector2, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry } from 'three';
+import React, { useMemo, useState, useRef, useCallback, useContext, createContext } from 'react';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, BoxGeometry, ShapeGeometry } from 'three';
 import { useAtom } from 'jotai';
-import { selectionAtom } from '../../state/store';
-import { Text } from '@react-three/drei';
+import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom } from '../../state/store';
+import { Text, Edges, Line } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import { OpticalComponent } from '../../physics/Component';
 import { Mirror } from '../../physics/components/Mirror';
 import { SphericalLens } from '../../physics/components/SphericalLens';
@@ -31,13 +32,156 @@ import { Filter } from '../../physics/components/Filter';
 import { DichroicMirror } from '../../physics/components/DichroicMirror';
 import { CurvedMirror } from '../../physics/components/CurvedMirror';
 import { PolygonScanner } from '../../physics/components/PolygonScanner';
+import { AbstractPolygonOptic } from '../../physics/components/AbstractPolygonOptic';
 import { PMT } from '../../physics/components/PMT';
 import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
+import { Diffuser } from '../../physics/components/Diffuser';
+import { DoubleSlit } from '../../physics/components/DoubleSlit';
+import { FaradayIsolator } from '../../physics/components/FaradayIsolator';
+import { QPD } from '../../physics/components/QPD';
+import { AOD } from '../../physics/components/AOD';
+import { AchromatDoublet } from '../../physics/components/AchromatDoublet';
+import { PupilMaskElement } from '../../physics/components/PupilMaskElement';
+import { MediumVolume } from '../../physics/components/MediumVolume';
+import { Rail } from '../../physics/components/Rail';
+import { StructuredSource } from '../../physics/components/StructuredSource';
+import { PointSourceBase } from '../../physics/components/PointSourceBase';
+import { ConeSource3D } from '../../physics/components/ConeSource3D';
+import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
-import { wavelengthToHex } from '../../physics/spectral';
+import { wavelengthToHex, wavelengthToCSS } from '../../physics/spectral';
+
+/**
+ * Context for outline color — black (#000000) for components on the active
+ * Z level, grey (#888888) for components on other levels.
+ * Provided per-component in OpticalTable.tsx.
+ */
+export const OutlineColorContext = createContext<string>('#000000');
+
+/** Simple edge outline using drei's <Edges>. Place as a child of any <mesh>. */
+const EdgeOutline: React.FC<{ threshold?: number; color?: string }> = ({ threshold = 20, color }) => {
+    const contextColor = useContext(OutlineColorContext);
+    return <Edges threshold={threshold} color={color ?? contextColor} />;
+};
+
+/**
+ * Explicit outline for extruded polygon optics (prisms, etc.).
+ * Draws front/back endcap perimeters and corner connecting lines.
+ */
+const PolygonOutline: React.FC<{
+    component: { getOutlineData: () => { frontCap: Vector3[]; backCap: Vector3[]; corners: [Vector3, Vector3][] }; version: number };
+}> = ({ component }) => {
+    const outlineData = useMemo(() => component.getOutlineData(), [component.version]);
+
+    const frontPts = outlineData.frontCap.map(v => [v.x, v.y, v.z] as [number, number, number]);
+    if (frontPts.length > 0) frontPts.push(frontPts[0]);
+    const backPts = outlineData.backCap.map(v => [v.x, v.y, v.z] as [number, number, number]);
+    if (backPts.length > 0) backPts.push(backPts[0]);
+
+    const outlineColor = useContext(OutlineColorContext);
+
+    return (
+        <group>
+            {frontPts.length > 1 && <Line points={frontPts} color={outlineColor} lineWidth={1.5} />}
+            {backPts.length > 1 && <Line points={backPts} color={outlineColor} lineWidth={1.5} />}
+            {outlineData.corners.map((pair, i) => (
+                <Line key={i} points={[[pair[0].x, pair[0].y, pair[0].z], [pair[1].x, pair[1].y, pair[1].z]]} color={outlineColor} lineWidth={1.5} />
+            ))}
+        </group>
+    );
+};
+
+/**
+ * Build a flat ShapeGeometry from a lens profile for clean 2D top-down rendering.
+ */
+function buildProfileShapeGeo(profile: Vector2[]): ShapeGeometry {
+    const shape = new Shape();
+    shape.moveTo(profile[0].x, profile[0].y);
+    for (let i = 1; i < profile.length; i++) {
+        shape.lineTo(profile[i].x, profile[i].y);
+    }
+    for (let i = profile.length - 1; i >= 0; i--) {
+        shape.lineTo(-profile[i].x, profile[i].y);
+    }
+    shape.closePath();
+    return new ShapeGeometry(shape);
+}
+
+/**
+ * Explicit rim outline for LatheGeometry-based lenses.
+ * EdgesGeometry doesn't work well on curved lathe surfaces (picks up seam,
+ * misses rim).  Instead we draw the rim circle(s) for perspective view, and
+ * the profile cross-section curves for top-down view.
+ */
+const LensRimOutline: React.FC<{
+    profilePoints: Vector2[];
+    aperture: number;
+}> = ({ profilePoints, aperture }) => {
+    const [blend] = useAtom(cameraBlendAtom);
+
+    const { rimCircles, rightProfile, leftProfile } = useMemo(() => {
+        let maxR = 0;
+        for (const p of profilePoints) {
+            if (p.x > maxR) maxR = p.x;
+        }
+
+        const segments = 64;
+        const makeCircle = (z: number, r: number): [number, number, number][] => {
+            const circle: [number, number, number][] = [];
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                circle.push([
+                    Math.cos(angle) * r,
+                    Math.sin(angle) * r,
+                    z
+                ]);
+            }
+            return circle;
+        };
+
+        const threshold = maxR * 0.99;
+        let rimZmin = Infinity, rimZmax = -Infinity;
+        for (const p of profilePoints) {
+            if (p.x >= threshold) {
+                if (p.y < rimZmin) rimZmin = p.y;
+                if (p.y > rimZmax) rimZmax = p.y;
+            }
+        }
+
+        const circles = [makeCircle(rimZmin, maxR)];
+        const thin = Math.abs(rimZmax - rimZmin) <= 0.01;
+        if (!thin) {
+            circles.push(makeCircle(rimZmax, maxR));
+        }
+
+        const right: [number, number, number][] = profilePoints.map(p => [p.x, 0, p.y]);
+        const left: [number, number, number][] = profilePoints.map(p => [-p.x, 0, p.y]);
+
+        return { rimCircles: circles, rightProfile: right, leftProfile: left };
+    }, [profilePoints, aperture]);
+
+    const rimOpacity = blend;
+    const profileOpacity = 1 - blend;
+
+    const outlineColor = useContext(OutlineColorContext);
+
+    return (
+        <group>
+            {rimOpacity > 0.01 && rimCircles.map((circle, i) => (
+                <Line key={`rim-${i}`} points={circle} color={outlineColor} lineWidth={1.5} opacity={rimOpacity} transparent={rimOpacity < 1} />
+            ))}
+            {profileOpacity > 0.01 && rightProfile.length > 2 && (
+                <>
+                    <Line points={rightProfile} color={outlineColor} lineWidth={1.5} opacity={profileOpacity} transparent={profileOpacity < 1} />
+                    <Line points={leftProfile} color={outlineColor} lineWidth={1.5} opacity={profileOpacity} transparent={profileOpacity < 1} />
+                </>
+            )}
+        </group>
+    );
+};
 
 /** Wall panel with a real circular hole (CSG via Shape + ExtrudeGeometry) */
 const WallWithHole = ({ wallSize, holeRadius, thickness, position, rotation, color }: {
@@ -449,11 +593,13 @@ export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror 
         >
             <mesh geometry={geom} renderOrder={-1}>
                 <meshPhysicalMaterial
-                    color="#ffffff"
-                    metalness={0.95}
-                    roughness={0.05}
+                    color="#eef1f5"
+                    metalness={0.35}
+                    roughness={0.18}
                     clearcoat={1.0}
-                    clearcoatRoughness={0.05}
+                    clearcoatRoughness={0.04}
+                    emissive="#c8d2dc"
+                    emissiveIntensity={0.4}
                     side={DoubleSide}
                 />
             </mesh>
@@ -713,6 +859,7 @@ export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => 
 };
 
 export const CardVisualizer = ({ component }: { component: Card }) => {
+    const opaque = component.opaque;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
@@ -721,7 +868,9 @@ export const CardVisualizer = ({ component }: { component: Card }) => {
         >
             <mesh>
                 <boxGeometry args={[component.width, component.height, 1]} />
-                <meshStandardMaterial color="white" roughness={0.5} emissive="white" emissiveIntensity={0.1} />
+                {opaque
+                    ? <meshStandardMaterial color="#050505" roughness={0.95} metalness={0.0} emissive="#000000" />
+                    : <meshStandardMaterial color="white" roughness={0.5} emissive="white" emissiveIntensity={0.1} />}
             </mesh>
             <mesh>
                 <boxGeometry args={[component.width, component.height, 10]} />
@@ -769,44 +918,71 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
         return profile;
     }, [aperture, thickness, R1, R2]);
 
+    const [blend] = useAtom(cameraBlendAtom);
+
+    const lensGeo = useMemo(() => new LatheGeometry(profilePoints, 32), [profilePoints]);
+    const lensFlatGeo = useMemo(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
+
+    const lensColor = component.ior > 1.55 ? "#88ffee" : "#aaddff";
+    const lensEmissive = isSelected ? "#64ffda" : "#000000";
+    const lensEmissiveIntensity = isSelected ? 0.15 : 0;
+
+    const targetTransmission = isSelected ? 0.85 : 0.95;
+    const transmission = blend * targetTransmission;
+    const orthoOpacity = isSelected ? 0.6 : 0.5;
+    const perspOpacity = isSelected ? 0.6 : 0.5;
+    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
+    const roughness = 0.1 * (1 - blend);
+
+    const show3D = blend > 0.01;
+    const show2D = blend < 0.99;
+    const flatOpacity = isSelected ? 0.6 : 0.5;
+
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <latheGeometry args={[profilePoints, 32]} />
-                <meshPhysicalMaterial
-                    color={component.ior > 1.55 ? "#88ffee" : "#aaddff"}
-                    transmission={isSelected ? 0.85 : 0.95}
-                    opacity={isSelected ? 0.6 : 0.4}
-                    transparent
-                    roughness={0}
-                    metalness={0}
-                    ior={component.ior || 1.5}
-                    side={DoubleSide}
-                    depthWrite={false}
-                    emissive={isSelected ? "#64ffda" : "#000000"}
-                    emissiveIntensity={isSelected ? 0.15 : 0}
-                />
-            </mesh>
+            {show2D && (
+                <mesh geometry={lensFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <meshBasicMaterial
+                        color={lensColor}
+                        transparent
+                        opacity={flatOpacity * (1 - blend)}
+                        depthWrite={false}
+                        side={DoubleSide}
+                    />
+                </mesh>
+            )}
+            {show3D && (
+                <mesh geometry={lensGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <meshPhysicalMaterial
+                        color={lensColor}
+                        transmission={transmission}
+                        opacity={opacity * blend}
+                        transparent
+                        roughness={roughness}
+                        metalness={0}
+                        ior={component.ior || 1.5}
+                        thickness={0.5}
+                        attenuationColor="#aaddff"
+                        attenuationDistance={5}
+                        side={DoubleSide}
+                        depthWrite={false}
+                        emissive={lensEmissive}
+                        emissiveIntensity={lensEmissiveIntensity}
+                    />
+                </mesh>
+            )}
+            <LensRimOutline profilePoints={profilePoints} aperture={aperture} />
         </group>
     );
 };
 
 export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
     const isLaser = component instanceof Laser || component.constructor.name === 'Laser';
-    let beamColor = "#222";
-    if (isLaser) {
-        const wl = (component as Laser).wavelength;
-        if (wl < 430) beamColor = "#8a2be2";
-        else if (wl < 490) beamColor = "#00bfff";
-        else if (wl < 550) beamColor = "#00ff00";
-        else if (wl < 590) beamColor = "#ffd700";
-        else if (wl < 630) beamColor = "#ff8c00";
-        else beamColor = "#ff0000";
-    }
+    const beamColor = isLaser ? wavelengthToCSS((component as Laser).wavelength) : "#222";
 
     return (
         <group
@@ -1043,6 +1219,751 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
                     side={2}
                     depthWrite={false}
                 />
+            </mesh>
+        </group>
+    );
+};
+
+// ─── Ported from BOMB ────────────────────────────────────────────────
+
+export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolygonOptic }) => {
+    if (!component || !component.rotation || !component.position) return null;
+    const [blend] = useAtom(cameraBlendAtom);
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+    const geometry = useMemo(() => component.buildDisplayGeometry(), [component.version]);
+
+    const isGlass = component.faceModes.some(m => m === 'refractive');
+
+    if (isGlass) {
+        const glassColor = component.ior > 1.55 ? "#88ffee" : "#aaddff";
+        const targetTransmission = isSelected ? 0.85 : 0.95;
+        const orthoOpacity = isSelected ? 0.45 : 0.3;
+        const perspOpacity = isSelected ? 0.6 : 0.4;
+
+        return (
+            <group
+                position={[component.position.x, component.position.y, component.position.z]}
+                quaternion={component.rotation.clone()}
+                onClick={(e) => { e.stopPropagation(); }}
+            >
+                <mesh geometry={geometry} renderOrder={2}>
+                    <meshPhysicalMaterial
+                        color={glassColor}
+                        transmission={blend * targetTransmission}
+                        opacity={orthoOpacity + blend * (perspOpacity - orthoOpacity)}
+                        transparent
+                        roughness={0.1 * (1 - blend)}
+                        metalness={0}
+                        ior={component.ior || 1.5}
+                        thickness={0.5}
+                        attenuationColor="#aaddff"
+                        attenuationDistance={5}
+                        side={DoubleSide}
+                        depthWrite={false}
+                    />
+                </mesh>
+                <PolygonOutline component={component} />
+            </group>
+        );
+    }
+
+    const metalOrthoOpacity = isSelected ? 0.55 : 0.45;
+    const metalPerspOpacity = 1.0;
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh geometry={geometry}>
+                <meshPhysicalMaterial
+                    color="#d6dde4"
+                    metalness={blend * 0.85}
+                    roughness={0.18 + 0.3 * (1 - blend)}
+                    clearcoat={blend}
+                    clearcoatRoughness={0.04}
+                    emissive="#6f7a84"
+                    emissiveIntensity={0.08}
+                    transparent
+                    opacity={metalOrthoOpacity + blend * (metalPerspOpacity - metalOrthoOpacity)}
+                    side={DoubleSide}
+                    depthWrite={blend > 0.5}
+                />
+            </mesh>
+            <PolygonOutline component={component} />
+        </group>
+    );
+};
+
+export const PupilMaskVisualizer = ({ component }: { component: PupilMaskElement }) => {
+    const outerR = component.radius;
+    const innerR = outerR * Math.max(0, Math.min(component.innerRadius, 1));
+    const ringOuterR = outerR * Math.max(component.innerRadius, Math.min(component.outerRadius, 1));
+    const ringVisible = component.mode !== 'uniform' && ringOuterR > innerR + 1e-4;
+    const backgroundOpacity = Math.max(0.08, Math.min(0.65, component.backgroundTransmission));
+    const ringOpacity = Math.max(0.1, Math.min(0.85, component.ringTransmission));
+    const ringColor = component.ringPhaseShift >= 0 ? '#ffd166' : '#ef476f';
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[outerR, outerR, component.thickness, 48]} />
+                <meshStandardMaterial color="#6f7d8c" transparent opacity={backgroundOpacity} metalness={0.3} roughness={0.3} />
+                <EdgeOutline />
+            </mesh>
+            {component.mode !== 'annulus' && innerR > 0.01 && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.02]}>
+                    <cylinderGeometry args={[innerR, innerR, component.thickness * 0.55, 48]} />
+                    <meshBasicMaterial color="#8ecae6" transparent opacity={Math.max(0.1, backgroundOpacity)} />
+                </mesh>
+            )}
+            {ringVisible && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.04]}>
+                    <cylinderGeometry args={[ringOuterR, ringOuterR, component.thickness * 0.65, 48]} />
+                    <meshBasicMaterial color={ringColor} transparent opacity={ringOpacity} />
+                </mesh>
+            )}
+            {ringVisible && innerR > 0.001 && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.05]}>
+                    <cylinderGeometry args={[innerR, innerR, component.thickness * 0.8, 48]} />
+                    <meshStandardMaterial color="#111" transparent opacity={component.mode === 'annulus' ? 0.9 : 0.15} />
+                </mesh>
+            )}
+        </group>
+    );
+};
+
+export const MediumVolumeVisualizer = ({ component }: { component: MediumVolume }) => {
+    const isBridge = component.visualMode === 'bridge';
+    const radiusA = Math.max(component.bridgeStartRadius, 0.05);
+    const radiusB = Math.max(component.bridgeEndRadius, 0.05);
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={isBridge ? [Math.PI / 2, 0, 0] : undefined}>
+                {isBridge ? (
+                    <cylinderGeometry args={[radiusB, radiusA, component.depth, 32]} />
+                ) : (
+                    <boxGeometry args={[component.width, component.height, component.depth]} />
+                )}
+                <meshPhysicalMaterial
+                    color="#7fd8ff"
+                    transmission={0.75}
+                    transparent
+                    opacity={0.16}
+                    roughness={0.05}
+                    metalness={0}
+                    depthWrite={false}
+                />
+                <EdgeOutline color="#7fd8ff" />
+            </mesh>
+        </group>
+    );
+};
+
+export const DiffuserVisualizer = ({ component }: { component: Diffuser }) => {
+    const radius = component.diameter / 2;
+    const geo = useMemo(() => new CylinderGeometry(radius, radius, component.thickness, 32), [radius, component.thickness]);
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh geometry={geo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <meshPhysicalMaterial
+                    color="#eeddcc"
+                    metalness={0.0}
+                    roughness={0.9}
+                    transparent={true}
+                    opacity={0.6}
+                />
+                <EdgeOutline />
+            </mesh>
+        </group>
+    );
+};
+
+export const DoubleSlitVisualizer = ({ component }: { component: DoubleSlit }) => {
+    const bars = useMemo(() => {
+        const halfSep = component.slitSeparation / 2;
+        const halfW = component.slitWidth / 2;
+        const halfH = component.slitHeight / 2;
+        const outerR = component.housingDiameter / 2;
+        const thickness = 2;
+        const leftEdge = -halfSep - halfW;
+        const rightEdgeLeft = -halfSep + halfW;
+        const leftEdgeRight = halfSep - halfW;
+        const rightEdge = halfSep + halfW;
+        const result: { position: [number, number, number]; size: [number, number, number] }[] = [
+            { position: [(leftEdge + (-outerR)) / 2, 0, 0], size: [leftEdge - (-outerR), halfH * 2, thickness] },
+            { position: [(rightEdgeLeft + leftEdgeRight) / 2, 0, 0], size: [leftEdgeRight - rightEdgeLeft, halfH * 2, thickness] },
+            { position: [(rightEdge + outerR) / 2, 0, 0], size: [outerR - rightEdge, halfH * 2, thickness] },
+            { position: [0, (halfH + outerR) / 2, 0], size: [outerR * 2, outerR - halfH, thickness] },
+            { position: [0, -(halfH + outerR) / 2, 0], size: [outerR * 2, outerR - halfH, thickness] },
+        ];
+        return result.filter(b => b.size[0] > 0.01 && b.size[1] > 0.01);
+    }, [component.slitWidth, component.slitSeparation, component.slitHeight, component.housingDiameter]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {bars.map((bar, index) => (
+                <group key={index} position={bar.position}>
+                    <mesh>
+                        <boxGeometry args={bar.size} />
+                        <meshStandardMaterial color="#444" roughness={0.5} metalness={0.5} />
+                        <EdgeOutline />
+                    </mesh>
+                </group>
+            ))}
+        </group>
+    );
+};
+
+const DoubletOutline: React.FC<{
+    component: AchromatDoublet;
+    frontProfile: Vector2[];
+    backProfile: Vector2[];
+}> = ({ component, backProfile }) => {
+    const [blend] = useAtom(cameraBlendAtom);
+
+    const outlineData = useMemo(() => {
+        const combinedProfile = component.generateCombinedProfile(48);
+
+        let maxR = 0;
+        for (const p of combinedProfile) if (p.x > maxR) maxR = p.x;
+
+        const rightProfile: [number, number, number][] = combinedProfile.map(p => [p.x, 0, p.y]);
+        const leftProfile: [number, number, number][] = combinedProfile.map(p => [-p.x, 0, p.y]);
+
+        const cementRight: [number, number, number][] = [];
+        const cementLeft: [number, number, number][] = [];
+        for (const p of backProfile) {
+            if (Math.abs(p.x - maxR) < 0.001) break;
+            cementRight.push([p.x, 0, p.y]);
+            cementLeft.push([-p.x, 0, p.y]);
+        }
+
+        const threshold = maxR * 0.99;
+        let rimZmin = Infinity, rimZmax = -Infinity;
+        for (const p of combinedProfile) {
+            if (p.x >= threshold) {
+                if (p.y < rimZmin) rimZmin = p.y;
+                if (p.y > rimZmax) rimZmax = p.y;
+            }
+        }
+        const circleSegs = 64;
+        const makeCircle = (z: number, r: number): [number, number, number][] => {
+            const circle: [number, number, number][] = [];
+            for (let i = 0; i <= circleSegs; i++) {
+                const angle = (i / circleSegs) * Math.PI * 2;
+                circle.push([Math.cos(angle) * r, Math.sin(angle) * r, z]);
+            }
+            return circle;
+        };
+        const rimCircles = [makeCircle(rimZmin, maxR)];
+        if (Math.abs(rimZmax - rimZmin) > 0.01) {
+            rimCircles.push(makeCircle(rimZmax, maxR));
+        }
+        return { rightProfile, leftProfile, cementRight, cementLeft, rimCircles };
+    }, [component.version, backProfile]);
+
+    const rimOpacity = blend;
+    const profileOpacity = 1 - blend;
+
+    const outlineColor = useContext(OutlineColorContext);
+
+    return (
+        <group>
+            {rimOpacity > 0.01 && outlineData.rimCircles.map((circle, i) => (
+                <Line key={`rim-${i}`} points={circle} color={outlineColor} lineWidth={1.5} opacity={rimOpacity} transparent={rimOpacity < 1} />
+            ))}
+            {profileOpacity > 0.01 && (
+                <>
+                    <Line points={outlineData.rightProfile} color={outlineColor} lineWidth={1.5} opacity={profileOpacity} transparent={profileOpacity < 1} />
+                    <Line points={outlineData.leftProfile} color={outlineColor} lineWidth={1.5} opacity={profileOpacity} transparent={profileOpacity < 1} />
+                    {outlineData.cementRight.length > 2 && (
+                        <>
+                            <Line points={outlineData.cementRight} color={outlineColor} lineWidth={1.0} opacity={profileOpacity * 0.7} transparent />
+                            <Line points={outlineData.cementLeft} color={outlineColor} lineWidth={1.0} opacity={profileOpacity * 0.7} transparent />
+                        </>
+                    )}
+                </>
+            )}
+        </group>
+    );
+};
+
+export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDoublet }) => {
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+
+    if (!component || !component.rotation || !component.position) return null;
+
+    const [blend] = useAtom(cameraBlendAtom);
+
+    const [frontProfile, backProfile] = useMemo(
+        () => component.generateSplitProfiles(32),
+        [component.version],
+    );
+
+    const frontGeo = useMemo(() => new LatheGeometry(frontProfile, 32), [frontProfile]);
+    const backGeo = useMemo(() => new LatheGeometry(backProfile, 32), [backProfile]);
+
+    const frontFlatGeo = useMemo(() => buildProfileShapeGeo(frontProfile), [frontProfile]);
+    const backFlatGeo = useMemo(() => buildProfileShapeGeo(backProfile), [backProfile]);
+
+    const frontColor = "#88ffee";
+    const backColor  = "#aabbff";
+    const lensEmissive = isSelected ? "#64ffda" : "#000000";
+    const lensEmissiveIntensity = isSelected ? 0.15 : 0;
+
+    const maxIor = Math.max(component.ior1, component.ior2);
+    const targetTransmission = isSelected ? 0.85 : 0.95;
+    const transmission = blend * targetTransmission;
+    const orthoOpacity = isSelected ? 0.6 : 0.5;
+    const perspOpacity = isSelected ? 0.6 : 0.5;
+    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
+    const roughness = 0.1 * (1 - blend);
+
+    const matProps3D = {
+        transmission,
+        opacity,
+        transparent: true as const,
+        roughness,
+        metalness: 0,
+        ior: maxIor,
+        thickness: 0.5,
+        attenuationColor: "#aaddff",
+        attenuationDistance: 5,
+        depthWrite: false,
+        emissive: lensEmissive,
+        emissiveIntensity: lensEmissiveIntensity,
+        side: DoubleSide,
+    };
+
+    const show3D = blend > 0.01;
+    const show2D = blend < 0.99;
+    const flatOpacity = isSelected ? 0.6 : 0.5;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {show2D && (
+                <>
+                    <mesh geometry={frontFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                        <meshBasicMaterial color={frontColor} transparent opacity={flatOpacity * (1 - blend)} depthWrite={false} side={DoubleSide} />
+                    </mesh>
+                    <mesh geometry={backFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                        <meshBasicMaterial color={backColor} transparent opacity={flatOpacity * (1 - blend)} depthWrite={false} side={DoubleSide} />
+                    </mesh>
+                </>
+            )}
+            {show3D && (
+                <>
+                    <mesh geometry={frontGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                        <meshPhysicalMaterial color={frontColor} {...matProps3D} opacity={opacity * blend} />
+                    </mesh>
+                    <mesh geometry={backGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                        <meshPhysicalMaterial color={backColor} {...matProps3D} opacity={opacity * blend} />
+                    </mesh>
+                </>
+            )}
+            <DoubletOutline component={component} frontProfile={frontProfile} backProfile={backProfile} />
+        </group>
+    );
+};
+
+export const PointSourceVisualizer: React.FC<{ component: PointSourceBase }> = ({ component }) => {
+    const color = useMemo(() => {
+        return wavelengthToCSS(component.wavelength);
+    }, [component.wavelength, component.version]);
+
+    const isCone = component instanceof ConeSource3D;
+    const isWedge = component instanceof WedgeSource2D;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh>
+                <sphereGeometry args={[2.5, 16, 16]} />
+                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} metalness={0.3} roughness={0.4} />
+            </mesh>
+
+            {isCone && (() => {
+                const cone = component as ConeSource3D;
+                const len = 25;
+                const radius = len * Math.tan(cone.halfAngle);
+                return (
+                    <mesh position={[0, 0, len / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                        <coneGeometry args={[radius, len, 24, 1, true]} />
+                        <meshBasicMaterial color={color} wireframe transparent opacity={0.3} />
+                    </mesh>
+                );
+            })()}
+
+            {isWedge && (() => {
+                const wedge = component as WedgeSource2D;
+                const halfAngle = wedge.subtendedAngle / 2;
+                const len = 25;
+                const segments = 24;
+                const points: [number, number, number][] = [[0, 0, 0]];
+                for (let i = 0; i <= segments; i++) {
+                    const theta = -halfAngle + (i / segments) * wedge.subtendedAngle;
+                    points.push([Math.sin(theta) * len, 0, Math.cos(theta) * len]);
+                }
+                points.push([0, 0, 0]);
+                return (
+                    <Line points={points} color={color} lineWidth={1} transparent opacity={0.4} />
+                );
+            })()}
+        </group>
+    );
+};
+
+export const StructuredSourceVisualizer: React.FC<{ component: StructuredSource }> = ({ component }) => {
+    const beamColor = useMemo(() => {
+        return wavelengthToCSS(component.wavelength);
+    }, [component.wavelength, component.version]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh position={[0, 0, -33]}>
+                <boxGeometry args={[38, 40, 70]} />
+                <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
+                <EdgeOutline />
+            </mesh>
+            <mesh position={[0, 20.1, -40]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[20, 38]} />
+                <meshBasicMaterial color={beamColor} />
+            </mesh>
+            <Text
+                position={[0, 20.2, -33]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                fontSize={18}
+                color="#fff"
+                anchorX="center"
+                anchorY="middle"
+                font={undefined}
+            >
+                {component.asciiChar}
+            </Text>
+            <mesh position={[0, 0, 2]}>
+                <boxGeometry args={[component.beamRadius * 2, component.beamRadius * 2, 2]} />
+                <meshStandardMaterial color="#666" />
+                <EdgeOutline />
+            </mesh>
+        </group>
+    );
+};
+
+// ─── Rail Visualizer ─────────────────────────────────────────────────
+
+/** Snap XY to the nearest 25mm optical table hole (offset 12.5mm to match shader grid). */
+function snapEndpointToHole(x: number, y: number): Vector3 {
+    const spacing = 25;
+    const offset = 12.5;
+    const sx = Math.round((x - offset) / spacing) * spacing + offset;
+    const sy = Math.round((y - offset) / spacing) * spacing + offset;
+    return new Vector3(sx, sy, Rail.TABLE_Z);
+}
+
+const RailEndpointHandle: React.FC<{
+    rail: Rail;
+    endpoint: 'A' | 'B';
+    position: [number, number, number];
+}> = ({ rail, endpoint, position }) => {
+    const [components, setComponents] = useAtom(componentsAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
+    const [, setHandleDragging] = useAtom(handleDraggingAtom);
+    const { controls } = useThree();
+    const dragging = useRef(false);
+    const [hovered, setHovered] = useState(false);
+
+    const raycastToTable = useCallback((e: any): Vector3 | null => {
+        const ray = e.ray;
+        if (Math.abs(ray.direction.z) < 1e-6) return null;
+        const t = (Rail.TABLE_Z - ray.origin.z) / ray.direction.z;
+        return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
+    }, []);
+
+    const handlePointerDown = useCallback((e: any) => {
+        e.stopPropagation();
+        try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { }
+        pushUndo();
+        dragging.current = true;
+        setHandleDragging(true);
+        if (controls) (controls as any).enabled = false;
+    }, [pushUndo, setHandleDragging, controls]);
+
+    const handlePointerUp = useCallback((e: any) => {
+        e.stopPropagation();
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { }
+        dragging.current = false;
+        setHandleDragging(false);
+        if (controls) (controls as any).enabled = true;
+    }, [setHandleDragging, controls]);
+
+    const handlePointerMove = useCallback((e: any) => {
+        if (!dragging.current) return;
+        e.stopPropagation();
+
+        const worldPos = raycastToTable(e);
+        if (!worldPos) return;
+
+        const snapped = snapEndpointToHole(worldPos.x, worldPos.y);
+
+        if (endpoint === 'A') {
+            rail.setEndpointA(snapped);
+        } else {
+            rail.setEndpointB(snapped);
+        }
+
+        setComponents([...components]);
+    }, [components, setComponents, rail, endpoint, raycastToTable]);
+
+    return (
+        <mesh
+            position={position}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerMove={handlePointerMove}
+            onPointerOver={() => { setHovered(true); document.body.style.cursor = 'grab'; }}
+            onPointerOut={() => { setHovered(false); document.body.style.cursor = 'auto'; }}
+        >
+            <sphereGeometry args={[3.5, 16, 16]} />
+            <meshStandardMaterial color={hovered ? '#64ffda' : '#999'} metalness={0.5} roughness={0.3} />
+        </mesh>
+    );
+};
+
+export const RailVisualizer: React.FC<{ component: Rail }> = ({ component }) => {
+    const outlineColor = useContext(OutlineColorContext);
+
+    const { midPos, angle, len } = useMemo(() => {
+        const a = component.holeA;
+        const b = component.holeB;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        mid.z = Rail.TABLE_Z + component.profileHeight / 2 + 0.1;
+        return {
+            midPos: mid,
+            angle: Math.atan2(dy, dx),
+            len: Math.sqrt(dx * dx + dy * dy),
+        };
+    }, [component.holeA, component.holeB, component.profileHeight, component.version]);
+
+    const w = component.profileWidth;
+    const h = component.profileHeight;
+
+    const grooveWidth = w * 0.35;
+    const grooveDepth = h * 0.2;
+    const handleZ = Rail.TABLE_Z + h + 0.5;
+
+    return (
+        <group>
+            <mesh position={[midPos.x, midPos.y, midPos.z]} rotation={[0, 0, angle]}>
+                <boxGeometry args={[len, w, h]} />
+                <meshStandardMaterial color="#555" metalness={0.6} roughness={0.4} />
+                <Edges threshold={15} color={outlineColor} />
+            </mesh>
+            <mesh
+                position={[midPos.x, midPos.y, midPos.z + h / 2 - grooveDepth / 2 + 0.01]}
+                rotation={[0, 0, angle]}
+            >
+                <boxGeometry args={[len - 1, grooveWidth, grooveDepth]} />
+                <meshStandardMaterial color="#333" metalness={0.7} roughness={0.3} />
+            </mesh>
+            <RailEndpointHandle rail={component} endpoint="A" position={[component.holeA.x, component.holeA.y, handleZ]} />
+            <RailEndpointHandle rail={component} endpoint="B" position={[component.holeB.x, component.holeB.y, handleZ]} />
+        </group>
+    );
+};
+
+export const FaradayIsolatorVisualizer: React.FC<{ component: FaradayIsolator }> = ({ component }) => {
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[12, 12, 25, 32]} />
+                <meshStandardMaterial color="#2a2a2a" metalness={0.6} roughness={0.4} />
+                <EdgeOutline />
+            </mesh>
+            <mesh position={[0, 0, 8]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[12.2, 12.2, 3, 32]} />
+                <meshStandardMaterial color="#00cc66" metalness={0.3} roughness={0.5} />
+            </mesh>
+            <Line
+                points={[[0, 12.5, -6], [0, 12.5, 8], [3, 12.5, 5], [-3, 12.5, 5], [0, 12.5, 8]]}
+                color="#00cc66"
+                lineWidth={2}
+            />
+        </group>
+    );
+};
+
+export const QPDVisualizer: React.FC<{ component: QPD }> = ({ component }) => {
+    const r = component.activeDiameter / 2;
+    const gap = component.gapWidth;
+    const quadSize = r - gap / 2;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh position={[0, 0, -3]}>
+                <boxGeometry args={[component.activeDiameter + 6, component.activeDiameter + 6, 6]} />
+                <meshStandardMaterial color="#333" metalness={0.5} roughness={0.5} />
+                <EdgeOutline />
+            </mesh>
+            {[[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([qx, qy], i) => (
+                <mesh key={i} position={[qx * (quadSize / 2 + gap / 2), qy * (quadSize / 2 + gap / 2), 0.1]}>
+                    <planeGeometry args={[quadSize, quadSize]} />
+                    <meshStandardMaterial color={['#4ecdc4', '#45b7aa', '#3ea99d', '#378f85'][i]} metalness={0.7} roughness={0.2} />
+                </mesh>
+            ))}
+            <Line points={[[0, -r, 0.15], [0, r, 0.15]]} color="#111" lineWidth={2} />
+            <Line points={[[-r, 0, 0.15], [r, 0, 0.15]]} color="#111" lineWidth={2} />
+        </group>
+    );
+};
+
+export const AODVisualizer: React.FC<{ component: AOD }> = ({ component }) => {
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh>
+                <boxGeometry args={[12, 12, 30]} />
+                <meshPhysicalMaterial
+                    color="#88ccff"
+                    metalness={0.0}
+                    roughness={0.1}
+                    transmission={0.6}
+                    thickness={5}
+                    transparent
+                    opacity={0.4}
+                />
+                <EdgeOutline />
+            </mesh>
+            <mesh position={[-6.1, 0, 0]}>
+                <boxGeometry args={[0.5, 10, 25]} />
+                <meshStandardMaterial color="#cc8833" metalness={0.7} roughness={0.3} />
+            </mesh>
+            {[-8, -4, 0, 4, 8].map((zz, i) => (
+                <Line
+                    key={i}
+                    points={[[-5.8, -4, zz], [-5.8, 4, zz]]}
+                    color="#ffaa44"
+                    lineWidth={1}
+                />
+            ))}
+        </group>
+    );
+};
+
+// ─── Ghost Visualizer (mb4-specific) ─────────────────────────────────
+
+/**
+ * Renders a component as a glowing dashed-blue outline — a target placeholder
+ * the user drags a real component into. Ghosts are excluded from ray tracing.
+ * Color: rgb(0, 127, 255) = #007fff (matches the BOMB brand glow).
+ */
+export const GhostVisualizer = ({ component }: { component: OpticalComponent }) => {
+    const GHOST_COLOR = '#007fff';
+    // Guess an aperture radius from the component; fall back to 12.7 mm.
+    const anyComp = component as any;
+    const radius =
+        typeof anyComp.diameter === 'number' ? anyComp.diameter / 2 :
+        typeof anyComp.apertureRadius === 'number' ? anyComp.apertureRadius :
+        typeof anyComp.radius === 'number' ? anyComp.radius :
+        12.7;
+
+    // Build a ring of points in the component's local XY plane (the mirror/lens aperture plane).
+    const ringPoints = useMemo(() => {
+        const pts: [number, number, number][] = [];
+        const N = 64;
+        for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            pts.push([Math.cos(a) * radius, Math.sin(a) * radius, 0]);
+        }
+        return pts;
+    }, [radius]);
+
+    // Small cross at the center to show the exact target point.
+    const crossPoints: Array<[number, number, number][]> = useMemo(() => {
+        const h = radius * 0.25;
+        return [
+            [[-h, 0, 0], [h, 0, 0]],
+            [[0, -h, 0], [0, h, 0]],
+        ];
+    }, [radius]);
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+        >
+            {/* Dashed circle outlining the aperture. */}
+            <Line
+                points={ringPoints}
+                color={GHOST_COLOR}
+                lineWidth={2}
+                dashed
+                dashSize={2}
+                gapSize={1.5}
+                transparent
+                opacity={0.95}
+            />
+            {/* Second offset ring to imply thickness + give a glow halo. */}
+            <Line
+                points={ringPoints}
+                color={GHOST_COLOR}
+                lineWidth={6}
+                dashed
+                dashSize={2}
+                gapSize={1.5}
+                transparent
+                opacity={0.25}
+            />
+            {/* Center cross. */}
+            {crossPoints.map((seg, i) => (
+                <Line key={i} points={seg} color={GHOST_COLOR} lineWidth={1.5} transparent opacity={0.8} />
+            ))}
+            {/* Faint filled disc so the target is visible under bloom. */}
+            <mesh>
+                <circleGeometry args={[radius * 0.95, 48]} />
+                <meshBasicMaterial color={GHOST_COLOR} transparent opacity={0.06} depthWrite={false} />
             </mesh>
         </group>
     );

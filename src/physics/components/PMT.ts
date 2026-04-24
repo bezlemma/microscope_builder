@@ -2,6 +2,20 @@ import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult } from '../types';
 
+export function derivePMTScanResolution(
+    pmtSampleHz: number,
+    xHz: number,
+    yHz: number,
+): { resX: number; resY: number } {
+    const safePmtHz = Math.max(1, pmtSampleHz);
+    const safeXHz = Math.max(xHz, 1e-6);
+    const safeYHz = Math.max(yHz, 1e-6);
+    return {
+        resX: Math.max(2, Math.round(safePmtHz / safeXHz)),
+        resY: Math.max(2, Math.round(safeXHz / safeYHz)),
+    };
+}
+
 /**
  * PMT (Photo-Multiplier Tube) — a point detector that records total incident
  * light intensity. Unlike a Camera (which has a 2D sensor), the PMT sums all
@@ -26,6 +40,7 @@ export class PMT extends OpticalComponent {
     scanResX: number = 64;
     scanResY: number = 64;
     scanImage: Float32Array | null = null;    // Raster-scanned image (resX × resY)
+    scanExcitationImage: Float32Array | null = null; // Excitation channel for multi-channel display
     scanStale: boolean = true;
     /** PMT sample rate in Hz — combined with galvo Hz values to derive scan resolution */
     pmtSampleHz: number = 4096;
@@ -36,6 +51,11 @@ export class PMT extends OpticalComponent {
         super(name);
         this.width = width;
         this.height = height;
+        // Housing (from PMTVisualizer): 20×20×30 box centered at origin.
+        this.bounds.set(
+            new Vector3(-10, -10, -15),
+            new Vector3(10, 10, 15),
+        );
     }
 
     /** Mark the scan result as stale. Keeps the image if it exists. */
@@ -48,6 +68,14 @@ export class PMT extends OpticalComponent {
         this.scanImage = null;
         this.scanStale = true;
         this.scanVersionSnapshot = null;
+    }
+
+    /** Connect this PMT's raster axes to a DualGalvoScanHead. */
+    connectGalvo(scanHead: { id: string }): void {
+        this.xAxisComponentId = scanHead.id;
+        this.xAxisProperty = 'scanX';
+        this.yAxisComponentId = scanHead.id;
+        this.yAxisProperty = 'scanY';
     }
 
     /** Check if the PMT has valid axis bindings for raster scanning. */

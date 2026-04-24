@@ -19,6 +19,7 @@ import {
 } from './sceneSnapshot';
 import { GaussianBeamSegment } from './Solver2';
 import type { PackedFirstHitHints } from './solver3FirstHitHints';
+import type { PackedAnalyticHits } from './solver3AnalyticNarrowPhase';
 import { Solver3Kernel, type Solver3Result } from './solver3Kernel';
 import { readRegisteredSolver3WasmModule, WasmSolver3Backend } from './solver3WasmBackend';
 import type { PackedCameraSamples } from './solver3Sampling';
@@ -47,7 +48,7 @@ export interface Solver3KernelBackend {
     renderCamera(request: CameraKernelRequest): Solver3Result;
     renderCameraGenerator(request: CameraKernelRequest): Generator<{ progress: number }, Solver3Result, void>;
     renderPMTPixel(request: PMTKernelRequest): { radiance: number; bestPath: Ray[] | null };
-    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; path: Ray[]; absorbed: boolean };
+    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean };
 }
 
 export function createSolver3KernelContext(
@@ -111,7 +112,7 @@ export class JsSolver3Backend implements Solver3KernelBackend {
         return this.kernel.renderPMTPixel(request.snapshot);
     }
 
-    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; path: Ray[]; absorbed: boolean } {
+    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean } {
         void this.context.tracePacket;
         void this.context.beamPacket;
         return this.kernel.traceBackward(startRay, originatorId);
@@ -121,22 +122,24 @@ export class JsSolver3Backend implements Solver3KernelBackend {
         request: CameraKernelRequest,
         samples: PackedCameraSamples,
         firstHitHints?: PackedFirstHitHints,
+        analyticHits?: PackedAnalyticHits,
     ): Solver3Result {
         void request.packet;
         void this.context.tracePacket;
         void this.context.beamPacket;
-        return this.kernel.renderPackedCameraSamples(request.snapshot, samples, request.maxVisPaths, firstHitHints);
+        return this.kernel.renderPackedCameraSamples(request.snapshot, samples, request.maxVisPaths, firstHitHints, analyticHits);
     }
 
     *renderCameraSamplesGenerator(
         request: CameraKernelRequest,
         samples: PackedCameraSamples,
         firstHitHints?: PackedFirstHitHints,
+        analyticHits?: PackedAnalyticHits,
     ): Generator<{ progress: number }, Solver3Result, void> {
         void request.packet;
         void this.context.tracePacket;
         void this.context.beamPacket;
-        return yield* this.kernel.renderPackedCameraSamplesGenerator(request.snapshot, samples, request.maxVisPaths, firstHitHints);
+        return yield* this.kernel.renderPackedCameraSamplesGenerator(request.snapshot, samples, request.maxVisPaths, firstHitHints, analyticHits);
     }
 }
 

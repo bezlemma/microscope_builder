@@ -31,6 +31,11 @@ export class CurvedMirror extends OpticalComponent {
         this.diameter = diameter;
         this.radiusOfCurvature = radiusOfCurvature;
         this.thickness = thickness;
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
     }
 
     /** Sag depth of the spherical surface at distance r from axis */

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 
 /**
  * Aperture / Iris — an adjustable circular stop.
@@ -23,6 +23,8 @@ export class Aperture extends OpticalComponent {
         super(name);
         this.openingDiameter = openingDiameter;
         this.housingDiameter = housingDiameter;
+        const r = housingDiameter / 2;
+        this.bounds.set(new Vector3(-r, -r, -1), new Vector3(r, r, 1));
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -44,23 +46,37 @@ export class Aperture extends OpticalComponent {
         const innerR = this.openingDiameter / 2;
         const outerR = this.housingDiameter / 2;
 
-        // Only intersect if hit is on the annular ring (outside opening, inside housing)
-        if (rSq < innerR * innerR || rSq > outerR * outerR) {
-            return null;  // Passes through the opening or misses entirely
+        // Only intersect if hit is within the outer housing bounds
+        if (rSq > outerR * outerR) {
+            return null; // completely misses housing
         }
+
+        const isBlocked = rSq >= innerR * innerR;
 
         const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);  // ±w normal
         return {
             t,
             point: hitPoint,
             normal,
-            localPoint: hitPoint.clone()
+            localPoint: hitPoint.clone(),
+            isBlocked
         };
     }
 
-    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
-        // Absorb: ray hit the ring body
-        return { rays: [] };
+    interact(ray: Ray, hit: HitRecord): InteractionResult {
+        if (hit.isBlocked) {
+            // Absorb: ray hit the ring body
+            return { rays: [] };
+        }
+        
+        // Pass through opening
+        return {
+            rays: [childRay(ray, {
+                origin: hit.point,
+                direction: ray.direction.clone(),
+                opticalPathLength: ray.opticalPathLength + hit.t
+            })]
+        };
     }
 
     // Solver 2 transfer matrix — identity (aperture is just a stop, no optical power).

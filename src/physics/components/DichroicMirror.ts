@@ -29,6 +29,11 @@ export class DichroicMirror extends OpticalComponent {
         this.diameter = diameter;
         this.thickness = thickness;
         this.spectralProfile = spectralProfile ?? new SpectralProfile('longpass', 500);
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -74,14 +79,25 @@ export class DichroicMirror extends OpticalComponent {
             return {
                 rays: [childRay(ray, {
                     origin: hit.point,
-                    intensity: ray.intensity
+                    intensity: ray.intensity,
+                    opticalPathLength: ray.opticalPathLength + hit.t,
                 })]
             };
         }
 
-        // Ray wavelength is in meters (SI), SpectralProfile expects nm
+        // Ray wavelength is in meters (SI), SpectralProfile expects nm.
+        // Guard against NaN/non-finite wavelengths so the split fractions stay
+        // well-defined (downstream infinity propagation would otherwise create
+        // ghost rays with NaN intensity that poison later visualizations).
         const wavelengthNm = ray.wavelength * 1e9;
-        const transmission = this.spectralProfile.getTransmission(wavelengthNm);
+        if (!Number.isFinite(wavelengthNm) || wavelengthNm <= 0) {
+            // Treat as fully absorbed at this surface.
+            return { rays: [] };
+        }
+        const rawT = this.spectralProfile.getTransmission(wavelengthNm);
+        const transmission = Number.isFinite(rawT)
+            ? Math.max(0, Math.min(1, rawT))
+            : 0;
         const opl = ray.opticalPathLength + hit.t;
         const rays: Ray[] = [];
 

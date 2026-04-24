@@ -28,6 +28,11 @@ export class BeamSplitter extends OpticalComponent {
         this.diameter = diameter;
         this.thickness = thickness;
         this.splitRatio = splitRatio;
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -67,25 +72,30 @@ export class BeamSplitter extends OpticalComponent {
         const approaching = ray.direction.dot(hit.normal) < 0;
 
         if (!approaching) {
-            // Hitting from inside — just pass through (shouldn't normally happen
-            // for thin plate, but handle gracefully)
             return {
                 rays: [childRay(ray, {
                     origin: hit.point,
-                    intensity: ray.intensity
+                    intensity: ray.intensity,
+                    opticalPathLength: ray.opticalPathLength + hit.t,
                 })]
             };
         }
 
         const opl = ray.opticalPathLength + hit.t;
 
-        // Reflected ray
+        // Reflected ray — π phase shift on reflection (negate Jones vector)
         const reflectedDir = reflectVector(ray.direction, hit.normal);
+        const polX = ray.polarization.x;
+        const polY = ray.polarization.y;
         const reflectedRay = childRay(ray, {
             origin: hit.point,
             direction: reflectedDir,
             intensity: ray.intensity * this.splitRatio,
-            opticalPathLength: opl
+            opticalPathLength: opl,
+            polarization: {
+                x: { re: -polX.re, im: -polX.im },
+                y: { re: -polY.re, im: -polY.im },
+            },
         });
 
         // Transmitted ray — passes straight through

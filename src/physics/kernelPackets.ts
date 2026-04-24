@@ -7,6 +7,12 @@ import { Laser } from './components/Laser';
 import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { SlitAperture } from './components/SlitAperture';
+import { Filter } from './components/Filter';
+import { DichroicMirror } from './components/DichroicMirror';
+import { BeamSplitter } from './components/BeamSplitter';
+import { PolarizingBeamSplitter } from './components/PolarizingBeamSplitter';
+import { SphericalLens } from './components/SphericalLens';
+import { AchromatDoublet } from './components/AchromatDoublet';
 import { GaussianBeamSegment } from './Solver2';
 import { Coherence } from './types';
 
@@ -15,6 +21,11 @@ export const PACKED_COMPONENT_MATRIX_STRIDE = 16;
 export const PACKED_COMPONENT_BOUNDS_STRIDE = 6;
 export const PACKED_DETECTOR_BASIS_STRIDE = 12;
 export const PACKED_BEAM_SEGMENT_SCALAR_STRIDE = 27;
+export const PACKED_SURFACE_PARAM_STRIDE = 8;
+
+export const SURFACE_KIND_UNSUPPORTED = 0;
+export const SURFACE_KIND_FLAT_DISC = 1;    // params: [inner_r, outer_r, absorbing_ring ? 1 : 0, ...]
+export const SURFACE_KIND_THICK_LENS = 2;   // params: [R1, R2, thickness, aperture, ior, ...]
 export const SOLVER3_KERNEL_STATUS_OK = 0;
 export const SOLVER3_KERNEL_STATUS_UNSUPPORTED_ABI = 1;
 export const SOLVER3_KERNEL_STATUS_UNIMPLEMENTED = 2;
@@ -79,6 +90,10 @@ export interface PackedTraceScene {
     componentVersions: Uint32Array;
     sampleComponentIndex: number;
     sampleScalars: Float64Array | null;
+    /** Per-component surface kind (SURFACE_KIND_* constants). */
+    surfaceKinds: Uint8Array;
+    /** Per-component surface parameters, PACKED_SURFACE_PARAM_STRIDE f64s each. */
+    surfaceParams: Float64Array;
 }
 
 export interface PackedBeamField {
@@ -114,13 +129,72 @@ export interface Solver3PacketHeader {
     detectorKind: number;
 }
 
+function packSurfaceParams(component: OpticalComponent, out: Float64Array, offset: number): number {
+    // FLAT_DISC family: plane at local z=0 clipped by an outer radius, optionally
+    // with an absorbing annular ring (Aperture).  Filter / Card / BeamSplitter /
+    // DichroicMirror / PolarizingBeamSplitter all share the same geometric test.
+    if (component instanceof Aperture) {
+        out[offset + 0] = component.openingDiameter / 2;
+        out[offset + 1] = component.housingDiameter / 2;
+        out[offset + 2] = 1;
+        return SURFACE_KIND_FLAT_DISC;
+    }
+    if (component instanceof Filter) {
+        out[offset + 0] = component.diameter / 2;
+        out[offset + 1] = component.diameter / 2;
+        out[offset + 2] = 0;
+        return SURFACE_KIND_FLAT_DISC;
+    }
+    if (component instanceof BeamSplitter
+        || component instanceof PolarizingBeamSplitter
+        || component instanceof DichroicMirror
+    ) {
+        out[offset + 0] = component.diameter / 2;
+        out[offset + 1] = component.diameter / 2;
+        out[offset + 2] = 0;
+        return SURFACE_KIND_FLAT_DISC;
+    }
+    // THICK_LENS: two spherical refracting surfaces.
+    if (component instanceof SphericalLens) {
+        const { R1, R2 } = component.getRadii();
+        out[offset + 0] = R1;
+        out[offset + 1] = R2;
+        out[offset + 2] = component.thickness;
+        out[offset + 3] = component.apertureRadius;
+        out[offset + 4] = component.ior;
+        return SURFACE_KIND_THICK_LENS;
+    }
+    // AchromatDoublet: for the first-hit narrow phase we only need the outer
+    // two surfaces (R1 front, R3 back).  The cement interface is only crossed
+    // once the ray is already inside the glass — that hit is still resolved by
+    // the JS .interact() path.  Reuse THICK_LENS with totalThickness = t1 + t2
+    // + cementGap.  Using the crown IOR is only advisory; the caller doesn't
+    // refract in the narrow phase.
+    if (component instanceof AchromatDoublet) {
+        out[offset + 0] = component.r1;
+        out[offset + 1] = component.r3;
+        out[offset + 2] = component.totalThickness;
+        out[offset + 3] = component.apertureRadius;
+        out[offset + 4] = component.ior1;
+        return SURFACE_KIND_THICK_LENS;
+    }
+    // Mirror (flat) and CurvedMirror are intentionally NOT handled here: Mirror
+    // has two flat planes at ±thickness/2 (not a single z=0 plane), and
+    // CurvedMirror uses a rim-absorption sentinel in the JS HitRecord's normal
+    // field that the narrow phase can't reproduce.  Both stay on the JS path.
+    return SURFACE_KIND_UNSUPPORTED;
+}
+
 export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceScene {
-    const count = scene.length;
+    const activeComponents = scene.filter(c => !c.isGhost);
+    const count = activeComponents.length;
     const componentKinds = new Uint8Array(count);
     const componentAbsorptionCoeff = new Float64Array(count);
     const localToWorldMatrices = new Float64Array(count * PACKED_COMPONENT_MATRIX_STRIDE);
     const worldToLocalMatrices = new Float64Array(count * PACKED_COMPONENT_MATRIX_STRIDE);
     const localBounds = new Float64Array(count * PACKED_COMPONENT_BOUNDS_STRIDE);
+    const surfaceKinds = new Uint8Array(count);
+    const surfaceParams = new Float64Array(count * PACKED_SURFACE_PARAM_STRIDE);
     const componentIds = new Array<string>(count);
     const componentNames = new Array<string>(count);
     const componentVersions = new Uint32Array(count);
@@ -128,7 +202,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
     let sampleScalars: Float64Array | null = null;
 
     for (let i = 0; i < count; i++) {
-        const component = scene[i];
+        const component = activeComponents[i];
         component.updateMatrices();
 
         componentKinds[i] = componentKindCode(component);
@@ -143,6 +217,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
             component.bounds.max.y,
             component.bounds.max.z,
         ], i * PACKED_COMPONENT_BOUNDS_STRIDE);
+        surfaceKinds[i] = packSurfaceParams(component, surfaceParams, i * PACKED_SURFACE_PARAM_STRIDE);
         componentIds[i] = component.id;
         componentNames[i] = component.name;
         componentVersions[i] = component.version;
@@ -170,6 +245,8 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
         componentVersions,
         sampleComponentIndex,
         sampleScalars,
+        surfaceKinds,
+        surfaceParams,
     };
 }
 

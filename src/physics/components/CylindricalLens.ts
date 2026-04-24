@@ -40,6 +40,10 @@ export class CylindricalLens extends OpticalComponent {
         this.width = width;
         this.thickness = thickness;
         this.ior = ior;
+        this.bounds.set(
+            new Vector3(-width / 2, -apertureRadius, -thickness / 2),
+            new Vector3(width / 2, apertureRadius, thickness / 2),
+        );
     }
 
     /** Sag function for the front surface at height y */

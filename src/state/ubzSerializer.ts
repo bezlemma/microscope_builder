@@ -35,6 +35,16 @@ import { PolygonScanner } from '../physics/components/PolygonScanner';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { PMT } from '../physics/components/PMT';
+import { DoubleSlit } from '../physics/components/DoubleSlit';
+import { Diffuser } from '../physics/components/Diffuser';
+import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
+import { FaradayIsolator } from '../physics/components/FaradayIsolator';
+import { AOD } from '../physics/components/AOD';
+import { QPD } from '../physics/components/QPD';
+import { Rail } from '../physics/components/Rail';
+import { MediumVolume } from '../physics/components/MediumVolume';
+import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
 
 // ════════════════════════════════════════════════════════════
@@ -210,6 +220,62 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`pmtSampleHz = ${fmt(comp.pmtSampleHz)}`);
         lines.push(`scanResX = ${fmt(comp.scanResX)}`);
         lines.push(`scanResY = ${fmt(comp.scanResY)}`);
+    } else if (comp instanceof AchromatDoublet) {
+        lines.push(`r1 = ${fmt(comp.r1)}`);
+        lines.push(`r2 = ${fmt(comp.r2)}`);
+        lines.push(`r3 = ${fmt(comp.r3)}`);
+        lines.push(`t1 = ${fmt(comp.t1)}`);
+        lines.push(`t2 = ${fmt(comp.t2)}`);
+        lines.push(`apertureRadius = ${fmt(comp.apertureRadius)}`);
+        lines.push(`ior1 = ${fmt(comp.ior1)}`);
+        lines.push(`ior2 = ${fmt(comp.ior2)}`);
+    } else if (comp instanceof DoubleSlit) {
+        lines.push(`slitWidth = ${fmt(comp.slitWidth)}`);
+        lines.push(`slitSeparation = ${fmt(comp.slitSeparation)}`);
+        lines.push(`slitHeight = ${fmt(comp.slitHeight)}`);
+        lines.push(`housingDiameter = ${fmt(comp.housingDiameter)}`);
+    } else if (comp instanceof Diffuser) {
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`coneHalfAngle = ${fmt(comp.coneHalfAngle)}`);
+    } else if (comp instanceof PolarizingBeamSplitter) {
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+    } else if (comp instanceof FaradayIsolator) {
+        lines.push(`insertionLoss = ${fmt(comp.insertionLoss)}`);
+        lines.push(`extinctionDB = ${fmt(comp.extinctionDB)}`);
+        lines.push(`apertureRadius = ${fmt(comp.apertureRadius)}`);
+    } else if (comp instanceof AOD) {
+        lines.push(`deflectionAngle = ${fmt(comp.deflectionAngle)}`);
+        lines.push(`efficiency = ${fmt(comp.efficiency)}`);
+        lines.push(`maxAngle = ${fmt(comp.maxAngle)}`);
+        lines.push(`apertureRadius = ${fmt(comp.apertureRadius)}`);
+    } else if (comp instanceof QPD) {
+        lines.push(`activeDiameter = ${fmt(comp.activeDiameter)}`);
+        lines.push(`gapWidth = ${fmt(comp.gapWidth)}`);
+    } else if (comp instanceof MediumVolume) {
+        lines.push(`width = ${fmt(comp.width)}`);
+        lines.push(`height = ${fmt(comp.height)}`);
+        lines.push(`depth = ${fmt(comp.depth)}`);
+        lines.push(`refractiveIndex = ${fmt(comp.refractiveIndex)}`);
+        lines.push(`exteriorRefractiveIndex = ${fmt(comp.exteriorRefractiveIndex)}`);
+        lines.push(`visualMode = ${comp.visualMode}`);
+        lines.push(`bridgeStartRadius = ${fmt(comp.bridgeStartRadius)}`);
+        lines.push(`bridgeEndRadius = ${fmt(comp.bridgeEndRadius)}`);
+    } else if (comp instanceof PupilMaskElement) {
+        lines.push(`mode = ${comp.mode}`);
+        lines.push(`radius = ${fmt(comp.radius)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`innerRadius = ${fmt(comp.innerRadius)}`);
+        lines.push(`outerRadius = ${fmt(comp.outerRadius)}`);
+        lines.push(`ringTransmission = ${fmt(comp.ringTransmission)}`);
+        lines.push(`ringPhaseShift = ${fmt(comp.ringPhaseShift)}`);
+        lines.push(`backgroundTransmission = ${fmt(comp.backgroundTransmission)}`);
+        lines.push(`backgroundPhaseShift = ${fmt(comp.backgroundPhaseShift)}`);
+        lines.push(`resolution = ${fmt(comp.resolution)}`);
+    } else if (comp instanceof Rail) {
+        lines.push(`holeA = ${fmt(comp.holeA.x)}, ${fmt(comp.holeA.y)}, ${fmt(comp.holeA.z)}`);
+        lines.push(`holeB = ${fmt(comp.holeB.x)}, ${fmt(comp.holeB.y)}, ${fmt(comp.holeB.z)}`);
     }
 }
 
@@ -253,6 +319,10 @@ export function deserializeScene(text: string): OpticalComponent[] {
         }
 
         components.push(comp);
+        // DualGalvoScanHead is composite — its child mirrors must also be in the scene
+        if (comp instanceof DualGalvoScanHead) {
+            components.push(...comp.getManagedSubcomponents());
+        }
     }
 
     return components;
@@ -544,7 +614,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 mode,
                 num(props, 'apertureRadius', 12.5),
                 num(props, 'fastAxisAngle', 0),
-                str(props, 'name', undefined as any)
+                str(props, 'name', 'Waveplate')
             );
         }
         case 'Aperture': {
@@ -625,6 +695,94 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             }
             return sc;
         }
+        case 'AchromatDoublet': {
+            const c = new AchromatDoublet(
+                num(props, 'r1', 77.4), num(props, 'r2', -87.6), num(props, 'r3', 291.1),
+                num(props, 't1', 4.0), num(props, 't2', 2.5), num(props, 'apertureRadius', 25.4),
+                num(props, 'ior1', 1.658), num(props, 'ior2', 1.750),
+                str(props, 'name', 'Achromatic Doublet')
+            );
+            return c;
+        }
+        case 'DoubleSlit': {
+            return new DoubleSlit(
+                num(props, 'slitWidth', 0.5), num(props, 'slitSeparation', 2),
+                num(props, 'slitHeight', 20), num(props, 'housingDiameter', 25),
+                str(props, 'name', 'Double Slit')
+            );
+        }
+        case 'Diffuser': {
+            return new Diffuser(
+                num(props, 'diameter', 25.4), num(props, 'thickness', 2),
+                num(props, 'coneHalfAngle', Math.PI / 180),
+                str(props, 'name', 'Diffuser')
+            );
+        }
+        case 'PolarizingBeamSplitter': {
+            return new PolarizingBeamSplitter(
+                num(props, 'diameter', 25.4), num(props, 'thickness', 2),
+                str(props, 'name', 'Polarizing BS')
+            );
+        }
+        case 'FaradayIsolator': {
+            const c = new FaradayIsolator(str(props, 'name', 'Faraday Isolator'));
+            c.insertionLoss = num(props, 'insertionLoss', 0.95);
+            c.extinctionDB = num(props, 'extinctionDB', 35);
+            c.apertureRadius = num(props, 'apertureRadius', 12.5);
+            return c;
+        }
+        case 'AOD': {
+            const c = new AOD(str(props, 'name', 'AOD'));
+            c.deflectionAngle = num(props, 'deflectionAngle', 0);
+            c.efficiency = num(props, 'efficiency', 0.85);
+            c.maxAngle = num(props, 'maxAngle', 0.05);
+            c.apertureRadius = num(props, 'apertureRadius', 5);
+            return c;
+        }
+        case 'QPD': {
+            const c = new QPD(num(props, 'activeDiameter', 5), str(props, 'name', 'QPD'));
+            c.gapWidth = num(props, 'gapWidth', 0.1);
+            return c;
+        }
+        case 'MediumVolume': {
+            return new MediumVolume({
+                width: num(props, 'width', 10), height: num(props, 'height', 10),
+                depth: num(props, 'depth', 10), refractiveIndex: num(props, 'refractiveIndex', 1.33),
+                exteriorRefractiveIndex: num(props, 'exteriorRefractiveIndex', 1.0),
+                visualMode: (str(props, 'visualMode', 'box') as 'box' | 'bridge'),
+                bridgeStartRadius: props['bridgeStartRadius'] ? parseFloat(props['bridgeStartRadius']) : undefined,
+                bridgeEndRadius: props['bridgeEndRadius'] ? parseFloat(props['bridgeEndRadius']) : undefined,
+                name: str(props, 'name', 'Medium Volume'),
+            });
+        }
+        case 'PupilMaskElement': {
+            const c = new PupilMaskElement(str(props, 'name', 'Pupil Mask'));
+            c.mode = str(props, 'mode', 'phaseRing') as 'uniform' | 'annulus' | 'phaseRing';
+            c.radius = num(props, 'radius', 4);
+            c.thickness = num(props, 'thickness', 1);
+            c.innerRadius = num(props, 'innerRadius', 0.55);
+            c.outerRadius = num(props, 'outerRadius', 0.8);
+            c.ringTransmission = num(props, 'ringTransmission', 1);
+            c.ringPhaseShift = num(props, 'ringPhaseShift', Math.PI / 2);
+            c.backgroundTransmission = num(props, 'backgroundTransmission', 1);
+            c.backgroundPhaseShift = num(props, 'backgroundPhaseShift', 0);
+            c.resolution = num(props, 'resolution', 64);
+            c.rebuildMask();
+            return c;
+        }
+        case 'Rail': {
+            const c = new Rail();
+            if (props['holeA']) {
+                const [ax, ay, az] = props['holeA'].split(',').map(s => parseFloat(s.trim()));
+                c.holeA.set(ax, ay, az);
+            }
+            if (props['holeB']) {
+                const [bx, by, bz] = props['holeB'].split(',').map(s => parseFloat(s.trim()));
+                c.holeB.set(bx, by, bz);
+            }
+            c._updateFromEndpoints();
+            return c;
+        }
         default:
             return null;
     }
@@ -687,4 +845,51 @@ export function openUbzFilePicker(): Promise<OpticalComponent[]> {
         };
         input.click();
     });
+}
+
+// ════════════════════════════════════════════════════════════
+//  URL HASH SCENE SHARING
+// ════════════════════════════════════════════════════════════
+
+export function encodeSceneToUrlHash(components: OpticalComponent[]): string {
+    const text = serializeScene(components);
+    const bytes = new TextEncoder().encode(text);
+    // Chunked conversion to avoid stack overflow on large scenes
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    // Make URL-safe: replace +/= with -_~
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '~');
+}
+
+export function decodeSceneFromUrlHash(hash: string): OpticalComponent[] {
+    const base64 = hash.replace(/-/g, '+').replace(/_/g, '/').replace(/~/g, '=');
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    const text = new TextDecoder().decode(bytes);
+    return deserializeScene(text);
+}
+
+export function generateSceneUrl(components: OpticalComponent[]): string {
+    const encoded = encodeSceneToUrlHash(components);
+    const base = window.location.href.split('#')[0];
+    return `${base}#scene=${encoded}`;
+}
+
+export function loadSceneFromUrlHash(): OpticalComponent[] | null {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#scene=')) return null;
+    const encoded = hash.slice('#scene='.length);
+    if (!encoded) return null;
+    try {
+        return decodeSceneFromUrlHash(encoded);
+    } catch (e) {
+        console.warn('Failed to decode scene from URL:', e);
+        return null;
+    }
 }

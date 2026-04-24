@@ -6,8 +6,8 @@ import { SphericalLens } from '../physics/components/SphericalLens';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { Mirror } from '../physics/components/Mirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
-import { PrismLens } from '../physics/components/PrismLens';
-import { PolygonScanner } from '../physics/components/PolygonScanner';
+import { AbstractPolygonOptic } from '../physics/components/AbstractPolygonOptic';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 
 const PANEL_W = 280;
 const PANEL_H = 200;
@@ -17,6 +17,7 @@ const CENTER_Y = PANEL_H / 2;
 
 const SURFACE_COLOR = '#64b5f6';
 const SURFACE_COLOR_DIM = '#80cbc4';
+const DOUBLET_SURFACE1 = '#ffb74d';   // Orange for surface labels
 const MIRROR_SURFACE = '#cfd8dc';
 const POLYGON_COLOR = '#ffd166';
 const RIM_COLOR = '#666';
@@ -32,8 +33,8 @@ type EditableProfileComponent =
     | CylindricalLens
     | Mirror
     | CurvedMirror
-    | PrismLens
-    | PolygonScanner;
+    | AbstractPolygonOptic
+    | AchromatDoublet;
 
 type HandleId = string | null;
 
@@ -106,8 +107,8 @@ function lensProfileToScreen(
     return { front, back, rim };
 }
 
-function isPolygonEditable(component: OpticalComponent): component is PrismLens | PolygonScanner {
-    return component instanceof PrismLens || component instanceof PolygonScanner;
+function isPolygonEditable(component: OpticalComponent): component is AbstractPolygonOptic {
+    return component instanceof AbstractPolygonOptic;
 }
 
 function isEditableProfileComponent(component: OpticalComponent): component is EditableProfileComponent {
@@ -116,8 +117,8 @@ function isEditableProfileComponent(component: OpticalComponent): component is E
         component instanceof CylindricalLens ||
         component instanceof Mirror ||
         component instanceof CurvedMirror ||
-        component instanceof PrismLens ||
-        component instanceof PolygonScanner
+        component instanceof AbstractPolygonOptic ||
+        component instanceof AchromatDoublet
     );
 }
 
@@ -401,7 +402,7 @@ interface PolygonFaceInfo {
     end: [number, number];
 }
 
-function computePolygonFaceInfo(component: PrismLens | PolygonScanner): PolygonFaceInfo[] {
+function computePolygonFaceInfo(component: AbstractPolygonOptic): PolygonFaceInfo[] {
     const vertices = component.getEditorProfileVertices();
     const cx = vertices.reduce((sum, vertex) => sum + vertex[0], 0) / vertices.length;
     const cy = vertices.reduce((sum, vertex) => sum + vertex[1], 0) / vertices.length;
@@ -474,7 +475,7 @@ function PolygonProfilePanel({
     activeHandle,
     startDrag,
 }: {
-    component: PrismLens | PolygonScanner;
+    component: AbstractPolygonOptic;
     activeHandle: HandleId;
     startDrag: (id: string) => void;
 }) {
@@ -493,7 +494,7 @@ function PolygonProfilePanel({
     const toScreenY = (value: number) => CENTER_Y - value * scaleRef.current;
     const faceInfo = computePolygonFaceInfo(component);
 
-    const faceLabels = component instanceof PrismLens && !(component instanceof PolygonScanner) && component.numFaces === 3
+    const faceLabels = component.numFaces === 3
         ? ['1', '2', '3']
         : Array.from({ length: component.numFaces }, (_, index) => String(index + 1));
 
@@ -548,9 +549,177 @@ function PolygonProfilePanel({
             ))}
 
             <text x={4} y={PANEL_H - 10} fill={TEXT_COLOR} fontSize={9}>
-                {component instanceof PolygonScanner
-                    ? `${component.numFaces}-face polygon  r=${component.inscribedRadius.toFixed(1)}mm`
-                    : `α=${(component.apexAngle * 180 / Math.PI).toFixed(1)}°  h=${component.height.toFixed(1)}mm`}
+                {`${component.numFaces}-face polygon  r=${component.inscribedRadius.toFixed(1)}mm`}
+            </text>
+        </>
+    );
+}
+
+function doubletSag(R: number, apex: number, r: number): number {
+    if (Math.abs(R) >= 1e8) return apex;
+    const val = R * R - r * r;
+    if (val < 0) return apex;
+    return (apex + R) - Math.sign(R) * Math.sqrt(val);
+}
+
+const DOUBLET_SELECTED = '#64b5f6';  // Blue for selected surface
+const DOUBLET_DIM = '#444';          // Dim for unselected surfaces
+
+function AchromatDoubletPanel({
+    component,
+    activeHandle,
+    startDrag,
+    selectedSurface,
+    onSelectSurface,
+}: {
+    component: AchromatDoublet;
+    activeHandle: HandleId;
+    startDrag: (id: string) => void;
+    selectedSurface: number;
+    onSelectSurface: (s: number) => void;
+}) {
+    const totalT = component.totalThickness;
+    const a = component.apertureRadius;
+    const frontApex = -totalT / 2;
+    const backApex = totalT / 2;
+    const cZ = component.cementZ;
+
+    // Vertical scale: fit aperture diameter to panel height.
+    // Horizontal scale: exaggerate so curves are distinguishable, capped at 3x vertical.
+    const { sx, sy } = useMemo(() => {
+        const syVal = (DRAW_H * 0.8) / Math.max(a * 2, 1);
+        let zMin = Infinity, zMax = -Infinity;
+        for (let i = 0; i <= 32; i++) {
+            const r = (i / 32) * a;
+            const z1 = doubletSag(component.r1, frontApex, r);
+            const z2 = doubletSag(component.r2, cZ, r);
+            const z3 = doubletSag(component.r3, backApex, r);
+            zMin = Math.min(zMin, z1, z2, z3);
+            zMax = Math.max(zMax, z1, z2, z3);
+        }
+        const zExtent = Math.max(zMax - zMin, 0.1);
+        const sxFromZ = (PANEL_W * 0.4) / zExtent;
+        // Cap horizontal exaggeration at 3x vertical scale
+        const sxVal = Math.min(sxFromZ, syVal * 3);
+        return { sx: Math.max(sxVal, syVal), sy: syVal };
+    }, [component.r1, component.r2, component.r3, a, frontApex, backApex, cZ]);
+
+    const sxRef = useRef(sx);
+    const syRef = useRef(sy);
+    if (!activeHandle) { sxRef.current = sx; syRef.current = sy; }
+
+    const segments = 40;
+
+    // Surface definitions
+    const surfaceDefs = [
+        { R: component.r1, apex: frontApex, idx: 1 },
+        { R: component.r2, apex: cZ, idx: 2 },
+        { R: component.r3, apex: backApex, idx: 3 },
+    ];
+
+    const hx = sxRef.current;
+    const hy = syRef.current;
+
+    // Generate curve points for each surface (top-to-bottom)
+    const surfaceCurves = surfaceDefs.map(sd => {
+        const pts: number[] = [];
+        for (let i = segments; i >= 0; i--) {
+            const r = (i / segments) * a;
+            pts.push(CENTER_X + doubletSag(sd.R, sd.apex, r) * hx, CENTER_Y + r * hy);
+        }
+        for (let i = 1; i <= segments; i++) {
+            const r = (i / segments) * a;
+            pts.push(CENTER_X + doubletSag(sd.R, sd.apex, r) * hx, CENTER_Y - r * hy);
+        }
+        return { ...sd, pts };
+    });
+
+    // Rim lines
+    const frontEdgeZ = doubletSag(component.r1, frontApex, a);
+    const backEdgeZ = doubletSag(component.r3, backApex, a);
+    const topY = CENTER_Y - a * hy;
+    const bottomY = CENTER_Y + a * hy;
+
+    // Filled body outline
+    const fillPts: number[] = [];
+    for (let i = 0; i <= segments; i++) {
+        const r = (i / segments) * a;
+        fillPts.push(CENTER_X + doubletSag(component.r1, frontApex, r) * hx, CENTER_Y - r * hy);
+    }
+    fillPts.push(CENTER_X + backEdgeZ * hx, CENTER_Y - a * hy);
+    for (let i = segments; i >= 0; i--) {
+        const r = (i / segments) * a;
+        fillPts.push(CENTER_X + doubletSag(component.r3, backApex, r) * hx, CENTER_Y + r * hy);
+    }
+    fillPts.push(CENTER_X + frontEdgeZ * hx, CENTER_Y + a * hy);
+
+    // Handle position for selected surface at top edge
+    const selSurface = surfaceCurves.find(sc => sc.idx === selectedSurface)!;
+    const handleX = CENTER_X + doubletSag(selSurface.R, selSurface.apex, a) * hx;
+
+    // Label X positions
+    const labelPositions = surfaceDefs.map(sd => ({
+        idx: sd.idx,
+        x: CENTER_X + sd.apex * hx,
+    }));
+    const labelY = PANEL_H - 8;
+
+    const surfaceColor = (idx: number) => idx === selectedSurface ? DOUBLET_SELECTED : DOUBLET_DIM;
+    const surfaceWidth = (idx: number) => idx === selectedSurface ? 3 : 1.5;
+
+    return (
+        <>
+            {/* Filled body */}
+            <polygon points={pointsToAttr(fillPts)} fill="rgba(255, 183, 77, 0.06)" stroke="transparent" />
+            {/* Optical axis dashed line */}
+            <line x1={CENTER_X + frontApex * hx - 10} y1={CENTER_Y} x2={CENTER_X + backApex * hx + 10} y2={CENTER_Y}
+                stroke={AXIS_COLOR} strokeWidth={1} strokeDasharray="4 3" />
+            {/* Surface curves — click to select */}
+            {surfaceCurves.map(sc => (
+                <React.Fragment key={`surface-${sc.idx}`}>
+                    <polyline
+                        points={pointsToAttr(sc.pts)}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={12}
+                        style={{ cursor: 'pointer' }}
+                        onPointerDown={(e) => { e.stopPropagation(); onSelectSurface(sc.idx); }}
+                    />
+                    <polyline
+                        points={pointsToAttr(sc.pts)}
+                        fill="none"
+                        stroke={surfaceColor(sc.idx)}
+                        strokeWidth={surfaceWidth(sc.idx)}
+                        style={{ cursor: 'pointer', pointerEvents: 'none' }}
+                    />
+                </React.Fragment>
+            ))}
+            {/* Rim lines */}
+            <line x1={CENTER_X + frontEdgeZ * hx} y1={topY} x2={CENTER_X + backEdgeZ * hx} y2={topY} stroke={RIM_COLOR} strokeWidth={1} />
+            <line x1={CENTER_X + frontEdgeZ * hx} y1={bottomY} x2={CENTER_X + backEdgeZ * hx} y2={bottomY} stroke={RIM_COLOR} strokeWidth={1} />
+            {/* Curvature handle at top edge — drag left/right to change R */}
+            <ProfileHandle id={`curvature:${selectedSurface}`} x={handleX} y={topY} activeHandle={activeHandle} startDrag={startDrag} />
+            {/* Position handle on axis — drag left/right to move surface (changes t1/t2) */}
+            <ProfileHandle id={`position:${selectedSurface}`} x={CENTER_X + selSurface.apex * hx} y={CENTER_Y} activeHandle={activeHandle} startDrag={startDrag} />
+            {/* Surface labels — clickable */}
+            {labelPositions.map(lp => (
+                <text
+                    key={`label-${lp.idx}`}
+                    x={lp.x}
+                    y={labelY}
+                    fill={lp.idx === selectedSurface ? DOUBLET_SELECTED : DOUBLET_SURFACE1}
+                    fontSize={11}
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    style={{ cursor: 'pointer' }}
+                    onPointerDown={(e) => { e.stopPropagation(); onSelectSurface(lp.idx); }}
+                >
+                    {lp.idx}
+                </text>
+            ))}
+            {/* Info text */}
+            <text x={4} y={PANEL_H - 10} fill={TEXT_COLOR} fontSize={9}>
+                {`S${selectedSurface}  R=${(selectedSurface === 1 ? component.r1 : selectedSurface === 2 ? component.r2 : component.r3).toFixed(1)}mm`}
             </text>
         </>
     );
@@ -560,6 +729,7 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
     const [components, setComponents] = useAtom(componentsAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [activeHandle, setActiveHandle] = useState<HandleId>(null);
+    const [doubletSelectedSurface, setDoubletSelectedSurface] = useState(1);
     const svgRef = useRef<SVGSVGElement | null>(null);
 
     const editable = supportsLensProfileEditor(component) ? component : null;
@@ -579,6 +749,84 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
         activeHandle,
         (handle, x, y) => {
             if (!editable) return;
+
+            if (editable instanceof AchromatDoublet) {
+                const aR = editable.apertureRadius;
+                const totalT = editable.totalThickness;
+                const frontApex = -totalT / 2;
+                const backApex = totalT / 2;
+                const cZ = editable.cementZ;
+                // Compute the same sx scale used by the panel rendering
+                let zMin = Infinity, zMax = -Infinity;
+                for (let i = 0; i <= 32; i++) {
+                    const r = (i / 32) * aR;
+                    const z1 = doubletSag(editable.r1, frontApex, r);
+                    const z2 = doubletSag(editable.r2, cZ, r);
+                    const z3 = doubletSag(editable.r3, backApex, r);
+                    zMin = Math.min(zMin, z1, z2, z3);
+                    zMax = Math.max(zMax, z1, z2, z3);
+                }
+                const zExtent = Math.max(zMax - zMin, 0.1);
+                const syDrag = (DRAW_H * 0.8) / Math.max(aR * 2, 1);
+                const sxFromZ = (PANEL_W * 0.4) / zExtent;
+                const sxDrag = Math.min(sxFromZ, syDrag * 3);
+                const sc = Math.max(sxDrag, syDrag);
+
+                if (handle.startsWith('curvature:')) {
+                    const surfaceIdx = parseInt(handle.split(':')[1], 10);
+                    const apexZ = surfaceIdx === 1 ? frontApex
+                        : surfaceIdx === 2 ? cZ
+                        : backApex;
+                    const apexScreenX = CENTER_X + apexZ * sc;
+                    const sagMm = (x - apexScreenX) / sc;
+                    // Convert sag to radius of curvature: R = (r² + sag²) / (2 * sag)
+                    let newR = Math.abs(sagMm) < 0.3
+                        ? 1e9
+                        : (aR * aR + sagMm * sagMm) / (2 * sagMm);
+                    // Clamp: |R| must be > apertureRadius to keep surface valid
+                    const minR = aR * 1.1;
+                    if (Math.abs(newR) < minR && Math.abs(newR) < 1e8) {
+                        newR = newR > 0 ? minR : -minR;
+                    }
+                    commitChange((entry) => {
+                        if (entry instanceof AchromatDoublet) {
+                            if (surfaceIdx === 1) entry.r1 = newR;
+                            else if (surfaceIdx === 2) entry.r2 = newR;
+                            else entry.r3 = newR;
+                            entry.invalidateMesh();
+                        }
+                    });
+                } else if (handle.startsWith('position:')) {
+                    const surfaceIdx = parseInt(handle.split(':')[1], 10);
+                    const desiredZ = (x - CENTER_X) / sc;
+                    const gap = 0.01; // AchromatDoublet.CEMENT_GAP
+                    const minT = 0.5;
+                    commitChange((entry) => {
+                        if (!(entry instanceof AchromatDoublet)) return;
+                        if (surfaceIdx === 1) {
+                            // Front surface: frontApex = -(t1+t2+gap)/2
+                            // new_t1 = -2*desiredZ - t2 - gap
+                            const newT1 = Math.max(minT, -2 * desiredZ - entry.t2 - gap);
+                            entry.t1 = newT1;
+                        } else if (surfaceIdx === 2) {
+                            // Cement: cementZ = -(t1+t2+gap)/2 + t1
+                            // new_t1 = desiredZ + totalT/2, keep total t1+t2 constant
+                            const sum = entry.t1 + entry.t2;
+                            const curTotalT = sum + gap;
+                            const newT1 = Math.max(minT, Math.min(sum - minT, desiredZ + curTotalT / 2));
+                            entry.t1 = newT1;
+                            entry.t2 = sum - newT1;
+                        } else {
+                            // Back surface: backApex = (t1+t2+gap)/2
+                            // new_t2 = 2*desiredZ - t1 - gap
+                            const newT2 = Math.max(minT, 2 * desiredZ - entry.t1 - gap);
+                            entry.t2 = newT2;
+                        }
+                        entry.invalidateMesh();
+                    });
+                }
+                return;
+            }
 
             if (editable instanceof SphericalLens || editable instanceof CylindricalLens) {
                 const s = scaleStableRef.current;
@@ -705,6 +953,10 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
     if (!editable) return null;
 
     const currentScale = (() => {
+        if (editable instanceof AchromatDoublet) {
+            // Return the vertical scale (for aperture); horizontal scale computed separately in drag handler
+            return (DRAW_H * 0.8) / Math.max(editable.apertureRadius * 2, 1);
+        }
         if (editable instanceof SphericalLens || editable instanceof CylindricalLens) {
             return (DRAW_H * 0.8) / Math.max(editable.apertureRadius * 2, editable.thickness, 1);
         }
@@ -714,7 +966,7 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
         if (editable instanceof Mirror) {
             return (DRAW_H * 0.8) / Math.max(editable.diameter, editable.thickness * 2, 1);
         }
-        const polygonEditable = editable as PrismLens | PolygonScanner;
+        const polygonEditable = editable as AbstractPolygonOptic;
         const vertices = polygonEditable.getEditorProfileVertices();
         const minX = Math.min(...vertices.map((vertex: [number, number]) => vertex[0]));
         const maxX = Math.max(...vertices.map((vertex: [number, number]) => vertex[0]));
@@ -732,14 +984,22 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
             </label>
             <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #333' }}>
                 <ProfileFrame svgRef={svgRef} activeHandle={activeHandle}>
-                    {editable instanceof SphericalLens || editable instanceof CylindricalLens ? (
+                    {editable instanceof AchromatDoublet ? (
+                        <AchromatDoubletPanel
+                            component={editable}
+                            activeHandle={activeHandle}
+                            startDrag={startDrag}
+                            selectedSurface={doubletSelectedSurface}
+                            onSelectSurface={setDoubletSelectedSurface}
+                        />
+                    ) : editable instanceof SphericalLens || editable instanceof CylindricalLens ? (
                         <LensProfilePanel component={editable} activeHandle={activeHandle} startDrag={startDrag} />
                     ) : editable instanceof CurvedMirror ? (
                         <CurvedMirrorPanel component={editable} activeHandle={activeHandle} startDrag={startDrag} />
-                    ) : editable instanceof Mirror && !(editable instanceof PrismLens) ? (
+                    ) : editable instanceof Mirror && !(editable instanceof AbstractPolygonOptic) ? (
                         <FlatMirrorPanel component={editable} activeHandle={activeHandle} startDrag={startDrag} />
                     ) : (
-                        <PolygonProfilePanel component={editable as PrismLens | PolygonScanner} activeHandle={activeHandle} startDrag={startDrag} />
+                        <PolygonProfilePanel component={editable as AbstractPolygonOptic} activeHandle={activeHandle} startDrag={startDrag} />
                     )}
                 </ProfileFrame>
             </div>
@@ -749,3 +1009,4 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
         </div>
     );
 };
+

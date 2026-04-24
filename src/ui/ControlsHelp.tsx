@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
+import { useIsMobile } from './useIsMobile';
 
 export const ControlsHelp: React.FC = () => {
     const [open, setOpen] = useState(false);
+    const isMobile = useIsMobile();
+
+    // No keyboard/mouse help on mobile — those controls don't exist
+    if (isMobile) return null;
 
     return (
         <>
@@ -9,7 +14,7 @@ export const ControlsHelp: React.FC = () => {
                 onClick={() => setOpen(!open)}
                 title="Keyboard & mouse controls"
                 style={{
-                    position: 'absolute',
+                    position: 'fixed',
                     bottom: 16,
                     right: 16,
                     width: 28,
@@ -34,7 +39,7 @@ export const ControlsHelp: React.FC = () => {
             {open && (
                 <div
                     style={{
-                        position: 'absolute',
+                        position: 'fixed',
                         bottom: 52,
                         right: 16,
                         width: 280,
@@ -53,25 +58,27 @@ export const ControlsHelp: React.FC = () => {
                 >
                     <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: 10, color: '#fff' }}>Controls</div>
 
-                    <Section title="Navigate (no selection)">
+                    <Section title="Navigate">
                         <Row keys="WASD / Arrows" action="Pan" />
                         <Row keys="Shift + Left-drag" action="Pan" />
                         <Row keys="Middle-drag" action="Pan" />
-                        <Row keys="Alt + Left-drag" action="Rotate 3D" />
+                        <Row keys="Ctrl + Left-drag" action="Rotate 3D" />
                         <Row keys="Scroll / [ ]" action="Zoom" />
                     </Section>
 
-                    <Section title="Components (with selection)">
-                        <Row keys="Click" action="Select" />
+                    <Section title="Components">
+                        <Row keys="Left-click" action="Select" />
                         <Row keys="Shift + Click" action="Multi-select" />
+                        <Row keys="Alt + Click" action="Snap to nearest hole" />
                         <Row keys="Drag" action="Move" />
+                        <Row keys="Hold + Scroll" action="Rotate ±5°" />
                         <Row keys="Q / E" action="Rotate ±15°" />
                         <Row keys="Delete" action="Remove" />
                         <Row keys="Escape" action="Deselect all" />
                     </Section>
 
                     <Section title="Solvers">
-                        <Row keys="2" action="Toggle E&M (Solver 2)" />
+                        <Row keys="2" action="Toggle Wave View" />
                         <Row keys="3" action="Fire Backward Tracer" />
                     </Section>
 

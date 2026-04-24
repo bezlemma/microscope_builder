@@ -1,6 +1,6 @@
 import { Vector3, Box3, Euler, Quaternion, BoxGeometry } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { SpectralProfile } from '../SpectralProfile';
 import { OpticMesh, NormalFn } from '../OpticMesh';
 
@@ -19,6 +19,7 @@ export class Sample extends OpticalComponent {
     emissionSpectrum: SpectralProfile;     // What wavelengths are emitted
     fluorescenceEfficiency: number;        // Quantum yield × absorption (dimensionless)
     absorption: number;                    // Beer-Lambert coeff (mm⁻¹). Higher = more opaque.
+    refractiveIndexDelta: number = 0;      // Refractive index difference from immersion medium
 
     // Internal specimen rotation: Allows rotating the Mickey Mouse independent of the outer boundary box (e.g. for SPIM SampleChamber cups to remain unspilled)
     specimenRotation: Euler = new Euler(0, 0, 0);
@@ -28,20 +29,36 @@ export class Sample extends OpticalComponent {
     specimenOffset: Vector3 = new Vector3(0, 0, 0);
 
     // Mickey Mouse geometry definition (local space)
-    // Frame is in XY plane (standing upright at default rotation),
-    // holder normal is along Z, ears point +Y (up), spread in ±X.
+    // Scaled by 2/3 and centered for better specimen proportions.
+    private static readonly MICKEY_SCALE = 2 / 3;
+    private static readonly MICKEY_CENTER = new Vector3(0, 0.125, 0);
+
     private static readonly SPHERES = [
-        { center: new Vector3(0, 0, 0), radius: 0.5 },        // Head
-        { center: new Vector3(-0.5, 0.5, 0), radius: 0.25 },  // Left ear (+Y up, -X left)
-        { center: new Vector3(0.5, 0.5, 0), radius: 0.25 },   // Right ear (+Y up, +X right)
+        { center: new Vector3(0, 0, 0).sub(Sample.MICKEY_CENTER).multiplyScalar(Sample.MICKEY_SCALE), radius: 0.5 * Sample.MICKEY_SCALE },
+        { center: new Vector3(-0.5, 0.5, 0).sub(Sample.MICKEY_CENTER).multiplyScalar(Sample.MICKEY_SCALE), radius: 0.25 * Sample.MICKEY_SCALE },
+        { center: new Vector3(0.5, 0.5, 0).sub(Sample.MICKEY_CENTER).multiplyScalar(Sample.MICKEY_SCALE), radius: 0.25 * Sample.MICKEY_SCALE },
     ];
 
-    private static readonly BOUNDS = new Box3(
-        new Vector3(-15, -15, -10),
-        new Vector3(15, 15, 10)
-    );
+    private static readonly BOUNDS = (() => {
+        const bounds = new Box3();
+        for (const sphere of Sample.SPHERES) {
+            bounds.expandByPoint(sphere.center.clone().addScalar(sphere.radius));
+            bounds.expandByPoint(sphere.center.clone().addScalar(-sphere.radius));
+        }
+        // Add margin for the interaction region around the specimen
+        bounds.min.addScalar(-5);
+        bounds.max.addScalar(5);
+        return bounds;
+    })();
 
     private _mesh: OpticMesh | null = null;
+
+    static getSpecimenSpheresCanonical(): { center: Vector3; radius: number }[] {
+        return Sample.SPHERES.map(sphere => ({
+            center: sphere.center.clone(),
+            radius: sphere.radius,
+        }));
+    }
 
     constructor(name: string = "Sample (Mickey)") {
         super(name);
@@ -50,6 +67,34 @@ export class Sample extends OpticalComponent {
         this.emissionSpectrum = new SpectralProfile('bandpass', 500, [{ center: 520, width: 40 }]);
         this.fluorescenceEfficiency = 0.5; // Fluorescence quantum yield (0–1)
         this.absorption = 0.1;              // Reduced Beer-Lambert coeff
+        // Holder frame (from SampleVisualizer): 40×40×2 outer
+        this.bounds.set(new Vector3(-20, -20, -1), new Vector3(20, 20, 1));
+    }
+
+    getSpecimenSpheresLocal(): { center: Vector3; radius: number }[] {
+        const rotation = new Quaternion().setFromEuler(this.specimenRotation);
+        return Sample.getSpecimenSpheresCanonical().map(sphere => ({
+            center: sphere.center.clone().applyQuaternion(rotation).add(this.specimenOffset),
+            radius: sphere.radius,
+        }));
+    }
+
+    getSpecimenBoundsLocal(): Box3 {
+        const bounds = new Box3();
+        for (const sphere of this.getSpecimenSpheresLocal()) {
+            const center = sphere.center;
+            bounds.expandByPoint(center.clone().addScalar(sphere.radius));
+            bounds.expandByPoint(center.clone().addScalar(-sphere.radius));
+        }
+        return bounds;
+    }
+
+    getVolumeBoundsLocal(): Box3 {
+        return this.getSpecimenBoundsLocal();
+    }
+
+    getFieldBoundsLocal(): Box3 {
+        return this.getSpecimenBoundsLocal();
     }
 
     get mesh(): OpticMesh {
@@ -98,14 +143,44 @@ export class Sample extends OpticalComponent {
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
-        const meshHit = this.mesh.intersectRay(rayLocal.origin, rayLocal.direction);
-        if (!meshHit) return null;
+        // Compute analytical intersection with the AABB
+        const box = Sample.BOUNDS;
+        let tMin = -Infinity, tMax = Infinity;
+        let normal = new Vector3();
 
+        const checkAxis = (originCoord: number, dirCoord: number, minBound: number, maxBound: number, axisNormal: Vector3) => {
+            if (Math.abs(dirCoord) < 1e-12) {
+                if (originCoord < minBound || originCoord > maxBound) return false;
+            } else {
+                let t1 = (minBound - originCoord) / dirCoord;
+                let t2 = (maxBound - originCoord) / dirCoord;
+                let n1 = axisNormal.clone().multiplyScalar(-1);
+                let n2 = axisNormal.clone();
+                if (t1 > t2) {
+                    const temp = t1; t1 = t2; t2 = temp;
+                    const tempN = n1; n1 = n2; n2 = tempN;
+                }
+                if (t1 > tMin) { tMin = t1; normal = n1; }
+                if (t2 < tMax) tMax = t2;
+                if (tMin > tMax) return false;
+                if (tMax < 0) return false;
+            }
+            return true;
+        };
+
+        if (!checkAxis(rayLocal.origin.x, rayLocal.direction.x, box.min.x, box.max.x, new Vector3(1, 0, 0))) return null;
+        if (!checkAxis(rayLocal.origin.y, rayLocal.direction.y, box.min.y, box.max.y, new Vector3(0, 1, 0))) return null;
+        if (!checkAxis(rayLocal.origin.z, rayLocal.direction.z, box.min.z, box.max.z, new Vector3(0, 0, 1))) return null;
+
+        const t = tMin > 0 ? tMin : tMax;
+        if (t < 0) return null;
+
+        const localPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
         return {
-            t: meshHit.t,
-            point: meshHit.point,
-            normal: meshHit.normal,
-            localPoint: meshHit.point.clone()
+            t,
+            point: localPoint, // gets mapped to world by chkIntersection
+            normal,
+            localPoint
         };
     }
 
@@ -239,17 +314,15 @@ export class Sample extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Brightfield pass-through: ray continues unchanged.
-        // But since we use OpticMesh, it will generate tags for Solver 2
-        // to handle absorption through the volume.
-        return this.mesh.interact(
-            hit.normal,
-            ray.direction.clone().transformDirection(this.worldToLocal).normalize(),
-            hit.localPoint!,
-            1.0, // Index 1.0 (sample is basically air + fluorophores)
-            this.localToWorld,
-            hit.point,
-            ray
-        );
+        // Brightfield pass-through. Ignore this.mesh refraction so the excitation
+        // beam doesn't get trapped by TIR in the bounding box.
+        // We just return a ray that continues straight.
+        return {
+            rays: [childRay(ray, {
+                origin: hit.point.clone(),
+                direction: ray.direction.clone(),
+                opticalPathLength: ray.opticalPathLength + hit.t
+            })]
+        };
     }
 }

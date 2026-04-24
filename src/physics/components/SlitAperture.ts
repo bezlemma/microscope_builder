@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 
 /**
  * SlitAperture — a rectangular slit stop.
@@ -29,6 +29,8 @@ export class SlitAperture extends OpticalComponent {
         this.slitWidth = slitWidth;
         this.slitHeight = slitHeight;
         this.housingDiameter = housingDiameter;
+        const r = housingDiameter / 2;
+        this.bounds.set(new Vector3(-r, -r, -1), new Vector3(r, r, 1));
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -48,11 +50,6 @@ export class SlitAperture extends OpticalComponent {
         const halfW = this.slitWidth / 2;
         const halfH = this.slitHeight / 2;
 
-        // If inside the opening, ray passes through — no intersection
-        if (Math.abs(hu) < halfW && Math.abs(hv) < halfH) {
-            return null;
-        }
-
         // Check if within housing bounds (circular housing)
         const rSq = hu * hu + hv * hv;
         const outerR = this.housingDiameter / 2;
@@ -60,19 +57,33 @@ export class SlitAperture extends OpticalComponent {
             return null;  // Misses entirely
         }
 
+        const isBlocked = !(Math.abs(hu) < halfW && Math.abs(hv) < halfH);
+
         // Hit the frame body — will be absorbed
         const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);
         return {
             t,
             point: hitPoint,
             normal,
-            localPoint: hitPoint.clone()
+            localPoint: hitPoint.clone(),
+            isBlocked
         };
     }
 
-    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
-        // Absorb: ray hit the slit frame
-        return { rays: [] };
+    interact(ray: Ray, hit: HitRecord): InteractionResult {
+        if (hit.isBlocked) {
+            // Absorb: ray hit the slit frame
+            return { rays: [] };
+        }
+        
+        // Pass through opening
+        return {
+            rays: [childRay(ray, {
+                origin: hit.point,
+                direction: ray.direction.clone(),
+                opticalPathLength: ray.opticalPathLength + hit.t
+            })]
+        };
     }
 
     // Solver 2 transfer matrix — identity (slit is just a stop, no optical power).

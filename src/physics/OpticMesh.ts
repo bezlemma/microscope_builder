@@ -46,6 +46,17 @@ export class OpticMesh {
     private geometry: BufferGeometry | null = null;
     private raycaster: Raycaster = new Raycaster();
 
+    private static _warnedKeys: Set<string> = new Set();
+    /**
+     * Emit a warning once per session for a given key, so noisy fallbacks
+     * don't flood the console on every ray but are still visible.
+     */
+    static warnOnce(key: string, message: string): void {
+        if (OpticMesh._warnedKeys.has(key)) return;
+        OpticMesh._warnedKeys.add(key);
+        console.warn(message);
+    }
+
     get builtGeometry(): BufferGeometry | null {
         return this.geometry;
     }
@@ -210,9 +221,10 @@ export class OpticMesh {
         worldEntryPoint: Vector3,
         ray: import('./types').Ray,
         allowInternalReflection: boolean = false,
-        exitSurfaceLabel?: (faceIndex: number) => string
+        exitSurfaceLabel?: (faceIndex: number) => string,
+        exteriorIorCallback?: (hitPointLocal: Vector3) => number
     ): import('./types').InteractionResult {
-        const nAir = 1.0;
+        const nAirEntry = exteriorIorCallback ? exteriorIorCallback(entryPoint) : 1.0;
         const nGlass = ior;
 
         // Clean near-zero floating-point artifacts from geometry normals and
@@ -226,8 +238,8 @@ export class OpticMesh {
         // Ensure entry normal faces against the incoming ray
         if (entryNormal.dot(localDir) > 0) entryNormal.negate();
 
-        // 1. Refract at Entry (Air → Glass)
-        const dirInside = OpticMesh.refract(localDir, entryNormal, nAir, nGlass);
+        // 1. Refract at Entry (Exterior → Glass)
+        const dirInside = OpticMesh.refract(localDir, entryNormal, nAirEntry, nGlass);
         if (!dirInside) {
             // TIR at entry (extreme grazing angle) — reflect off the front surface
             const dotDN = localDir.dot(entryNormal);
@@ -269,11 +281,16 @@ export class OpticMesh {
             }
 
             if (hits.length === 0) {
-                // Lens fallback: if we have a last known normal and internal reflections
-                // aren't allowed (lens mode), use grazing exit instead of absorbing.
-                // The ray slipped through a triangle edge gap after TIR — emit it
-                // from the current position along a tangent direction.
+                // The fallbacks below are geometric rescues, not physical models:
+                // they emit a "grazing escape" ray to keep the trace alive when the
+                // mesh-raycaster fails (LatheGeometry axis singularities, sub-voxel
+                // edge gaps). Downstream components receive a ray that doesn't
+                // represent the true physical path. We warn once per fallback so
+                // degenerate setups are visible rather than silently producing
+                // bogus ray geometry.
                 if (!allowInternalReflection && bounce > 0 && lastHitNormal) {
+                    OpticMesh.warnOnce('lens-post-bounce-fallback',
+                        '[OpticMesh] Lens TIR/gap fallback: emitting grazing exit ray (non-physical).');
                     const outwardNormal = lastHitNormal.clone();
                     // outwardNormal should point outward (away from glass interior)
                     if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
@@ -305,6 +322,8 @@ export class OpticMesh {
                 // the sharp apex of a triangular prism). Emit a grazing escape ray
                 // instead of silently absorbing the beam.
                 if (allowInternalReflection && bounce > 0 && lastHitNormal) {
+                    OpticMesh.warnOnce('prism-post-bounce-fallback',
+                        '[OpticMesh] Prism TIR/gap fallback: emitting grazing exit ray (non-physical).');
                     const outwardNormal = lastHitNormal.clone();
                     if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
 
@@ -344,7 +363,8 @@ export class OpticMesh {
                         totalPath += hit.t;
                         const exitNormal = hit.normal.clone();
                         if (exitNormal.dot(currentDir) > 0) exitNormal.negate();
-                        const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAir);
+                        const nAirExit = exteriorIorCallback ? exteriorIorCallback(hit.point) : 1.0;
+                        const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAirExit);
                         if (dirOut) {
                             const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
                             const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
@@ -361,6 +381,8 @@ export class OpticMesh {
                     }
                     // Nudge didn't help — pass through undeviated as fallback for lenses
                     // (on-axis ray through flat surface should continue straight)
+                    OpticMesh.warnOnce('lens-axis-passthrough-fallback',
+                        '[OpticMesh] On-axis lens fallback: passing ray through undeviated (no exit surface found).');
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                     const dirOutWorld = currentDir.clone().transformDirection(localToWorld).normalize();
                     return {
@@ -398,8 +420,9 @@ export class OpticMesh {
             // Ensure normal faces against the ray for Snell's law
             if (exitNormal.dot(currentDir) > 0) exitNormal.negate();
 
-            // Try to refract out (Glass → Air)
-            const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAir);
+            // Try to refract out (Glass → Exterior)
+            const nAirExit = exteriorIorCallback ? exteriorIorCallback(hit.point) : 1.0;
+            const dirOut = OpticMesh.refract(currentDir, exitNormal, nGlass, nAirExit);
 
             if (dirOut) {
 

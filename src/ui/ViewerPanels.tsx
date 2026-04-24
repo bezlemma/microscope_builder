@@ -14,15 +14,35 @@ import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
+import { PMTViewer } from './PMTViewer';
 import { OpticalComponent } from '../physics/Component';
+import { useIsMobile } from './useIsMobile';
+
+function fmtPowerCompact(watts: number): string {
+    if (watts >= 1e-3) return `${(watts * 1e3).toFixed(1)} mW`;
+    if (watts >= 1e-6) return `${(watts * 1e6).toFixed(1)} uW`;
+    if (watts >= 1e-9) return `${(watts * 1e9).toFixed(1)} nW`;
+    return `${watts.toExponential(1)} W`;
+}
 
 export const ViewerPanels: React.FC = () => {
+    const isMobile = useIsMobile();
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [animator] = useAtom(animatorAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
+
+    // On mobile, start with all pinned viewers minimized
+    const initializedForMobile = React.useRef(false);
+    React.useEffect(() => {
+        if (isMobile && !initializedForMobile.current && pinnedIds.size > 0) {
+            initializedForMobile.current = true;
+            setMinimizedIds(new Set(pinnedIds));
+        }
+    }, [isMobile, pinnedIds]);
 
     // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
@@ -31,16 +51,22 @@ export const ViewerPanels: React.FC = () => {
 
     if (pinnedComponents.length === 0) return null;
 
+    // Reserve space for the Sidebar on the left so pinned viewers don't slide
+    // behind it. On mobile the sidebar is an overlay (transformed off-screen
+    // when closed), so we can hug the left edge there.
+    const sidebarWidth = isMobile ? 0 : 250;
     return (
         <div style={{
-            position: 'absolute',
-            bottom: '20px',
-            left: '20px',
-            right: '20px',
+            position: 'fixed',
+            top: isMobile ? undefined : undefined,
+            bottom: isMobile ? '8px' : '20px',
+            left: isMobile ? '8px' : `${sidebarWidth + 20}px`,
+            right: isMobile ? undefined : '20px',
+            maxWidth: isMobile ? '40vw' : undefined,
             display: 'flex',
             flexDirection: 'row',
             flexWrap: 'wrap',
-            gap: '8px',
+            gap: isMobile ? '4px' : '8px',
             zIndex: 10,
             pointerEvents: 'none',
             alignItems: 'flex-end',
@@ -51,26 +77,43 @@ export const ViewerPanels: React.FC = () => {
                     style={{
                         backgroundColor: '#222',
                         border: '1px solid #444',
-                        borderRadius: '8px',
-                        padding: '6px',
+                        borderRadius: '6px',
+                        padding: isMobile && comp instanceof Camera ? '0' : '6px',
                         fontFamily: 'sans-serif',
                         pointerEvents: 'auto',
+                        overflow: 'hidden',
+                        maxHeight: isMobile && comp instanceof Camera ? '12vh' : undefined,
+                        maxWidth: isMobile && comp instanceof Camera ? '40vw' : undefined,
+                        display: 'flex',
+                        flexDirection: 'column',
                     }}
                 >
-                    {/* Header: name + close button */}
+                    {/* Header: name + minimize + close */}
+                    {!(isMobile && comp instanceof Camera) && (
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        marginBottom: '4px',
+                        marginBottom: minimizedIds.has(comp.id) ? '0' : '4px',
                         paddingLeft: '2px',
                     }}>
-                        <span style={{
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            color: '#999',
-                        }}>
-                            {comp.name}
+                        <span
+                            style={{
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                color: '#999',
+                                cursor: 'pointer',
+                                flex: 1,
+                            }}
+                            onClick={() => {
+                                const next = new Set(minimizedIds);
+                                if (next.has(comp.id)) next.delete(comp.id);
+                                else next.add(comp.id);
+                                setMinimizedIds(next);
+                            }}
+                            title={minimizedIds.has(comp.id) ? 'Expand viewer' : 'Minimize viewer'}
+                        >
+                            {minimizedIds.has(comp.id) ? '\u25b8' : '\u25be'} {comp.name}
                         </span>
                         <button
                             onClick={() => {
@@ -92,16 +135,24 @@ export const ViewerPanels: React.FC = () => {
                             ✕
                         </button>
                     </div>
+                    )}
 
-                    {/* Viewer content */}
-                    {comp instanceof Card && (
+                    {/* Viewer content (hidden when minimized) */}
+                    {!minimizedIds.has(comp.id) && comp instanceof Card && (
                         <CardViewer card={comp} compact />
                     )}
-                    {comp instanceof Camera && (
+                    {minimizedIds.has(comp.id) && comp instanceof Card && (comp as Card).beamProfiles.length > 0 && (
+                        <div style={{ fontSize: '9px', color: '#777', fontFamily: 'monospace', marginTop: '2px' }}>
+                            {fmtPowerCompact((comp as Card).beamProfiles.reduce((sum, p) => sum + p.power, 0))}
+                        </div>
+                    )}
+                    {!minimizedIds.has(comp.id) && comp instanceof Camera && (
                         <CameraViewer
                             camera={comp}
                             isRendering={isRendering}
+                            isMobile={isMobile}
                             onRefresh={() => {
+                                if (isRendering) return;
                                 if (animator.channels.length > 0) {
                                     // Animation channels present — auto scan accumulation
                                     setScanAccumConfig({ steps: scanAccumConfig.steps, trigger: scanAccumConfig.trigger + 1 });
@@ -111,80 +162,20 @@ export const ViewerPanels: React.FC = () => {
                             }}
                         />
                     )}
-                    {comp instanceof PMT && (() => {
+                    {!minimizedIds.has(comp.id) && comp instanceof PMT && (() => {
                         const pmt = comp as PMT;
-                        const hasScanImage = !!pmt.scanImage;
                         return (
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2px' }}>
-                                    <button
-                                        onClick={() => {
-                                            pmt.markScanStale();
-                                            pmt.version++;
-                                            setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
-                                        }}
-                                        disabled={isRendering}
-                                        title="Re-run raster scan"
-                                        style={{
-                                            background: isRendering ? '#333' : '#1a5a2a',
-                                            border: '1px solid #444',
-                                            borderRadius: '3px',
-                                            color: isRendering ? '#666' : '#8f8',
-                                            cursor: isRendering ? 'not-allowed' : 'pointer',
-                                            fontSize: '11px',
-                                            padding: '1px 5px',
-                                            lineHeight: 1.2,
-                                        }}
-                                    >
-                                        🔄
-                                    </button>
-                                </div>
-                                <canvas
-                                    ref={el => {
-                                        if (!el) return;
-                                        const ctx = el.getContext('2d');
-                                        if (!ctx) return;
-                                        const w = pmt.scanResX;
-                                        const h = pmt.scanResY;
-                                        if (pmt.scanImage) {
-                                            const img = pmt.scanImage;
-                                            let maxVal = 0;
-                                            for (let i = 0; i < img.length; i++) if (img[i] > maxVal) maxVal = img[i];
-                                            if (maxVal < 1e-12) maxVal = 1;
-                                            const imageData = ctx.createImageData(w, h);
-                                            for (let y = 0; y < h; y++) {
-                                                for (let x = 0; x < w; x++) {
-                                                    const srcIdx = (h - 1 - y) * w + x;
-                                                    const v = Math.pow(Math.max(0, Math.min(1, img[srcIdx] / maxVal)), 0.45);
-                                                    const dstIdx = (y * w + x) * 4;
-                                                    imageData.data[dstIdx + 0] = Math.round(v * 80);
-                                                    imageData.data[dstIdx + 1] = Math.round(v * 255);
-                                                    imageData.data[dstIdx + 2] = Math.round(v * 80);
-                                                    imageData.data[dstIdx + 3] = 255;
-                                                }
-                                            }
-                                            ctx.putImageData(imageData, 0, 0);
-                                        } else {
-                                            ctx.fillStyle = '#000';
-                                            ctx.fillRect(0, 0, w, h);
-                                        }
-                                    }}
-                                    width={pmt.scanResX}
-                                    height={pmt.scanResY}
-                                    style={{ width: '160px', height: '160px', imageRendering: 'pixelated', borderRadius: 4, border: '1px solid #333' }}
-                                />
-                                {!hasScanImage && (
-                                    <div style={{
-                                        position: 'absolute', top: 24, left: 0, width: '160px', height: '160px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        borderRadius: 4,
-                                    }}>
-                                        <span style={{ fontSize: '10px', color: '#555', fontStyle: 'italic' }}>
-                                            No scan data yet
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
+                            <PMTViewer
+                                pmt={pmt}
+                                isRendering={isRendering}
+                                compact
+                                onRefresh={() => {
+                                    if (isRendering) return;
+                                    pmt.markScanStale();
+                                    pmt.version++;
+                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
+                                }}
+                            />
                         );
                     })()}
                 </div>

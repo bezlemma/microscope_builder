@@ -64,6 +64,18 @@ export class SampleChamber extends Sample {
     // (Mickey SPHERE-based), so Solver3 backward rays interact with
     // the specimen geometry, not the transparent chamber walls.
 
+    /** Refractive index of fill medium (water = 1.33, air = 1.0). */
+    fillMediumIndex: number = 1.33;
+
+    /** Inner cavity bounds in local coordinates, accounting for wall thickness. */
+    getVolumeBoundsLocal(): Box3 {
+        const inner = this.cubeSize / 2 - this.wallThickness;
+        return new Box3(
+            new Vector3(-inner, -inner, -inner),
+            new Vector3(inner, inner, inner)
+        );
+    }
+
     /** Solver 2 transfer matrix: no focusing power. */
     getParaxialTransform(): [number, number, number, number] {
         return [1, 0, 0, 1];

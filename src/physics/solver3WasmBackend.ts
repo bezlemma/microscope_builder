@@ -10,6 +10,7 @@ import {
     SOLVER3_KERNEL_STATUS_UNIMPLEMENTED,
 } from './kernelPackets';
 import { createPackedFirstHitHintsFromWasm } from './solver3FirstHitHints';
+import { createPackedAnalyticHitsFromWasm } from './solver3AnalyticNarrowPhase';
 import { createJsPackedCameraSamples, createPackedCameraSamplesFromWasm } from './solver3Sampling';
 import type { Solver3Result } from './solver3Kernel';
 import type {
@@ -51,6 +52,21 @@ export interface Solver3WasmExports {
         candidateCountsPtr: number,
         candidateIndicesPtr: number,
         candidateTNearPtr: number,
+    ): number;
+    solver3_surface_param_stride?(): number;
+    solver3_analytic_narrow_phase?(
+        headerPtr: number,
+        worldToLocalPtr: number,
+        localToWorldPtr: number,
+        surfaceKindsPtr: number,
+        surfaceParamsPtr: number,
+        componentCount: number,
+        sampleScalarsPtr: number,
+        sampleCount: number,
+        candidateCountsPtr: number,
+        candidateIndicesPtr: number,
+        maxCandidates: number,
+        outputPtr: number,
     ): number;
 }
 
@@ -128,7 +144,8 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
 
         if (packet) {
             const hints = createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, packet);
-            return this.fallback.renderCameraSamples(request, packet, hints ?? undefined);
+            const analytic = hints ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, packet, hints) : null;
+            return this.fallback.renderCameraSamples(request, packet, hints ?? undefined, analytic ?? undefined);
         }
 
         if (typeof this.module.exports.solver3_render_camera_stub === 'function' && headerPtr !== null) {
@@ -157,14 +174,17 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
         const hints = packet
             ? createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket)
             : null;
-        return yield* this.fallback.renderCameraSamplesGenerator(request, resolvedPacket, hints ?? undefined);
+        const analytic = (packet && hints)
+            ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, hints)
+            : null;
+        return yield* this.fallback.renderCameraSamplesGenerator(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
     }
 
     renderPMTPixel(request: PMTKernelRequest): { radiance: number; bestPath: Ray[] | null } {
         return this.fallback.renderPMTPixel(request);
     }
 
-    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; path: Ray[]; absorbed: boolean } {
+    traceBackward(startRay: Ray, originatorId?: string): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean } {
         return this.fallback.traceBackward(startRay, originatorId);
     }
 }

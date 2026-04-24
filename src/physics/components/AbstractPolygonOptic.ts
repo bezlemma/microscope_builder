@@ -75,7 +75,7 @@ export abstract class AbstractPolygonOptic extends OpticalComponent {
         this.invalidateMesh();
     }
 
-    protected setRegularPolygon(numSides: number, inscribedRadius: number): void {
+    public setRegularPolygon(numSides: number, inscribedRadius: number): void {
         const sides = Math.max(3, Math.round(numSides));
         const circumRadius = inscribedRadius / Math.cos(Math.PI / sides);
         const vertices: [number, number][] = [];
@@ -84,6 +84,22 @@ export abstract class AbstractPolygonOptic extends OpticalComponent {
             vertices.push([circumRadius * Math.cos(angle), circumRadius * Math.sin(angle)]);
         }
         this.setVertices(vertices);
+    }
+
+    /** Approximate inscribed radius (distance from center to nearest edge midpoint). */
+    get inscribedRadius(): number {
+        const verts = this.vertices;
+        if (verts.length < 3) return 0;
+        let minDist = Infinity;
+        for (let i = 0; i < verts.length; i++) {
+            const [ax, ay] = verts[i];
+            const [bx, by] = verts[(i + 1) % verts.length];
+            const mx = (ax + bx) / 2;
+            const my = (ay + by) / 2;
+            const dist = Math.sqrt(mx * mx + my * my);
+            if (dist < minDist) minDist = dist;
+        }
+        return minDist;
     }
 
     public getProfileVertices(): [number, number][] {
@@ -231,6 +247,43 @@ export abstract class AbstractPolygonOptic extends OpticalComponent {
         }
         this.faceROC = nextROC;
         this.faceModes = nextModes;
+    }
+
+    public getOutlineData(): { frontCap: Vector3[]; backCap: Vector3[]; corners: [Vector3, Vector3][] } {
+        const displayed = this.getProfileVertices();
+        const halfWidth = this.width / 2;
+        const segs = 12;
+        const faceData = this.computeFaceData(displayed);
+
+        const perimeter: [number, number][] = [];
+        for (const face of faceData) {
+            for (let i = 0; i <= segs; i++) {
+                if (i === segs) continue;
+                const t = i / segs;
+                const a = face.v0[0] + t * (face.v1[0] - face.v0[0]);
+                const b = face.v0[1] + t * (face.v1[1] - face.v0[1]);
+                if (!face.canCurve || !face.center) {
+                    perimeter.push([a, b]);
+                    continue;
+                }
+                const radial = Math.hypot(a - face.midpoint[0], b - face.midpoint[1]);
+                const sagSq = face.absRadius * face.absRadius - radial * radial;
+                const sag = sagSq > 0 ? Math.sign(face.roc) * (Math.sqrt(sagSq) - face.chordToCenter) : 0;
+                perimeter.push([
+                    a + face.outwardNormal[0] * sag,
+                    b + face.outwardNormal[1] * sag,
+                ]);
+            }
+        }
+
+        const frontCap = perimeter.map(([a, b]) => this.mapToLocal(a, b, -halfWidth));
+        const backCap = perimeter.map(([a, b]) => this.mapToLocal(a, b, halfWidth));
+        const corners: [Vector3, Vector3][] = displayed.map(([a, b]) => [
+            this.mapToLocal(a, b, -halfWidth),
+            this.mapToLocal(a, b, halfWidth),
+        ]);
+
+        return { frontCap, backCap, corners };
     }
 
     private updateLocalBounds(): void {

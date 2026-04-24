@@ -13,12 +13,14 @@ export type WaveplateMode = 'half' | 'quarter' | 'polarizer';
  * - 'polarizer' : Linear polarizer — projects onto transmission axis, attenuates intensity
  * 
  * Physics (Jones calculus):
- *   Half-wave plate:     J = R(-θ) · diag(1, -1) · R(θ)
- *   Quarter-wave plate:  J = R(-θ) · diag(1, -i) · R(θ)
- *   Linear polarizer:    J = R(-θ) · diag(1,  0) · R(θ)
- * 
+ *   Half-wave plate:     J = R(θ) · diag(1, -1) · R(-θ)
+ *   Quarter-wave plate:  J = R(θ) · diag(1, -i) · R(-θ)
+ *   Linear polarizer:    J = R(θ) · diag(1,  0) · R(-θ)
+ *
  * where θ = fastAxisAngle, R(θ) is rotation matrix.
- * 
+ *
+ * Convention: R(-θ) rotates the input vector INTO the fast-axis frame; the
+ * diag() phase/attenuation is applied there; R(θ) rotates back to the lab frame.
  * The fast axis angle is measured from the local u-axis (transverse plane).
  */
 export class Waveplate extends OpticalComponent {
@@ -48,8 +50,8 @@ export class Waveplate extends OpticalComponent {
         const t = Waveplate.THICKNESS / 2;
         const r = this.apertureRadius;
         this.bounds = new Box3(
-            new Vector3(-t, -r, -r),
-            new Vector3(t, r, r)
+            new Vector3(-r, -r, -t),
+            new Vector3(r, r, t)
         );
     }
 
@@ -116,36 +118,40 @@ export class Waveplate extends OpticalComponent {
             outY = { re: sin * mx.re + cos * my.re, im: sin * mx.im + cos * my.im };
 
         } else {
-            // Polarizer: project onto transmission axis (fast axis direction)
-            // Component along fast axis
+            // Polarizer: project onto transmission axis (fast axis direction).
+            // The projected E-field has magnitude |proj|; we encode the amplitude
+            // loss in `intensity`, so the Jones vector here must be UNIT-MAGNITUDE.
+            // Storing (cos·proj, sin·proj) alongside intensity*throughput would
+            // double-count the loss, since downstream uses |E|² = intensity·|Jones|².
             const projRe = cos * jx.re + sin * jy.re;
             const projIm = cos * jx.im + sin * jy.im;
-            outX = { re: cos * projRe, im: cos * projIm };
-            outY = { re: sin * projRe, im: sin * projIm };
+            // Unit Jones vector along the fast axis, carrying only the projection's phase.
+            outX = { re: cos, im: 0 };
+            outY = { re: sin, im: 0 };
 
-            // Intensity loss: |proj|² / |J_in|²
             const inPow = jx.re * jx.re + jx.im * jx.im + jy.re * jy.re + jy.im * jy.im;
             const outPow = projRe * projRe + projIm * projIm;
             const throughput = inPow > 0 ? outPow / inPow : 0;
 
-            // Create transmitted ray with reduced intensity
             const outRay = childRay(ray, {
-                origin: hit.point.clone().add(ray.direction.clone().multiplyScalar(0.1)),
+                origin: hit.point.clone(),
                 direction: ray.direction.clone(),
                 polarization: { x: outX, y: outY },
-                intensity: ray.intensity * throughput
+                intensity: ray.intensity * throughput,
+                opticalPathLength: ray.opticalPathLength + hit.t,
             });
-            return { rays: [outRay] };
+            return { rays: [outRay], passthrough: true };
         }
 
         // Waveplates don't change intensity, only phase/polarization
         const outRay = childRay(ray, {
-            origin: hit.point.clone().add(ray.direction.clone().multiplyScalar(0.1)),
+            origin: hit.point.clone(),
             direction: ray.direction.clone(),
             polarization: { x: outX, y: outY },
-            intensity: ray.intensity
+            intensity: ray.intensity,
+            opticalPathLength: ray.opticalPathLength + hit.t,
         });
-        return { rays: [outRay] };
+        return { rays: [outRay], passthrough: true };
     }
 
     /** Solver 2 transfer matrix: identity (waveplates don't affect beam width). */

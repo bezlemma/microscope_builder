@@ -62,42 +62,40 @@ export function cleanVec(v: Vector3, eps: number = 1e-12): Vector3 {
 }
 
 /**
- * Slab method for AABB Intersection (Broadphase)
+ * Slab method for AABB Intersection (Broadphase).
  * Returns entry and exit distances (tmin, tmax).
  * If tmin > tmax or tmax < 0, no intersection.
+ *
+ * Robust against zero / near-zero direction components: for a slab where the
+ * ray is parallel, we return a miss iff the origin is outside that slab.
  */
 export function intersectAABB(origin: Vector3, direction: Vector3, box: Box3): { hit: boolean, tMin: number, tMax: number } {
-    const invDirX = 1.0 / direction.x;
-    const invDirY = 1.0 / direction.y;
-    const invDirZ = 1.0 / direction.z;
+    const EPS = 1e-20;
 
-    let tmin = (box.min.x - origin.x) * invDirX;
-    let tmax = (box.max.x - origin.x) * invDirX;
+    const slab = (o: number, d: number, lo: number, hi: number): { min: number; max: number } | null => {
+        if (Math.abs(d) < EPS) {
+            // Ray is parallel to this slab: miss unless origin is between the planes.
+            if (o < lo || o > hi) return null;
+            return { min: -Infinity, max: Infinity };
+        }
+        const inv = 1 / d;
+        let t1 = (lo - o) * inv;
+        let t2 = (hi - o) * inv;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        return { min: t1, max: t2 };
+    };
 
-    if (tmin > tmax) [tmin, tmax] = [tmax, tmin];
+    const sx = slab(origin.x, direction.x, box.min.x, box.max.x);
+    if (!sx) return { hit: false, tMin: 0, tMax: 0 };
+    const sy = slab(origin.y, direction.y, box.min.y, box.max.y);
+    if (!sy) return { hit: false, tMin: 0, tMax: 0 };
+    const sz = slab(origin.z, direction.z, box.min.z, box.max.z);
+    if (!sz) return { hit: false, tMin: 0, tMax: 0 };
 
-    let tymin = (box.min.y - origin.y) * invDirY;
-    let tymax = (box.max.y - origin.y) * invDirY;
+    const tmin = Math.max(sx.min, sy.min, sz.min);
+    const tmax = Math.min(sx.max, sy.max, sz.max);
 
-    if (tymin > tymax) [tymin, tymax] = [tymax, tymin];
-
-    if ((tmin > tymax) || (tymin > tmax))
-        return { hit: false, tMin: 0, tMax: 0 };
-
-    if (tymin > tmin) tmin = tymin;
-    if (tymax < tmax) tmax = tymax;
-
-    let tzmin = (box.min.z - origin.z) * invDirZ;
-    let tzmax = (box.max.z - origin.z) * invDirZ;
-
-    if (tzmin > tzmax) [tzmin, tzmax] = [tzmax, tzmin];
-
-    if ((tmin > tzmax) || (tzmin > tmax))
-        return { hit: false, tMin: 0, tMax: 0 };
-
-    if (tzmin > tmin) tmin = tzmin;
-    if (tzmax < tmax) tmax = tzmax;
-
+    if (tmin > tmax) return { hit: false, tMin: 0, tMax: 0 };
     return { hit: tmax > 0, tMin: tmin, tMax: tmax };
 }
 
@@ -117,4 +115,25 @@ export function solveQuadratic(A: number, B: number, C: number): number[] {
     const t1 = (-B + sqrtDisc) / (2 * A);
     
     return [Math.min(t0, t1), Math.max(t0, t1)];
+}
+
+/**
+ * Numerical approximation of the Error Function (erf)
+ * Maximum error 1.5e-7 (Abramowitz and Stegun 7.1.26)
+ */
+export function erf(x: number): number {
+    const sign = x >= 0 ? 1 : -1;
+    x = Math.abs(x);
+    
+    const p = 0.3275911;
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    
+    const t = 1.0 / (1.0 + p * x);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    
+    return sign * y;
 }

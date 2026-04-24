@@ -14,13 +14,21 @@ interface ScrubInputProps {
     allowInfinity?: boolean;
 }
 
+/** Minimum ms between onCommit calls during drag — keeps live preview smooth
+ *  without hammering expensive downstream work (solver, spectrum, etc.). */
+const COMMIT_THROTTLE_MS = 60;
+
 /**
  * ScrubInput — A Blender/Figma-style scrubbable number input.
- * 
+ *
  * - Type values directly in the text field (commits on Enter/blur)
  * - Click-drag on the LABEL to scrub the value in real-time
+ * - Tap the ‹/› stepper buttons to nudge the value up/down by one step
  * - Cursor shows ↔ (ew-resize) when hovering the label
- * - Holds shift for 10x precision, ctrl for 0.1x precision
+ * - Holds shift for 10x precision (desktop only)
+ *
+ * During drag, onChange fires every pointer-move (cheap local state update)
+ * while onCommit is throttled to ~16 fps to avoid hammering heavy work.
  */
 export const ScrubInput: React.FC<ScrubInputProps> = ({
     label,
@@ -31,13 +39,19 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     min,
     max,
     step = 0.01,
-    suffix = '',
+    suffix,
     title,
     allowInfinity = false,
 }) => {
     const [isScrubbing, setIsScrubbing] = useState(false);
     const startXRef = useRef(0);
     const startValueRef = useRef(0);
+
+    // Throttle bookkeeping for onCommit during drag
+    const lastCommitTimeRef = useRef(0);
+    const pendingCommitRef = useRef<string | null>(null);
+    const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const latestScrubValueRef = useRef<string>('');
 
     const clamp = useCallback((v: number) => {
         if (min !== undefined) v = Math.max(min, v);
@@ -49,18 +63,47 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         return Math.round(v / step) * step;
     }, [step]);
 
+    /** Fire onCommit, respecting throttle window. Guarantees the last value
+     *  is always committed (via a trailing timer). */
+    const throttledCommit = useCallback((val: string) => {
+        const now = performance.now();
+        const elapsed = now - lastCommitTimeRef.current;
+
+        if (elapsed >= COMMIT_THROTTLE_MS) {
+            // Enough time has passed — commit immediately
+            lastCommitTimeRef.current = now;
+            pendingCommitRef.current = null;
+            if (commitTimerRef.current) { clearTimeout(commitTimerRef.current); commitTimerRef.current = null; }
+            onCommit(val);
+        } else {
+            // Too soon — queue a trailing commit so the final value is never lost
+            pendingCommitRef.current = val;
+            if (!commitTimerRef.current) {
+                commitTimerRef.current = setTimeout(() => {
+                    commitTimerRef.current = null;
+                    if (pendingCommitRef.current !== null) {
+                        lastCommitTimeRef.current = performance.now();
+                        onCommit(pendingCommitRef.current);
+                        pendingCommitRef.current = null;
+                    }
+                }, COMMIT_THROTTLE_MS - elapsed);
+            }
+        }
+    }, [onCommit]);
+
     const handleLabelPointerDown = useCallback((e: React.PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
         // Parse current value for scrub start
-        const currentVal = value.toLowerCase() === 'infinity' ? 1e9 
+        const currentVal = value.toLowerCase() === 'infinity' ? 1e9
                          : value.toLowerCase() === '-infinity' ? -1e9
                          : parseFloat(value);
         if (isNaN(currentVal)) return;
 
         startXRef.current = e.clientX;
         startValueRef.current = currentVal;
+        lastCommitTimeRef.current = 0;  // Reset throttle so first move commits immediately
         setIsScrubbing(true);
 
         // Capture pointer for reliable drag tracking
@@ -72,34 +115,46 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         e.preventDefault();
 
         const dx = e.clientX - startXRef.current;
-        
+
         // Shift = fine (0.1x), default = normal
         const modifier = e.shiftKey ? 0.1 : 1.0;
-        
+
         let newVal = startValueRef.current + dx * speed * modifier;
         newVal = clamp(newVal);
         newVal = round(newVal);
 
         // Format display
+        let formatted: string;
         if (allowInfinity && Math.abs(newVal) >= 1e6) {
-            onChange(newVal > 0 ? 'Infinity' : '-Infinity');
+            formatted = newVal > 0 ? 'Infinity' : '-Infinity';
         } else {
-            onChange(String(round(newVal)));
+            formatted = String(round(newVal));
         }
 
-        // Commit in real-time for live updates
-        if (allowInfinity && Math.abs(newVal) >= 1e6) {
-            onCommit(newVal > 0 ? 'Infinity' : '-Infinity');
-        } else {
-            onCommit(String(round(newVal)));
-        }
-    }, [isScrubbing, speed, clamp, round, onChange, onCommit, allowInfinity]);
+        latestScrubValueRef.current = formatted;
+        onChange(formatted);             // Always — cheap local state update
+        throttledCommit(formatted);      // Throttled — expensive downstream work
+    }, [isScrubbing, speed, clamp, round, onChange, throttledCommit, allowInfinity]);
 
     const handleLabelPointerUp = useCallback((e: React.PointerEvent) => {
         if (!isScrubbing) return;
         setIsScrubbing(false);
         try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
-    }, [isScrubbing]);
+
+        // Cancel any pending throttled commit and immediately commit the final value
+        if (commitTimerRef.current) { clearTimeout(commitTimerRef.current); commitTimerRef.current = null; }
+        pendingCommitRef.current = null;
+        if (latestScrubValueRef.current) {
+            onCommit(latestScrubValueRef.current);
+        }
+    }, [isScrubbing, onCommit]);
+
+    // Clean up trailing timer on unmount
+    useEffect(() => {
+        return () => {
+            if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+        };
+    }, []);
 
     // Prevent body selection while scrubbing
     useEffect(() => {
@@ -123,7 +178,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     }, [isScrubbing]);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <label
                 title={title}
                 onPointerDown={handleLabelPointerDown}
@@ -136,40 +191,51 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     cursor: 'ew-resize',
                     userSelect: 'none',
                     transition: 'color 0.15s',
+                    padding: '2px 0',
                 }}
             >
-                {label}{suffix ? ` (${suffix})` : ''}
-                <span style={{ 
-                    fontSize: '10px', 
-                    color: '#555', 
-                    marginLeft: 4,
-                    opacity: 0.7,
-                }}>
-                    ↔
-                </span>
+                {label}
             </label>
-            <input
-                type="text"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                onBlur={() => onCommit(value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                        onCommit(value);
-                        (e.target as HTMLInputElement).blur();
-                    }
-                }}
-                style={{
-                    backgroundColor: '#222',
-                    border: `1px solid ${isScrubbing ? '#64ffda' : '#444'}`,
-                    color: '#fff',
-                    padding: '6px',
-                    borderRadius: '4px',
-                    width: '100%',
-                    boxSizing: 'border-box' as const,
-                    transition: 'border-color 0.15s',
-                }}
-            />
+            <div style={{ position: 'relative', width: '100%' }}>
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    onBlur={() => onCommit(value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            onCommit(value);
+                            (e.target as HTMLInputElement).blur();
+                        }
+                    }}
+                    style={{
+                        backgroundColor: '#222',
+                        border: `1px solid ${isScrubbing ? '#64ffda' : '#444'}`,
+                        color: '#fff',
+                        padding: suffix ? '6px 28px 6px 6px' : '6px',
+                        borderRadius: '4px',
+                        width: '100%',
+                        minWidth: 0,
+                        boxSizing: 'border-box' as const,
+                        transition: 'border-color 0.15s',
+                    }}
+                />
+                {suffix && (
+                    <span style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '11px',
+                        color: '#777',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        fontFamily: 'Inter, sans-serif',
+                    }}>
+                        {suffix}
+                    </span>
+                )}
+            </div>
         </div>
     );
 };

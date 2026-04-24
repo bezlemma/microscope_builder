@@ -15,6 +15,7 @@ export class Laser extends OpticalComponent {
     
     constructor(name: string = "Laser Source") {
         super(name);
+        this.bounds = Laser.HOUSING.clone();
         // Default: beam fires along +X (in the optical table XY plane)
         this.pointAlong(1, 0, 0);
     }
@@ -23,14 +24,17 @@ export class Laser extends OpticalComponent {
         const { hit, tMin, tMax } = intersectAABB(rayLocal.origin, rayLocal.direction, Laser.HOUSING);
         if (!hit) return null;
 
-        const t = tMin > 0 ? tMin : tMax;
-        if (t < 0) return null;
+        // Use the first positive t to avoid self-intersection when a ray starts
+        // exactly on the housing boundary.
+        const t = tMin > 0.001 ? tMin : tMax;
+        if (t < 0.001) return null;
 
+        const point = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
         return {
             t,
-            point: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t)),
+            point,
             normal: new Vector3(0, 0, 1),
-            localPoint: rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t))
+            localPoint: point.clone()
         };
     }
 

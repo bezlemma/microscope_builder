@@ -3,6 +3,7 @@ import { Ray, JonesVector, Coherence } from './types';
 import { OpticalComponent } from './Component';
 import { Complex, cInv } from './complex';
 import { Solver1 } from './Solver1';
+import { erf } from './math_solvers';
 
 // ─── Legacy q-Parameter Helpers ───────────────────────────────────────
 //
@@ -73,6 +74,10 @@ export interface GaussianBeamSegment {
     opticalPathLength: number;
     refractiveIndex: number;
     coherenceMode: Coherence;
+    
+    // Performance caches
+    bounds?: Float64Array;
+    length?: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -149,32 +154,56 @@ export class Solver2 {
      * Returns intensity [W/mm²], polarization, and accumulated phase.
      */
     static queryIntensity(
-        point: Vector3,
+        px: number,
+        py: number,
+        pz: number,
         segments: GaussianBeamSegment[]
     ): { intensity: number; polarization: JonesVector; phase: number } | null {
         if (segments.length === 0) return null;
 
         let bestSeg: GaussianBeamSegment | null = null;
-        let bestDist = Infinity;
+        let bestDist2 = Infinity;
         let bestT = 0;
 
-        const toPoint = new Vector3();
-        const closest = new Vector3();
-
         for (const seg of segments) {
-            const segDir = seg.direction;
-            const segLen = getSegmentLength(seg);
-            if (segLen < 1e-6) continue;
+            if (seg.length === undefined) {
+                seg.length = seg.start.distanceTo(seg.end);
+            }
+            if (!seg.bounds) {
+                const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+                const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
+                const startR = Math.max(seg.footprintStart ?? 0.05, 0.05);
+                const endR = Math.max(seg.footprintEnd ?? 0.05, 0.05);
+                const maxR = Math.max(startR, endR) * 10.0;
+                seg.bounds = new Float64Array([
+                    Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
+                    Math.max(sx, ex) + maxR, Math.max(sy, ey) + maxR, Math.max(sz, ez) + maxR,
+                ]);
+            }
+            
+            const b = seg.bounds;
+            if (px < b[0] || py < b[1] || pz < b[2] || px > b[3] || py > b[4] || pz > b[5]) continue;
 
-            toPoint.subVectors(point, seg.start);
-            const along = toPoint.dot(segDir);
-            const t = clamp(along, 0, segLen);
+            const dx = seg.direction.x, dy = seg.direction.y, dz = seg.direction.z;
+            const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+            const toPx = px - sx, toPy = py - sy, toPz = pz - sz;
+            
+            if (seg.length < 1e-6) continue;
 
-            closest.copy(seg.start).addScaledVector(segDir, t);
-            const dist = point.distanceTo(closest);
+            const along = toPx * dx + toPy * dy + toPz * dz;
+            const t = clamp(along, 0, seg.length);
 
-            if (dist < bestDist) {
-                bestDist = dist;
+            const cx = sx + dx * t;
+            const cy = sy + dy * t;
+            const cz = sz + dz * t;
+            
+            const distX = px - cx;
+            const distY = py - cy;
+            const distZ = pz - cz;
+            const dist2 = distX * distX + distY * distY + distZ * distZ;
+
+            if (dist2 < bestDist2) {
+                bestDist2 = dist2;
                 bestSeg = seg;
                 bestT = t;
             }
@@ -183,25 +212,39 @@ export class Solver2 {
         if (!bestSeg) return null;
 
         const seg = bestSeg;
-        const segDir = seg.direction;
         const { wx, wy } = segmentBeamRadii(seg, bestT);
 
         if (wx <= 0 || wy <= 0) return null;
 
         const maxBeamRadius = Math.max(wx, wy);
-        if (bestDist > maxBeamRadius * 10) return null;
+        if (bestDist2 > maxBeamRadius * maxBeamRadius * 100) return null;
 
-        toPoint.subVectors(point, seg.start);
-        const along = toPoint.dot(segDir);
-        const transverse = toPoint.clone().sub(segDir.clone().multiplyScalar(along));
+        const dx = seg.direction.x, dy = seg.direction.y, dz = seg.direction.z;
+        const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+        const toPx = px - sx, toPy = py - sy, toPz = pz - sz;
+        
+        const along = toPx * dx + toPy * dy + toPz * dz;
+        const transX = toPx - dx * along;
+        const transY = toPy - dy * along;
+        const transZ = toPz - dz * along;
 
-        const up = new Vector3(0, 1, 0);
-        if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
-        const right = new Vector3().crossVectors(segDir, up).normalize();
-        const localUp = new Vector3().crossVectors(right, segDir).normalize();
+        let upX = 0, upY = 1, upZ = 0;
+        if (Math.abs(dy) > 0.99) { upX = 1; upY = 0; upZ = 0; }
+        
+        let rightX = dy * upZ - dz * upY;
+        let rightY = dz * upX - dx * upZ;
+        let rightZ = dx * upY - dy * upX;
+        let rightL = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+        if (rightL > 0) { rightX /= rightL; rightY /= rightL; rightZ /= rightL; }
 
-        const x = transverse.dot(right);
-        const y = transverse.dot(localUp);
+        let localUpX = rightY * dz - rightZ * dy;
+        let localUpY = rightZ * dx - rightX * dz;
+        let localUpZ = rightX * dy - rightY * dx;
+        let localUpL = Math.sqrt(localUpX * localUpX + localUpY * localUpY + localUpZ * localUpZ);
+        if (localUpL > 0) { localUpX /= localUpL; localUpY /= localUpL; localUpZ /= localUpL; }
+
+        const x = transX * rightX + transY * rightY + transZ * rightZ;
+        const y = transX * localUpX + transY * localUpY + transZ * localUpZ;
 
         const gaussArg = 2 * (x * x / (wx * wx) + y * y / (wy * wy));
         const gaussFactor = Math.exp(-gaussArg);
@@ -219,16 +262,22 @@ export class Solver2 {
     }
 
     /**
-     * Query the total intensity at a 3D point from all beamlet branches,
-     * coherently summing E-fields for coherent sources.
+     * Query the total intensity at a 3D point from all beamlet branches.
+     *
+     * Branches with Coherence.Coherent that share a sourceId are summed coherently
+     * (same emitter → they can interfere). Branches from different sources sum
+     * incoherently even if both are flagged coherent, since separate lasers/lamps
+     * are mutually incoherent in practice.
      */
     static queryIntensityMultiBeam(
-        point: Vector3,
+        px: number,
+        py: number,
+        pz: number,
         allSegments: GaussianBeamSegment[][],
         targetWavelength?: number
     ): number {
-        let ex_re = 0, ex_im = 0;
-        let ey_re = 0, ey_im = 0;
+        // Per-coherence-group accumulators: keyed by sourceId (or a stable fallback).
+        const groups = new Map<string, { ex_re: number; ex_im: number; ey_re: number; ey_im: number }>();
         let incoherentSum = 0;
 
         for (const branch of allSegments) {
@@ -241,31 +290,160 @@ export class Solver2 {
                 }
             }
 
-            const result = Solver2.queryIntensity(point, branch);
+            const result = Solver2.queryIntensity(px, py, pz, branch);
             if (!result || result.intensity < 1e-12) continue;
 
             const mode = branch[0].coherenceMode;
 
             if (mode === Coherence.Coherent || mode === undefined) {
+                // Branches from the same source may interfere; branches from different
+                // sources (different lasers, different lamp wavelengths) must not.
+                const sourceKey = branch[0].sourceId ?? '__anonymous__';
+                let acc = groups.get(sourceKey);
+                if (!acc) {
+                    acc = { ex_re: 0, ex_im: 0, ey_re: 0, ey_im: 0 };
+                    groups.set(sourceKey, acc);
+                }
+
                 const amplitude = Math.sqrt(result.intensity);
                 const phi = result.phase;
                 const cosPhi = Math.cos(phi);
                 const sinPhi = Math.sin(phi);
 
                 const jx = result.polarization.x;
-                ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
-                ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
+                acc.ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
+                acc.ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
 
                 const jy = result.polarization.y;
-                ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
-                ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+                acc.ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
+                acc.ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
             } else {
                 incoherentSum += result.intensity;
             }
         }
 
-        const coherentIntensity = ex_re * ex_re + ex_im * ex_im + ey_re * ey_re + ey_im * ey_im;
-        return coherentIntensity + incoherentSum;
+        let totalIntensity = incoherentSum;
+        for (const acc of groups.values()) {
+            totalIntensity += acc.ex_re * acc.ex_re + acc.ex_im * acc.ex_im
+                            + acc.ey_re * acc.ey_re + acc.ey_im * acc.ey_im;
+        }
+        return totalIntensity;
+    }
+
+    /**
+     * Analytically integrates the intensity of all incoherent beam segments 
+     * along a generic 3D line segment (e.g. backward ray intersecting sample).
+     * Replaces expensive point-sampling with exact Error Function evaluation of Gaussians.
+     */
+    static integrateIntensityMultiBeam(
+        pxStart: number, pyStart: number, pzStart: number,
+        dx: number, dy: number, dz: number,
+        len: number,
+        allSegments: GaussianBeamSegment[][],
+        targetWavelength?: number
+    ): number {
+        let totalIntegral = 0;
+        
+        for (const branch of allSegments) {
+            if (branch.length === 0) continue;
+            if (targetWavelength !== undefined && Math.abs(branch[0].wavelength - targetWavelength) > 15e-9) continue;
+
+            for (const seg of branch) {
+                if (seg.length === undefined) seg.length = seg.start.distanceTo(seg.end);
+                
+                // Fast lazy bounds
+                if (!seg.bounds) {
+                    const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+                    const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
+                    const sr = Math.max(seg.footprintStart ?? 0.05, 0.05);
+                    const er = Math.max(seg.footprintEnd ?? 0.05, 0.05);
+                    const maxR = Math.max(sr, er) * 10;
+                    seg.bounds = new Float64Array([
+                        Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
+                        Math.max(sx, ex) + maxR, Math.max(sy, ey) + maxR, Math.max(sz, ez) + maxR,
+                    ]);
+                }
+                const b = seg.bounds;
+                
+                // Line AABB check: check start, end, and simple bounding box overlap
+                const ex = pxStart + dx * len, ey = pyStart + dy * len, ez = pzStart + dz * len;
+                if (Math.min(pxStart, ex) > b[3] || Math.max(pxStart, ex) < b[0]) continue;
+                if (Math.min(pyStart, ey) > b[4] || Math.max(pyStart, ey) < b[1]) continue;
+                if (Math.min(pzStart, ez) > b[5] || Math.max(pzStart, ez) < b[2]) continue;
+
+                const segDx = seg.direction.x, segDy = seg.direction.y, segDz = seg.direction.z;
+                const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+                
+                // Evaluate beam radius at the midpoint of the query segment (approximation)
+                const midX = pxStart + dx * (len / 2);
+                const midY = pyStart + dy * (len / 2);
+                const midZ = pzStart + dz * (len / 2);
+                const alongMid = (midX - sx)*segDx + (midY - sy)*segDy + (midZ - sz)*segDz;
+                const tMid = clamp(alongMid, 0, seg.length);
+                const { wx, wy } = segmentBeamRadii(seg, tMid);
+                if (wx <= 0 || wy <= 0) continue;
+
+                const toPx = pxStart - sx, toPy = pyStart - sy, toPz = pzStart - sz;
+                
+                // Base along distance at t=0
+                const along0 = toPx*segDx + toPy*segDy + toPz*segDz;
+                const trans0X = toPx - segDx*along0;
+                const trans0Y = toPy - segDy*along0;
+                const trans0Z = toPz - segDz*along0;
+                
+                // Rate of change of along direction
+                const dAlong = dx*segDx + dy*segDy + dz*segDz;
+                const dTransX = dx - segDx*dAlong;
+                const dTransY = dy - segDy*dAlong;
+                const dTransZ = dz - segDz*dAlong;
+
+                let upX = 0, upY = 1, upZ = 0;
+                if (Math.abs(segDy) > 0.99) { upX = 1; upY = 0; upZ = 0; }
+                
+                let rightX = segDy*upZ - segDz*upY;
+                let rightY = segDz*upX - segDx*upZ;
+                let rightZ = segDx*upY - segDy*upX;
+                const rightL = Math.sqrt(rightX*rightX + rightY*rightY + rightZ*rightZ);
+                if (rightL > 0) { rightX /= rightL; rightY /= rightL; rightZ /= rightL; }
+
+                let localUpX = rightY*segDz - rightZ*segDy;
+                let localUpY = rightZ*segDx - rightX*segDz;
+                let localUpZ = rightX*segDy - rightY*segDx;
+                const localUpL = Math.sqrt(localUpX*localUpX + localUpY*localUpY + localUpZ*localUpZ);
+                if (localUpL > 0) { localUpX /= localUpL; localUpY /= localUpL; localUpZ /= localUpL; }
+
+                const x0 = trans0X*rightX + trans0Y*rightY + trans0Z*rightZ;
+                const y0 = trans0X*localUpX + trans0Y*localUpY + trans0Z*localUpZ;
+                
+                const ux = dTransX*rightX + dTransY*rightY + dTransZ*rightZ;
+                const uy = dTransX*localUpX + dTransY*localUpY + dTransZ*localUpZ;
+
+                const w2x = wx * wx;
+                const w2y = wy * wy;
+
+                const A = 2 * ( (ux*ux)/w2x + (uy*uy)/w2y );
+                const B = 4 * ( (x0*ux)/w2x + (y0*uy)/w2y );
+                const C = 2 * ( (x0*x0)/w2x + (y0*y0)/w2y );
+
+                const peakI = seg.power / (Math.PI * wx * wy);
+
+                if (A < 1e-12) {
+                    // Ray runs parallel to the beam. Intensity is constant transversely.
+                    totalIntegral += len * peakI * Math.exp(-C);
+                } else {
+                    // Analytical Erf integration over t in [0, len]
+                    const sqrtA = Math.sqrt(A);
+                    const arg0 = B / (2 * sqrtA);
+                    const argL = sqrtA * len + arg0;
+                    
+                    const term1 = Math.exp((B*B)/(4*A) - C);
+                    const term2 = (Math.sqrt(Math.PI) / (2 * sqrtA)) * (erf(argL) - erf(arg0));
+                    
+                    totalIntegral += peakI * term1 * term2;
+                }
+            }
+        }
+        return totalIntegral;
     }
 }
 

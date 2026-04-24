@@ -18,14 +18,24 @@ export interface BeamProfile {
 export class Card extends OpticalComponent {
     width: number;
     height: number;
+    opaque: boolean = false;
     hits: { localPoint: Vector3, ray: Ray }[] = [];
     beamProfiles: BeamProfile[] = [];
+    /** Field data from rod-based card field synthesis (null in ray system). */
+    fieldData: { resX: number; resY: number; extentWidth: number; extentHeight: number } | null = null;
+    /** Manual pixel pitch overrides (0 = auto). */
+    fieldPixelPitchOverrideX: number = 0;
+    fieldPixelPitchOverrideY: number = 0;
     emissionPowerRef: number = 0;   // Estimated total fluorescence emission power (W)
 
     constructor(width: number, height: number, name: string) {
         super(name);
         this.width = width;
         this.height = height;
+        this.bounds.set(
+            new Vector3(-width / 2, -height / 2, -0.5),
+            new Vector3(width / 2, height / 2, 0.5),
+        );
     }
 
     intersect(localRay: Ray): HitRecord | null {
@@ -35,7 +45,7 @@ export class Card extends OpticalComponent {
         if (Math.abs(dw) < 1e-6) return null; // Parallel
 
         const t = -localRay.origin.z / dw;
-        if (t < 0) return null;
+        if (t < 0.001) return null;
 
         const point = localRay.origin.clone().add(localRay.direction.clone().multiplyScalar(t));
 
@@ -57,10 +67,16 @@ export class Card extends OpticalComponent {
         // Record the hit for visualization
         this.hits.push({ localPoint: hit.localPoint, ray });
 
+        // Opaque cards absorb all light
+        if (this.opaque) {
+            return { rays: [] };
+        }
+
         // Pass the ray through unaffected (Viewing card probe)
         return {
             rays: [childRay(ray, {
-                origin: hit.point
+                origin: hit.point,
+                opticalPathLength: ray.opticalPathLength + hit.t,
             })],
             passthrough: true
         };

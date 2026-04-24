@@ -180,13 +180,11 @@ describe("E-field Intensity Query", () => {
         const seg = makeSeg();
         const segments = [seg];
 
-        // Query on-axis (midpoint of segment)
-        const onAxis = Solver2.queryIntensity(new Vector3(50, 0, 0), segments);
+        const onAxis = Solver2.queryIntensity(50, 0, 0, segments);
         expect(onAxis).not.toBeNull();
         expect(onAxis!.intensity).toBeGreaterThan(0);
 
-        // Query off-axis (2mm above)
-        const offAxis = Solver2.queryIntensity(new Vector3(50, 2, 0), segments);
+        const offAxis = Solver2.queryIntensity(50, 2, 0, segments);
         expect(offAxis).not.toBeNull();
 
         // On-axis should be brighter than off-axis
@@ -197,10 +195,10 @@ describe("E-field Intensity Query", () => {
         const seg = makeSeg();
         const segments = [seg];
 
-        const r0 = Solver2.queryIntensity(new Vector3(50, 0, 0), segments);
-        const r1 = Solver2.queryIntensity(new Vector3(50, 1, 0), segments);
-        const r2 = Solver2.queryIntensity(new Vector3(50, 2, 0), segments);
-        const r3 = Solver2.queryIntensity(new Vector3(50, 3, 0), segments);
+        const r0 = Solver2.queryIntensity(50, 0, 0, segments);
+        const r1 = Solver2.queryIntensity(50, 1, 0, segments);
+        const r2 = Solver2.queryIntensity(50, 2, 0, segments);
+        const r3 = Solver2.queryIntensity(50, 3, 0, segments);
 
         expect(r0).not.toBeNull();
         expect(r1).not.toBeNull();
@@ -217,8 +215,8 @@ describe("E-field Intensity Query", () => {
         const seg = makeSeg();
         const segments = [seg];
 
-        const p1 = Solver2.queryIntensity(new Vector3(10, 0, 0), segments);
-        const p2 = Solver2.queryIntensity(new Vector3(50, 0, 0), segments);
+        const p1 = Solver2.queryIntensity(10, 0, 0, segments);
+        const p2 = Solver2.queryIntensity(50, 0, 0, segments);
 
         expect(p1).not.toBeNull();
         expect(p2).not.toBeNull();
@@ -234,7 +232,7 @@ describe("E-field Intensity Query", () => {
     });
 
     test("queryIntensity: returns null for empty segments", () => {
-        const result = Solver2.queryIntensity(new Vector3(0, 0, 0), []);
+        const result = Solver2.queryIntensity(0, 0, 0, []);
         expect(result).toBeNull();
     });
 
@@ -242,8 +240,8 @@ describe("E-field Intensity Query", () => {
         const seg = makeSeg();
         const point = new Vector3(50, 0, 0);
 
-        const single = Solver2.queryIntensity(point, [seg]);
-        const multi = Solver2.queryIntensityMultiBeam(point, [[seg]]);
+        const single = Solver2.queryIntensity(point.x, point.y, point.z, [seg]);
+        const multi = Solver2.queryIntensityMultiBeam(point.x, point.y, point.z, [[seg]]);
 
         expect(single).not.toBeNull();
         expect(multi).toBeCloseTo(single!.intensity, 6);
@@ -255,9 +253,9 @@ describe("E-field Intensity Query", () => {
         const seg2 = makeSeg({ opticalPathLength: 0 });
 
         const point = new Vector3(50, 0, 0);
-        const singleI = Solver2.queryIntensity(point, [seg1])!.intensity;
+        const singleI = Solver2.queryIntensity(point.x, point.y, point.z, [seg1])!.intensity;
 
-        const multiI = Solver2.queryIntensityMultiBeam(point, [[seg1], [seg2]]);
+        const multiI = Solver2.queryIntensityMultiBeam(point.x, point.y, point.z, [[seg1], [seg2]]);
 
         // Constructive: I_total = (√I + √I)² = 4·I
         expect(multiI).toBeCloseTo(4 * singleI, 3);
@@ -275,9 +273,9 @@ describe("E-field Intensity Query", () => {
         });
 
         const point = new Vector3(50, 0, 0);
-        const singleI = Solver2.queryIntensity(point, [seg1])!.intensity;
+        const singleI = Solver2.queryIntensity(point.x, point.y, point.z, [seg1])!.intensity;
 
-        const multiI = Solver2.queryIntensityMultiBeam(point, [[seg1], [seg2]]);
+        const multiI = Solver2.queryIntensityMultiBeam(point.x, point.y, point.z, [[seg1], [seg2]]);
 
         // Incoherent sum: I_total = I₁ + I₂ = 2·I (not 4·I)
         expect(multiI).toBeCloseTo(2 * singleI, 3);

@@ -96,6 +96,9 @@ export function setProperty(
     } else if (property === 'tiltAngle') {
         component.tiltAngle = value;
         component.recomputeRotation();
+    } else if (property === 'rollAngle') {
+        component.rollAngle = value;
+        component.recomputeRotation();
     } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         component.position[axis] = value;
@@ -140,6 +143,8 @@ export function getProperty(component: OpticalComponent, property: string): numb
         return component.panAngle;
     } else if (property === 'tiltAngle') {
         return component.tiltAngle;
+    } else if (property === 'rollAngle') {
+        return component.rollAngle;
     } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1] as 'x' | 'y' | 'z';
         return component.position[axis];

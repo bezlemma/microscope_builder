@@ -7,10 +7,48 @@ export class Mirror extends OpticalComponent {
     diameter: number;   // mm — circular aperture diameter
     thickness: number;  // mm — mirror body thickness
 
+    /** Table hole spacing in mm. */
+    static readonly TABLE_HOLE_SPACING_MM = 25;
+
     constructor(diameter: number = 25.4, thickness: number = 6, name: string = "Mirror") {
         super(name);
         this.diameter = diameter;
         this.thickness = thickness;
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
+    }
+
+    /**
+     * Position and orient this mirror so that a beam arriving from
+     * `incomingDirection` reflects into `outgoingDirection` at the given
+     * world-space coordinates. The reflecting surface lands precisely on
+     * (hitX, hitY, hitZ).
+     */
+    reflectAt(
+        hitX: number,
+        hitY: number,
+        hitZ: number,
+        incomingDirection: Vector3,
+        outgoingDirection: Vector3,
+    ): void {
+        const incoming = incomingDirection.clone().normalize();
+        const outgoing = outgoingDirection.clone().normalize();
+        const normal = incoming.clone().sub(outgoing);
+        if (normal.lengthSq() < 1e-12) {
+            throw new Error('Mirror.reflectAt requires distinct incoming/outgoing directions.');
+        }
+        normal.normalize();
+        this.pointAlong(normal.x, normal.y, normal.z);
+        const offsetSign = Math.sign(incoming.dot(normal)) || 1;
+        const halfThickness = this.thickness / 2;
+        this.setPosition(
+            hitX + offsetSign * halfThickness * normal.x,
+            hitY + offsetSign * halfThickness * normal.y,
+            hitZ + offsetSign * halfThickness * normal.z,
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

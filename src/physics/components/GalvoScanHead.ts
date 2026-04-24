@@ -33,6 +33,13 @@ export class GalvoScanHead extends OpticalComponent {
         super(name);
         this.diameter = diameter;
         this.thickness = thickness;
+        // Housing (from GalvoScanHeadVisualizer): 0.8d × 0.8d × 1.5t box, plus mirror disc.
+        const halfBoxXY = diameter * 0.4;
+        const halfBoxZ = thickness * 0.75;
+        this.bounds.set(
+            new Vector3(-halfBoxXY, -halfBoxXY, -halfBoxZ),
+            new Vector3(halfBoxXY, halfBoxXY, halfBoxZ),
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

@@ -5,6 +5,7 @@ import { Lamp } from '../physics/components/Lamp';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
 import { Aperture } from '../physics/components/Aperture';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 
 /**
  * Brightfield Microscope — absorption/shadow imaging with white light.
@@ -34,8 +35,11 @@ export function createBrightfieldScene(): OpticalComponent[] {
     //                                            parallel rays
     //                                           (infinity space = 200mm)
 
-    // 1. Lamp — broadband white light source (7-band ROYGBIV)
+    // 1. Lamp — broadband white light source.  Brightfield is absorption
+    // imaging, not fluorescence, so 3 wavelengths (R/G/B) are plenty for
+    // correct appearance and give a ~4× speedup over the default 13-band set.
     const lamp = new Lamp("White Light Source");
+    lamp.spectralWavelengths = [460, 540, 620];
     lamp.setPosition(-100, 0, 0);
     lamp.pointAlong(1, 0, 0);  // emit along +X
     lamp.beamRadius = 3;
@@ -93,29 +97,28 @@ export function createBrightfieldScene(): OpticalComponent[] {
     scene.push(objective);
 
     // 6. Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
-    // Element 1: Crown Glass (N-SSK5, n=1.658)
-    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
-    tubeLensCrown.setPosition(220, 0, 0); 
-    tubeLensCrown.pointAlong(1, 0, 0);  // optical axis along +X
-    scene.push(tubeLensCrown);
-    
-    // Element 2: Flint Glass (N-SF7, n=1.750)
-    // Crown center is 220. Thickness 4.0. Back vertex is 222.
-    // Gap 0.01. Flint front is 222.01. Thickness 2.5. Center is 223.26.
-    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
-    tubeLensFlint.setPosition(223.26, 0, 0); 
-    tubeLensFlint.pointAlong(1, 0, 0);  // optical axis along +X
-    scene.push(tubeLensFlint);
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    tubeLens.setPosition(221.25, 0, 0);
+    tubeLens.pointAlong(1, 0, 0);  // optical axis along +X
+    scene.push(tubeLens);
 
-    // 7. Camera — at tube lens BFP  
+    // 7. Camera — at tube lens BFP
     // 13mm sensor with 10× objective gives 1.3mm field at sample —
     // Mickey head (1mm) fills most of the field.
     const camera = new Camera(13, 13, "CMOS Sensor");
+    camera.sensorResX = 32;
+    camera.sensorResY = 32;
     // Back focal length (BFL) of this doublet is 196.4 mm from the back vertex.
     // Back vertex is at x = 223.26 + 1.25 = 224.51 mm.
     // Focal plane = 224.51 + 196.4 = 420.91 mm.
     camera.setPosition(420.91, 0, 0);
     camera.pointAlong(-1, 0, 0);  // faces -X (towards incoming beam)
+    // sensorNA = objective NA / magnification. Solver 3 pupil-aware sampling
+    // aims backward rays at the tube lens aperture, but a small extra cone
+    // ensures every pixel still sees the full back pupil even at the sensor
+    // edges so the Mickey silhouette develops across the whole frame.
+    camera.sensorNA = 0.25 / 10;
+    camera.samplesPerPixel = 4;
     scene.push(camera);
 
     return scene;

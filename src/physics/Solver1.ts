@@ -3,7 +3,22 @@ import { Ray, InteractionResult } from './types';
 import { OpticalComponent } from './Component';
 import { Laser } from './components/Laser';
 import { Lamp } from './components/Lamp';
+import { PointSourceBase } from './components/PointSourceBase';
+import { ConeSource3D } from './components/ConeSource3D';
+import { WedgeSource2D } from './components/WedgeSource2D';
+import { StructuredSource } from './components/StructuredSource';
 import type { GaussianBeamSegment } from './Solver2';
+
+/** A component counts as an emitter when forward rays hitting it should be
+ *  absorbed by its housing rather than refracted/reflected. */
+function isEmitter(c: OpticalComponent): boolean {
+    return c instanceof Laser
+        || c instanceof Lamp
+        || c instanceof PointSourceBase
+        || c instanceof ConeSource3D
+        || c instanceof WedgeSource2D
+        || c instanceof StructuredSource;
+}
 
 interface BeamletDraft extends GaussianBeamSegment {
     bundleKey: string;
@@ -29,11 +44,12 @@ function createLegacyQPair(
     segmentLength: number,
     refractiveIndex: number
 ): { qStart: { re: number; im: number }; qEnd: { re: number; im: number } } {
+    // In a medium with index n, use λ_medium = λ₀/n in q(0) and propagate with the
+    // physical distance z. Applying BOTH λ/n and z/n would double-count the index.
     const wavelengthMm = wavelengthSI * 1e3;
     const effectiveWavelength = wavelengthMm / Math.max(refractiveIndex, 1e-6);
     const qStart = initialQ(beamRadiusMm, effectiveWavelength);
-    const reducedDistance = refractiveIndex > 1 ? segmentLength / refractiveIndex : segmentLength;
-    const qEnd = propagateFreeSpace(qStart, reducedDistance);
+    const qEnd = propagateFreeSpace(qStart, segmentLength);
     return { qStart, qEnd };
 }
 
@@ -42,14 +58,19 @@ export class Solver1 {
     scene: OpticalComponent[];
 
     constructor(scene: OpticalComponent[]) {
-        this.scene = scene;
+        this.scene = scene.filter(c => !c.isGhost);
     }
 
     trace(sources: Ray[]): Ray[][] {
         const allPaths: Ray[][] = [];
 
         for (const sourceRay of sources) {
-            if (isNaN(sourceRay.origin.x) || isNaN(sourceRay.direction.x)) {
+            const o = sourceRay.origin;
+            const d = sourceRay.direction;
+            if (
+                isNaN(o.x) || isNaN(o.y) || isNaN(o.z) ||
+                isNaN(d.x) || isNaN(d.y) || isNaN(d.z)
+            ) {
                 console.warn("Solver1: Skipping invalid source ray (NaN values)", sourceRay);
                 continue;
             }
@@ -124,7 +145,12 @@ export class Solver1 {
             return;
         }
 
-        if (isNaN(currentRay.origin.length()) || isNaN(currentRay.direction.length())) {
+        const o = currentRay.origin;
+        const d = currentRay.direction;
+        if (
+            isNaN(o.x) || isNaN(o.y) || isNaN(o.z) ||
+            isNaN(d.x) || isNaN(d.y) || isNaN(d.z)
+        ) {
             console.warn("Solver1: Ray became NaN during trace. Terminating path.");
             allPaths.push([...currentPath]);
             return;
@@ -152,7 +178,7 @@ export class Solver1 {
         currentRay.interactionDistance = nearestT;
         currentRay.interactionComponentId = nearestComponent.id;
 
-        if (nearestComponent instanceof Laser) {
+        if (isEmitter(nearestComponent)) {
             allPaths.push([...currentPath]);
             return;
         }
@@ -253,7 +279,7 @@ export class Solver1 {
         for (let i = 0; i < path.length; i++) {
             const ray = path[i];
             let power = ray.intensity * powerScale;
-            if (power < 1e-6) break;
+            if (power < 1e-6) continue;
 
             const fallbackRadius = Math.max(ray.footprintRadius || sourceRadius || 0.05, 0.05);
 
@@ -415,21 +441,28 @@ export class Solver1 {
     }
 
     private findComponentAt(point: Vector3): OpticalComponent | null {
-        let bestDist = Infinity;
+        // Transform the query point into each component's local frame and
+        // test against its declared bounds. This correctly identifies glass
+        // volumes regardless of shape, instead of relying on a position-to-point
+        // distance that failed for thick or elongated components.
         let best: OpticalComponent | null = null;
+        let bestVolume = Infinity;
 
         for (const c of this.scene) {
-            if (c instanceof Laser || c instanceof Lamp) continue;
-
-            const dist = c.position.distanceTo(point);
-            if (dist < bestDist) {
-                bestDist = dist;
+            if (isEmitter(c)) continue;
+            c.updateMatrices();
+            const localPoint = point.clone().applyMatrix4(c.worldToLocal);
+            if (!c.bounds.containsPoint(localPoint)) continue;
+            // Prefer the tightest-fitting bounds when multiple components cover
+            // the same point (e.g. lens inside an objective casing).
+            const size = c.bounds.getSize(new Vector3());
+            const vol = size.x * size.y * size.z;
+            if (vol < bestVolume) {
+                bestVolume = vol;
                 best = c;
             }
         }
 
-        if (!best) return null;
-        const maxDist = (best as any).apertureRadius ?? 50;
-        return bestDist < maxDist + 20 ? best : null;
+        return best;
     }
 }

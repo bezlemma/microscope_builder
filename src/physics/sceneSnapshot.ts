@@ -7,6 +7,10 @@ import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { Aperture } from './components/Aperture';
 import { SlitAperture } from './components/SlitAperture';
+import { PointSourceBase } from './components/PointSourceBase';
+import { ConeSource3D } from './components/ConeSource3D';
+import { WedgeSource2D } from './components/WedgeSource2D';
+import { StructuredSource } from './components/StructuredSource';
 import {
     BeamFieldSnapshot,
     CameraKernelSnapshot,
@@ -30,7 +34,20 @@ function resolveKernelKind(component: OpticalComponent): KernelComponentKind {
     if (component instanceof Sample) return 'sample';
     if (component instanceof Aperture) return 'aperture';
     if (component instanceof SlitAperture) return 'slitAperture';
+    if (component instanceof ConeSource3D) return 'coneSource';
+    if (component instanceof WedgeSource2D) return 'wedgeSource';
+    if (component instanceof StructuredSource) return 'structuredSource';
+    if (component instanceof PointSourceBase) return 'pointSource';
     return 'optic';
+}
+
+function resolveOpeningRadius(component: OpticalComponent): number | undefined {
+    // Aperture-like components expose `openingDiameter`; slit apertures expose
+    // `slitWidth`. We pick the smaller half-dimension so importance sampling
+    // fits inside the actual clear aperture. Other components return undefined.
+    if (component instanceof Aperture) return component.openingDiameter / 2;
+    if (component instanceof SlitAperture) return Math.min(component.slitWidth, component.slitHeight) / 2;
+    return undefined;
 }
 
 function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponent {
@@ -39,6 +56,8 @@ function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponen
         name: component.name,
         kind: resolveKernelKind(component),
         absorptionCoeff: component.absorptionCoeff,
+        position: component.position,
+        openingRadius: resolveOpeningRadius(component),
         chkIntersection: (ray) => component.chkIntersection(ray),
         interact: (ray, hit) => component.interact(ray, hit),
     };

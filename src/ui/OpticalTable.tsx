@@ -15,6 +15,10 @@ import {
     MAX_REVERSE_PATH_COUNT,
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
+    activeZLevelAtom,
+    reverseRayCounterAtom,
+    drawnRayCountsAtom,
+    cameraImageTickAtom,
 } from '../state/store';
 import { setProperty } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
@@ -33,20 +37,59 @@ import { BundleWaveVisualizer } from './BundleWaveVisualizer';
 import { GaussianBeamSegment, segmentBeamRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays } from '../physics/SourceRayFactory';
+import { serializeScene } from '../state/ubzSerializer';
+import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
+
+/** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
+function rehydratePath(path: SerializedPath): Ray[] {
+    return path.map(r => ({
+        origin: new Vector3(r.origin.x, r.origin.y, r.origin.z),
+        direction: new Vector3(r.direction.x, r.direction.y, r.direction.z),
+        wavelength: r.wavelength,
+        intensity: r.intensity,
+        opticalPathLength: r.opticalPathLength,
+        footprintRadius: r.footprintRadius,
+        coherenceMode: r.coherenceMode,
+        sourceId: r.sourceId,
+        isMainRay: r.isMainRay,
+        polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        interactionDistance: r.interactionDistance,
+        terminationPoint: r.terminationPoint
+            ? new Vector3(r.terminationPoint.x, r.terminationPoint.y, r.terminationPoint.z)
+            : undefined,
+    }));
+}
 import { Draggable } from './Draggable';
 import { getComponentVisualizer } from './componentPresentation';
+import { OutlineColorContext } from './visualizers/ComponentVisualizers';
+import { TutorialOverlay } from './TutorialOverlay';
+import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { captureAnimatedValues, createScheduledRenderJob } from './renderJob';
 
 
 export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [rayConfig] = useAtom(rayConfigAtom);
+    const [activeZ] = useAtom(activeZLevelAtom);
     const [rays, setRays] = useState<Ray[][]>([]);
     const [beamSegments, setBeamSegments] = useState<GaussianBeamSegment[][]>([]);
     const [solver3Paths, setSolver3Paths] = useState<Ray[][]>([]);
-    const [solver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
+    // Actually we need the value for the guard
+    const [solver3Rendering] = useAtom(solver3RenderingAtom);
     const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
+    const [, setReverseRayCounter] = useAtom(reverseRayCounterAtom);
+    const [, setDrawnRayCounts] = useAtom(drawnRayCountsAtom);
+    const [, setCameraImageTick] = useAtom(cameraImageTickAtom);
+
+    // Keep the UI counter of drawn rays in sync with what the RayVisualizer sees.
+    // Each path corresponds to one source-emitted ray (it may bounce through
+    // several components, producing multiple segments — those are not counted
+    // separately here).
+    useEffect(() => {
+        setDrawnRayCounts({ forward: rays.length, reverse: solver3Paths.length });
+    }, [rays, solver3Paths, setDrawnRayCounts]);
 
     // ─── Animation System ───
     const [animator] = useAtom(animatorAtom);
@@ -84,8 +127,9 @@ export const OpticalTable: React.FC = () => {
     // Uses component.version which is bumped on every property mutation.
     const opticsFingerprint = useMemo(() => {
         if (!components) return '';
+        // Cards only affect optics when flagged opaque — otherwise they're passive.
         return components
-            .filter(c => !(c instanceof Card))
+            .filter(c => !(c instanceof Card) || (c as Card).opaque)
             .map(c => `${c.id}:${c.position.x},${c.position.y},${c.position.z}:${c.rotation.x},${c.rotation.y},${c.rotation.z},${c.rotation.w}:v${c.version}`)
             .join('|');
     }, [components, animTick]);
@@ -100,7 +144,9 @@ export const OpticalTable: React.FC = () => {
 
     const traceCenterBeamSegments = () => {
         const solver1 = new Solver1(components);
-        const sourceRays = createSourceRays(components, 1, 'center');
+        // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
+        // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
+        const sourceRays = createSourceRays(components, 4, 'full'); 
         return solver1.traceWithBeamSegments(sourceRays).beamSegments;
     };
 
@@ -380,10 +426,21 @@ export const OpticalTable: React.FC = () => {
         beamSegsRef.current = beamSegs;
 
         if (sceneChanged) {
+            let hasCamera = false;
+            let hasPMT = false;
             for (const comp of components) {
                 if (comp instanceof Camera) {
                     comp.markSolver3Stale();
+                    hasCamera = true;
                 }
+                if (comp instanceof PMT && (comp as PMT).hasValidAxes()) {
+                    hasPMT = true;
+                }
+            }
+            // Auto-kick Solver-3 whenever the scene changes and there is a detector,
+            // so camera images refresh without the user pressing "Render".
+            if ((hasCamera || hasPMT) && !solver3Rendering) {
+                setSolver3Trigger(t => t + 1);
             }
             // Check if scan results should be invalidated:
             // Only clear if a NON-ANIMATED component changed since scan completed
@@ -419,150 +476,160 @@ export const OpticalTable: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, rayConfig]);
 
-    // ─── Effect 1b: Solver 3 — backward trace from ALL detectors (on-demand) ───
+    // ─── Effect 1b: Solver 3 — backward trace from ALL detectors, offloaded to a Web Worker ───
+    const solver3WorkerRef = useRef<Worker | null>(null);
+    const solver3JobIdRef = useRef<number>(0);
+    const componentsRefForSolver3 = useRef(components);
+    componentsRefForSolver3.current = components;
+
+    // Lazily spin up the dedicated worker and wire the message handler.
+    useEffect(() => {
+        const worker = new Worker(new URL('../physics/solver3Worker.ts', import.meta.url), {
+            type: 'module',
+        });
+        solver3WorkerRef.current = worker;
+
+        const onMessage = (e: MessageEvent<WorkerToMain>) => {
+            const msg = e.data;
+            if (msg.jobId !== solver3JobIdRef.current) return; // stale job, ignore
+            const currentComponents = componentsRefForSolver3.current;
+            if (msg.type === 'progress') {
+                // Map per-camera progress onto the overall progress bar.
+                const cameras = currentComponents.filter(c => c instanceof Camera) as Camera[];
+                const pmts = currentComponents.filter(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT[];
+                const totalWorkUnits = Math.max(cameras.length + pmts.length, 1);
+                const normalized = Math.max(0, Math.min(1, (msg.cameraIndex + msg.fraction) / totalWorkUnits));
+                setScanAccumProgress(normalized);
+            } else if (msg.type === 'camera-done') {
+                const camera = currentComponents.find(c => c.id === msg.cameraId) as Camera | undefined;
+                if (!camera) return;
+                const hydrated = msg.paths.map(rehydratePath);
+                // Main-thread safety net: clip any reverse-ray path segment that
+                // would extend past the sample plane. Mirrors the kernel's
+                // `truncatePathAtSample` but uses the Vector3-typed positions of
+                // the actual scene components, so even if the worker didn't clip
+                // (serialization edge cases, etc.) the visualizer never draws
+                // ghost rays on the far side of the specimen.
+                const sampleComp = currentComponents.find(c => c instanceof Sample) as Sample | undefined;
+                const clipped: Ray[][] = hydrated.map(path => {
+                    if (!sampleComp || path.length === 0) return path;
+                    const sp = sampleComp.position;
+                    for (let i = 0; i < path.length; i++) {
+                        const r = path[i];
+                        const dx = sp.x - r.origin.x;
+                        const dy = sp.y - r.origin.y;
+                        const dz = sp.z - r.origin.z;
+                        const tProj = dx * r.direction.x + dy * r.direction.y + dz * r.direction.z;
+                        if (tProj < -0.001) return path.slice(0, i);
+                        const rayDist = r.interactionDistance ?? Infinity;
+                        if (tProj <= rayDist) {
+                            const clippedRay = { ...r, interactionDistance: tProj };
+                            return [...path.slice(0, i), clippedRay];
+                        }
+                    }
+                    return path;
+                });
+                camera.solver3Image = msg.emissionImage;
+                camera.forwardImage = msg.excitationImage;
+                camera.solver3Paths = clipped;
+                camera.solver3Stale = false;
+                camera.version++;
+                // Bump the image tick so CameraViewer re-renders and repaints
+                // with the new progressive image (the Camera instance itself is
+                // mutated in place, which React can't observe on its own).
+                setCameraImageTick(t => t + 1);
+
+                const currentPaths = solver3PathsRef.current || [];
+                const nextPaths = [...currentPaths, ...clipped];
+                if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
+                setSolver3Paths(nextPaths);
+                solver3PathsRef.current = nextPaths;
+            } else if (msg.type === 'pmt-done') {
+                const hydrated = msg.paths.map(rehydratePath);
+                const currentPaths = solver3PathsRef.current || [];
+                const nextPaths = [...currentPaths, ...hydrated];
+                if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
+                setSolver3Paths(nextPaths);
+                solver3PathsRef.current = nextPaths;
+            } else if (msg.type === 'complete') {
+                setReverseRayCounter(msg.raysTraced);
+                setScanAccumProgress(1);
+                setSolver3Rendering(false);
+            } else if (msg.type === 'error') {
+                console.warn('[Solver3 worker] ', msg.message);
+                setSolver3Rendering(false);
+                setScanAccumProgress(0);
+            }
+        };
+        worker.addEventListener('message', onMessage);
+        return () => {
+            worker.removeEventListener('message', onMessage);
+            worker.terminate();
+            solver3WorkerRef.current = null;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
         if (solver3Trigger === 0) return; // Skip initial mount
         if (!components) return;
+        const worker = solver3WorkerRef.current;
+        if (!worker) return;
 
         const cameras = components.filter(c => c instanceof Camera) as Camera[];
         const pmts = components.filter(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT[];
         if (cameras.length === 0 && pmts.length === 0) return;
 
+        // Cancel any in-flight job and assign a new id.
+        const previousId = solver3JobIdRef.current;
+        if (previousId > 0) {
+            const cancelMsg: MainToWorker = { type: 'cancel', jobId: previousId };
+            worker.postMessage(cancelMsg);
+        }
+        const newJobId = previousId + 1;
+        solver3JobIdRef.current = newJobId;
+
         setSolver3Rendering(true);
         setScanAccumProgress(0);
+        setReverseRayCounter(0);
 
-        // Use requestAnimationFrame-driven generator for non-blocking rendering.
-        // Each animation frame processes rows for up to ~16ms, then yields to the browser.
-        let cancelled = false;
-
-        const runAsync = () => {
-            try {
-                const beamSegs = rayConfig.solver2Enabled && beamSegsRef.current.length > 0
-                    ? beamSegsRef.current
-                    : traceFullBeamSegments();
-                const solver3 = new Solver3(components, beamSegs);
-                const allPaths: Ray[][] = [];
-
-                // Build a list of camera generators to process sequentially
-                const cameraGens = cameras.map(cam => ({
-                    camera: cam,
-                    gen: solver3.renderGenerator(cam, clampedReversePathCount),
-                }));
-
-                let camIdx = 0;
-                const totalWorkUnits = Math.max(cameras.length + pmts.length, 1);
-                const updateRenderProgress = (completedUnits: number, unitProgress: number = 0) => {
-                    const normalized = Math.max(0, Math.min(1, (completedUnits + unitProgress) / totalWorkUnits));
-                    setScanAccumProgress(normalized);
-                };
-
-                const step = () => {
-                    if (cancelled) {
-                        setSolver3Rendering(false);
-                        setScanAccumProgress(0);
-                        return;
-                    }
-
-                    const frameStart = performance.now();
-                    // Process rows for up to 16ms per animation frame
-                    while (camIdx < cameraGens.length && performance.now() - frameStart < 16) {
-                        const { camera, gen } = cameraGens[camIdx];
-                        const { value, done } = gen.next();
-                        if (!done && value) {
-                            updateRenderProgress(camIdx, value.progress);
-                        }
-                        if (done) {
-                            // Generator returned the final Solver3Result
-                            const result = value as import('../physics/Solver3').Solver3Result;
-                            camera.solver3Image = result.emissionImage;
-                            camera.forwardImage = result.excitationImage;
-                            camera.solver3Paths = result.paths;
-                            camera.solver3Stale = false;
-                            allPaths.push(...result.paths);
-                            camIdx++;
-                            updateRenderProgress(camIdx, 0);
-                        }
-                        // If not done, the generator yielded a progress update — continue in this frame
-                    }
-
-                    if (camIdx < cameraGens.length) {
-                        // More cameras to process — schedule next frame
-                        requestAnimationFrame(step);
-                        return;
-                    }
-
-                    // All cameras done — now handle PMTs (synchronous, they're fast)
-                    if (pmts.length > 0) {
-                        const sample = components.find(c => c instanceof Sample) as Sample | undefined;
-                        const emissionWavelength = sample ? sample.getEmissionWavelength() * 1e-9 : 532e-9;
-
-                        for (let pmtIdx = 0; pmtIdx < pmts.length; pmtIdx++) {
-                            const pmt = pmts[pmtIdx];
-                            pmt.updateMatrices();
-                            const pmtPos = pmt.position.clone();
-                            const pmtW = new Vector3(0, 0, 1).applyQuaternion(pmt.rotation).normalize();
-                            const pmtU = new Vector3(1, 0, 0).applyQuaternion(pmt.rotation).normalize();
-                            const pmtV = new Vector3(0, 1, 0).applyQuaternion(pmt.rotation).normalize();
-
-                            const numRays = clampedReversePathCount;
-                            const sinThetaMax = 0.3;
-
-                            for (let i = 0; i < numRays; i++) {
-                                const phi = Math.random() * 2 * Math.PI;
-                                const sinTheta = sinThetaMax * Math.sqrt(Math.random());
-                                const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
-
-                                const dir = pmtW.clone().multiplyScalar(cosTheta)
-                                    .add(pmtU.clone().multiplyScalar(sinTheta * Math.cos(phi)))
-                                    .add(pmtV.clone().multiplyScalar(sinTheta * Math.sin(phi)))
-                                    .normalize();
-
-                                const polAngle = Math.random() * Math.PI;
-                                const backwardRay: Ray = {
-                                    origin: pmtPos.clone(),
-                                    direction: dir,
-                                    wavelength: emissionWavelength,
-                                    intensity: 1.0,
-                                    polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
-                                    opticalPathLength: 0,
-                                    footprintRadius: 0.1,
-                                    coherenceMode: Coherence.Incoherent,
-                                    sourceId: `pmt_backward_${pmt.id}_${i}`,
-                                };
-
-                                const result = solver3.traceBackward(backwardRay, sample);
-                                if (result.path.length > 1) {
-                                    allPaths.push(result.path);
-                                }
-                            }
-                            updateRenderProgress(cameras.length + pmtIdx + 1, 0);
-                        }
-                    }
-
-                    console.log(`[Solver3] Backward traced ${cameras.length} cameras + ${pmts.length} PMTs → ${allPaths.length} paths`);
-                    setSolver3Paths(allPaths);
-                    solver3PathsRef.current = allPaths;
-                    setSolver3Rendering(false);
-                    setScanAccumProgress(1);
-                };
-
-                requestAnimationFrame(step);
-            } catch (e) {
-                console.warn('Solver 3 error:', e);
-                setSolver3Rendering(false);
-                setScanAccumProgress(0);
-            }
+        const sceneText = serializeScene(components);
+        const request: MainToWorker = {
+            type: 'render',
+            jobId: newJobId,
+            sceneText,
+            cameraIds: cameras.map(c => c.id),
+            pmtIds: pmts.map(p => p.id),
+            reversePathCount: clampedReversePathCount,
+            forwardRayCount: clampedForwardRayCount,
+            solver2Enabled: rayConfig.solver2Enabled,
         };
-
-        // Kick off on next frame to let the "rendering" state update paint first
-        requestAnimationFrame(runAsync);
+        worker.postMessage(request);
 
         return () => {
-            cancelled = true;
-            setScanAccumProgress(0);
+            // If the trigger changes again before we're done, cancel this job.
+            const cancelMsg: MainToWorker = { type: 'cancel', jobId: newJobId };
+            worker.postMessage(cancelMsg);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [solver3Trigger]);
+
+    // ─── Effect 1b': rod-count sliders (forward or reverse) also kick a fresh reverse trace ───
+    const reverseCountRef = useRef(clampedReversePathCount);
+    const forwardCountRef = useRef(clampedForwardRayCount);
+    useEffect(() => {
+        const reverseChanged = reverseCountRef.current !== clampedReversePathCount;
+        const forwardChanged = forwardCountRef.current !== clampedForwardRayCount;
+        if (!reverseChanged && !forwardChanged) return;
+        reverseCountRef.current = clampedReversePathCount;
+        forwardCountRef.current = clampedForwardRayCount;
+        // Mark camera images stale so the UI shows "Updating…" while a new trace runs.
+        for (const comp of components) {
+            if (comp instanceof Camera) comp.markSolver3Stale();
+        }
+        setSolver3Trigger(t => t + 1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [clampedReversePathCount, clampedForwardRayCount]);
 
     // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
     const [scanAccumConfig] = useAtom(scanAccumTriggerAtom);
@@ -571,6 +638,7 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         if (scanAccumConfig.trigger === 0) return; // Skip initial mount
         if (!components) return;
+        if (solver3Rendering) return; // Guard against concurrent triggers
 
         const camera = components.find(c => c instanceof Camera) as Camera | undefined;
         if (!camera) return;
@@ -1077,28 +1145,45 @@ export const OpticalTable: React.FC = () => {
                 paths={rays}
                 glowEnabled={rayConfig.solver2Enabled}
                 hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+                minOpacity={rayConfig.minRayOpacity}
+                maxOpacity={rayConfig.maxRayOpacity}
             />
             {solver3Paths.length > 0 && (
                 <RayVisualizer
                     paths={solver3Paths}
                     glowEnabled={false}
+                    noBloom={true}
                     hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+                    minOpacity={rayConfig.minRayOpacity}
+                    maxOpacity={rayConfig.maxRayOpacity}
                 />
             )}
             {rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave' && (
                 <BundleWaveVisualizer beamSegments={beamSegments} reversePaths={solver3Paths} />
             )}
 
+            <TutorialOverlay />
+
             <group>
                 {components.map(c => {
                     const visual = getComponentVisualizer(c);
 
                     if (visual) {
+                        // Outline color: black for components on the active Z level,
+                        // grey for components on other levels.
+                        const cz = Math.round(c.position.z * 10) / 10;
+                        const onActiveLevel = (c instanceof DualGalvoScanHead)
+                            ? (cz === activeZ || Math.round((c.position.z + c.mirrorSpacing) * 10) / 10 === activeZ)
+                            : cz === activeZ;
+                        const outlineColor = onActiveLevel ? '#000000' : '#888888';
+
                         return (
                             <group key={c.id}>
-                                <Draggable component={c}>
-                                    {visual}
-                                </Draggable>
+                                <OutlineColorContext.Provider value={outlineColor}>
+                                    <Draggable component={c}>
+                                        {visual}
+                                    </Draggable>
+                                </OutlineColorContext.Provider>
                             </group>
                         );
                     }

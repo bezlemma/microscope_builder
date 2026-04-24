@@ -1,25 +1,25 @@
 import React from 'react';
 import { DoubleSide } from 'three';
 import { useAtom } from 'jotai';
-import { selectionAtom } from '../state/store';
+import { selectionAtom, selectedRodAtom } from '../state/store';
 
 export const InfiniteTable: React.FC = () => {
   const [, setSelection] = useAtom(selectionAtom);
+  const [, setSelectedRod] = useAtom(selectedRodAtom);
   // A very large plane to simulate infinity
   const size = 10000;
 
-  // Custom Shader for the Hole Pattern
-  // Frags based on world position (or UV scaled)
-  // UV 0..1 covers 'size' units.
-  // We want holes every 25 units.
-  // freq = size / 25.
-
+  // Click handler: clear both component and rod selection on empty-space click.
+  const handleClick = () => {
+    setSelection([]);
+    setSelectedRod(null);
+  };
 
   return (
     <mesh
       position={[0, 0, -42]} // Shifted down so components at Z=0 are 42mm above table (ORCA height)
       receiveShadow
-      onClick={() => setSelection([])}
+      onClick={handleClick}
     >
       {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
       <planeGeometry args={[size, size]} />
@@ -102,22 +102,21 @@ function TableHoleMaterial({ size }: { size: number }) {
       float edge = 1.0; // Softness
       float circle = smoothstep(holeRadius, holeRadius - edge, dist);
       
-      // Optical table surface — anodized aluminum with brushed-metal grain
-      vec3 bgColor = vec3(0.38, 0.40, 0.42);
+      // Distance from origin
+      float distFromCenter = length((vUv - 0.5) * totalSize);
       
-      // Subtle brushed-metal grain (±3% brightness variation)
-      float grain = brushedNoise(pos) * 0.06 - 0.03;
-      bgColor += grain;
+      // Stark minimalist table surface: very dark blue-grey transparent glass
+      vec3 bgColor = vec3(0.02, 0.03, 0.04);
       
-      // Faint specular highlight shimmer along brush direction
-      float shimmer = brushedNoise(pos * 0.08) * 0.02;
-      bgColor += shimmer;
-      
-      vec3 holeColor = vec3(0.05);
+      // Glowing or deep holes
+      vec3 holeColor = vec3(0.0, 0.0, 0.0);
       
       vec3 finalColor = mix(bgColor, holeColor, circle);
       
-      gl_FragColor = vec4(finalColor, 1.0);
+      // Radial fade to transparent so it blends perfectly with the HTML background
+      float alpha = smoothstep(2000.0, 600.0, distFromCenter) * 0.6;
+      
+      gl_FragColor = vec4(finalColor, alpha);
     }
   `;
 
@@ -127,6 +126,7 @@ function TableHoleMaterial({ size }: { size: number }) {
       vertexShader={vertexShader}
       fragmentShader={fragmentShader}
       side={DoubleSide}
+      transparent={true}
     />
   );
 }

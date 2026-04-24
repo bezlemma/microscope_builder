@@ -9,6 +9,9 @@ export class Camera extends OpticalComponent {
     sensorResY: number;
     sensorNA: number;           // Pixel acceptance cone NA (determines angular sampling spread)
     samplesPerPixel: number;    // Monte Carlo samples per pixel for Solver 3
+    detectorLaunchModel: 'stochastic' | 'packet' = 'stochastic';
+    fieldPixelPitchOverrideX: number = 0;  // Override for field pixel pitch (0 = auto)
+    fieldPixelPitchOverrideY: number = 0;
 
     // Solver 3 render results (stored on the camera that produced them)
     solver3Image: Float32Array | null = null;
@@ -31,6 +34,11 @@ export class Camera extends OpticalComponent {
         this.sensorResY = 64;
         this.sensorNA = 0;          // Angular sampling disabled (0 = deterministic single ray)
         this.samplesPerPixel = 4;   // 4 rays per pixel default
+        // Housing (from CameraVisualizer): 84×84×122 box centered at z = -depth/2
+        this.bounds.set(
+            new Vector3(-42, -42, -122),
+            new Vector3(42, 42, 0.5),
+        );
     }
 
     /** Clear single-shot Solver 3 results (called when scene changes).
@@ -70,52 +78,43 @@ export class Camera extends OpticalComponent {
         const ox = rayLocal.origin.x, oy = rayLocal.origin.y, oz = rayLocal.origin.z;
         const dx = rayLocal.direction.x, dy = rayLocal.direction.y, dz = rayLocal.direction.z;
 
-        // Slab-based ray-AABB intersection
+        // Slab-based ray-AABB intersection.
+        // Track which face is responsible for both the entry (tMin) and exit (tMax)
+        // so we return the correct normal regardless of whether the ray starts
+        // outside or inside the body.
         let tMin = -Infinity, tMax = Infinity;
-        let normalAxis = 0; // 0=x, 1=y, 2=z
-        let normalSign = 1;
+        let minAxis = 0, minSign = 1;   // face hit when entering (tMin)
+        let maxAxis = 0, maxSign = 1;   // face hit when exiting (tMax)
 
-        // X slab
-        if (Math.abs(dx) < 1e-12) {
-            if (ox < -hw || ox > hw) return null;
+        const slab = (o: number, d: number, lo: number, hi: number, axis: number): boolean => {
+            if (Math.abs(d) < 1e-12) {
+                return o >= lo && o <= hi;
+            }
+            let t1 = (lo - o) / d;
+            let t2 = (hi - o) / d;
+            // t1 corresponds to the 'lo' plane (outward normal = -axis),
+            // t2 corresponds to the 'hi' plane (outward normal = +axis).
+            let s1 = -1, s2 = 1;
+            if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; const ss = s1; s1 = s2; s2 = ss; }
+            if (t1 > tMin) { tMin = t1; minAxis = axis; minSign = s1; }
+            if (t2 < tMax) { tMax = t2; maxAxis = axis; maxSign = s2; }
+            return tMin <= tMax;
+        };
+
+        if (!slab(ox, dx, -hw, hw, 0)) return null;
+        if (!slab(oy, dy, -hh, hh, 1)) return null;
+        if (!slab(oz, dz, minZ, 0, 2)) return null;
+
+        let t: number;
+        let normalAxis: number, normalSign: number;
+        if (tMin > 0.001) {
+            t = tMin; normalAxis = minAxis; normalSign = minSign;
+        } else if (tMax > 0.001) {
+            // Ray origin was inside the body — use the exit face normal.
+            t = tMax; normalAxis = maxAxis; normalSign = maxSign;
         } else {
-            let t1 = (-hw - ox) / dx;
-            let t2 = ( hw - ox) / dx;
-            let sign = -1;
-            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
-            if (t1 > tMin) { tMin = t1; normalAxis = 0; normalSign = sign; }
-            if (t2 < tMax) tMax = t2;
-            if (tMin > tMax) return null;
+            return null;
         }
-
-        // Y slab
-        if (Math.abs(dy) < 1e-12) {
-            if (oy < -hh || oy > hh) return null;
-        } else {
-            let t1 = (-hh - oy) / dy;
-            let t2 = ( hh - oy) / dy;
-            let sign = -1;
-            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
-            if (t1 > tMin) { tMin = t1; normalAxis = 1; normalSign = sign; }
-            if (t2 < tMax) tMax = t2;
-            if (tMin > tMax) return null;
-        }
-
-        // Z slab
-        if (Math.abs(dz) < 1e-12) {
-            if (oz < minZ || oz > 0) return null;
-        } else {
-            let t1 = (minZ - oz) / dz;
-            let t2 = (0    - oz) / dz;
-            let sign = -1;
-            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; sign = 1; }
-            if (t1 > tMin) { tMin = t1; normalAxis = 2; normalSign = sign; }
-            if (t2 < tMax) tMax = t2;
-            if (tMin > tMax) return null;
-        }
-
-        const t = tMin > 0.001 ? tMin : (tMax > 0.001 ? tMax : -1);
-        if (t < 0.001) return null;
 
         const hitPoint = rayLocal.origin.clone().add(rayLocal.direction.clone().multiplyScalar(t));
         const normal = new Vector3(0, 0, 0);

@@ -10,6 +10,11 @@ export class Blocker extends OpticalComponent {
         super(name);
         this.diameter = diameter;
         this.thickness = thickness;
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {

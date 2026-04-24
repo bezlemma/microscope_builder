@@ -27,6 +27,11 @@ export class Filter extends OpticalComponent {
         this.diameter = diameter;
         this.thickness = thickness;
         this.spectralProfile = spectralProfile ?? new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]);
+        const r = diameter / 2;
+        this.bounds.set(
+            new Vector3(-r, -r, -thickness / 2),
+            new Vector3(r, r, thickness / 2),
+        );
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -60,9 +65,17 @@ export class Filter extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
-        // Ray wavelength is in meters (SI), SpectralProfile expects nm
+        // Ray wavelength is in meters (SI), SpectralProfile expects nm.
+        // Guard NaN/non-finite inputs so the filter can't silently produce
+        // infinite-intensity ghost rays.
         const wavelengthNm = ray.wavelength * 1e9;
-        const transmission = this.spectralProfile.getTransmission(wavelengthNm);
+        if (!Number.isFinite(wavelengthNm) || wavelengthNm <= 0) {
+            return { rays: [] };
+        }
+        const rawT = this.spectralProfile.getTransmission(wavelengthNm);
+        const transmission = Number.isFinite(rawT)
+            ? Math.max(0, Math.min(1, rawT))
+            : 0;
 
         // Threshold for spawning rays: must be physically significant (>1e-5).
         const minIntensity = 1e-5;

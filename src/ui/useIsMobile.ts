@@ -17,3 +17,17 @@ export function useIsMobile(breakpoint = 768): boolean {
     }, [breakpoint]);
     return isMobile;
 }
+
+export function useIsLandscape(): boolean {
+    const [isLandscape, setIsLandscape] = useState(() =>
+        typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches
+    );
+    useEffect(() => {
+        const mql = window.matchMedia('(orientation: landscape)');
+        const onChange = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+        mql.addEventListener('change', onChange);
+        setIsLandscape(mql.matches);
+        return () => mql.removeEventListener('change', onChange);
+    }, []);
+    return isLandscape;
+}

@@ -10,13 +10,24 @@ export type KernelComponentKind =
     | 'pmt'
     | 'sample'
     | 'aperture'
-    | 'slitAperture';
+    | 'slitAperture'
+    | 'pointSource'
+    | 'coneSource'
+    | 'wedgeSource'
+    | 'structuredSource';
 
 export interface KernelTraceComponent {
     id: string;
     name: string;
     kind: KernelComponentKind;
     absorptionCoeff: number;
+    /** World-space centre of the component (read from the underlying instance). */
+    position: Vector3;
+    /** Clear-aperture radius (mm) exposed for detector importance sampling.
+     *  Zero (or undefined) means the detector sampler falls back to a generic
+     *  target disc. Set for Aperture / SlitAperture / PupilMaskElement so
+     *  PMT backward rays correctly aim at the actual pinhole. */
+    openingRadius?: number;
     chkIntersection(ray: Ray): HitRecord | null;
     interact(ray: Ray, hit: HitRecord): InteractionResult;
 }

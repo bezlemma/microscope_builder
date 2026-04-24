@@ -5,18 +5,22 @@ import {
     Square,
     Search,
     Zap,
-    ChevronRight
+    ChevronRight,
+    Type,
+    ArrowRight,
+    Redo2,
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom } from '../state/store';
-import { downloadUbz, openUbzFilePicker } from '../state/ubzSerializer';
-import { useIsMobile } from './useIsMobile';
+import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, presetDescriptionAtom } from '../state/store';
+import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
+import { useIsMobile, useIsLandscape } from './useIsMobile';
 
 // ─── Draggable component item ─────────────────────────────────────────
 
 
 const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: string, label: string, icon: any, onDragStarted?: () => void }) => {
+    const isMobile = useIsMobile();
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('componentType', type);
         e.dataTransfer.effectAllowed = 'copy';
@@ -30,15 +34,15 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
             style={{
                 display: 'flex',
                 alignItems: 'center',
-                padding: '6px 12px 6px 24px',
-                margin: '2px 0',
+                padding: isMobile ? '4px 6px 4px 16px' : '6px 12px 6px 24px',
+                margin: isMobile ? '1px 0' : '2px 0',
                 backgroundColor: '#252525',
                 cursor: 'grab',
                 border: '1px solid transparent',
                 borderRadius: '4px',
                 transition: 'all 0.15s ease',
                 userSelect: 'none',
-                fontSize: '13px',
+                fontSize: isMobile ? '11px' : '13px',
                 color: '#ccc'
             }}
             onMouseOver={(e) => {
@@ -52,7 +56,7 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
                 e.currentTarget.style.color = '#ccc';
             }}
         >
-            <Icon size={14} style={{ marginRight: '8px', color: '#64ffda', flexShrink: 0 }} />
+            <Icon size={isMobile ? 11 : 14} style={{ marginRight: isMobile ? '5px' : '8px', color: '#64ffda', flexShrink: 0 }} />
             <span style={{ fontWeight: 400 }}>{label}</span>
         </div>
     );
@@ -81,6 +85,11 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         items: [
             { type: 'laser', label: 'Laser', icon: Zap },
             { type: 'lamp', label: 'Lamp', icon: Zap },
+            { type: 'pointSource2D', label: 'Point Source 2D', icon: Zap },
+            { type: 'pointSource3D', label: 'Point Source 3D', icon: Zap },
+            { type: 'coneSource3D', label: 'Cone Source 3D', icon: Zap },
+            { type: 'wedgeSource2D', label: 'Wedge Source 2D', icon: Zap },
+            { type: 'structuredSource', label: 'Structured Source / SLM', icon: Zap },
         ]
     },
     {
@@ -91,6 +100,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'lens', label: 'Spherical Lens', icon: Circle },
             { type: 'cylindricalLens', label: 'Cylindrical Lens', icon: Circle },
             { type: 'idealLens', label: 'Ideal Lens', icon: Circle },
+            { type: 'achromatDoublet', label: 'Achromatic Doublet', icon: Circle },
             { type: 'objective', label: 'Objective', icon: Circle },
             { type: 'prism', label: 'Prism', icon: Box },
         ]
@@ -103,8 +113,11 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'mirror', label: 'Mirror', icon: Square },
             { type: 'curvedMirror', label: 'Curved Mirror', icon: Square },
             { type: 'beamSplitter', label: 'Beam Splitter', icon: Square },
+            { type: 'polarizingBeamSplitter', label: 'Polarizing Beam Splitter', icon: Square },
             { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
             { type: 'polygonScanner', label: 'Polygon Scanner', icon: Square },
+            { type: 'dualGalvoScanHead', label: 'Dual Galvo Scan Head', icon: Square },
+            { type: 'aod', label: 'Acousto-Optic Deflector', icon: Square },
         ]
     },
     {
@@ -115,6 +128,8 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'halfWavePlate', label: 'λ/2 Plate', icon: Circle },
             { type: 'quarterWavePlate', label: 'λ/4 Plate', icon: Circle },
             { type: 'polarizer', label: 'Linear Polarizer', icon: Box },
+            { type: 'pupilMask', label: 'Pupil Mask', icon: Circle },
+            { type: 'faradayIsolator', label: 'Faraday Isolator', icon: Box },
         ]
     },
     {
@@ -125,6 +140,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'card', label: 'Viewing Card', icon: Search },
             { type: 'camera', label: 'Camera', icon: Box },
             { type: 'pmt', label: 'PMT Detector', icon: Search },
+            { type: 'qpd', label: 'QPD', icon: Search },
         ]
     },
     {
@@ -132,8 +148,10 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         icon: Box,
         color: '#fd79a8',
         items: [
+            { type: 'sampleSlide', label: '2D Sample Holder', icon: Box },
             { type: 'sample', label: 'Sample (Mickey)', icon: Box },
             { type: 'lChamber', label: 'X Sample Holder', icon: Box },
+            { type: 'mediumVolume', label: 'Medium Volume', icon: Box },
         ]
     },
     {
@@ -141,9 +159,11 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         icon: Box,
         color: '#e17055',
         items: [
+            { type: 'abstractPlane', label: 'Abstract Plane', icon: Box },
             { type: 'blocker', label: 'Blocker', icon: Box },
             { type: 'aperture', label: 'Aperture / Iris', icon: Circle },
             { type: 'slitAperture', label: 'Slit Aperture', icon: Box },
+            { type: 'doubleSlit', label: 'Double Slit', icon: Box },
         ]
     },
     {
@@ -152,6 +172,25 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#81ecec',
         items: [
             { type: 'filter', label: 'Filter', icon: Square },
+            { type: 'diffuser', label: 'Diffuser', icon: Square },
+        ]
+    },
+    {
+        name: 'Hardware',
+        icon: Box,
+        color: '#b0b0b0',
+        items: [
+            { type: 'rail', label: 'Optical Rail', icon: Box },
+        ]
+    },
+    {
+        name: 'Annotations',
+        icon: Type,
+        color: '#007fff',
+        items: [
+            { type: 'textAnnotation', label: 'Text', icon: Type },
+            { type: 'arrowAnnotation', label: 'Arrow', icon: ArrowRight },
+            { type: 'curvedArrowAnnotation', label: 'Curved Arrow', icon: Redo2 },
         ]
     }
 ];
@@ -170,6 +209,7 @@ const ComponentGroupSection = ({
     onDragStarted?: () => void;
 }) => {
     const GroupIcon = group.icon;
+    const isMobile = useIsMobile();
 
     return (
         <div style={{ marginBottom: '2px' }}>
@@ -179,7 +219,7 @@ const ComponentGroupSection = ({
                 style={{
                     display: 'flex',
                     alignItems: 'center',
-                    padding: '8px 10px',
+                    padding: isMobile ? '5px 6px' : '8px 10px',
                     cursor: 'pointer',
                     backgroundColor: isOpen ? '#2a2a2a' : 'transparent',
                     borderRadius: '6px',
@@ -194,9 +234,9 @@ const ComponentGroupSection = ({
                 }}
             >
                 <ChevronRight
-                    size={14}
+                    size={isMobile ? 11 : 14}
                     style={{
-                        marginRight: '6px',
+                        marginRight: isMobile ? '4px' : '6px',
                         color: '#888',
                         transition: 'transform 0.2s ease',
                         transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -204,11 +244,11 @@ const ComponentGroupSection = ({
                     }}
                 />
                 <GroupIcon
-                    size={14}
-                    style={{ marginRight: '8px', color: group.color, flexShrink: 0 }}
+                    size={isMobile ? 11 : 14}
+                    style={{ marginRight: isMobile ? '5px' : '8px', color: group.color, flexShrink: 0 }}
                 />
                 <span style={{
-                    fontSize: '12px',
+                    fontSize: isMobile ? '10px' : '12px',
                     fontWeight: 600,
                     color: isOpen ? '#fff' : '#aaa',
                     textTransform: 'uppercase',
@@ -219,7 +259,7 @@ const ComponentGroupSection = ({
                 </span>
                 <span style={{
                     marginLeft: 'auto',
-                    fontSize: '11px',
+                    fontSize: isMobile ? '9px' : '11px',
                     color: '#555',
                     fontWeight: 400
                 }}>
@@ -253,11 +293,15 @@ const ComponentGroupSection = ({
 
 export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
+    const [presetDescription] = useAtom(presetDescriptionAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [components] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
+    const [selection, setSelection] = useAtom(selectionAtom);
+    const [, zoomTo] = useAtom(zoomToComponentAtom);
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
+    const isLandscape = useIsLandscape();
 
 
 
@@ -410,12 +454,12 @@ export const Sidebar: React.FC = () => {
                 position: isMobile ? 'fixed' : 'relative',
                 top: 0,
                 left: 0,
-                width: '250px',
+                width: isMobile ? '170px' : '250px',
                 height: '100%',
                 flex: isMobile ? undefined : '0 0 250px',
                 backgroundColor: '#1a1a1a',
                 borderRight: '1px solid #333',
-                padding: '10px',
+                padding: isMobile ? '6px' : '10px',
                 overflowY: 'auto',
                 zIndex: 15,
                 display: 'flex',
@@ -442,15 +486,60 @@ export const Sidebar: React.FC = () => {
                     </button>
                 )}
                 <div style={{ flex: 1 }}>
+                    {/* BOMB brand — giant caps inlined in "Bez's Optics & Microscope Builder" on one line. */}
+                    <div style={{ marginBottom: isMobile ? 6 : 10 }}>
+                        {(() => {
+                            const smallPx = isMobile ? 10 : 12;
+                            const bigPx = isMobile ? 15 : 18;
+                            const capStyle: React.CSSProperties = {
+                                fontSize: `${bigPx}px`,
+                                fontWeight: 800,
+                                lineHeight: 1,
+                            };
+                            const smStyle: React.CSSProperties = {
+                                fontSize: `${smallPx}px`,
+                                fontWeight: 500,
+                                lineHeight: 1,
+                            };
+                            return (
+                                <div style={{
+                                    fontFamily: 'Inter, sans-serif',
+                                    color: '#007fff',
+                                    textShadow: '0 0 8px rgba(0,127,255,0.85), 0 0 16px rgba(0,127,255,0.5)',
+                                    whiteSpace: 'nowrap',
+                                    userSelect: 'none',
+                                    display: 'inline-block',
+                                }}>
+                                    <span style={capStyle}>B</span><span style={smStyle}>ez's </span>
+                                    <span style={capStyle}>O</span><span style={smStyle}>ptics &amp; </span>
+                                    <span style={capStyle}>M</span><span style={smStyle}>icroscope </span>
+                                    <span style={capStyle}>B</span><span style={smStyle}>uilder</span>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                    {presetDescription && (
+                        <div style={{
+                            marginBottom: isMobile ? 8 : 12,
+                            padding: isMobile ? '5px 7px' : '8px 10px',
+                            border: '1px solid #1e3b5a',
+                            borderRadius: 5,
+                            background: 'rgba(0,127,255,0.06)',
+                            fontSize: isMobile ? '10px' : '11px',
+                            lineHeight: 1.35,
+                            color: '#c6d8e8',
+                        }}>
+                            {presetDescription}
+                        </div>
+                    )}
                     <a
                         href="https://bezialemma.com/"
                         style={{
                             display: 'block',
                             color: '#888',
-                            fontSize: '11px',
+                            fontSize: '10px',
                             textDecoration: 'none',
                             marginBottom: '8px',
-                            padding: '4px 0',
                             transition: 'color 0.15s',
                         }}
                         onMouseOver={(e) => { e.currentTarget.style.color = '#64ffda'; }}

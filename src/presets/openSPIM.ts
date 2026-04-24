@@ -8,6 +8,7 @@ import { Filter } from '../physics/components/Filter';
 import { Camera } from '../physics/components/Camera';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { SpectralProfile } from '../physics/SpectralProfile';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { OpticalComponent } from '../physics/Component';
 
 /**
@@ -113,13 +114,26 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     slit.pointAlong(-1, 0, 0);  // faces along beam
     components.push(slit);
 
-    // 7. Cylindrical Lens (f=50mm) at K2 — creates light sheet (1" diameter)
+    // 7. Cylindrical Lens (f=50mm) at K2 — creates light sheet (1" diameter).
+    // For a horizontal light sheet perpendicular to the detection axis (world X),
+    // the lens must focus in world Y BEFORE the +X→+Y turning mirror, so that
+    // after reflection the focused direction becomes world X (thin sheet in X).
+    // Default pointAlong(1,0,0) maps local Y → world Z; rolling the lens by +π/2
+    // about its optical axis rotates that focused direction onto world Y and
+    // matches the drag-drop default (cylinder axis vertical in the top-down view).
     const cylLens = new CylindricalLens(
         25.84, 1e9, 12.7, 25.4, 4,
         "Cylindrical Lens (f50)"
     );
     cylLens.setPosition(hole(C.K, 1).x, hole(C.K, 1).y, 0);
     cylLens.pointAlong(1, 0, 0);  // optical axis along +X
+    
+    // CylindricalLens curved axis is local Y.
+    // By default (rollAngle 0) pointAlong(1,0,0) maps local Y to World Z.
+    // This focuses the beam in Z to a point, which is then relayed to the 
+    // objective BFP to emerge as a tall, collimated vertical sheet at the sample.
+    cylLens.rollAngle = 0;
+    cylLens.recomputeRotation();
     components.push(cylLens);
 
     // 8. 1" Turn Mirror at N2 — redirects +X → +Y (up)
@@ -199,23 +213,21 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     // 14. Tube Lens — Achromatic Doublet (Nikon f=200mm) at F10
     //     Placed ~150mm from objective back aperture for infinity-corrected imaging
 
-    // Tube Lens — Achromatic Doublet 
-    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
-    tubeLensCrown.setPosition(hole(C.F, 9).x, hole(C.F, 9).y, 0); 
-    tubeLensCrown.pointAlong(-1, 0, 0);  // optical axis along -X (detection path)
-    components.push(tubeLensCrown);
-    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
-    tubeLensFlint.setPosition(hole(C.F, 9).x+3.26, hole(C.F, 9).y, 0); 
-    tubeLensFlint.pointAlong(-1, 0, 0);  // optical axis along -X (detection path)
-    components.push(tubeLensFlint);
+    // Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    tubeLens.setPosition(hole(C.F, 9).x + 1.63, hole(C.F, 9).y, 0);
+    tubeLens.pointAlong(-1, 0, 0);  // optical axis along -X (detection path)
+    components.push(tubeLens);
 
-    // sCMOS Camera — positioned at tube lens back focal distance (~200mm)
-    // The achromatic doublet center is at about hole(C.F, 9).x + 1.6mm
-    // For infinity-corrected imaging, image forms at f ≈ 200mm behind the tube lens
-    const tubeLensCenter = hole(C.F, 9).x + 3.26 / 2;  // midpoint of crown+flint
+    // sCMOS Camera — positioned at tube lens back focal distance (~200mm).
+    // Detection is via a 10×/0.3W objective: sensorNA = NA / mag = 0.03.
+    // Solver 3 pupil-aware sampling handles the off-axis pixels; this NA
+    // controls the small residual jitter around the aimed direction.
     const cam = new Camera(13, 13, "sCMOS Camera");
-    cam.setPosition(tubeLensCenter - 200, hole(C.F, 9).y, 0);
+    cam.setPosition(hole(C.F, 9).x + 1.63 - 200, hole(C.F, 9).y, 0);
     cam.pointAlong(1, 0, 0);  // sensor faces +X (toward detection arm)
+    cam.sensorNA = 0.3 / 10;
+    cam.samplesPerPixel = 16;
     components.push(cam);
 
     return components;

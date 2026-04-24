@@ -6,6 +6,7 @@ import { Laser } from '../physics/components/Laser';
 import { Filter } from '../physics/components/Filter';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { SpectralProfile } from '../physics/SpectralProfile';
 
 /**
@@ -24,7 +25,7 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
 
     // 1. Laser — 488 nm excitation for GFP fluorescence
     const laser = new Laser("488 nm Laser");
-    laser.setPosition(-100, 0, 0); 
+    laser.setPosition(-100, 0, 0);
     laser.pointAlong(1, 0, 0);  // emit along +X
     laser.beamRadius = 2;
     laser.wavelength = 488;
@@ -76,44 +77,33 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     objective.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(objective);
 
-    // A true Nikon tube lens is an extensive multi-element achromatic/apochromatic array.
-    // We represent this using a standard 200mm Achromatic Doublet (Thorlabs AC254-200-A eq)
-    // Element 1: Crown Glass (N-SSK5, n=1.658)
-    const tubeLensCrown = new SphericalLens(0, 25.4, 4.0, "Tube Lens (Crown)", 77.4, -87.6, 1.658);
-    tubeLensCrown.setPosition(220, 0, 0); 
-    tubeLensCrown.pointAlong(1, 0, 0);  // optical axis along +X
-    scene.push(tubeLensCrown);
-    
-    // Gap of 0.01mm between optical cement faces to avoid coplanar tracing issues
-    
-    // Element 2: Flint Glass (N-SF7, n=1.750)
-    // Crown center is 220. Thickness 4.0. Back vertex is 222.
-    // Gap 0.01. Flint front is 222.01. Thickness 2.5. Center is 223.26.
-    const tubeLensFlint = new SphericalLens(0, 25.4, 2.5, "Tube Lens (Flint)", -87.6, 291.1, 1.750);
-    tubeLensFlint.setPosition(223.26, 0, 0); 
-    tubeLensFlint.pointAlong(1, 0, 0);  // optical axis along +X
-    scene.push(tubeLensFlint);
+    // 5. Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    tubeLens.setPosition(221.25, 0, 0);
+    tubeLens.pointAlong(1, 0, 0);  // optical axis along +X
+    scene.push(tubeLens);
 
     // 6. Emission Filter — longpass 505 nm in infinity space
     const emFilter = new Filter(
         25,     // diameter mm
         3,      // thickness mm
-        new SpectralProfile('longpass', 505, [], 5),  
+        new SpectralProfile('longpass', 505, [], 5),
         "Em Filter (LP 505)"
     );
     emFilter.setPosition(120, 0, 0);
     emFilter.pointAlong(-1, 0, 0);  // faces -X (towards beam)
     scene.push(emFilter);
 
-    // 6. Camera — at tube lens BFP  
+    // 7. Camera — at tube lens BFP.
+    // Sensor NA = objective NA / magnification so backward rays span the
+    // detection cone needed to image the sample (otherwise each pixel would
+    // trace a single collimated ray and the specimen would never light up).
     const camera = new Camera(13, 13, "CMOS Sensor");
-    // Back focal length (BFL) of this doublet is 196.4 mm from the back vertex.
-    // Back vertex is at x = 223.26 + 1.25 = 224.51 mm.
-    // Focal plane = 224.51 + 196.4 = 420.91 mm.
     camera.setPosition(420.91, 0, 0);
     camera.pointAlong(-1, 0, 0);  // faces -X (towards incoming beam)
+    camera.sensorNA = 0.25 / 10;  // objective NA (0.25) divided by magnification (10)
+    camera.samplesPerPixel = 16;
     scene.push(camera);
 
     return scene;
 }
-

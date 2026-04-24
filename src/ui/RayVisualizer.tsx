@@ -12,6 +12,11 @@ function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible
     return { color: wavelengthToCSS(nm), isVisible };
 }
 
+/** Defensive: accept either a Vector3 or a {x,y,z} plain object and return a Vector3. */
+function toVec3(v: { x: number; y: number; z: number }): Vector3 {
+    return v instanceof Vector3 ? v : new Vector3(v.x, v.y, v.z);
+}
+
 /**
  * Animated pulsating glow line for the main ray (Solver 2 skeleton).
  * Sharp spike pulse that stays mostly at the wavelength color and briefly
@@ -21,7 +26,8 @@ const PulsatingRayLine: React.FC<{
     points: Vector3[];
     wavelengthMeters: number;
     dashed: boolean;
-}> = ({ points, wavelengthMeters, dashed }) => {
+    opacity?: number;
+}> = ({ points, wavelengthMeters, dashed, opacity = 1 }) => {
     const lineRef = useRef<any>(null);
     const rgb = wavelengthToRGB(wavelengthMeters * 1e9);
 
@@ -59,6 +65,7 @@ const PulsatingRayLine: React.FC<{
         }
     });
 
+    const isTransparent = opacity < 0.999;
     return (
         <Line
             ref={lineRef}
@@ -66,8 +73,9 @@ const PulsatingRayLine: React.FC<{
             color={baseColor}
             lineWidth={4.5}
             toneMapped={false}
-            transparent={false}
-            opacity={1}
+            transparent={isTransparent}
+            opacity={opacity}
+            depthWrite={!isTransparent}
             dashed={dashed}
             dashSize={dashed ? 3 : undefined}
             gapSize={dashed ? 2 : undefined}
@@ -81,11 +89,13 @@ const PulsatingRayLine: React.FC<{
 interface RayVisualizerProps {
     paths: Ray[][];
     glowEnabled?: boolean;
+    noBloom?: boolean;  // If true, dims the colors below the bloom threshold
     hideAll?: boolean;  // E-field mode: hide all rays
+    minOpacity?: number; // 0..1, controls dimmest visible ray alpha
+    maxOpacity?: number; // 0..1, controls brightest ray alpha
 }
 
-
-export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled = true, hideAll = false }) => {
+export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled = true, noBloom = false, hideAll = false, minOpacity = 0.33, maxOpacity = 1.0 }) => {
     // In E-field mode, hide all rays entirely
     if (hideAll) return null;
 
@@ -116,14 +126,14 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                     if (r.intensity < 1e-6) break;
 
                     if (r.entryPoint) {
-                        points.push(r.entryPoint);
+                        points.push(toVec3(r.entryPoint));
                     }
                     if (r.internalPath) {
                         for (const p of r.internalPath) {
-                            points.push(p);
+                            points.push(toVec3(p));
                         }
                     }
-                    points.push(r.origin);
+                    points.push(toVec3(r.origin));
                 }
 
                 const isMain = path.length > 0 && path[0].isMainRay === true;
@@ -137,7 +147,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                     const lastRay = lastIncludedIdx >= 0 ? path[lastIncludedIdx] : path[path.length - 1];
                     if (lastRay.intensity >= 1e-6 && !lastRay.terminationPoint) {
                         const dist = lastRay.interactionDistance ?? 1000;
-                        const endPoint = lastRay.origin.clone().add(lastRay.direction.clone().multiplyScalar(dist));
+                        const origin = toVec3(lastRay.origin);
+                        const direction = toVec3(lastRay.direction);
+                        const endPoint = origin.clone().add(direction.clone().multiplyScalar(dist));
                         points.push(endPoint);
                     }
                 }
@@ -150,11 +162,16 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 // (Coherent rays have explicit NormalBlending/transparent=false/opacity=1 to prevent state leaks.)
                 if (isIncoherent) {
                     const rgb = wavelengthToRGB(wavelength * 1e9);
-                    const color = rgb.isVisible
-                        ? `rgb(${Math.round(rgb.r * 255)}, ${Math.round(rgb.g * 255)}, ${Math.round(rgb.b * 255)})`
-                        : 'rgb(135, 135, 135)'; // Gray for UV/IR
-                    // Opacity from ray intensity (Lamp's additive white-balance value)
-                    const rayOpacity = path.length > 0 ? Math.min(1, path[0].intensity) : 0.5;
+                    const scale = noBloom ? 0.18 : 1.0;
+                    const bStr = noBloom 
+                        ? `rgb(${Math.round(rgb.r * 255 * scale)}, ${Math.round(rgb.g * 255 * scale)}, ${Math.round(rgb.b * 255 * scale)})`
+                        : (rgb.isVisible
+                            ? `rgb(${Math.round(rgb.r * 255)}, ${Math.round(rgb.g * 255)}, ${Math.round(rgb.b * 255)})`
+                            : 'rgb(135, 135, 135)');
+                    const color = bStr;
+                    // Opacity from ray intensity, remapped through min/max opacity range
+                    const rawOpacity = path.length > 0 ? Math.min(1, path[0].intensity) : 0.5;
+                    const rayOpacity = minOpacity + rawOpacity * (maxOpacity - minOpacity);
 
                     return (
                         <Line
@@ -181,26 +198,33 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
                     // Pulsating glow only when E&M solver is enabled
                     if (glowEnabled) {
+                        const glowRawOpacity = Math.min(1, path[0].intensity);
+                        const glowOpacity = minOpacity + glowRawOpacity * (maxOpacity - minOpacity);
                         return (
                             <PulsatingRayLine
                                 key={idx}
                                 points={points}
                                 wavelengthMeters={wavelength}
                                 dashed={!wc.isVisible}
+                                opacity={glowOpacity}
                             />
                         );
                     }
 
                     // Static main ray (no glow) — thicker white/wavelength line
                     const color = `rgb(${Math.round(wc.r * 255)}, ${Math.round(wc.g * 255)}, ${Math.round(wc.b * 255)})`;
+                    const mainRawOpacity = Math.min(1, path[0].intensity);
+                    const mainOpacity = minOpacity + mainRawOpacity * (maxOpacity - minOpacity);
+                    const mainTransparent = mainOpacity < 0.999;
                     return (
                         <Line
                             key={idx}
                             points={points}
                             color={wc.isVisible ? color : 'white'}
                             lineWidth={4}
-                            transparent={false}
-                            opacity={1}
+                            transparent={mainTransparent}
+                            opacity={mainOpacity}
+                            depthWrite={!mainTransparent}
                             dashed={!wc.isVisible}
                             dashSize={!wc.isVisible ? 3 : undefined}
                             gapSize={!wc.isVisible ? 2 : undefined}
@@ -213,18 +237,27 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 }
 
                 // Non-main coherent rays: static wavelength color
-                const wc = wavelengthToColor(wavelength);
+                const nrGb = wavelengthToRGB(wavelength * 1e9);
+                const nScale = noBloom ? 0.18 : 1.0;
+                const nColor = noBloom
+                    ? `rgb(${Math.round(nrGb.r * 255 * nScale)}, ${Math.round(nrGb.g * 255 * nScale)}, ${Math.round(nrGb.b * 255 * nScale)})`
+                    : wavelengthToColor(wavelength).color;
+                const isVis = wavelengthToColor(wavelength).isVisible;
+                const nRawOpacity = path.length > 0 ? Math.min(1, path[0].intensity) : 1;
+                const nOpacity = minOpacity + nRawOpacity * (maxOpacity - minOpacity);
+                const nTransparent = nOpacity < 0.999;
                 return (
                     <Line
                         key={idx}
                         points={points}
-                        color={wc.color}
+                        color={nColor}
                         lineWidth={2}
-                        transparent={false}
-                        opacity={1}
-                        dashed={!wc.isVisible}
-                        dashSize={!wc.isVisible ? 3 : undefined}
-                        gapSize={!wc.isVisible ? 2 : undefined}
+                        transparent={nTransparent}
+                        opacity={nOpacity}
+                        depthWrite={!nTransparent}
+                        dashed={!isVis}
+                        dashSize={!isVis ? 3 : undefined}
+                        gapSize={!isVis ? 2 : undefined}
                         depthTest={true}
                         renderOrder={1}
                         toneMapped={false}

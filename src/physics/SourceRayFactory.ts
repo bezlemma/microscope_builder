@@ -11,6 +11,11 @@ import { Laser } from './components/Laser';
 import { Lamp } from './components/Lamp';
 import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
+import { PointSource2D } from './components/PointSource2D';
+import { PointSource3D } from './components/PointSource3D';
+import { ConeSource3D } from './components/ConeSource3D';
+import { WedgeSource2D } from './components/WedgeSource2D';
+import { StructuredSource } from './components/StructuredSource';
 import { Ray, Coherence } from './types';
 
 /**
@@ -43,6 +48,70 @@ function estimateBeamletFootprint(beamRadius: number, totalBeamlets: number): nu
     return Math.max(beamRadius / Math.sqrt(totalBeamlets), 0.05);
 }
 
+/**
+ * Rasterize a single character into a square bitmap of side `size`. Pixels that
+ * fall inside the rendered glyph are marked as emission points.
+ *
+ * Uses OffscreenCanvas (browser) when available; in Node/tests we fall back to
+ * a simple "filled disk" pattern so code paths still produce rays.
+ */
+interface StructuredPattern { size: number; bits: Uint8Array; count: number; }
+const structuredPatternCache = new Map<string, StructuredPattern>();
+function rasterizeStructuredPattern(char: string, size: number): StructuredPattern {
+    const key = `${size}::${char}`;
+    const cached = structuredPatternCache.get(key);
+    if (cached) return cached;
+
+    const bits = new Uint8Array(size * size);
+    let count = 0;
+
+    const canMakeCanvas = typeof document !== 'undefined'
+        || (typeof globalThis !== 'undefined' && 'OffscreenCanvas' in globalThis);
+    if (canMakeCanvas) {
+        try {
+            const canvas: any = typeof document !== 'undefined'
+                ? document.createElement('canvas')
+                : new (globalThis as any).OffscreenCanvas(size, size);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, size, size);
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `${Math.floor(size * 0.8)}px sans-serif`;
+                ctx.fillText(char || '?', size / 2, size / 2);
+                const img = ctx.getImageData(0, 0, size, size);
+                for (let i = 0; i < size * size; i++) {
+                    if (img.data[i * 4] > 128) { bits[i] = 1; count++; }
+                }
+            }
+        } catch {
+            /* fall through to circle fallback */
+        }
+    }
+
+    if (count === 0) {
+        // Fallback pattern: filled disk so the source still emits rays even in
+        // environments without a canvas.
+        const r2 = (size * 0.45) ** 2;
+        const cx = size / 2 - 0.5;
+        const cy = size / 2 - 0.5;
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - cx, dy = y - cy;
+                if (dx * dx + dy * dy <= r2) { bits[y * size + x] = 1; count++; }
+            }
+        }
+    }
+
+    const pattern = { size, bits, count };
+    structuredPatternCache.set(key, pattern);
+    return pattern;
+}
+
 
 /**
  * Snap a ray count to the nearest ring boundary so that all
@@ -58,16 +127,28 @@ export function snapToRingBoundary(n: number): number {
 }
 
 /**
- * Generate ring-distributed rays around a center ray.
+ * Generate laser/lamp beamlet rays that mathematically match a Gaussian
+ * intensity profile.
  *
- * @param origin       Center of the beam at the source plane
- * @param direction    Beam propagation direction (normalized)
- * @param beamRadius   1/e² beam radius (mm)
- * @param totalRays    Number of marginal/fill rays (snapped to ring boundary)
- * @param wavelength   Wavelength in meters
- * @param intensity    Ray intensity (power or opacity)
- * @param coherenceMode Coherent or Incoherent
- * @param sourceId     Source component ID
+ *   I(r) = I₀ · exp(−2 r² / w²)           (1/e² beam radius = `beamRadius`)
+ *
+ * We sample each ray's radial position via the inverse CDF of the 2D Gaussian
+ * so ray density itself matches the Gaussian density, and pair that with a
+ * Fibonacci-sunflower angle so the transverse tiling is near-optimal. Every
+ * ray carries the same (caller-supplied) intensity. As `totalRays` increases
+ * the Monte-Carlo sum of identical-intensity Gaussian-distributed beamlets
+ * converges smoothly to the continuous Gaussian profile — the image settles
+ * instead of oscillating.
+ *
+ * @param origin            Centre of the beam at the source plane
+ * @param direction         Beam propagation direction (normalized)
+ * @param beamRadius        1/e² beam radius (mm)
+ * @param totalRays         Number of off-axis rays to place
+ * @param wavelength        Wavelength in meters
+ * @param intensityPerRay   Intensity carried by each beamlet
+ * @param coherenceMode     Coherent or Incoherent
+ * @param sourceId          Source component ID
+ * @param beamletFootprint  Visual footprint per beamlet (mm)
  */
 function generateRingRays(
     origin: Vector3,
@@ -75,13 +156,13 @@ function generateRingRays(
     beamRadius: number,
     totalRays: number,
     wavelength: number,
-    intensity: number,
+    intensityPerRay: number,
     coherenceMode: number,
     sourceId: string,
     beamletFootprint: number,
 ): Ray[] {
-    // Snap to ring boundary so we never have partial circles
-    const snapped = snapToRingBoundary(totalRays);
+    const requested = Math.max(0, Math.floor(totalRays));
+    if (requested === 0) return [];
 
     const rays: Ray[] = [];
 
@@ -90,38 +171,31 @@ function generateRingRays(
     const right = new Vector3().crossVectors(direction, up).normalize();
     const trueUp = new Vector3().crossVectors(right, direction).normalize();
 
-    let raysPlaced = 0;
-    let ringIndex = 0;
-    while (raysPlaced < snapped && ringIndex < RADIUS_FRACTIONS.length) {
-        const ringRadius = beamRadius * RADIUS_FRACTIONS[ringIndex];
-        const raysForThisRing = ringIndex === 0 ? FIRST_RING_COUNT : INNER_RING_COUNT;
-        const angularOffset = ringIndex * Math.PI / 7;
+    // Golden-angle spiral for azimuthal placement — best-known low-discrepancy
+    // tiling of a 2D disc for smooth coverage at any ray count.
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
-        for (let i = 0; i < raysForThisRing; i++) {
-            const phi = angularOffset + (i / raysForThisRing) * Math.PI * 2;
-            const ringOffset = new Vector3()
-                .addScaledVector(trueUp, Math.sin(phi) * ringRadius)
-                .addScaledVector(right, Math.cos(phi) * ringRadius);
+    // Radii from the inverse CDF of the 2D Gaussian beam.
+    // CDF(r) = 1 - exp(-2 r² / w²)  ⇒  r = w · √(-ln(1-u) / 2).
+    // Use stratified u values (i + 0.5)/N for variance reduction.
+    for (let i = 0; i < requested; i++) {
+        const u = (i + 0.5) / requested;
+        const r = beamRadius * Math.sqrt(-Math.log(1 - u) / 2);
+        const phi = i * goldenAngle;
 
-            const rNorm = RADIUS_FRACTIONS[ringIndex];
-            const gaussIntensity = coherenceMode === Coherence.Coherent
-                ? Math.exp(-2 * rNorm * rNorm)
-                : intensity;
-
-            rays.push({
-                origin: origin.clone().add(ringOffset),
-                direction: direction.clone().normalize(),
-                wavelength,
-                intensity: gaussIntensity,
-                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                opticalPathLength: 0,
-                footprintRadius: beamletFootprint,
-                coherenceMode,
-                sourceId,
-            });
-            raysPlaced++;
-        }
-        ringIndex++;
+        rays.push({
+            origin: origin.clone()
+                .addScaledVector(right, Math.cos(phi) * r)
+                .addScaledVector(trueUp, Math.sin(phi) * r),
+            direction: direction.clone().normalize(),
+            wavelength,
+            intensity: intensityPerRay,
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            opticalPathLength: 0,
+            footprintRadius: beamletFootprint,
+            coherenceMode,
+            sourceId,
+        });
     }
     return rays;
 }
@@ -149,15 +223,22 @@ export function createSourceRays(
         origin.add(direction.clone().multiplyScalar(3));
 
         const wavelength = laser.wavelength * 1e-9;
-        const totalBeamlets = mode === 'full' ? 1 + snapToRingBoundary(Math.max(1, rayCount)) : 1;
+        const ringRays = mode === 'full' ? Math.max(1, rayCount) : 0;
+        const totalBeamlets = 1 + ringRays;
         const beamletFootprint = estimateBeamletFootprint(laser.beamRadius, totalBeamlets);
+        // Split the laser's total power evenly across the (center + ring) rays
+        // so ∑ intensities = P exactly. Previously the center ray carried full
+        // P while each ring ray got P/N, leading to a ~2× intensity spike on
+        // the optical axis that focused to a hot dot in the camera image.
+        const intensityPerRay = laser.power / totalBeamlets;
 
-        // Center (main) ray
+        // Center (main) ray — kept for visualization (thicker/brighter draw) but
+        // with the same per-beamlet intensity as the Gaussian-distributed rays.
         sourceRays.push({
             origin: origin.clone(),
             direction: direction.clone(),
             wavelength,
-            intensity: laser.power,
+            intensity: intensityPerRay,
             polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
             opticalPathLength: 0,
             footprintRadius: beamletFootprint,
@@ -166,12 +247,11 @@ export function createSourceRays(
             sourceId: laser.id,
         });
 
-        // Ring rays (marginal + fill)
+        // Gaussian-distributed off-axis rays sampled via inverse-CDF stratification.
         if (mode === 'full') {
-            const totalRays = Math.max(1, rayCount);
             sourceRays.push(...generateRingRays(
-                origin, direction, laser.beamRadius, totalRays,
-                wavelength, laser.power, Coherence.Coherent, laser.id, beamletFootprint,
+                origin, direction, laser.beamRadius, ringRays,
+                wavelength, intensityPerRay, Coherence.Coherent, laser.id, beamletFootprint,
             ));
         }
     }
@@ -192,7 +272,7 @@ export function createSourceRays(
             const totalRays = mode === 'full'
                 ? (defaultRays >= 16 ? Math.max(1, Math.floor(defaultRays / 2)) : defaultRays)
                 : 0;
-            const totalBeamlets = mode === 'full' ? 1 + snapToRingBoundary(totalRays) : 1;
+            const totalBeamlets = mode === 'full' ? 1 + totalRays : 1;
             const beamletFootprint = estimateBeamletFootprint(beamRadius, totalBeamlets);
 
             // Center (main) ray
@@ -217,6 +297,192 @@ export function createSourceRays(
                     `${lamp.id}_${wavelengthNm}nm`, beamletFootprint,
                 ));
             }
+        }
+    }
+
+    // ── Point / Cone / Wedge / Structured sources ──
+
+    // Orthonormal basis aligned with the component's forward direction (+Z local).
+    const makeBasis = (rotation: { clone(): any }) => {
+        const forward = new Vector3(0, 0, 1).applyQuaternion((rotation as any).clone()).normalize();
+        const right = new Vector3(1, 0, 0).applyQuaternion((rotation as any).clone()).normalize();
+        const up = new Vector3(0, 1, 0).applyQuaternion((rotation as any).clone()).normalize();
+        return { forward, right, up };
+    };
+
+    const makeSourceRay = (
+        origin: Vector3, direction: Vector3, wavelengthM: number,
+        intensity: number, footprint: number, sourceId: string,
+        mainRay: boolean,
+    ): Ray => ({
+        origin: origin.clone(),
+        direction: direction.clone().normalize(),
+        wavelength: wavelengthM,
+        intensity,
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        opticalPathLength: 0,
+        footprintRadius: footprint,
+        coherenceMode: Coherence.Incoherent,
+        isMainRay: mainRay,
+        sourceId,
+    });
+
+    // --- PointSource3D: isotropic sphere (Fibonacci lattice) ---
+    const pointSource3Ds = components.filter(c => c instanceof PointSource3D) as PointSource3D[];
+    for (const src of pointSource3Ds) {
+        src.updateMatrices();
+        const origin = src.position.clone();
+        const wavelengthM = src.wavelength * 1e-9;
+        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
+        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
+
+        // Center (forward) main ray first
+        const { forward } = makeBasis(src.rotation);
+        sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
+        if (mode !== 'full') continue;
+
+        // Fibonacci sphere for the remaining rays — uniform density over 4π.
+        const phiGolden = Math.PI * (3 - Math.sqrt(5));
+        for (let i = 0; i < n; i++) {
+            const y = 1 - (2 * (i + 0.5)) / n;
+            const r = Math.sqrt(Math.max(0, 1 - y * y));
+            const phi = i * phiGolden;
+            const dir = new Vector3(r * Math.cos(phi), y, r * Math.sin(phi));
+            sourceRays.push(makeSourceRay(origin, dir, wavelengthM, perRayPower, footprint, src.id, false));
+        }
+    }
+
+    // --- PointSource2D: isotropic in the component's X-Z plane ---
+    const pointSource2Ds = components.filter(c => c instanceof PointSource2D) as PointSource2D[];
+    for (const src of pointSource2Ds) {
+        src.updateMatrices();
+        const origin = src.position.clone();
+        const wavelengthM = src.wavelength * 1e-9;
+        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
+        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const { forward, right } = makeBasis(src.rotation);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
+
+        sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
+        if (mode !== 'full') continue;
+
+        for (let i = 0; i < n; i++) {
+            const theta = (2 * Math.PI * i) / n;
+            const dir = forward.clone().multiplyScalar(Math.cos(theta))
+                .add(right.clone().multiplyScalar(Math.sin(theta)));
+            sourceRays.push(makeSourceRay(origin, dir, wavelengthM, perRayPower, footprint, src.id, false));
+        }
+    }
+
+    // --- ConeSource3D: forward-facing cone with uniform solid-angle sampling ---
+    const coneSources = components.filter(c => c instanceof ConeSource3D) as ConeSource3D[];
+    for (const src of coneSources) {
+        src.updateMatrices();
+        const origin = src.position.clone();
+        const wavelengthM = src.wavelength * 1e-9;
+        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
+        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const { forward, right, up } = makeBasis(src.rotation);
+        const halfAngle = Math.max(1e-6, src.halfAngle);
+        const cosHalf = Math.cos(halfAngle);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
+
+        sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
+        if (mode !== 'full') continue;
+
+        // Stratified fibonacci spiral on the spherical cap.
+        const phiGolden = Math.PI * (3 - Math.sqrt(5));
+        for (let i = 0; i < n; i++) {
+            // u ∈ [cosHalf, 1] uniform → sinθ correct for uniform solid-angle
+            const u = cosHalf + (1 - cosHalf) * ((i + 0.5) / n);
+            const sinTheta = Math.sqrt(Math.max(0, 1 - u * u));
+            const phi = i * phiGolden;
+            const dir = forward.clone().multiplyScalar(u)
+                .add(right.clone().multiplyScalar(sinTheta * Math.cos(phi)))
+                .add(up.clone().multiplyScalar(sinTheta * Math.sin(phi)));
+            sourceRays.push(makeSourceRay(origin, dir, wavelengthM, perRayPower, footprint, src.id, false));
+        }
+    }
+
+    // --- WedgeSource2D: planar fan in the component's forward / right plane ---
+    const wedgeSources = components.filter(c => c instanceof WedgeSource2D) as WedgeSource2D[];
+    for (const src of wedgeSources) {
+        src.updateMatrices();
+        const origin = src.position.clone();
+        const wavelengthM = src.wavelength * 1e-9;
+        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
+        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const { forward, right } = makeBasis(src.rotation);
+        const subtended = Math.max(1e-6, src.subtendedAngle);
+        const halfFan = subtended / 2;
+        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
+
+        sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
+        if (mode !== 'full') continue;
+
+        for (let i = 0; i < n; i++) {
+            const frac = n === 1 ? 0.5 : i / (n - 1);
+            const theta = -halfFan + frac * subtended;
+            const dir = forward.clone().multiplyScalar(Math.cos(theta))
+                .add(right.clone().multiplyScalar(Math.sin(theta)));
+            sourceRays.push(makeSourceRay(origin, dir, wavelengthM, perRayPower, footprint, src.id, false));
+        }
+    }
+
+    // --- StructuredSource: ASCII-character bitmap of collimated rays ---
+    //
+    // The source emits exactly `rayCount` rays drawn from the rasterized character's
+    // lit pixels.  The pattern extent is fixed by `src.diameter` — `beamRadius`
+    // affects only the cosmetic plate in the visualizer, never the beam itself.
+    const structuredSources = components.filter(c => c instanceof StructuredSource) as StructuredSource[];
+    for (const src of structuredSources) {
+        src.updateMatrices();
+        const wavelengthM = src.wavelength * 1e-9;
+        const { forward, right, up } = makeBasis(src.rotation);
+        const halfDiam = Math.max(0.05, src.diameter / 2);
+        const totalRays = mode === 'full' ? Math.max(1, rayCount) : 1;
+
+        // Footprint derives from the pattern extent and ray count (not from beamRadius).
+        const footprint = Math.max(halfDiam / Math.sqrt(totalRays), 0.05);
+
+        const pattern = rasterizeStructuredPattern(src.asciiChar, 16);
+        const size = pattern.size;
+
+        // Collect lit pixel indices for sampling.
+        const lit: { px: number; py: number }[] = [];
+        for (let py = 0; py < size; py++) {
+            for (let px = 0; px < size; px++) {
+                if (pattern.bits[py * size + px]) lit.push({ px, py });
+            }
+        }
+
+        // Empty-pattern fallback: single center ray.
+        if (lit.length === 0) {
+            sourceRays.push(makeSourceRay(src.position.clone(), forward, wavelengthM, src.power, footprint, src.id, true));
+            continue;
+        }
+
+        const perRayPower = Math.max(1e-6, src.power / totalRays);
+
+        for (let i = 0; i < totalRays; i++) {
+            // Deterministic stratified traversal over lit pixels — when rayCount
+            // exceeds the pixel count we wrap and jitter so rays don't stack.
+            const frac = totalRays === 1 ? 0 : i / totalRays;
+            const pixIdx = Math.floor(frac * lit.length) % lit.length;
+            const { px, py } = lit[pixIdx];
+            // Jitter only when oversampling the pattern; keeps first pass pixel-aligned.
+            const over = totalRays > lit.length;
+            const ju = over ? (Math.random() - 0.5) : 0;
+            const jv = over ? (Math.random() - 0.5) : 0;
+            const u = ((px + 0.5 + ju) / size * 2 - 1) * halfDiam;
+            const v = -((py + 0.5 + jv) / size * 2 - 1) * halfDiam;
+            const origin = src.position.clone()
+                .add(right.clone().multiplyScalar(u))
+                .add(up.clone().multiplyScalar(v));
+            sourceRays.push(makeSourceRay(
+                origin, forward, wavelengthM, perRayPower, footprint, src.id, i === 0,
+            ));
         }
     }
 
