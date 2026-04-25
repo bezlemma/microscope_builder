@@ -6,6 +6,7 @@ import { Solver1 } from '../Solver1';
 import { Solver3 } from '../Solver3';
 import { createSourceRays } from '../SourceRayFactory';
 import { AchromatDoublet } from '../components/AchromatDoublet';
+import { Blocker } from '../components/Blocker';
 import { DichroicMirror } from '../components/DichroicMirror';
 import { GalvoScanHead } from '../components/GalvoScanHead';
 import { IdealLens } from '../components/IdealLens';
@@ -56,8 +57,9 @@ describe('Che-Hang Yu 2026 preset', () => {
         const { scene } = createCheHangYu2026Scene();
 
         expect(scene.some(component => component instanceof IdealLens)).toBe(false);
-        expect(scene.filter(component => component instanceof AchromatDoublet).length).toBeGreaterThanOrEqual(5);
-        expect(scene.some(component => component instanceof SphericalLens)).toBe(true);
+        expect(scene.filter(component => component instanceof AchromatDoublet).length).toBeGreaterThanOrEqual(4);
+        expect(scene.filter(component => component instanceof SphericalLens).length).toBeGreaterThanOrEqual(2);
+        expect(scene.some(component => component instanceof Blocker && component.name === 'Post-Sample Beam Dump')).toBe(true);
     });
 
     test('uses a visible fluorescence surrogate with a matching dichroic', () => {
@@ -93,6 +95,7 @@ describe('Che-Hang Yu 2026 preset', () => {
         const names = traceLaserHitNames();
         const objectiveIndex = names.findIndex(name => name.includes('Nikon 16'));
         const sampleIndex = names.findIndex(name => name.includes('GCaMP6s'));
+        const dumpIndex = names.findIndex(name => name === 'Post-Sample Beam Dump');
 
         expect(names).toContain('LSM54-1050 Scan Lens 1 (thick f=54)');
         expect(names).toContain('LSM54-1050 Scan Lens 2 (thick f=54)');
@@ -100,7 +103,9 @@ describe('Che-Hang Yu 2026 preset', () => {
         expect(names).toContain('TTL200MP Tube Lens (thick f=200)');
         expect(objectiveIndex).toBeGreaterThan(-1);
         expect(sampleIndex).toBeGreaterThan(-1);
+        expect(dumpIndex).toBeGreaterThan(-1);
         expect(objectiveIndex).toBeLessThan(sampleIndex);
+        expect(sampleIndex).toBeLessThan(dumpIndex);
     });
 
     test('single-axis scan extrema still reach the specimen', () => {

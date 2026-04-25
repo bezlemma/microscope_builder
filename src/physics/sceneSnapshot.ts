@@ -22,6 +22,11 @@ import {
 } from './kernelTypes';
 import { GaussianBeamSegment } from './Solver2';
 
+const WORLD_BOUNDS_CORNERS = [
+    [0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1],
+    [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1],
+] as const;
+
 function cloneDirection(matrix: Matrix4, axis: Vector3): Vector3 {
     return axis.clone().transformDirection(matrix).normalize();
 }
@@ -50,6 +55,31 @@ function resolveOpeningRadius(component: OpticalComponent): number | undefined {
     return undefined;
 }
 
+function computeWorldBounds(component: OpticalComponent): KernelTraceComponent['worldBounds'] {
+    component.updateMatrices();
+    const min = component.bounds.min;
+    const max = component.bounds.max;
+    const p = new Vector3();
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    for (const corner of WORLD_BOUNDS_CORNERS) {
+        p.set(
+            corner[0] ? max.x : min.x,
+            corner[1] ? max.y : min.y,
+            corner[2] ? max.z : min.z,
+        ).applyMatrix4(component.localToWorld);
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.z < minZ) minZ = p.z;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+        if (p.z > maxZ) maxZ = p.z;
+    }
+
+    return { minX, minY, minZ, maxX, maxY, maxZ };
+}
+
 function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponent {
     return {
         id: component.id,
@@ -57,8 +87,9 @@ function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponen
         kind: resolveKernelKind(component),
         absorptionCoeff: component.absorptionCoeff,
         position: component.position,
+        worldBounds: computeWorldBounds(component),
         openingRadius: resolveOpeningRadius(component),
-        chkIntersection: (ray) => component.chkIntersection(ray),
+        chkIntersection: (ray, maxDistance) => component.chkIntersection(ray, maxDistance),
         interact: (ray, hit) => component.interact(ray, hit),
     };
 }

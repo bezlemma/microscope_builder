@@ -35,14 +35,24 @@ export const ViewerPanels: React.FC = () => {
     const [isRendering] = useAtom(solver3RenderingAtom);
     const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
 
-    // On mobile, start with all pinned viewers minimized
+    // On mobile, start with auxiliary viewers minimized so the screen isn't
+    // swamped on first preset load — but EXCLUDE Cameras, since they are the
+    // primary image output the user came to see.  Without this exclusion the
+    // mobile-camera special-case path below (which suppresses the panel
+    // header) leaves the Camera as a 0-px invisible div when minimized,
+    // which is exactly the OpenSPIM "camera doesn't show up" bug.
     const initializedForMobile = React.useRef(false);
     React.useEffect(() => {
         if (isMobile && !initializedForMobile.current && pinnedIds.size > 0) {
             initializedForMobile.current = true;
-            setMinimizedIds(new Set(pinnedIds));
+            const toMinimize = new Set<string>();
+            for (const id of pinnedIds) {
+                const comp = components.find(c => c.id === id);
+                if (comp && !(comp instanceof Camera)) toMinimize.add(id);
+            }
+            setMinimizedIds(toMinimize);
         }
-    }, [isMobile, pinnedIds]);
+    }, [isMobile, pinnedIds, components]);
 
     // Resolve pinned IDs to actual Card / Camera / PMT / Sample instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
@@ -97,7 +107,7 @@ export const ViewerPanels: React.FC = () => {
                         // height) lets the whole image breathe while still
                         // capping the panel's growth.
                         overflow: 'hidden',
-                        maxHeight: isMobile && comp instanceof Camera ? '35vh' : undefined,
+                        maxHeight: isMobile && comp instanceof Camera ? 'calc(var(--app-height, 100dvh) * 0.35)' : undefined,
                         maxWidth: isMobile && comp instanceof Camera ? '50vw' : undefined,
                         display: 'flex',
                         flexDirection: 'column',

@@ -45,6 +45,18 @@ export class OpticMesh {
     private mesh: Mesh | null = null;
     private geometry: BufferGeometry | null = null;
     private raycaster: Raycaster = new Raycaster();
+    private posAttr: BufferAttribute | null = null;
+    private normAttr: BufferAttribute | null = null;
+    private indexAttr: BufferAttribute | null = null;
+    private scratchDirection: Vector3 = new Vector3();
+    private scratchP0: Vector3 = new Vector3();
+    private scratchP1: Vector3 = new Vector3();
+    private scratchP2: Vector3 = new Vector3();
+    private scratchN0: Vector3 = new Vector3();
+    private scratchN1: Vector3 = new Vector3();
+    private scratchN2: Vector3 = new Vector3();
+    private scratchBary: Vector3 = new Vector3();
+    private scratchTriangle: Triangle = new Triangle();
 
     private static _warnedKeys: Set<string> = new Set();
     /**
@@ -86,6 +98,9 @@ export class OpticMesh {
         }
 
         geometry.setAttribute('normal', new BufferAttribute(normals, 3));
+        this.posAttr = posAttr;
+        this.normAttr = geometry.getAttribute('normal') as BufferAttribute;
+        this.indexAttr = geometry.index;
 
         // Build BVH for accelerated raycasting
         (geometry as any).boundsTree = new MeshBVH(geometry);
@@ -99,15 +114,13 @@ export class OpticMesh {
      * Compute smooth interpolated normal at an intersection point
      * using barycentric interpolation of analytical vertex normals.
      */
-    private computeSmoothNormal(faceIndex: number, hitPoint: Vector3): Vector3 {
-        if (!this.geometry) return new Vector3(0, 0, 1);
-
-        const index = this.geometry.index;
-        const posAttr = this.geometry.getAttribute('position') as BufferAttribute;
-        const normAttr = this.geometry.getAttribute('normal') as BufferAttribute;
+    private computeSmoothNormal(faceIndex: number, hitPoint: Vector3, target: Vector3): Vector3 {
+        const index = this.indexAttr;
+        const posAttr = this.posAttr;
+        const normAttr = this.normAttr;
 
         if (!index || !posAttr || !normAttr) {
-            return new Vector3(0, 0, 1);
+            return target.set(0, 0, 1);
         }
 
         // Get vertex indices for this face
@@ -116,28 +129,25 @@ export class OpticMesh {
         const c = index.getX(faceIndex * 3 + 2);
 
         // Get vertex positions
-        const p0 = new Vector3().fromBufferAttribute(posAttr, a);
-        const p1 = new Vector3().fromBufferAttribute(posAttr, b);
-        const p2 = new Vector3().fromBufferAttribute(posAttr, c);
+        const p0 = this.scratchP0.fromBufferAttribute(posAttr, a);
+        const p1 = this.scratchP1.fromBufferAttribute(posAttr, b);
+        const p2 = this.scratchP2.fromBufferAttribute(posAttr, c);
 
         // Get analytical vertex normals
-        const n0 = new Vector3().fromBufferAttribute(normAttr, a);
-        const n1 = new Vector3().fromBufferAttribute(normAttr, b);
-        const n2 = new Vector3().fromBufferAttribute(normAttr, c);
+        const n0 = this.scratchN0.fromBufferAttribute(normAttr, a);
+        const n1 = this.scratchN1.fromBufferAttribute(normAttr, b);
+        const n2 = this.scratchN2.fromBufferAttribute(normAttr, c);
 
         // Compute barycentric coordinates
-        const bary = new Vector3();
-        const tri = new Triangle(p0, p1, p2);
-        tri.getBarycoord(hitPoint, bary);
+        const bary = this.scratchBary;
+        this.scratchTriangle.set(p0, p1, p2).getBarycoord(hitPoint, bary);
 
         // Interpolate normal using barycentric weights
-        const smoothNormal = new Vector3()
+        return target.set(0, 0, 0)
             .addScaledVector(n0, bary.x)
             .addScaledVector(n1, bary.y)
             .addScaledVector(n2, bary.z)
             .normalize();
-
-        return smoothNormal;
     }
 
     /**
@@ -148,7 +158,8 @@ export class OpticMesh {
     intersectRayAll(origin: Vector3, direction: Vector3): MeshHit[] {
         if (!this.mesh) return [];
 
-        this.raycaster.set(origin, direction.clone().normalize());
+        (this.raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = false;
+        this.raycaster.set(origin, this.scratchDirection.copy(direction).normalize());
         this.raycaster.near = 0.001;
         this.raycaster.far = Infinity;
 
@@ -157,7 +168,7 @@ export class OpticMesh {
         return intersections.map(hit => ({
             t: hit.distance,
             point: hit.point.clone(),
-            normal: this.computeSmoothNormal(hit.faceIndex!, hit.point),
+            normal: this.computeSmoothNormal(hit.faceIndex!, hit.point, new Vector3()),
             faceIndex: hit.faceIndex ?? undefined
         }));
     }
@@ -166,8 +177,27 @@ export class OpticMesh {
      * Find the nearest ray-mesh intersection.
      */
     intersectRay(origin: Vector3, direction: Vector3): MeshHit | null {
-        const hits = this.intersectRayAll(origin, direction);
-        return hits.length > 0 ? hits[0] : null;
+        if (!this.mesh) return null;
+
+        const raycaster = this.raycaster as Raycaster & { firstHitOnly?: boolean };
+        raycaster.firstHitOnly = true;
+        try {
+            this.raycaster.set(origin, this.scratchDirection.copy(direction).normalize());
+            this.raycaster.near = 0.001;
+            this.raycaster.far = Infinity;
+
+            const hit = this.raycaster.intersectObject(this.mesh, false)[0];
+            if (!hit) return null;
+
+            return {
+                t: hit.distance,
+                point: hit.point.clone(),
+                normal: this.computeSmoothNormal(hit.faceIndex!, hit.point, new Vector3()),
+                faceIndex: hit.faceIndex ?? undefined
+            };
+        } finally {
+            raycaster.firstHitOnly = false;
+        }
     }
 
     // ========================================================================

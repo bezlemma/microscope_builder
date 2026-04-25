@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
 import { serializeScene, deserializeScene } from './ubzSerializer';
-import { PropertyAnimator } from '../physics/PropertyAnimator';
+import { PropertyAnimator, type AnimationChannel } from '../physics/PropertyAnimator';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
 
@@ -107,7 +107,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
-    [PresetName.OpticalTrap, () => ({ scene: createOpticalTrapScene() })],
+    [PresetName.OpticalTrap, () => ({ scene: createOpticalTrapScene(), rayCount: 72 })],
     [PresetName.Tutorial, () => createTutorialScene()],
     [PresetName.CheHangYu2026, () => createCheHangYu2026Scene()],
 ]);
@@ -289,6 +289,7 @@ export const loadSceneAtom = atom(
 
         set(componentsAtom, components);
         set(activePresetAtom, null);
+        set(presetDescriptionAtom, "");
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(selectionAtom, []);
         set(undoStackAtom, []); // Clear undo history on scene load
@@ -309,14 +310,31 @@ export const loadSceneAtom = atom(
 //  Stores serialized scene snapshots. Max 20 entries.
 // ════════════════════════════════════════════════════════════
 const MAX_UNDO = 20; // How much RAM does this cost us? Seems like not a lot.
-export const undoStackAtom = atom<string[]>([]);
+interface UndoSnapshot {
+    sceneText: string;
+    channels: AnimationChannel[];
+    animationPlaying: boolean;
+    animationSpeed: number;
+}
+
+function cloneChannels(channels: AnimationChannel[]): AnimationChannel[] {
+    return channels.map(ch => ({ ...ch }));
+}
+
+export const undoStackAtom = atom<UndoSnapshot[]>([]);
 
 /** Push current scene state onto the undo stack (call BEFORE mutation). */
 export const pushUndoAtom = atom(
     null,
     (get, set) => {
         const components = get(componentsAtom);
-        const snapshot = serializeScene(components);
+        const animator = get(animatorAtom);
+        const snapshot: UndoSnapshot = {
+            sceneText: serializeScene(components),
+            channels: cloneChannels(animator.channels),
+            animationPlaying: get(animationPlayingAtom),
+            animationSpeed: get(animationSpeedAtom),
+        };
         const stack = get(undoStackAtom);
         const newStack = [...stack, snapshot];
         if (newStack.length > MAX_UNDO) newStack.shift();
@@ -333,9 +351,22 @@ export const undoAtom = atom(
         const newStack = [...stack];
         const snapshot = newStack.pop()!;
         set(undoStackAtom, newStack);
-        const restored = deserializeScene(snapshot);
+        const restored = deserializeScene(snapshot.sceneText);
+        const restoredIds = new Set(restored.map(c => c.id));
+        const restoredChannels = snapshot.channels.filter(ch => restoredIds.has(ch.targetId));
+        const animator = get(animatorAtom);
+        animator.clearAll();
+        animator.reset();
+        for (const ch of restoredChannels) {
+            animator.addChannel({ ...ch });
+        }
         set(componentsAtom, restored);
         set(selectionAtom, []);
+        set(animationPlayingAtom, snapshot.animationPlaying && restoredChannels.length > 0);
+        set(animationSpeedAtom, snapshot.animationSpeed);
+        set(solver3RenderingAtom, false);
+        set(scanAccumProgressAtom, 0);
+        set(cameraImageTickAtom, tick => tick + 1);
     }
 );
 

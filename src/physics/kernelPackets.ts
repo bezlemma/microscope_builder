@@ -13,6 +13,7 @@ import { BeamSplitter } from './components/BeamSplitter';
 import { PolarizingBeamSplitter } from './components/PolarizingBeamSplitter';
 import { SphericalLens } from './components/SphericalLens';
 import { AchromatDoublet } from './components/AchromatDoublet';
+import { Mirror } from './components/Mirror';
 import { GaussianBeamSegment } from './Solver2';
 import { Coherence } from './types';
 
@@ -22,10 +23,16 @@ export const PACKED_COMPONENT_BOUNDS_STRIDE = 6;
 export const PACKED_DETECTOR_BASIS_STRIDE = 12;
 export const PACKED_BEAM_SEGMENT_SCALAR_STRIDE = 27;
 export const PACKED_SURFACE_PARAM_STRIDE = 8;
+export const PACKED_INTERACTION_INPUT_STRIDE = 16;
+export const PACKED_INTERACTION_OUTPUT_STRIDE = 16;
 
 export const SURFACE_KIND_UNSUPPORTED = 0;
 export const SURFACE_KIND_FLAT_DISC = 1;    // params: [inner_r, outer_r, absorbing_ring ? 1 : 0, ...]
 export const SURFACE_KIND_THICK_LENS = 2;   // params: [R1, R2, thickness, aperture, ior, ...]
+export const SURFACE_KIND_MIRROR_DISC = 3;  // params: [radius, half_thickness, ...]
+export const PACKED_INTERACTION_UNSUPPORTED = 0;
+export const PACKED_INTERACTION_APERTURE = 1;
+export const PACKED_INTERACTION_MIRROR = 2;
 export const SOLVER3_KERNEL_STATUS_OK = 0;
 export const SOLVER3_KERNEL_STATUS_UNSUPPORTED_ABI = 1;
 export const SOLVER3_KERNEL_STATUS_UNIMPLEMENTED = 2;
@@ -94,6 +101,8 @@ export interface PackedTraceScene {
     surfaceKinds: Uint8Array;
     /** Per-component surface parameters, PACKED_SURFACE_PARAM_STRIDE f64s each. */
     surfaceParams: Float64Array;
+    /** Per-component packed interaction kind. Unsupported means exact JS .interact() fallback. */
+    interactionKinds: Uint8Array;
 }
 
 export interface PackedBeamField {
@@ -154,6 +163,11 @@ function packSurfaceParams(component: OpticalComponent, out: Float64Array, offse
         out[offset + 2] = 0;
         return SURFACE_KIND_FLAT_DISC;
     }
+    if (component instanceof Mirror) {
+        out[offset + 0] = component.diameter / 2;
+        out[offset + 1] = component.thickness / 2;
+        return SURFACE_KIND_MIRROR_DISC;
+    }
     // THICK_LENS: two spherical refracting surfaces.
     if (component instanceof SphericalLens) {
         const { R1, R2 } = component.getRadii();
@@ -178,11 +192,16 @@ function packSurfaceParams(component: OpticalComponent, out: Float64Array, offse
         out[offset + 4] = component.ior1;
         return SURFACE_KIND_THICK_LENS;
     }
-    // Mirror (flat) and CurvedMirror are intentionally NOT handled here: Mirror
-    // has two flat planes at ±thickness/2 (not a single z=0 plane), and
-    // CurvedMirror uses a rim-absorption sentinel in the JS HitRecord's normal
-    // field that the narrow phase can't reproduce.  Both stay on the JS path.
+    // CurvedMirror is intentionally NOT handled here: it uses a rim-absorption
+    // sentinel in the JS HitRecord's normal field that the narrow phase can't
+    // reproduce. It stays on the JS path.
     return SURFACE_KIND_UNSUPPORTED;
+}
+
+function packedInteractionKind(component: OpticalComponent): number {
+    if (component instanceof Aperture) return PACKED_INTERACTION_APERTURE;
+    if (component instanceof Mirror) return PACKED_INTERACTION_MIRROR;
+    return PACKED_INTERACTION_UNSUPPORTED;
 }
 
 export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceScene {
@@ -195,6 +214,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
     const localBounds = new Float64Array(count * PACKED_COMPONENT_BOUNDS_STRIDE);
     const surfaceKinds = new Uint8Array(count);
     const surfaceParams = new Float64Array(count * PACKED_SURFACE_PARAM_STRIDE);
+    const interactionKinds = new Uint8Array(count);
     const componentIds = new Array<string>(count);
     const componentNames = new Array<string>(count);
     const componentVersions = new Uint32Array(count);
@@ -218,6 +238,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
             component.bounds.max.z,
         ], i * PACKED_COMPONENT_BOUNDS_STRIDE);
         surfaceKinds[i] = packSurfaceParams(component, surfaceParams, i * PACKED_SURFACE_PARAM_STRIDE);
+        interactionKinds[i] = packedInteractionKind(component);
         componentIds[i] = component.id;
         componentNames[i] = component.name;
         componentVersions[i] = component.version;
@@ -247,6 +268,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
         sampleScalars,
         surfaceKinds,
         surfaceParams,
+        interactionKinds,
     };
 }
 

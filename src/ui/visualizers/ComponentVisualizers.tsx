@@ -13,6 +13,7 @@ import { useThree } from '@react-three/fiber';
 import { OpticalComponent } from '../../physics/Component';
 import { Mirror } from '../../physics/components/Mirror';
 import { SphericalLens } from '../../physics/components/SphericalLens';
+import { AsphericLens } from '../../physics/components/AsphericLens';
 import { Laser } from '../../physics/components/Laser';
 import { Blocker } from '../../physics/components/Blocker';
 import { Card } from '../../physics/components/Card';
@@ -49,6 +50,7 @@ import { StructuredSource } from '../../physics/components/StructuredSource';
 import { PointSourceBase } from '../../physics/components/PointSourceBase';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
+import { TrappedBead } from '../../physics/components/TrappedBead';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
@@ -253,6 +255,38 @@ export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) 
     );
 };
 
+/**
+ * TrappedBeadVisualizer — a small translucent sphere drawn at the bead's
+ * dynamic position (component origin + specimenOffset).  Re-renders on
+ * component.version changes so the integrator's per-frame mutation of
+ * specimenOffset shows up immediately.  Intentionally minimal — the whole
+ * point is that the camera/QPD downstream tells you whether the trap is
+ * working, not this little marker.
+ */
+export const TrappedBeadVisualizer = ({ component }: { component: TrappedBead }) => {
+    void component.version;   // subscribe to version bumps from the integrator
+    const r = component.radius;
+    const o = component.specimenOffset;
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            <mesh position={[o.x, o.y, o.z]}>
+                <sphereGeometry args={[r, 24, 16]} />
+                <meshStandardMaterial
+                    color="#bcd9ff"
+                    transparent
+                    opacity={0.55}
+                    roughness={0.25}
+                    metalness={0.05}
+                />
+            </mesh>
+        </group>
+    );
+};
+
 export const SampleVisualizer = ({ component }: { component: Sample }) => {
     const outerSize = 40;
     const innerSize = 30;
@@ -330,11 +364,8 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
     const zBack = Math.max(-f + parfocalDistance, zFront + 20);
     const zTaperEnd = zFront + Math.min(15, (zBack - zFront) * 0.6);
 
-    const immersionIdx = component.immersionIndex || 1;
-    const maxSin = component.NA / immersionIdx;
-    const maxTan = maxSin / Math.sqrt(1 - maxSin * maxSin);
-    const opticalFrontRadius = wd * maxTan;
-    const frontRadius = Math.max(opticalFrontRadius + 0.5, 2);
+    const opticalFrontRadius = component.getOpticalFrontRadius();
+    const frontRadius = component.getFrontRadius();
     const barrelLength = zBack - zFront;
 
     const getObjectiveBandColor = (mag: number) => {
@@ -970,6 +1001,89 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     );
 };
 
+export const AsphericLensVisualizer = ({ component }: { component: AsphericLens }) => {
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+
+    if (!component || !component.rotation || !component.position) return null;
+
+    const aperture = component.apertureRadius || 10;
+    const thickness = component.thickness || 2;
+
+    const profilePoints = useMemo(
+        () => AsphericLens.generateProfile(component.frontSurface, component.backSurface, aperture, thickness, 64),
+        [
+            aperture,
+            thickness,
+            component.r1,
+            component.r2,
+            component.k1,
+            component.k2,
+            component.A1,
+            component.A2,
+            component.version,
+        ],
+    );
+
+    const [blend] = useAtom(cameraBlendAtom);
+    const lensGeo = useMemo(() => new LatheGeometry(profilePoints, 64), [profilePoints]);
+    const lensFlatGeo = useMemo(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
+
+    const lensColor = component.ior > 1.55 ? '#88ffee' : '#aaddff';
+    const lensEmissive = isSelected ? '#64ffda' : '#000000';
+    const lensEmissiveIntensity = isSelected ? 0.15 : 0;
+    const targetTransmission = isSelected ? 0.85 : 0.95;
+    const transmission = blend * targetTransmission;
+    const orthoOpacity = isSelected ? 0.6 : 0.5;
+    const perspOpacity = isSelected ? 0.6 : 0.5;
+    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
+    const roughness = 0.1 * (1 - blend);
+    const show3D = blend > 0.01;
+    const show2D = blend < 0.99;
+    const flatOpacity = isSelected ? 0.6 : 0.5;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {show2D && (
+                <mesh geometry={lensFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <meshBasicMaterial
+                        color={lensColor}
+                        transparent
+                        opacity={flatOpacity * (1 - blend)}
+                        depthWrite={false}
+                        side={DoubleSide}
+                    />
+                </mesh>
+            )}
+            {show3D && (
+                <mesh geometry={lensGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <meshPhysicalMaterial
+                        color={lensColor}
+                        transmission={transmission}
+                        opacity={opacity * blend}
+                        transparent
+                        roughness={roughness}
+                        metalness={0}
+                        ior={component.ior || 1.5}
+                        thickness={0.5}
+                        attenuationColor="#aaddff"
+                        attenuationDistance={5}
+                        side={DoubleSide}
+                        depthWrite={false}
+                        emissive={lensEmissive}
+                        emissiveIntensity={lensEmissiveIntensity}
+                    />
+                </mesh>
+            )}
+            <LensRimOutline profilePoints={profilePoints} aperture={aperture} />
+        </group>
+    );
+};
+
 export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
     const isLaser = component instanceof Laser || component.constructor.name === 'Laser';
     const beamColor = isLaser ? wavelengthToCSS((component as Laser).wavelength) : "#222";
@@ -1219,7 +1333,7 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
     );
 };
 
-// ─── Ported from BOMB ────────────────────────────────────────────────
+// ─── Legacy optical-table rendering helpers ──────────────────────────
 
 export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolygonOptic }) => {
     if (!component || !component.rotation || !component.position) return null;
@@ -1892,7 +2006,7 @@ export const AODVisualizer: React.FC<{ component: AOD }> = ({ component }) => {
 /**
  * Renders a component as a glowing dashed-blue outline — a target placeholder
  * the user drags a real component into. Ghosts are excluded from ray tracing.
- * Color: rgb(0, 127, 255) = #007fff (matches the BOMB brand glow).
+ * Color: rgb(0, 127, 255) = #007fff (matches the table beam glow).
  */
 export const GhostVisualizer = ({ component }: { component: OpticalComponent }) => {
     const GHOST_COLOR = '#007fff';

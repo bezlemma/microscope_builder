@@ -19,7 +19,7 @@ export class Annotation extends OpticalComponent {
     kind: AnnotationKind;
     text: string;
     length: number;     // mm — tip-to-tail distance (arrows only)
-    fontSize: number;   // mm — text glyph height
+    fontSize: number;   // CSS px — screen-space label size
     color: string;      // CSS color string
 
     constructor(

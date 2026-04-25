@@ -12,6 +12,7 @@ import { OpticalComponent } from './Component';
 import { Laser } from './components/Laser';
 import { Lamp } from './components/Lamp';
 import { SphericalLens } from './components/SphericalLens';
+import { AsphericLens } from './components/AsphericLens';
 import { CurvedMirror } from './components/CurvedMirror';
 import { Mirror } from './components/Mirror';
 import { Blocker } from './components/Blocker';
@@ -49,6 +50,7 @@ import { ConeSource3D } from './components/ConeSource3D';
 import { WedgeSource2D } from './components/WedgeSource2D';
 import { StructuredSource } from './components/StructuredSource';
 import { Annotation } from './components/Annotation';
+import { TrappedBead } from './components/TrappedBead';
 
 /** Registry entry for a component type. */
 export interface ComponentEntry {
@@ -64,6 +66,7 @@ export interface ComponentEntry {
 const REGISTRY: [string, ComponentEntry][] = [
     ['Laser',           { ctor: Laser }],
     ['Lamp',            { ctor: Lamp }],
+    ['AsphericLens',    { ctor: AsphericLens }],
     ['SphericalLens',   { ctor: SphericalLens }],
     ['CurvedMirror',    { ctor: CurvedMirror }],
     ['Mirror',          { ctor: Mirror }],
@@ -103,6 +106,7 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['WedgeSource2D',   { ctor: WedgeSource2D }],
     ['StructuredSource', { ctor: StructuredSource }],
     ['Annotation',       { ctor: Annotation }],
+    ['TrappedBead',      { ctor: TrappedBead }],
 ];
 
 /** Map from type name → entry. */

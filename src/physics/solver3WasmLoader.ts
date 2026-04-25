@@ -1,6 +1,6 @@
 /**
  * Fetches and instantiates the solver3_kernel.wasm module, then registers it
- * on `globalThis.__BOMB_SOLVER3_WASM__` so that `solver3Host.createDefaultSolver3Backend`
+ * on `globalThis.__MICROSCOPE_SOLVER3_WASM__` so that `solver3Host.createDefaultSolver3Backend`
  * picks up the Rust kernel via `readRegisteredSolver3WasmModule`.
  *
  * Safe to call from both the main thread and Web Workers.  Results are cached,
@@ -9,7 +9,7 @@
 import type { Solver3WasmModule, Solver3WasmExports } from './solver3WasmBackend';
 import { validateSolver3WasmModule } from './solver3WasmBackend';
 
-type WasmRegistry = typeof globalThis & { __BOMB_SOLVER3_WASM__?: Solver3WasmModule };
+type WasmRegistry = typeof globalThis & { __MICROSCOPE_SOLVER3_WASM__?: Solver3WasmModule };
 
 let loadPromise: Promise<Solver3WasmModule | null> | null = null;
 
@@ -23,7 +23,7 @@ function kernelUrl(): string {
 
 export async function ensureSolver3WasmLoaded(): Promise<Solver3WasmModule | null> {
     const registry = globalThis as WasmRegistry;
-    if (registry.__BOMB_SOLVER3_WASM__) return registry.__BOMB_SOLVER3_WASM__;
+    if (registry.__MICROSCOPE_SOLVER3_WASM__) return registry.__MICROSCOPE_SOLVER3_WASM__;
     if (loadPromise) return loadPromise;
 
     loadPromise = (async () => {
@@ -46,7 +46,7 @@ export async function ensureSolver3WasmLoaded(): Promise<Solver3WasmModule | nul
                 console.warn(`[solver3] wasm validation failed: ${validation.reason}`);
                 return null;
             }
-            (globalThis as WasmRegistry).__BOMB_SOLVER3_WASM__ = module;
+            (globalThis as WasmRegistry).__MICROSCOPE_SOLVER3_WASM__ = module;
             const ctx = typeof (globalThis as typeof globalThis & { WorkerGlobalScope?: unknown }).WorkerGlobalScope !== 'undefined' ? 'worker' : 'main';
             console.log(`[solver3] wasm kernel loaded (${ctx}, abi=${module.exports.solver3_kernel_abi_version()})`);
             return module;

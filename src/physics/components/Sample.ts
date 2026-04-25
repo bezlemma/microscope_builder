@@ -52,6 +52,13 @@ export class Sample extends OpticalComponent {
     })();
 
     private _mesh: OpticMesh | null = null;
+    private _volumeLocalOrigin: Vector3 = new Vector3();
+    private _volumeLocalDir: Vector3 = new Vector3();
+    private _chordLocalOrigin: Vector3 = new Vector3();
+    private _chordLocalDir: Vector3 = new Vector3();
+    private _chordSpecOrigin: Vector3 = new Vector3();
+    private _chordSpecDir: Vector3 = new Vector3();
+    private _chordInvQ: Quaternion = new Quaternion();
 
     static getSpecimenSpheresCanonical(): { center: Vector3; radius: number }[] {
         return Sample.SPHERES.map(sphere => ({
@@ -190,8 +197,8 @@ export class Sample extends OpticalComponent {
      */
     getVolumeIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
         this.updateMatrices();
-        const localOrigin = worldRay.origin.clone().applyMatrix4(this.worldToLocal);
-        const localDir = worldRay.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const localOrigin = this._volumeLocalOrigin.copy(worldRay.origin).applyMatrix4(this.worldToLocal);
+        const localDir = this._volumeLocalDir.copy(worldRay.direction).transformDirection(this.worldToLocal).normalize();
 
         // Analytical AABB slab intersection — no triangle mesh, no edge artifacts.
         const box = Sample.BOUNDS;
@@ -243,23 +250,23 @@ export class Sample extends OpticalComponent {
     computeChordSegments(worldRay: Ray): { tStart: number; tEnd: number }[] {
         // Transform ray to local space
         this.updateMatrices();
-        const localOrigin = worldRay.origin.clone().applyMatrix4(this.worldToLocal);
-        const localDir = worldRay.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const localOrigin = this._chordLocalOrigin.copy(worldRay.origin).applyMatrix4(this.worldToLocal);
+        const localDir = this._chordLocalDir.copy(worldRay.direction).transformDirection(this.worldToLocal).normalize();
 
-        // Apply specimen internal offset
-        const offsetOrigin = localOrigin.clone().sub(this.specimenOffset);
-
-        // Apply specimen internal rotation
-        const invQ = new Quaternion().setFromEuler(this.specimenRotation).invert();
-        const specOrigin = offsetOrigin.applyQuaternion(invQ);
-        const specDir = localDir.clone().applyQuaternion(invQ);
+        // Apply specimen offset/rotation. These are rigid transforms with unit
+        // scale, so the sphere-intersection t values remain world-ray distances.
+        const invQ = this._chordInvQ.setFromEuler(this.specimenRotation).invert();
+        const specOrigin = this._chordSpecOrigin.copy(localOrigin).sub(this.specimenOffset).applyQuaternion(invQ);
+        const specDir = this._chordSpecDir.copy(localDir).applyQuaternion(invQ);
 
         const segments: { tStart: number; tEnd: number }[] = [];
 
         for (const sphere of Sample.SPHERES) {
-            const oc = specOrigin.clone().sub(sphere.center);
-            const b = oc.dot(specDir);
-            const c = oc.dot(oc) - sphere.radius * sphere.radius;
+            const ocX = specOrigin.x - sphere.center.x;
+            const ocY = specOrigin.y - sphere.center.y;
+            const ocZ = specOrigin.z - sphere.center.z;
+            const b = ocX * specDir.x + ocY * specDir.y + ocZ * specDir.z;
+            const c = ocX * ocX + ocY * ocY + ocZ * ocZ - sphere.radius * sphere.radius;
             const h = b * b - c;
 
             if (h >= 0) {
@@ -272,24 +279,9 @@ export class Sample extends OpticalComponent {
                 const tExit = Math.max(t2, 0);
 
                 if (tExit > tEntry) {
-                    // Convert local sphere intersection 't' back to world 't'.
-                    // Since scale is 1, world 't' delta matches local 't' delta.
-                    // We need to project the local hit point back to world space
-                    // to find the exact world-ray 't'.
-                    const pEntrySpec = specOrigin.clone().add(specDir.clone().multiplyScalar(tEntry));
-                    const pExitSpec = specOrigin.clone().add(specDir.clone().multiplyScalar(tExit));
-                    
-                    const q = new Quaternion().setFromEuler(this.specimenRotation);
-                    
-                    const specToWorld = (p: Vector3) => {
-                        const p2 = p.clone().applyQuaternion(q).add(this.specimenOffset);
-                        p2.applyMatrix4(this.localToWorld);
-                        return p2.sub(worldRay.origin).dot(worldRay.direction);
-                    };
-
                     segments.push({
-                        tStart: specToWorld(pEntrySpec),
-                        tEnd: specToWorld(pExitSpec)
+                        tStart: tEntry,
+                        tEnd: tExit
                     });
                 }
             }

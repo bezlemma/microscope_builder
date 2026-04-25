@@ -74,6 +74,7 @@ import { AltSnapIndicator } from './ui/AltSnapIndicator'
 import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom } from './state/store';
 import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
+import { PresetTooltip } from './ui/PresetTooltip';
 
 // ── Canvas Error Boundary ──────────────────────────────────
 class CanvasErrorBoundary extends React.Component<
@@ -128,6 +129,45 @@ function App() {
   const [, loadScene] = useAtom(loadSceneAtom);
   const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
 
+  // iOS Safari reports `100vh` as the full screen height, not the visible
+  // viewport after the URL / toolbar chrome is applied. R3F uses the measured
+  // canvas size to compute orthographic zoom, so keep an explicit CSS variable
+  // synced to the real visual viewport.
+  useEffect(() => {
+    const setAppHeight = () => {
+      const viewport = window.visualViewport;
+      const height = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      document.documentElement.style.setProperty('--app-height', `${height}px`);
+    };
+
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    window.addEventListener('orientationchange', setAppHeight);
+    window.visualViewport?.addEventListener('resize', setAppHeight);
+    window.visualViewport?.addEventListener('scroll', setAppHeight);
+    return () => {
+      window.removeEventListener('resize', setAppHeight);
+      window.removeEventListener('orientationchange', setAppHeight);
+      window.visualViewport?.removeEventListener('resize', setAppHeight);
+      window.visualViewport?.removeEventListener('scroll', setAppHeight);
+    };
+  }, []);
+
+  // Safari still emits proprietary gesture events for browser pinch-zoom in
+  // some WebKit builds even when the canvas has touch-action:none.
+  useEffect(() => {
+    const preventBrowserGesture = (event: Event) => event.preventDefault();
+    const options: AddEventListenerOptions = { passive: false };
+    document.addEventListener('gesturestart', preventBrowserGesture, options);
+    document.addEventListener('gesturechange', preventBrowserGesture, options);
+    document.addEventListener('gestureend', preventBrowserGesture, options);
+    return () => {
+      document.removeEventListener('gesturestart', preventBrowserGesture, options);
+      document.removeEventListener('gesturechange', preventBrowserGesture, options);
+      document.removeEventListener('gestureend', preventBrowserGesture, options);
+    };
+  }, []);
+
   // URL-based scene/preset loading.
   //   #scene=<base64> — full custom scene (from the Share button); takes priority
   //   ?preset=EpiFluorescence or ?preset=epi-fluorescence — built-in preset
@@ -167,7 +207,7 @@ function App() {
   }, []);
 
     return (
-      <div style={{ width: '100vw', height: '100vh', display: 'flex' }}>
+      <div style={{ width: '100vw', height: 'var(--app-height, 100dvh)', display: 'flex' }}>
         <Sidebar />
         <div style={{ 
           flex: 1, 
@@ -175,12 +215,19 @@ function App() {
           background: 'radial-gradient(circle at center, #0a0e17 0%, #000000 100%)' 
         }}>
   
+          <PresetTooltip />
+
           {/* Advanced mobile toolbar layered on top */}
           <MobileActionBar />
   
           <CanvasErrorBoundary>
           {/* Top-Down Engineering View - Orthographic, Z-up per PhysicsPlan.md */}
-          <Canvas orthographic gl={{ alpha: true }} camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}>
+          <Canvas
+            orthographic
+            dpr={[1, 2]}
+            gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+            camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}
+          >
             <ambientLight intensity={0.65} />
             <hemisphereLight args={['#d7e7ff', '#171717', 0.45]} />
             <pointLight position={[100, 100, 100]} intensity={1.0} />

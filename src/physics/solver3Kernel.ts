@@ -5,6 +5,8 @@ import { Solver2 } from './Solver2';
 import { type FirstHitHintCandidate, type PackedFirstHitHints, unpackFirstHitHintCandidates } from './solver3FirstHitHints';
 import { createJsPackedCameraSamples, type PackedCameraSamples, unpackCameraSample } from './solver3Sampling';
 import { type AnalyticHit, type PackedAnalyticHits, unpackAnalyticHit } from './solver3AnalyticNarrowPhase';
+import { TraceSceneAccelerator } from './TraceSceneAccelerator';
+import type { PackedInteractionBackend } from './solver3PackedInteraction';
 
 export interface Solver3Result {
     emissionImage: Float32Array;
@@ -113,10 +115,14 @@ export class Solver3Kernel {
     private traceScene: TraceSceneSnapshot;
     private beamField: BeamFieldSnapshot;
     private maxDepth: number = 20;
+    private accelerator: TraceSceneAccelerator;
+    private packedInteractor?: PackedInteractionBackend;
 
-    constructor(traceScene: TraceSceneSnapshot, beamField: BeamFieldSnapshot) {
+    constructor(traceScene: TraceSceneSnapshot, beamField: BeamFieldSnapshot, packedInteractor?: PackedInteractionBackend) {
         this.traceScene = traceScene;
         this.beamField = beamField;
+        this.accelerator = new TraceSceneAccelerator(traceScene.components);
+        this.packedInteractor = packedInteractor;
     }
 
     render(camera: CameraKernelSnapshot, maxVisPaths: number = 32): Solver3Result {
@@ -134,6 +140,7 @@ export class Solver3Kernel {
         firstHitHints?: PackedFirstHitHints,
         analyticHits?: PackedAnalyticHits,
     ): Solver3Result {
+        this.packedInteractor?.prepareScene();
         const resX = camera.sensorResX;
         const resY = camera.sensorResY;
         const emissionImage = new Float32Array(resX * resY);
@@ -204,6 +211,7 @@ export class Solver3Kernel {
         firstHitHints?: PackedFirstHitHints,
         analyticHits?: PackedAnalyticHits,
     ): Generator<{ progress: number }, Solver3Result, void> {
+        this.packedInteractor?.prepareScene();
         const resX = camera.sensorResX;
         const resY = camera.sensorResY;
         const emissionImage = new Float32Array(resX * resY);
@@ -269,6 +277,7 @@ export class Solver3Kernel {
     }
 
     renderPMTPixel(pmt: PMTKernelSnapshot): PMTPixelResult {
+        this.packedInteractor?.prepareScene();
         const sample = this.traceScene.sample;
         const activeWavelengths = new Set<number>();
         const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
@@ -390,6 +399,7 @@ export class Solver3Kernel {
             let nearestT = Infinity;
             let nearestHit: HitRecord | null = null;
             let nearestComponent: (typeof this.traceScene.components)[number] | null = null;
+            let nearestComponentIndex = -1;
             let skipHintedComponents: Set<number> | undefined;
 
             // At depth=0, prefer a Rust-computed analytic hit when the kernel
@@ -418,9 +428,11 @@ export class Solver3Kernel {
                         point: worldPoint,
                         normal: worldNormal,
                         localPoint,
+                        localNormal,
                         isBlocked: analyticHit.isBlocked,
                     };
                     nearestComponent = comp;
+                    nearestComponentIndex = analyticHit.componentIndex;
                 }
             }
 
@@ -429,6 +441,7 @@ export class Solver3Kernel {
                 nearestT = hinted.nearestT;
                 nearestHit = hinted.nearestHit;
                 nearestComponent = hinted.nearestComponent;
+                nearestComponentIndex = hinted.nearestComponentIndex;
                 if (hinted.hintedComponentIndices.size > 0) {
                     skipHintedComponents = hinted.hintedComponentIndices;
                 }
@@ -438,30 +451,21 @@ export class Solver3Kernel {
                 if (hinted.isCertain && nearestHit && nearestComponent) {
                     // The broad-phase order was sufficient to prove the nearest exact hit.
                 } else {
-                    for (let i = 0; i < this.traceScene.components.length; i++) {
-                        if (skipHintedComponents?.has(i)) continue;
-                        const component = this.traceScene.components[i];
-                        if (depth === 0 && component.id === originatorId) continue;
-                        const hit = component.chkIntersection(currentRay);
-                        if (hit && hit.t < nearestT && hit.t > 0.001) {
-                            nearestT = hit.t;
-                            nearestHit = hit;
-                            nearestComponent = component;
-                        }
+                    const accelerated = this.accelerator.findNearest(currentRay, originatorId, nearestT, skipHintedComponents);
+                    if (accelerated.nearestHit && accelerated.nearestComponent && accelerated.nearestT < nearestT) {
+                        nearestT = accelerated.nearestT;
+                        nearestHit = accelerated.nearestHit;
+                        nearestComponent = accelerated.nearestComponent;
+                        nearestComponentIndex = accelerated.nearestComponentIndex;
                     }
                 }
             } else {
-                for (const component of this.traceScene.components) {
-                    if (depth === 0 && component.id === originatorId) continue;
-                    const hit = component.chkIntersection(currentRay);
-                    if (hit && hit.t < nearestT && hit.t > 0.001) {
-                        nearestT = hit.t;
-                        nearestHit = hit;
-                        nearestComponent = component;
-                    }
-                }
+                const accelerated = this.accelerator.findNearest(currentRay, depth === 0 ? originatorId : undefined);
+                nearestT = accelerated.nearestT;
+                nearestHit = accelerated.nearestHit;
+                nearestComponent = accelerated.nearestComponent;
+                nearestComponentIndex = accelerated.nearestComponentIndex;
             }
-
             if (!nearestHit || !nearestComponent) {
                 currentRay.interactionDistance = 50;
                 break;
@@ -495,7 +499,16 @@ export class Solver3Kernel {
             }
 
             if (nearestComponent.kind === 'sample' && sample) {
-                const { chordLength, midT } = sample.computeChordLength(currentRay);
+                const chordSegments = sample.computeChordSegments(currentRay);
+                let chordLength = 0;
+                let weightedT = 0;
+                for (const segment of chordSegments) {
+                    const d = segment.tEnd - segment.tStart;
+                    if (d <= 0) continue;
+                    chordLength += d;
+                    weightedT += ((segment.tStart + segment.tEnd) * 0.5) * d;
+                }
+                const midT = chordLength > 0 ? weightedT / chordLength : 0;
                 throughput *= Math.exp(-sample.absorption * chordLength);
                 if (!visualPathAtSample) {
                     visualPathAtSample = buildSampleTerminatedPath(path, currentRay, nearestHit.point);
@@ -508,7 +521,6 @@ export class Solver3Kernel {
                 // number of expensive Solver-2 field queries per reverse ray.
                 // Inlined vector math avoids ~O(10*segments) Vector3 allocations
                 // per reverse ray (significant GC pressure at 65k rays/frame).
-                const chordSegments = sample.computeChordSegments(currentRay);
                 const emitsAtThisWl = sample.fluorescenceEfficiency > 0
                     ? sample.emissionTransmission(currentRay.wavelength * 1e9)
                     : 0;
@@ -568,7 +580,8 @@ export class Solver3Kernel {
                 continue;
             }
 
-            const result = nearestComponent.interact(currentRay, nearestHit);
+            const result = this.packedInteractor?.tryInteract(nearestComponentIndex, currentRay, nearestHit)
+                ?? nearestComponent.interact(currentRay, nearestHit);
             if (result.rays.length === 0) {
                 absorbed = true;
                 break;
@@ -650,12 +663,14 @@ export class Solver3Kernel {
         nearestT: number;
         nearestHit: HitRecord | null;
         nearestComponent: TraceSceneSnapshot['components'][number] | null;
+        nearestComponentIndex: number;
         isCertain: boolean;
         hintedComponentIndices: Set<number>;
     } {
         let nearestT = Infinity;
         let nearestHit: HitRecord | null = null;
         let nearestComponent: TraceSceneSnapshot['components'][number] | null = null;
+        let nearestComponentIndex = -1;
         const hintedComponentIndices = new Set<number>();
 
         const sorted = [...candidates].sort((a, b) => a.tNear - b.tNear);
@@ -666,11 +681,12 @@ export class Solver3Kernel {
             if (component.id === originatorId) continue;
             hintedComponentIndices.add(candidate.componentIndex);
 
-            const hit = component.chkIntersection(ray);
+            const hit = component.chkIntersection(ray, nearestT);
             if (hit && hit.t < nearestT && hit.t > 0.001) {
                 nearestT = hit.t;
                 nearestHit = hit;
                 nearestComponent = component;
+                nearestComponentIndex = candidate.componentIndex;
             }
 
             const nextTNear = sorted[i + 1]?.tNear ?? Infinity;
@@ -679,6 +695,7 @@ export class Solver3Kernel {
                     nearestT,
                     nearestHit,
                     nearestComponent,
+                    nearestComponentIndex,
                     isCertain: true,
                     hintedComponentIndices,
                 };
@@ -689,6 +706,7 @@ export class Solver3Kernel {
             nearestT,
             nearestHit,
             nearestComponent,
+            nearestComponentIndex,
             isCertain: false,
             hintedComponentIndices,
         };

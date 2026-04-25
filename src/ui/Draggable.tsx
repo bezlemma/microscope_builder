@@ -7,6 +7,7 @@ import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Rail } from '../physics/components/Rail';
 import { useIsMobile } from './useIsMobile';
+import { useHaptic } from './useHaptic';
 
 interface DraggableProps {
     component: OpticalComponent;
@@ -22,9 +23,13 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
     const [mobileSnap] = useAtom(mobileSnapEnabledAtom);
     const isMobile = useIsMobile();
+    const haptic = useHaptic();
 
     // Store offset from center to click point to prevent jumping
     const dragOffset = useRef(new Vector3(0, 0, 0));
+    // Tracks whether the drag was snapped to an axis/port/rail/ghost on the
+    // PREVIOUS pointermove tick.  Edge transitions drive snap/release haptics.
+    const wasAxisSnappedRef = useRef(false);
 
     // Grid Snapping (25mm)
     const gridSize = 25;
@@ -80,9 +85,11 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
         try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari/mobile may not support pointer capture */ }
         pushUndo();  // snapshot before drag
-        if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-            window.navigator.vibrate(50);
-        }
+        // Brief pulse confirms the tap landed on a real component — without
+        // this, mobile users can't tell their pixel-precise stab worked.
+        haptic.tap();
+        // Reset snap-edge tracking for this drag session.
+        wasAxisSnappedRef.current = false;
         setIsDragging(true);
         setGlobalDragging(true);
 
@@ -246,6 +253,18 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             // Re-apply axis locks after snapping
             if (component.axisLock.x) finalX = component.position.x;
             if (component.axisLock.y) finalY = component.position.y;
+
+            // Snap edge detection — fire only on transition, not every frame.
+            // We treat port/rail/ghost snaps as "real" snaps worth feeling;
+            // the grid fallback fires every tick during a fast drag and would
+            // turn into noise, so we exclude it.
+            const isAxisSnapped = bestAxisDist < AXIS_SNAP_THRESHOLD;
+            if (isAxisSnapped && !wasAxisSnappedRef.current) {
+                haptic.snap();
+            } else if (!isAxisSnapped && wasAxisSnappedRef.current) {
+                haptic.release();
+            }
+            wasAxisSnappedRef.current = isAxisSnapped;
 
             // Compute delta from current dragged component position
             const deltaX = finalX - component.position.x;

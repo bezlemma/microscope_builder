@@ -23,12 +23,21 @@ export interface KernelTraceComponent {
     absorptionCoeff: number;
     /** World-space centre of the component (read from the underlying instance). */
     position: Vector3;
+    /** World-space AABB used by the Solver 3 scene accelerator. */
+    worldBounds: {
+        minX: number;
+        minY: number;
+        minZ: number;
+        maxX: number;
+        maxY: number;
+        maxZ: number;
+    };
     /** Clear-aperture radius (mm) exposed for detector importance sampling.
      *  Zero (or undefined) means the detector sampler falls back to a generic
      *  target disc. Set for Aperture / SlitAperture / PupilMaskElement so
      *  PMT backward rays correctly aim at the actual pinhole. */
     openingRadius?: number;
-    chkIntersection(ray: Ray): HitRecord | null;
+    chkIntersection(ray: Ray, maxDistance?: number): HitRecord | null;
     interact(ray: Ray, hit: HitRecord): InteractionResult;
 }
 

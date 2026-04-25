@@ -64,12 +64,10 @@ export class SpectralProfile {
 
     /**
      * Generate sample points for the transmission curve chart.
-     * Returns points from 350nm to 850nm.
      */
     getSampleCurve(numPoints: number = 200): { nm: number; t: number }[] {
         const points: { nm: number; t: number }[] = [];
-        const start = 350;
-        const end = 850;
+        const { minNm: start, maxNm: end } = this.getSearchRange();
         const step = (end - start) / (numPoints - 1);
         for (let i = 0; i < numPoints; i++) {
             const nm = start + i * step;
@@ -101,13 +99,16 @@ export class SpectralProfile {
     }
 
     /**
-     * Get the dominant color of the filter for visualization tinting.
-     * Returns the wavelength with highest transmission in visible range.
+     * Get the dominant pass wavelength for physics and visualization.
      */
     getDominantPassWavelength(): number | null {
+        const bandPeak = this.getDominantBandPeak();
+        if (bandPeak !== null) return bandPeak;
+
+        const { minNm, maxNm } = this.getSearchRange();
         let bestNm = 0;
         let bestT = 0;
-        for (let nm = 380; nm <= 780; nm += 5) {
+        for (let nm = minNm; nm <= maxNm; nm += 5) {
             const t = this.getTransmission(nm);
             if (t > bestT) {
                 bestT = t;
@@ -118,6 +119,40 @@ export class SpectralProfile {
     }
 
     // ── Private helpers ────────────────────────────────────────
+
+    private getSearchRange(): { minNm: number; maxNm: number } {
+        let minNm = 350;
+        let maxNm = 850;
+
+        if (this.bands.length > 0) {
+            for (const band of this.bands) {
+                minNm = Math.min(minNm, band.center - band.width);
+                maxNm = Math.max(maxNm, band.center + band.width);
+            }
+        }
+
+        minNm = Math.min(minNm, this.cutoffNm - 200);
+        maxNm = Math.max(maxNm, this.cutoffNm + 200);
+
+        return {
+            minNm: Math.max(180, Math.floor(minNm / 5) * 5),
+            maxNm: Math.min(1600, Math.ceil(maxNm / 5) * 5),
+        };
+    }
+
+    private getDominantBandPeak(): number | null {
+        if (this.preset !== 'bandpass' && this.preset !== 'multiband') return null;
+        let bestNm: number | null = null;
+        let bestT = 0;
+        for (const band of this.bands) {
+            const t = this.getTransmission(band.center);
+            if (t > bestT) {
+                bestT = t;
+                bestNm = band.center;
+            }
+        }
+        return bestT > 0.1 ? bestNm : null;
+    }
 
     /** Smooth sigmoid: 0→1 transition centered at x=0 */
     private sigmoid(x: number): number {

@@ -29,9 +29,10 @@ export class SphericalLens extends OpticalComponent {
     // value matches the actual optical power. Otherwise, fall back to the
     // legacy `curvature` default (f = 1/curvature for a symmetric lens).
     public get focalLength(): number {
-        if (this.r1 !== undefined && this.r2 !== undefined) {
-            const invR1 = Math.abs(this.r1) > 1e8 ? 0 : 1 / this.r1;
-            const invR2 = Math.abs(this.r2) > 1e8 ? 0 : 1 / this.r2;
+        if (this.r1 !== undefined || this.r2 !== undefined) {
+            const { R1, R2 } = this.getRadii();
+            const invR1 = Math.abs(R1) > 1e8 ? 0 : 1 / R1;
+            const invR2 = Math.abs(R2) > 1e8 ? 0 : 1 / R2;
             const inv = (this.ior - 1) * (invR1 - invR2);
             if (Math.abs(inv) < 1e-12) return 1000;
             return 1 / inv;
@@ -138,7 +139,7 @@ export class SphericalLens extends OpticalComponent {
     ] as const;
 
     setFromLensType(type: string): void {
-        const f = this.focalLength;
+        const fMag = Math.max(Math.abs(this.focalLength), 1e-6);
         const n = this.ior;
         
         // 1/f = (n-1) * (1/R1 - 1/R2)
@@ -146,6 +147,7 @@ export class SphericalLens extends OpticalComponent {
         
         switch (type) {
             case 'biconvex': {
+                const f = fMag;
                 const R = 2 * (n - 1) * f;
                 this.r1 = R;
                 this.r2 = -R;
@@ -153,6 +155,7 @@ export class SphericalLens extends OpticalComponent {
             }
             case 'plano-convex': {
                 // R1=Inf, R2 = -(n-1)f
+                const f = fMag;
                 const R = (n - 1) * f;
                 this.r1 = undefined; // Infinity
                 this.r2 = -R;
@@ -160,6 +163,7 @@ export class SphericalLens extends OpticalComponent {
             }
             case 'convex-plano': {
                 // R1=(n-1)f, R2=Inf
+                const f = fMag;
                 const R = (n - 1) * f;
                 this.r1 = R;
                 this.r2 = undefined;
@@ -167,26 +171,30 @@ export class SphericalLens extends OpticalComponent {
             }
             case 'meniscus-pos': {
                 // Positive Meniscus: R1, R2 > 0. R1 < R2 (more curved front)
+                const f = fMag;
                 this.r1 = f;
                 this.r2 = f * 3; 
                 break;
             }
             case 'plano-concave': {
                 // f < 0. R2 = -(n-1)f. Since f<0, R2>0.
+                const f = -fMag;
                 const R = -(n - 1) * f;
                 this.r1 = undefined;
                 this.r2 = R;
                 break;
             }
             case 'concave-plano': {
-                // f < 0. R1 = f/(n-1). Since f<0, R1<0.
-                const R = f / (n - 1);
+                // f < 0. R1 = (n-1)f. Since f<0, R1<0.
+                const f = -fMag;
+                const R = (n - 1) * f;
                 this.r1 = R;
                 this.r2 = undefined;
                 break;
             }
             case 'biconcave': {
                 // f < 0. R1 = 2(n-1)f. R1 < 0.
+                const f = -fMag;
                 const R = 2 * (n - 1) * f;
                 this.r1 = R;
                 this.r2 = -R;
@@ -194,8 +202,8 @@ export class SphericalLens extends OpticalComponent {
             }
             case 'meniscus-neg': {
                  // Negative Meniscus. R1, R2 > 0 (bent right). R1 > R2 (weaker front).
-                this.r1 = Math.abs(f) * 3;
-                this.r2 = Math.abs(f); 
+                this.r1 = fMag * 3;
+                this.r2 = fMag;
                 break;
             }
         }
@@ -270,8 +278,8 @@ export class SphericalLens extends OpticalComponent {
     }
 
     getRadii(): { R1: number, R2: number } {
-        if (this.r1 !== undefined && this.r2 !== undefined) {
-            return { R1: this.r1, R2: this.r2 };
+        if (this.r1 !== undefined || this.r2 !== undefined) {
+            return { R1: this.r1 ?? 1e9, R2: this.r2 ?? 1e9 };
         }
         if (Math.abs(this.curvature) < 1e-9) {
             return { R1: 1e9, R2: 1e9 };

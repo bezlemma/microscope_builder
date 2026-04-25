@@ -36,15 +36,18 @@ export class Solver3 {
         this.backend = createDefaultSolver3Backend(this.context);
     }
 
-    render(camera: Camera, maxVisPaths: number = 32): Solver3Result {
-        return this.backend.renderCamera(createCameraKernelRequest(camera, maxVisPaths));
+    render(camera: Camera, maxVisPaths: number = 32, rowWorkerId?: number, rowWorkerCount?: number, activePixelMask?: Uint8Array): Solver3Result {
+        return this.backend.renderCamera(createCameraKernelRequest(camera, maxVisPaths, rowWorkerId, rowWorkerCount, activePixelMask));
     }
 
     *renderGenerator(
         camera: Camera,
         maxVisPaths: number = 32,
+        rowWorkerId?: number,
+        rowWorkerCount?: number,
+        activePixelMask?: Uint8Array,
     ): Generator<{ progress: number }, Solver3Result, void> {
-        return yield* this.backend.renderCameraGenerator(createCameraKernelRequest(camera, maxVisPaths));
+        return yield* this.backend.renderCameraGenerator(createCameraKernelRequest(camera, maxVisPaths, rowWorkerId, rowWorkerCount, activePixelMask));
     }
 
     renderPMTPixel(pmt: PMT): PMTPixelResult {

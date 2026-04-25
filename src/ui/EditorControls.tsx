@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera, PerspectiveCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom } from '../state/store';
 
 const PERSP_FOV = 50;
 const WASD_ACCEL = 0.4;
@@ -50,6 +50,7 @@ export const EditorControls: React.FC = () => {
     const resetViewSignal = useAtomValue(resetViewSignalAtom);
     const [zoomToComponent, setZoomToComponent] = useAtom(zoomToComponentAtom);
     const mobileCameraMode = useAtomValue(mobileCameraModeAtom);
+    const isDragging = useAtomValue(isDraggingAtom);
 
     // ─── Dual camera refs ───
     const isOrtho = useRef(true);
@@ -253,7 +254,7 @@ export const EditorControls: React.FC = () => {
             if (e.button === 0) leftMouseHeld.current = false;
         };
         const onWheel = (e: WheelEvent) => {
-            if (!leftMouseHeld.current || selection.length === 0) return;
+            if (!leftMouseHeld.current || selection.length === 0 || isDragging || e.shiftKey) return;
             e.preventDefault();
             e.stopPropagation();
 
@@ -283,7 +284,7 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('mouseup', onMouseUp, true);
             window.removeEventListener('wheel', onWheel, true);
         };
-    }, [selection, components, setComponents, pushUndo]);
+    }, [selection, components, setComponents, pushUndo, isDragging]);
 
     // ─── Keyboard shortcuts ───
     useEffect(() => {

@@ -56,9 +56,11 @@ function createLegacyQPair(
 export class Solver1 {
     maxDepth: number = 20;
     scene: OpticalComponent[];
+    private emitters: Set<OpticalComponent>;
 
     constructor(scene: OpticalComponent[]) {
         this.scene = scene.filter(c => !c.isGhost);
+        this.emitters = new Set(this.scene.filter(isEmitter));
     }
 
     trace(sources: Ray[]): Ray[][] {
@@ -75,6 +77,8 @@ export class Solver1 {
                 continue;
             }
 
+            sourceRay.interactionDistance = undefined;
+            sourceRay.interactionComponentId = undefined;
             const path: Ray[] = [sourceRay];
             this.traceRecursive(sourceRay, path, 0, allPaths);
         }
@@ -161,7 +165,7 @@ export class Solver1 {
         let nearestComponent = null;
 
         for (const component of this.scene) {
-            const hit = component.chkIntersection(currentRay);
+            const hit = component.chkIntersection(currentRay, nearestT);
 
             if (hit && hit.t < nearestT && hit.t > 0.001) {
                 nearestT = hit.t;
@@ -178,7 +182,7 @@ export class Solver1 {
         currentRay.interactionDistance = nearestT;
         currentRay.interactionComponentId = nearestComponent.id;
 
-        if (isEmitter(nearestComponent)) {
+        if (this.emitters.has(nearestComponent)) {
             allPaths.push([...currentPath]);
             return;
         }
@@ -195,8 +199,9 @@ export class Solver1 {
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
 
-            const nextPath = [...currentPath, nextRay];
-            this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
+            currentPath.push(nextRay);
+            this.traceRecursive(nextRay, currentPath, depth + 1, allPaths);
+            currentPath.pop();
             return;
         }
 
@@ -210,12 +215,15 @@ export class Solver1 {
             nextRay.sourceId = currentRay.sourceId;
 
             if (nextRay.intensity < 1e-6) {
-                allPaths.push([...currentPath, nextRay]);
+                currentPath.push(nextRay);
+                allPaths.push([...currentPath]);
+                currentPath.pop();
                 continue;
             }
 
-            const nextPath = [...currentPath, nextRay];
-            this.traceRecursive(nextRay, nextPath, depth + 1, allPaths);
+            currentPath.push(nextRay);
+            this.traceRecursive(nextRay, currentPath, depth + 1, allPaths);
+            currentPath.pop();
         }
     }
 

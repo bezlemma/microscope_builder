@@ -22,7 +22,7 @@ import {
     isDraggingAtom,
     forwardRaysAtom,
 } from '../state/store';
-import { setProperty, type AnimationChannel } from '../physics/PropertyAnimator';
+import type { AnimationChannel } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
 
 import { Ray } from '../physics/types';
@@ -32,6 +32,7 @@ import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { TrappedBead } from '../physics/components/TrappedBead';
 
 import { RayVisualizer } from './RayVisualizer';
 
@@ -39,7 +40,7 @@ import { BundleWaveVisualizer } from './BundleWaveVisualizer';
 import { GaussianBeamSegment, segmentBeamRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays } from '../physics/SourceRayFactory';
-import { deserializeScene, serializeScene } from '../state/ubzSerializer';
+import { serializeScene } from '../state/ubzSerializer';
 import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
 
 /** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
@@ -68,8 +69,10 @@ import { OutlineColorContext } from './visualizers/ComponentVisualizers';
 import { TutorialOverlay } from './TutorialOverlay';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { captureAnimatedValues, createScheduledRenderJob } from './renderJob';
+import { useHaptic } from './useHaptic';
 
 type PMTRasterChannel = Pick<AnimationChannel, 'targetId' | 'property' | 'from' | 'to'>;
+type PMTRasterPlan = { pmt: PMT; xCh: PMTRasterChannel; yCh: PMTRasterChannel };
 
 function resolvePMTRasterChannels(
     components: OpticalComponent[],
@@ -105,6 +108,21 @@ function resolvePMTRasterChannels(
     return xCh && yCh ? { xCh, yCh } : null;
 }
 
+function resolvePMTRasterPlans(
+    components: OpticalComponent[],
+    channels: AnimationChannel[],
+): PMTRasterPlan[] {
+    const plans: PMTRasterPlan[] = [];
+    for (const comp of components) {
+        if (!(comp instanceof PMT) || !comp.hasValidAxes()) continue;
+        const rasterChannels = resolvePMTRasterChannels(components, channels, comp);
+        if (rasterChannels) {
+            plans.push({ pmt: comp, ...rasterChannels });
+        }
+    }
+    return plans;
+}
+
 
 export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
@@ -124,6 +142,7 @@ export const OpticalTable: React.FC = () => {
     const [, setReverseRayCounter] = useAtom(reverseRayCounterAtom);
     const [, setDrawnRayCounts] = useAtom(drawnRayCountsAtom);
     const [, setCameraImageTick] = useAtom(cameraImageTickAtom);
+    const haptic = useHaptic();
 
     // Keep the UI counter of drawn rays in sync with what the RayVisualizer sees.
     // Each path corresponds to one source-emitted ray (it may bounce through
@@ -166,6 +185,34 @@ export const OpticalTable: React.FC = () => {
             // Force fingerprint recalculation by triggering a React re-render
             setAnimTickRef.current(t => t + 1);
         }
+    });
+
+    // ─── TrappedBead integrator ───────────────────────────────────────────
+    // Runs every frame regardless of the master animation play state, because
+    // the bead always experiences forces from the live beam — turning off the
+    // global "play" button shouldn't freeze a trap any more than turning off
+    // your monitor freezes one in a real lab.
+    //
+    // Sequencing per frame:
+    //   1. Solver 1's most recent trace already deposited per-ray photon
+    //      momentum into every TrappedBead's `forceAccumulator`.
+    //   2. We call `applyForceStep(now)` here, which integrates the
+    //      overdamped Langevin update, mutates `specimenOffset`, resets the
+    //      accumulator, and bumps `version`.
+    //   3. The version bump invalidates `opticsFingerprint`, scheduling a
+    //      fresh trace next render — which re-fills the accumulator with
+    //      forces evaluated at the bead's NEW position.  That's the closed
+    //      feedback loop.
+    useFrame(() => {
+        if (scanAccumActiveRef.current) return;
+        const beads = componentsRef.current.filter(c => c instanceof TrappedBead) as TrappedBead[];
+        if (beads.length === 0) return;
+        const now = performance.now();
+        let anyMoved = false;
+        for (const bead of beads) {
+            if (bead.applyForceStep(now)) anyMoved = true;
+        }
+        if (anyMoved) setAnimTickRef.current(t => t + 1);
     });
 
     // ─── Optics fingerprint: changes only when non-Card components change ───
@@ -457,15 +504,20 @@ export const OpticalTable: React.FC = () => {
         solverPathsRef.current = calculatedPaths;
 
         let beamSegs: GaussianBeamSegment[][] = [];
-        if (rayConfig.solver2Enabled) {
+        const trappedBeads = components.filter(c => c instanceof TrappedBead) as TrappedBead[];
+        if (rayConfig.solver2Enabled || trappedBeads.length > 0) {
             try {
                 beamSegs = solver.buildBeamSegments(calculatedPaths);
             } catch (e) {
                 console.warn('Solver 2 error:', e);
             }
         }
-        setBeamSegments(beamSegs);
-        beamSegsRef.current = beamSegs;
+        for (const bead of trappedBeads) {
+            bead.accumulateGradientTrapForce(beamSegs);
+        }
+        const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
+        setBeamSegments(visibleBeamSegs);
+        beamSegsRef.current = visibleBeamSegs;
 
         if (sceneChanged) {
             let hasCamera = false;
@@ -534,6 +586,9 @@ export const OpticalTable: React.FC = () => {
     // Per-(camera,worker) latest accumulator snapshot, for the main-thread
     // weighted-merge. Map<cameraId, snapshots[workerId]>.
     const workerAccumRef = useRef<Map<string, { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[]>>(new Map());
+    const workerCompleteRef = useRef<Set<number>>(new Set());
+    const workerRayCountsRef = useRef<number[]>([]);
+    const workerErrorRef = useRef(false);
 
     // Lazily spin up a pool of workers and wire the merging message handler.
     useEffect(() => {
@@ -619,19 +674,22 @@ export const OpticalTable: React.FC = () => {
                             }
                         }
                         return path;
-                    });
+                    }).filter(path => path.length > 0);
                     camera.solver3Image = merged;
                     camera.forwardImage = mergedEx;
-                    camera.solver3Paths = clipped;
+                    const visiblePaths = clipped.length > 0 ? clipped : (camera.solver3Paths ?? []);
+                    camera.solver3Paths = visiblePaths;
                     camera.solver3Stale = false;
                     camera.version++;
                     setCameraImageTick(t => t + 1);
 
-                    const currentPaths = solver3PathsRef.current || [];
-                    const nextPaths = [...currentPaths, ...clipped];
-                    if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
-                    setSolver3Paths(nextPaths);
-                    solver3PathsRef.current = nextPaths;
+                    if (clipped.length > 0) {
+                        const currentPaths = solver3PathsRef.current || [];
+                        const nextPaths = [...currentPaths, ...clipped];
+                        if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
+                        setSolver3Paths(nextPaths);
+                        solver3PathsRef.current = nextPaths;
+                    }
                 } else if (msg.type === 'pmt-done') {
                     if (w !== 0) return; // PMTs only need to run once.
                     const hydrated = msg.paths.map(rehydratePath);
@@ -641,16 +699,27 @@ export const OpticalTable: React.FC = () => {
                     setSolver3Paths(nextPaths);
                     solver3PathsRef.current = nextPaths;
                 } else if (msg.type === 'complete') {
-                    if (w === 0) {
-                        setReverseRayCounter(msg.raysTraced);
+                    workerCompleteRef.current.add(w);
+                    workerRayCountsRef.current[w] = msg.raysTraced;
+                    if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
+                        const totalRays = workerRayCountsRef.current.reduce((sum, count) => sum + (count || 0), 0);
+                        setReverseRayCounter(totalRays);
                         setScanAccumProgress(1);
                         setSolver3Rendering(false);
+                        if (workerErrorRef.current) haptic.error();
+                        else haptic.done();
                     }
                 } else if (msg.type === 'error') {
                     console.warn(`[Solver3 worker ${w}] `, msg.message);
-                    if (w === 0) {
+                    workerErrorRef.current = true;
+                    workerCompleteRef.current.add(w);
+                    workerRayCountsRef.current[w] = 0;
+                    if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
+                        const totalRays = workerRayCountsRef.current.reduce((sum, count) => sum + (count || 0), 0);
+                        setReverseRayCounter(totalRays);
                         setSolver3Rendering(false);
                         setScanAccumProgress(0);
+                        haptic.error();
                     }
                 }
             };
@@ -685,6 +754,9 @@ export const OpticalTable: React.FC = () => {
 
         // Reset per-worker accumulator state for the new job.
         workerAccumRef.current.clear();
+        workerCompleteRef.current.clear();
+        workerRayCountsRef.current = new Array(workers.length).fill(0);
+        workerErrorRef.current = false;
 
         setSolver3Rendering(true);
         setScanAccumProgress(0);
@@ -740,6 +812,31 @@ export const OpticalTable: React.FC = () => {
         setSolver3Trigger(t => t + 1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clampedReversePathCount, clampedForwardRayCount]);
+
+    // ─── Effect 1b'': re-kick Solver-3 when the page comes back to the
+    // foreground.  Mobile browsers (especially iOS Safari) suspend Web
+    // Workers when the screen locks, the user app-switches, or the device
+    // gets warm.  When the user returns, the worker may have been killed or
+    // its event loop frozen — its `for (round = 0; ;)` infinite-progressive
+    // loop never resumes posting `camera-done` and the image looks stuck.
+    // A trigger bump here forces a fresh job, which spawns a fresh worker if
+    // the old one is gone.
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const onVisibility = () => {
+            if (document.visibilityState !== 'visible') return;
+            // Only re-kick if there is at least one Camera in the scene; PMTs
+            // have their own raster effect that re-runs on its own triggers.
+            const hasCamera = components.some(c => c instanceof Camera);
+            if (!hasCamera) return;
+            for (const comp of components) {
+                if (comp instanceof Camera) comp.markSolver3Stale();
+            }
+            setSolver3Trigger(t => t + 1);
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [components, setSolver3Trigger]);
 
     // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
@@ -887,12 +984,9 @@ export const OpticalTable: React.FC = () => {
 
     const pmtRasterRequestKey = useMemo(() => {
         if (!components) return '';
-        const pmt = components.find(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT | undefined;
-        if (!pmt) return '';
-        const rasterChannels = resolvePMTRasterChannels(components, animator.channels, pmt);
-        if (!rasterChannels) return '';
-        const { xCh, yCh } = rasterChannels;
-        return [
+        const plans = resolvePMTRasterPlans(components, animator.channels);
+        if (plans.length === 0) return '';
+        return plans.map(({ pmt, xCh, yCh }) => [
             pmt.id,
             pmt.xAxisComponentId,
             pmt.xAxisProperty,
@@ -902,14 +996,18 @@ export const OpticalTable: React.FC = () => {
             pmt.scanResY,
             pmt.samplesPerPixel,
             pmt.sensorNA,
+            xCh.targetId,
+            xCh.property,
             xCh.from,
             xCh.to,
+            yCh.targetId,
+            yCh.property,
             yCh.from,
             yCh.to,
             clampedForwardRayCount,
             clampedReversePathCount,
             opticsFingerprint,
-        ].join('|');
+        ].join('|')).join('||');
     }, [components, animator.channels, clampedForwardRayCount, clampedReversePathCount, opticsFingerprint]);
 
     // ─── Effect 1d: PMT Raster Scan ───────────────────────────────────────
@@ -917,28 +1015,36 @@ export const OpticalTable: React.FC = () => {
         if (!pmtRasterRequestKey) return;
         if (!components) return;
 
-        const pmt = components.find(c => c instanceof PMT && (c as PMT).hasValidAxes()) as PMT | undefined;
-        if (!pmt) return;
-
-        const rasterChannels = resolvePMTRasterChannels(components, animator.channels, pmt);
-        if (!rasterChannels) {
-            console.warn('[PMT Raster] X or Y scan axis could not be resolved');
-            return;
-        }
-        const { xCh, yCh } = rasterChannels;
-
-        const resX = pmt.scanResX;
-        const resY = pmt.scanResY;
-        const totalPixels = resX * resY;
-
-        console.log(`[PMT Raster] Starting continuous ${resX}×${resY} raster accumulation (${totalPixels} pixels/frame)`);
+        const plans = resolvePMTRasterPlans(components, animator.channels);
+        if (plans.length === 0) return;
 
         let cancelled = false;
-        let firstFrameDone = false;
-        let frameIndex = 0;
-        let pixelsDoneThisFrame = 0;
         const timeoutIds: number[] = [];
         const ownsRenderingState = !components.some(c => c instanceof Camera);
+        const workerCount = SOLVER3_WORKER_COUNT;
+        const rasterWorkers: Worker[] = [];
+        const serializableComponents = components.filter(c => !c.isSubComponent);
+        const sceneText = serializeScene(serializableComponents);
+        const jobId = Math.floor(performance.now() * 1000);
+        const totalFirstFramePixels = plans.reduce((sum, { pmt }) => sum + pmt.scanResX * pmt.scanResY, 0);
+        let firstFramePixelsDone = 0;
+        let firstFrameDone = false;
+        let completionHapticSent = false;
+        let passIndex = 0;
+        let passMessagesDone = 0;
+        let passPaths: Ray[][] = [];
+
+        type RasterState = {
+            pmt: PMT;
+            resX: number;
+            resY: number;
+            accumulatedEmission: Float64Array;
+            accumulatedExcitation: Float64Array;
+            sampleCounts: Uint32Array;
+            displayEmission: Float32Array;
+            displayExcitation: Float32Array;
+        };
+        const rasterStates = new Map<string, RasterState>();
 
         const schedule = (callback: () => void, delay: number) => {
             const id = window.setTimeout(() => {
@@ -949,157 +1055,163 @@ export const OpticalTable: React.FC = () => {
             timeoutIds.push(id);
         };
 
-        const makeWorkScene = () => {
-            const serializableComponents = components.filter(c => !c.isSubComponent);
-            const workComponents = deserializeScene(serializeScene(serializableComponents));
-            const workById = new Map<string, OpticalComponent>();
-            for (const c of workComponents) workById.set(c.id, c);
-
-            const workPmt = workById.get(pmt.id) as PMT | undefined;
-            const workXTarget = workById.get(xCh.targetId);
-            const workYTarget = workById.get(yCh.targetId);
-            if (!workPmt || !workXTarget || !workYTarget) return null;
-
-            return { workComponents, workPmt, workXTarget, workYTarget };
-        };
-
-        const workScene = makeWorkScene();
-        if (!workScene) return;
-
-        pmt.clearScan();
-        const accumulatedEmission = new Float64Array(totalPixels);
-        const accumulatedExcitation = new Float64Array(totalPixels);
-        const sampleCounts = new Uint32Array(totalPixels);
-        const displayEmission = new Float32Array(totalPixels);
-        const displayExcitation = new Float32Array(totalPixels);
-
-        let framePaths: Ray[][] = [];
-        const maxVisPaths = clampedReversePathCount;
-
         if (ownsRenderingState) {
             setSolver3Rendering(true);
             setScanAccumProgress(0);
         }
 
-        const publishImage = () => {
-            pmt.scanImage = displayEmission;
-            pmt.scanExcitationImage = displayExcitation;
-            pmt.scanStale = false;
-            pmt.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+        for (const plan of plans) {
+            const { pmt } = plan;
+            const resX = pmt.scanResX;
+            const resY = pmt.scanResY;
+            const totalPixels = resX * resY;
+            console.log(`[PMT Raster] Starting worker-striped continuous ${resX}×${resY} raster accumulation for ${pmt.name} (${totalPixels} pixels/frame, ${workerCount} workers)`);
+
+            pmt.clearScan();
+            rasterStates.set(pmt.id, {
+                pmt,
+                resX,
+                resY,
+                accumulatedEmission: new Float64Array(totalPixels),
+                accumulatedExcitation: new Float64Array(totalPixels),
+                sampleCounts: new Uint32Array(totalPixels),
+                displayEmission: new Float32Array(totalPixels),
+                displayExcitation: new Float32Array(totalPixels),
+            });
+        }
+
+        const publishImages = () => {
+            for (const state of rasterStates.values()) {
+                state.pmt.scanImage = state.displayEmission;
+                state.pmt.scanExcitationImage = state.displayExcitation;
+                state.pmt.scanStale = false;
+                state.pmt.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+            }
             setCameraImageTick(t => t + 1);
         };
 
-        const runRow = (yIdx: number) => {
-            if (cancelled) return;
-
-            if (yIdx >= resY) {
-                publishImage();
-                if (framePaths.length > 0) {
-                    setSolver3Paths([...framePaths]);
-                    solver3PathsRef.current = framePaths;
-                }
-
-                if (!firstFrameDone) {
-                    console.log(`[PMT Raster] First frame complete. Continuing accumulation (${totalPixels} pixels/frame).`);
-                    firstFrameDone = true;
-                    if (ownsRenderingState) {
-                        setSolver3Rendering(false);
-                        setScanAccumProgress(1);
-                    }
-                }
-
-                frameIndex++;
-                pixelsDoneThisFrame = 0;
-                framePaths = [];
-                schedule(() => runRow(0), 0);
-                return;
+        const finishFirstFrame = () => {
+            if (firstFrameDone) return;
+            firstFrameDone = true;
+            console.log('[PMT Raster] First worker-striped frame complete. Continuing accumulation.');
+            if (ownsRenderingState) {
+                setSolver3Rendering(false);
+                setScanAccumProgress(1);
             }
-
-            const yFrac = resY > 1 ? yIdx / (resY - 1) : 0.5;
-            const yVal = yCh.from + (yCh.to - yCh.from) * yFrac;
-            setProperty(workScene.workYTarget, yCh.property, yVal);
-
-            const runPixel = (xIdx: number) => {
-                if (cancelled) return;
-
-                if (xIdx >= resX) {
-                    publishImage();
-                    if (!firstFrameDone && ownsRenderingState) {
-                        setScanAccumProgress(pixelsDoneThisFrame / totalPixels);
-                    }
-                    schedule(() => runRow(yIdx + 1), 0);
-                    return;
-                }
-
-                const xFrac = resX > 1 ? xIdx / (resX - 1) : 0.5;
-                const xVal = xCh.from + (xCh.to - xCh.from) * xFrac;
-                setProperty(workScene.workYTarget, yCh.property, yVal);
-                setProperty(workScene.workXTarget, xCh.property, xVal);
-
-                try {
-                    // Solver 1: Forward trace
-                    const solver1 = new Solver1(workScene.workComponents);
-                    const sourceRays = createSourceRays(
-                        workScene.workComponents,
-                        Math.max(8, Math.min(clampedForwardRayCount, 16)),
-                        'full',
-                    );
-                    const beamSegs = solver1.traceWithBeamSegments(sourceRays).beamSegments;
-
-                    // Debug: log beam focus position at corner/center pixels
-                    const isCornerOrCenter = (xIdx === 0 && yIdx === 0) ||
-                        (xIdx === resX - 1 && yIdx === 0) ||
-                        (xIdx === 0 && yIdx === resY - 1) ||
-                        (xIdx === resX - 1 && yIdx === resY - 1) ||
-                        (xIdx === Math.floor(resX / 2) && yIdx === Math.floor(resY / 2));
-                    if (frameIndex === 0 && isCornerOrCenter && beamSegs.length > 0) {
-                        const lastBranch = beamSegs[0];
-                        const lastSeg = lastBranch[lastBranch.length - 1];
-                        console.log(`[PMT Focus] pixel(${xIdx},${yIdx}) beam_end=(${lastSeg.end.x.toFixed(2)},${lastSeg.end.y.toFixed(2)},${lastSeg.end.z.toFixed(2)}) segs=${lastBranch.length}`);
-                    }
-
-                    // Solver 3: backward trace — PMT as 1-pixel camera
-                    // Uses the beamSegs from Solver 2 (excitation field) to query
-                    // fluorescence at the sample via the same traceBackward() as Camera
-                    const idx = yIdx * resX + xIdx;
-                    const samplesThisVisit = firstFrameDone ? Math.max(1, Math.min(pmt.samplesPerPixel, 4)) : 1;
-                    workScene.workPmt.samplesPerPixel = samplesThisVisit;
-                    workScene.workPmt.sampleOffset = sampleCounts[idx];
-
-                    const solver3 = new Solver3(workScene.workComponents, beamSegs);
-                    const { radiance, excitation, bestPath } = solver3.renderPMTPixel(workScene.workPmt);
-                    accumulatedEmission[idx] += radiance * samplesThisVisit;
-                    accumulatedExcitation[idx] += excitation * samplesThisVisit;
-                    sampleCounts[idx] += samplesThisVisit;
-                    displayEmission[idx] = accumulatedEmission[idx] / sampleCounts[idx];
-                    displayExcitation[idx] = accumulatedExcitation[idx] / sampleCounts[idx];
-
-                    // Accumulate surviving backward paths for visualization
-                    if (bestPath && framePaths.length < maxVisPaths) {
-                        framePaths.push(bestPath);
-                    }
-                } catch (e) {
-                    console.warn(`[PMT Raster] Pixel (${xIdx},${yIdx}) error:`, e);
-                    const idx = yIdx * resX + xIdx;
-                    sampleCounts[idx] += 1;
-                    displayEmission[idx] = accumulatedEmission[idx] / sampleCounts[idx];
-                    displayExcitation[idx] = accumulatedExcitation[idx] / sampleCounts[idx];
-                }
-
-                pixelsDoneThisFrame++;
-
-                // Schedule next pixel (yield to UI every pixel for responsiveness)
-                schedule(() => runPixel(xIdx + 1), 0);
-            };
-
-            runPixel(0);
+            if (!completionHapticSent) {
+                completionHapticSent = true;
+                haptic.done();
+            }
         };
 
-        schedule(() => runRow(0), 50);
+        const startPass = () => {
+            if (cancelled) return;
+            passMessagesDone = 0;
+            passPaths = [];
+            const samplesPerPixel = passIndex === 0
+                ? 1
+                : Math.max(1, Math.min(clampedReversePathCount, 4));
+            const requestPlans = plans.map(({ pmt, xCh, yCh }) => ({
+                pmtId: pmt.id,
+                xTargetId: xCh.targetId,
+                xProperty: xCh.property,
+                xFrom: xCh.from,
+                xTo: xCh.to,
+                yTargetId: yCh.targetId,
+                yProperty: yCh.property,
+                yFrom: yCh.from,
+                yTo: yCh.to,
+                resX: pmt.scanResX,
+                resY: pmt.scanResY,
+                samplesPerPixel,
+            }));
+
+            for (let w = 0; w < workerCount; w++) {
+                rasterWorkers[w].postMessage({
+                    type: 'pmt-raster',
+                    jobId,
+                    sceneText,
+                    plans: requestPlans,
+                    forwardRayCount: clampedForwardRayCount,
+                    reversePathCount: clampedReversePathCount,
+                    workerId: w,
+                    workerCount,
+                    passIndex,
+                } satisfies MainToWorker);
+            }
+        };
+
+        for (let w = 0; w < workerCount; w++) {
+            const worker = new Worker(new URL('../physics/solver3Worker.ts', import.meta.url), { type: 'module' });
+            rasterWorkers.push(worker);
+            worker.addEventListener('message', (e: MessageEvent<WorkerToMain>) => {
+                const msg = e.data;
+                if (cancelled || msg.jobId !== jobId) return;
+                if (msg.type === 'error') {
+                    console.warn(`[PMT raster worker ${w}]`, msg.message);
+                    cancelled = true;
+                    for (const id of timeoutIds.splice(0)) window.clearTimeout(id);
+                    for (const rasterWorker of rasterWorkers) {
+                        rasterWorker.postMessage({ type: 'cancel', jobId } satisfies MainToWorker);
+                        rasterWorker.terminate();
+                    }
+                    if (ownsRenderingState) {
+                        setSolver3Rendering(false);
+                        setScanAccumProgress(firstFrameDone ? 1 : 0);
+                    }
+                    haptic.error();
+                    return;
+                }
+                if (msg.type !== 'pmt-raster-done') return;
+
+                const state = rasterStates.get(msg.pmtId);
+                if (!state) return;
+                const pixels = state.resX * state.resY;
+                for (let i = 0; i < pixels; i++) {
+                    const c = msg.sampleCountsImage[i];
+                    if (c === 0) continue;
+                    state.accumulatedEmission[i] += msg.emissionImage[i];
+                    state.accumulatedExcitation[i] += msg.excitationImage[i];
+                    state.sampleCounts[i] += c;
+                    state.displayEmission[i] = state.accumulatedEmission[i] / state.sampleCounts[i];
+                    state.displayExcitation[i] = state.accumulatedExcitation[i] / state.sampleCounts[i];
+                }
+
+                if (!firstFrameDone && ownsRenderingState) {
+                    firstFramePixelsDone += msg.pixelsTraced;
+                    setScanAccumProgress(Math.max(0, Math.min(1, firstFramePixelsDone / Math.max(1, totalFirstFramePixels))));
+                }
+
+                for (const serializedPath of msg.paths) {
+                    if (passPaths.length >= clampedReversePathCount) break;
+                    passPaths.push(rehydratePath(serializedPath));
+                }
+
+                passMessagesDone++;
+                if (passMessagesDone >= workerCount * plans.length) {
+                    publishImages();
+                    if (passPaths.length > 0) {
+                        const nextPaths = [...passPaths];
+                        if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
+                        setSolver3Paths(nextPaths);
+                        solver3PathsRef.current = nextPaths;
+                    }
+                    if (passIndex === 0) finishFirstFrame();
+                    passIndex++;
+                    schedule(startPass, 0);
+                }
+            });
+        }
+
+        schedule(startPass, 50);
 
         return () => {
             cancelled = true;
             for (const id of timeoutIds) window.clearTimeout(id);
+            for (const worker of rasterWorkers) {
+                worker.postMessage({ type: 'cancel', jobId } satisfies MainToWorker);
+                worker.terminate();
+            }
             if (ownsRenderingState) {
                 setSolver3Rendering(false);
                 setScanAccumProgress(firstFrameDone ? 1 : 0);

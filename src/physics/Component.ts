@@ -3,6 +3,74 @@ import { Ray, HitRecord, InteractionResult } from './types';
 import { cleanVec } from './math_solvers';
 import { v4 as uuidv4 } from 'uuid';
 
+function rayLocalBoundsNearT(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    box: Box3,
+): number | null {
+    let tMin = -Infinity;
+    let tMax = Infinity;
+    const eps = 1e-20;
+
+    if (Math.abs(dx) < eps) {
+        if (ox < box.min.x || ox > box.max.x) return null;
+    } else {
+        const inv = 1 / dx;
+        let t1 = (box.min.x - ox) * inv;
+        let t2 = (box.max.x - ox) * inv;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) return null;
+    }
+
+    if (Math.abs(dy) < eps) {
+        if (oy < box.min.y || oy > box.max.y) return null;
+    } else {
+        const inv = 1 / dy;
+        let t1 = (box.min.y - oy) * inv;
+        let t2 = (box.max.y - oy) * inv;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) return null;
+    }
+
+    if (Math.abs(dz) < eps) {
+        if (oz < box.min.z || oz > box.max.z) return null;
+    } else {
+        const inv = 1 / dz;
+        let t1 = (box.min.z - oz) * inv;
+        let t2 = (box.max.z - oz) * inv;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) return null;
+    }
+
+    return tMax > 0.001 ? Math.max(0, tMin) : null;
+}
+
+function raySphereNearT(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    cx: number, cy: number, cz: number,
+    radius: number,
+): number | null {
+    const toCx = cx - ox;
+    const toCy = cy - oy;
+    const toCz = cz - oz;
+    const along = toCx * dx + toCy * dy + toCz * dz;
+    if (along < -radius) return null;
+    const dist2 = toCx * toCx + toCy * toCy + toCz * toCz - along * along;
+    const radius2 = radius * radius;
+    if (dist2 > radius2) return null;
+    const halfChord = Math.sqrt(Math.max(0, radius2 - dist2));
+    const tFar = along + halfChord;
+    if (tFar <= 0.001) return null;
+    return Math.max(0, along - halfChord);
+}
+
 export interface Surface {
     intersect(rayLocal: Ray): HitRecord | null;
     interact(ray: Ray, hit: HitRecord): InteractionResult;
@@ -44,6 +112,11 @@ export abstract class OpticalComponent implements Surface {
 
     /** Tracks last version for which matrices were computed (dirty-flag). */
     private _matrixVersion: number = -1;
+    private _worldBoundsVersion: number = -1;
+    private _worldBoundsCenter: Vector3 = new Vector3();
+    private _worldBoundsRadius: number = 0;
+    private _rayLocalOriginScratch: Vector3 = new Vector3();
+    private _rayLocalDirectionScratch: Vector3 = new Vector3();
     private static readonly UNIT_SCALE = new Vector3(1, 1, 1);
 
     constructor(name: string = "Unnamed Component") {
@@ -162,6 +235,22 @@ export abstract class OpticalComponent implements Surface {
         this._matrixVersion = this.version;
     }
 
+    private updateWorldBoundsSphere(): void {
+        if (this._worldBoundsVersion === this.version) return;
+        const min = this.bounds.min;
+        const max = this.bounds.max;
+        this._worldBoundsCenter.set(
+            (min.x + max.x) * 0.5,
+            (min.y + max.y) * 0.5,
+            (min.z + max.z) * 0.5,
+        ).applyMatrix4(this.localToWorld);
+        const sx = max.x - min.x;
+        const sy = max.y - min.y;
+        const sz = max.z - min.z;
+        this._worldBoundsRadius = 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz);
+        this._worldBoundsVersion = this.version;
+    }
+
     // ── Solver 2 Legacy q-Fallback Interface ─────────────────────────
     // Production Solver 2 now uses Solver 1 beamlets directly. These hooks
     // remain for legacy analytic segments and compatibility code paths.
@@ -193,14 +282,35 @@ export abstract class OpticalComponent implements Surface {
     abstract interact(ray: Ray, hit: HitRecord): InteractionResult;
 
     // Template method for tracing
-    chkIntersection(rayWorld: Ray): HitRecord | null {
+    chkIntersection(rayWorld: Ray, maxDistance: number = Infinity): HitRecord | null {
         // Ensure matrices are fresh before checking intersection
         // This fixes the "Blocker ignored" and "Lens Snapping" bugs caused by stale matrices
         this.updateMatrices();
+        this.updateWorldBoundsSphere();
+
+        const sphereCenter = this._worldBoundsCenter;
+        const sphereT = raySphereNearT(
+            rayWorld.origin.x, rayWorld.origin.y, rayWorld.origin.z,
+            rayWorld.direction.x, rayWorld.direction.y, rayWorld.direction.z,
+            sphereCenter.x, sphereCenter.y, sphereCenter.z,
+            this._worldBoundsRadius,
+        );
+        if (sphereT === null || sphereT > maxDistance) {
+            return null;
+        }
 
         // Transform Ray to Local
-        const rayLocalOrigin = cleanVec(rayWorld.origin.clone().applyMatrix4(this.worldToLocal));
-        const rayLocalDir = cleanVec(rayWorld.direction.clone().transformDirection(this.worldToLocal)).normalize();
+        const rayLocalOrigin = cleanVec(this._rayLocalOriginScratch.copy(rayWorld.origin).applyMatrix4(this.worldToLocal));
+        const rayLocalDir = cleanVec(this._rayLocalDirectionScratch.copy(rayWorld.direction).transformDirection(this.worldToLocal)).normalize();
+
+        const boundsT = rayLocalBoundsNearT(
+            rayLocalOrigin.x, rayLocalOrigin.y, rayLocalOrigin.z,
+            rayLocalDir.x, rayLocalDir.y, rayLocalDir.z,
+            this.bounds,
+        );
+        if (boundsT === null || boundsT > maxDistance) {
+            return null;
+        }
 
         const rayLocal: Ray = {
             ...rayWorld,
@@ -215,12 +325,9 @@ export abstract class OpticalComponent implements Surface {
             const pointWorld = hitLocal.point.clone().applyMatrix4(this.localToWorld);
             const normalWorld = hitLocal.normal.clone().transformDirection(this.localToWorld).normalize();
 
-            // Re-calculate t in world space (distance might scale if we had scaling, but we assume scale=1)
-            const tWorld = pointWorld.distanceTo(rayWorld.origin);
-
             return {
                 ...hitLocal, // Preserve all custom properties (like hitElement for Objective)
-                t: tWorld,
+                t: hitLocal.t,
                 point: pointWorld,
                 normal: normalWorld,
                 localPoint: hitLocal.point,

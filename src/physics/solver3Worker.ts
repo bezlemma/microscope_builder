@@ -21,12 +21,20 @@ import { Vector3 } from 'three';
 import { deserializeScene } from '../state/ubzSerializer';
 import { Solver1 } from './Solver1';
 import { Solver3 } from './Solver3';
+import { Solver3Kernel } from './solver3Kernel';
 import { Camera } from './components/Camera';
 import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { createSourceRays } from './SourceRayFactory';
+import { setProperty } from './PropertyAnimator';
+import { createPMTKernelSnapshot, createTraceSceneSnapshot } from './sceneSnapshot';
 import { Coherence, type Ray } from './types';
 import { ensureSolver3WasmLoaded } from './solver3WasmLoader';
+import {
+    createProgressiveSamplingState,
+    prepareProgressiveActiveMask,
+    updateProgressiveSamplingState,
+} from './solver3AdaptiveSampling';
 
 // Kick off WASM kernel load as soon as the worker module is evaluated so the
 // first render can pick it up via readRegisteredSolver3WasmModule().
@@ -53,12 +61,39 @@ export interface RenderRequest {
     workerCount?: number;
 }
 
+export interface PMTRasterPlanRequest {
+    pmtId: string;
+    xTargetId: string;
+    xProperty: string;
+    xFrom: number;
+    xTo: number;
+    yTargetId: string;
+    yProperty: string;
+    yFrom: number;
+    yTo: number;
+    resX: number;
+    resY: number;
+    samplesPerPixel: number;
+}
+
+export interface PMTRasterRequest {
+    type: 'pmt-raster';
+    jobId: number;
+    sceneText: string;
+    plans: PMTRasterPlanRequest[];
+    forwardRayCount: number;
+    reversePathCount: number;
+    workerId: number;
+    workerCount: number;
+    passIndex: number;
+}
+
 export interface CancelRequest {
     type: 'cancel';
     jobId: number;
 }
 
-export type MainToWorker = RenderRequest | CancelRequest;
+export type MainToWorker = RenderRequest | PMTRasterRequest | CancelRequest;
 
 export interface ProgressMsg {
     type: 'progress';
@@ -83,6 +118,21 @@ export interface PMTDoneMsg {
     paths: SerializedPath[];
 }
 
+export interface PMTRasterDoneMsg {
+    type: 'pmt-raster-done';
+    jobId: number;
+    pmtId: string;
+    resX: number;
+    resY: number;
+    workerId: number;
+    emissionImage: Float32Array;
+    excitationImage: Float32Array;
+    sampleCountsImage: Uint32Array;
+    paths: SerializedPath[];
+    pixelsTraced: number;
+    raysTraced: number;
+}
+
 export interface CompleteMsg {
     type: 'complete';
     jobId: number;
@@ -95,7 +145,7 @@ export interface ErrorMsg {
     message: string;
 }
 
-export type WorkerToMain = ProgressMsg | CameraDoneMsg | PMTDoneMsg | CompleteMsg | ErrorMsg;
+export type WorkerToMain = ProgressMsg | CameraDoneMsg | PMTDoneMsg | PMTRasterDoneMsg | CompleteMsg | ErrorMsg;
 
 /**
  * Rays are structured-cloneable once we strip Three.js Vector3 prototypes.
@@ -155,6 +205,32 @@ function post(msg: WorkerToMain, transfer: Transferable[] = []) {
     (self as unknown as Worker).postMessage(msg, transfer);
 }
 
+function canUseSharedArrayBuffer(): boolean {
+    return typeof SharedArrayBuffer !== 'undefined'
+        && typeof crossOriginIsolated !== 'undefined'
+        && crossOriginIsolated;
+}
+
+function makeFloat32Buffer(length: number): Float32Array {
+    return canUseSharedArrayBuffer()
+        ? new Float32Array(new SharedArrayBuffer(length * Float32Array.BYTES_PER_ELEMENT))
+        : new Float32Array(length);
+}
+
+function makeUint32Buffer(length: number): Uint32Array {
+    return canUseSharedArrayBuffer()
+        ? new Uint32Array(new SharedArrayBuffer(length * Uint32Array.BYTES_PER_ELEMENT))
+        : new Uint32Array(length);
+}
+
+function transferIfOwned(...arrays: Array<Float32Array | Uint32Array>): Transferable[] {
+    const transfers: Transferable[] = [];
+    for (const arr of arrays) {
+        if (arr.buffer instanceof ArrayBuffer) transfers.push(arr.buffer);
+    }
+    return transfers;
+}
+
 function yieldToEventLoop(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0));
 }
@@ -204,6 +280,111 @@ async function runPMTScan(
         onRays(req.reversePathCount);
     }
     post({ type: 'pmt-done', jobId: req.jobId, paths: allPaths });
+}
+
+async function runPMTRasterJob(req: PMTRasterRequest): Promise<void> {
+    activeJobId = req.jobId;
+    try {
+        const components = deserializeScene(req.sceneText);
+        if (components.length === 0 || req.plans.length === 0) {
+            post({ type: 'complete', jobId: req.jobId, raysTraced: 0 });
+            return;
+        }
+
+        const solver1 = new Solver1(components);
+        const sourceRays = createSourceRays(
+            components,
+            Math.max(8, Math.min(req.forwardRayCount, 16)),
+            'full',
+        ).filter(ray => !ray.sourceId?.startsWith('pmt_preview_'));
+        const byId = new Map<string, typeof components[number]>();
+        for (const c of components) byId.set(c.id, c);
+
+        let totalRays = 0;
+        const workerCount = Math.max(1, req.workerCount | 0);
+        const workerId = Math.max(0, Math.min(workerCount - 1, req.workerId | 0));
+
+        for (const plan of req.plans) {
+            if (cancelledJobs.has(req.jobId)) return;
+
+            const pmt = byId.get(plan.pmtId) as PMT | undefined;
+            const xTarget = byId.get(plan.xTargetId);
+            const yTarget = byId.get(plan.yTargetId);
+            if (!pmt || !xTarget || !yTarget) continue;
+
+            const pixels = plan.resX * plan.resY;
+            const emissionImage = makeFloat32Buffer(pixels);
+            const excitationImage = makeFloat32Buffer(pixels);
+            const sampleCountsImage = makeUint32Buffer(pixels);
+            const paths: SerializedPath[] = [];
+            const maxVisPaths = Math.max(0, req.reversePathCount);
+            const pmtSnapshot = createPMTKernelSnapshot(pmt);
+            pmtSnapshot.samplesPerPixel = Math.max(1, plan.samplesPerPixel | 0);
+            let pixelsTraced = 0;
+
+            for (let yIdx = 0; yIdx < plan.resY; yIdx++) {
+                if ((yIdx % workerCount) !== workerId) continue;
+                if (cancelledJobs.has(req.jobId)) return;
+                const yFrac = plan.resY > 1 ? yIdx / (plan.resY - 1) : 0.5;
+                const yVal = plan.yFrom + (plan.yTo - plan.yFrom) * yFrac;
+                setProperty(yTarget, plan.yProperty, yVal);
+
+                for (let xIdx = 0; xIdx < plan.resX; xIdx++) {
+                    if (cancelledJobs.has(req.jobId)) return;
+                    const xFrac = plan.resX > 1 ? xIdx / (plan.resX - 1) : 0.5;
+                    const xVal = plan.xFrom + (plan.xTo - plan.xFrom) * xFrac;
+                    setProperty(yTarget, plan.yProperty, yVal);
+                    setProperty(xTarget, plan.xProperty, xVal);
+
+                    const idx = yIdx * plan.resX + xIdx;
+                    try {
+                        const beamSegs = solver1.traceWithBeamSegments(sourceRays).beamSegments;
+                        const solver3 = new Solver3Kernel(createTraceSceneSnapshot(components), { branches: beamSegs });
+                        pmtSnapshot.sampleOffset = req.passIndex * pmtSnapshot.samplesPerPixel;
+                        const { radiance, excitation, bestPath } = solver3.renderPMTPixel(pmtSnapshot);
+                        emissionImage[idx] = radiance * pmtSnapshot.samplesPerPixel;
+                        excitationImage[idx] = excitation * pmtSnapshot.samplesPerPixel;
+                        sampleCountsImage[idx] = pmtSnapshot.samplesPerPixel;
+                        if (bestPath && paths.length < maxVisPaths) {
+                            paths.push(serializePath(bestPath));
+                        }
+                        totalRays += pmtSnapshot.samplesPerPixel;
+                    } catch {
+                        sampleCountsImage[idx] = 1;
+                        totalRays += 1;
+                    }
+                    pixelsTraced++;
+                }
+                await yieldToEventLoop();
+            }
+
+            post(
+                {
+                    type: 'pmt-raster-done',
+                    jobId: req.jobId,
+                    pmtId: plan.pmtId,
+                    resX: plan.resX,
+                    resY: plan.resY,
+                    workerId,
+                    emissionImage,
+                    excitationImage,
+                    sampleCountsImage,
+                    paths,
+                    pixelsTraced,
+                    raysTraced: totalRays,
+                },
+                transferIfOwned(emissionImage, excitationImage, sampleCountsImage),
+            );
+        }
+
+        post({ type: 'complete', jobId: req.jobId, raysTraced: totalRays });
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        post({ type: 'error', jobId: req.jobId, message });
+    } finally {
+        if (activeJobId === req.jobId) activeJobId = null;
+        cancelledJobs.delete(req.jobId);
+    }
 }
 
 async function runJob(req: RenderRequest) {
@@ -292,6 +473,7 @@ async function runJob(req: RenderRequest) {
             emission: new Float32Array(cam.sensorResX * cam.sensorResY),
             excitation: new Float32Array(cam.sensorResX * cam.sensorResY),
             count: new Uint32Array(cam.sensorResX * cam.sensorResY),
+            sampling: createProgressiveSamplingState(cam.sensorResX * cam.sensorResY),
         }));
 
         let firstRoundDone = false;
@@ -304,7 +486,9 @@ async function runJob(req: RenderRequest) {
             for (let ci = 0; ci < cameras.length; ci++) {
                 if (cancelledJobs.has(req.jobId)) return;
                 const cam = cameras[ci];
-                const gen = solver3.renderGenerator(cam, 32);
+                const acc = accumulators[ci];
+                const activeMask = prepareProgressiveActiveMask(acc.sampling, round);
+                const gen = solver3.renderGenerator(cam, 32, req.workerId, req.workerCount, activeMask);
                 let genResult = gen.next();
                 let lastReport = 0;
                 while (!genResult.done) {
@@ -322,18 +506,33 @@ async function runJob(req: RenderRequest) {
                     genResult = gen.next();
                 }
                 const result = genResult.value;
-                const acc = accumulators[ci];
                 for (let i = 0; i < acc.emission.length; i++) {
                     acc.emission[i] += result.emissionImage[i];
                     acc.excitation[i] += result.excitationImage[i];
                     acc.count[i] += result.sampleCountsImage[i];
                 }
-                raysTraced += acc.pixels * 8; // cap from sampling layer
+                let tracedThisRound = 0;
+                for (const count of result.sampleCountsImage) tracedThisRound += count;
+                raysTraced += tracedThisRound;
+
+                // Adaptive sampling throttles only proven dark/quiet pixels,
+                // and only for short sleep windows. Signal pixels continue to
+                // accumulate every round so the image keeps improving as long
+                // as the tab is open.
+                updateProgressiveSamplingState(
+                    acc.sampling,
+                    round,
+                    acc.emission,
+                    acc.excitation,
+                    acc.count,
+                    result.sampleCountsImage,
+                );
 
                 // Snapshot of the running per-pixel average for the main thread.
-                const emAvg = new Float32Array(acc.pixels);
-                const exAvg = new Float32Array(acc.pixels);
-                const cntSnap = new Uint32Array(acc.count);
+                const emAvg = makeFloat32Buffer(acc.pixels);
+                const exAvg = makeFloat32Buffer(acc.pixels);
+                const cntSnap = makeUint32Buffer(acc.pixels);
+                cntSnap.set(acc.count);
                 for (let i = 0; i < acc.pixels; i++) {
                     const c = acc.count[i] > 0 ? acc.count[i] : 1;
                     emAvg[i] = acc.emission[i] / c;
@@ -349,7 +548,7 @@ async function runJob(req: RenderRequest) {
                         sampleCountsImage: cntSnap,
                         paths: result.paths.map(serializePath),
                     },
-                    [emAvg.buffer, exAvg.buffer, cntSnap.buffer],
+                    transferIfOwned(emAvg, exAvg, cntSnap),
                 );
             }
 
@@ -387,6 +586,8 @@ self.addEventListener('message', (e: MessageEvent<MainToWorker>) => {
         // Fire-and-forget: the async runJob yields to the event loop periodically
         // so 'cancel' messages can land between generator steps.
         void runJob(msg);
+    } else if (msg.type === 'pmt-raster') {
+        void runPMTRasterJob(msg);
     } else if (msg.type === 'cancel') {
         cancelledJobs.add(msg.jobId);
     }

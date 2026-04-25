@@ -18,11 +18,13 @@ import {
     createTraceSceneSnapshot,
 } from './sceneSnapshot';
 import { GaussianBeamSegment } from './Solver2';
-import type { PackedFirstHitHints } from './solver3FirstHitHints';
-import type { PackedAnalyticHits } from './solver3AnalyticNarrowPhase';
+import { createPackedFirstHitHintsJs, type PackedFirstHitHints } from './solver3FirstHitHints';
+import { createPackedAnalyticHitsJs, type PackedAnalyticHits } from './solver3AnalyticNarrowPhase';
 import { Solver3Kernel, type PMTPixelResult, type Solver3Result } from './solver3Kernel';
 import { readRegisteredSolver3WasmModule, WasmSolver3Backend } from './solver3WasmBackend';
-import type { PackedCameraSamples } from './solver3Sampling';
+import { createWasmPackedInteractionBackend, type PackedInteractionBackend } from './solver3PackedInteraction';
+import { createOptionalWebGpuSolver3Backend } from './solver3WebGpuBackend';
+import { createJsPackedCameraSamples, type PackedCameraSamples } from './solver3Sampling';
 import type { BeamFieldSnapshot, CameraKernelSnapshot, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
 import { Ray } from './types';
 
@@ -37,6 +39,9 @@ export interface CameraKernelRequest {
     snapshot: CameraKernelSnapshot;
     packet: PackedCameraKernel;
     maxVisPaths: number;
+    rowWorkerId?: number;
+    rowWorkerCount?: number;
+    activePixelMask?: Uint8Array;
 }
 
 export interface PMTKernelRequest {
@@ -67,11 +72,20 @@ export function createSolver3KernelContext(
     };
 }
 
-export function createCameraKernelRequest(camera: Camera, maxVisPaths: number = 32): CameraKernelRequest {
+export function createCameraKernelRequest(
+    camera: Camera,
+    maxVisPaths: number = 32,
+    rowWorkerId?: number,
+    rowWorkerCount?: number,
+    activePixelMask?: Uint8Array,
+): CameraKernelRequest {
     return {
         snapshot: createCameraKernelSnapshot(camera),
         packet: createPackedCameraKernel(camera),
         maxVisPaths,
+        rowWorkerId,
+        rowWorkerCount,
+        activePixelMask,
     };
 }
 
@@ -85,24 +99,42 @@ export function createPMTKernelRequest(pmt: PMT): PMTKernelRequest {
 export class JsSolver3Backend implements Solver3KernelBackend {
     readonly kernel: Solver3Kernel;
 
-    constructor(private readonly context: Solver3KernelContext) {
-        this.kernel = new Solver3Kernel(context.traceScene, context.beamField);
+    constructor(private readonly context: Solver3KernelContext, packedInteractor?: PackedInteractionBackend) {
+        this.kernel = new Solver3Kernel(context.traceScene, context.beamField, packedInteractor);
     }
 
     renderCamera(request: CameraKernelRequest): Solver3Result {
         void request.packet;
-        void this.context.tracePacket;
         void this.context.beamPacket;
-        return this.kernel.render(request.snapshot, request.maxVisPaths);
+        const samples = createJsPackedCameraSamples(
+            request.snapshot,
+            null,
+            request.snapshot.sensorResX * request.snapshot.sensorResY * Math.max(1, request.snapshot.samplesPerPixel),
+            request.rowWorkerId,
+            request.rowWorkerCount,
+            request.activePixelMask,
+        );
+        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples);
+        const analytic = createPackedAnalyticHitsJs(this.context.tracePacket, samples, hints);
+        return this.kernel.renderPackedCameraSamples(request.snapshot, samples, request.maxVisPaths, hints, analytic);
     }
 
     *renderCameraGenerator(
         request: CameraKernelRequest,
     ): Generator<{ progress: number }, Solver3Result, void> {
         void request.packet;
-        void this.context.tracePacket;
         void this.context.beamPacket;
-        return yield* this.kernel.renderGenerator(request.snapshot, request.maxVisPaths);
+        const samples = createJsPackedCameraSamples(
+            request.snapshot,
+            null,
+            request.snapshot.sensorResX * request.snapshot.sensorResY * Math.max(1, request.snapshot.samplesPerPixel),
+            request.rowWorkerId,
+            request.rowWorkerCount,
+            request.activePixelMask,
+        );
+        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples);
+        const analytic = createPackedAnalyticHitsJs(this.context.tracePacket, samples, hints);
+        return yield* this.kernel.renderPackedCameraSamplesGenerator(request.snapshot, samples, request.maxVisPaths, hints, analytic);
     }
 
     renderPMTPixel(request: PMTKernelRequest): PMTPixelResult {
@@ -144,8 +176,11 @@ export class JsSolver3Backend implements Solver3KernelBackend {
 }
 
 export function createDefaultSolver3Backend(context: Solver3KernelContext): Solver3KernelBackend {
-    const jsBackend = new JsSolver3Backend(context);
     const wasmModule = readRegisteredSolver3WasmModule();
-    if (!wasmModule) return jsBackend;
-    return new WasmSolver3Backend(context, wasmModule, jsBackend);
+    const packedInteractor = wasmModule
+        ? createWasmPackedInteractionBackend(wasmModule, context.tracePacket) ?? undefined
+        : undefined;
+    const jsBackend = new JsSolver3Backend(context, packedInteractor);
+    const cpuBackend = wasmModule ? new WasmSolver3Backend(context, wasmModule, jsBackend) : jsBackend;
+    return createOptionalWebGpuSolver3Backend(context, cpuBackend);
 }

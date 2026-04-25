@@ -40,7 +40,12 @@ const timerCallbacks = new Map<number, () => void>();
 
 try {
     const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
-    timerWorker = new Worker(URL.createObjectURL(workerBlob));
+    const workerUrl = URL.createObjectURL(workerBlob);
+    try {
+        timerWorker = new Worker(workerUrl);
+    } finally {
+        URL.revokeObjectURL(workerUrl);
+    }
     timerWorker.onmessage = (e) => {
         const id = e.data as number;
         const callback = timerCallbacks.get(id);

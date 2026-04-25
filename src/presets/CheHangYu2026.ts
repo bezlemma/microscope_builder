@@ -11,6 +11,7 @@ import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
 import { PMT } from '../physics/components/PMT';
+import { Blocker } from '../physics/components/Blocker';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { AnimationChannel, generateChannelId } from '../physics/PropertyAnimator';
 import type { PresetResult } from '../state/store';
@@ -86,7 +87,7 @@ export function createCheHangYu2026Scene(): PresetResult {
     ) => {
         const ior = 1.5168;
         const radius = (ior - 1) * focalLengthMm;
-        return new SphericalLens(1 / focalLengthMm, apertureRadius, thickness, name, radius, undefined, ior);
+        return new SphericalLens(1 / focalLengthMm, apertureRadius, thickness, name, radius, 1e9, ior);
     };
 
     // ── Laser: visible surrogate excitation, 5 mm beam ─────────────────────
@@ -222,13 +223,24 @@ export function createCheHangYu2026Scene(): PresetResult {
     sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
     scene.push(sample);
 
+    // Absorb excitation that has passed the specimen so the table view is not
+    // cluttered with rays continuing indefinitely beyond the sample plane.
+    const beamDump = new Blocker(50, 4, 'Post-Sample Beam Dump');
+    const beamDumpCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(24));
+    beamDump.setPosition(beamDumpCenter.x, beamDumpCenter.y, beamDumpCenter.z);
+    beamDump.pointAlong(0, 1, 0);
+    scene.push(beamDump);
+
     // ── PMT collection arm (off the dichroic, +X side) ─────────────────────
     const collectionLens = makePlanoConvex(100, 12.5, 3.6, 'LA1050-A-ML Collection Lens (thick f=100)');
     collectionLens.setPosition(xCol + 70, yDichroic, 0);
     collectionLens.pointAlong(1, 0, 0);
     scene.push(collectionLens);
 
-    const pmtCondenser = makeScaledAchromat(20, 10, 'ACL2520U-A PMT Condenser (thick f≈20)');
+    // Visual/physics surrogate for the compact PMT condenser. A scaled 20 mm
+    // achromat would require surface radii smaller than this display aperture,
+    // so use a modest thick plano-convex relay lens instead.
+    const pmtCondenser = makePlanoConvex(50, 8, 4, 'ACL2520U-A PMT Relay Lens (thick f≈50)');
     pmtCondenser.setPosition(xCol + 125, yDichroic, 0);
     pmtCondenser.pointAlong(1, 0, 0);
     scene.push(pmtCondenser);

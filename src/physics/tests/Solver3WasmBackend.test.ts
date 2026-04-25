@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { Camera } from '../components/Camera';
+import { Aperture } from '../components/Aperture';
+import { Mirror } from '../components/Mirror';
 import { Sample } from '../components/Sample';
 import { Solver3 } from '../Solver3';
 import { GaussianBeamSegment, initialQ } from '../Solver2';
-import { Coherence } from '../types';
+import { Coherence, type HitRecord, type Ray } from '../types';
 import { createDefaultSolver3Backend } from '../solver3Host';
+import { createWasmPackedInteractionBackend } from '../solver3PackedInteraction';
 import {
     readRegisteredSolver3WasmModule,
     validateSolver3WasmModule,
@@ -18,13 +21,19 @@ import {
     PACKED_COMPONENT_BOUNDS_STRIDE,
     PACKED_COMPONENT_MATRIX_STRIDE,
     PACKED_DETECTOR_BASIS_STRIDE,
+    PACKED_INTERACTION_APERTURE,
+    PACKED_INTERACTION_INPUT_STRIDE,
+    PACKED_INTERACTION_MIRROR,
+    PACKED_INTERACTION_OUTPUT_STRIDE,
+    PACKED_INTERACTION_UNSUPPORTED,
     SOLVER3_KERNEL_ABI_VERSION,
     SOLVER3_KERNEL_STATUS_OK,
     SOLVER3_KERNEL_STATUS_UNIMPLEMENTED,
+    createPackedTraceScene,
     createSolver3PacketHeader,
 } from '../kernelPackets';
 import { createPackedFirstHitHintsFromWasm } from '../solver3FirstHitHints';
-import { createPackedCameraSamplesFromWasm, PACKED_CAMERA_SAMPLE_STRIDE } from '../solver3Sampling';
+import { createJsPackedCameraSamples, createPackedCameraSamplesFromWasm, PACKED_CAMERA_SAMPLE_STRIDE } from '../solver3Sampling';
 
 function makeSeg(start: Vector3, end: Vector3, direction: Vector3): GaussianBeamSegment {
     const wavelength = 488e-9;
@@ -62,6 +71,8 @@ function makeValidModule(): Solver3WasmModule {
             solver3_detector_basis_stride: () => PACKED_DETECTOR_BASIS_STRIDE,
             solver3_beam_segment_scalar_stride: () => PACKED_BEAM_SEGMENT_SCALAR_STRIDE,
             solver3_camera_sample_stride: () => PACKED_CAMERA_SAMPLE_STRIDE,
+            solver3_interaction_input_stride: () => PACKED_INTERACTION_INPUT_STRIDE,
+            solver3_interaction_output_stride: () => PACKED_INTERACTION_OUTPUT_STRIDE,
             solver3_validate_packet_header: () => SOLVER3_KERNEL_STATUS_OK,
             solver3_render_camera_stub: () => SOLVER3_KERNEL_STATUS_UNIMPLEMENTED,
             solver3_generate_camera_samples: (_headerPtr, _basisPtr, _scalarsPtr, intsPtr, rowOffsetsPtr, outputPtr, sampleCount) => {
@@ -81,6 +92,60 @@ function makeValidModule(): Solver3WasmModule {
                 }
                 rowOffsets[ints[1]] = index;
                 return index;
+            },
+            solver3_apply_packed_interaction: (_headerPtr, _localToWorldPtr, interactionKindsPtr, surfaceParamsPtr, _componentCount, inputPtr, outputPtr) => {
+                const input = new Float64Array(memory.buffer, inputPtr, PACKED_INTERACTION_INPUT_STRIDE);
+                const output = new Float64Array(memory.buffer, outputPtr, PACKED_INTERACTION_OUTPUT_STRIDE);
+                output.fill(0);
+                const componentIndex = input[0] | 0;
+                const interactionKind = new Uint8Array(memory.buffer, interactionKindsPtr + componentIndex, 1)[0];
+                if (interactionKind === PACKED_INTERACTION_UNSUPPORTED) return 0;
+
+                if (interactionKind === PACKED_INTERACTION_APERTURE) {
+                    const params = new Float64Array(
+                        memory.buffer,
+                        surfaceParamsPtr + componentIndex * 8 * Float64Array.BYTES_PER_ELEMENT,
+                        8,
+                    );
+                    const rSq = input[2] * input[2] + input[3] * input[3];
+                    if (rSq >= params[0] * params[0]) {
+                        output[0] = 2;
+                        return 1;
+                    }
+                    output[0] = 1;
+                    output[1] = 1;
+                    output[2] = input[2];
+                    output[3] = input[3];
+                    output[4] = input[4];
+                    output[5] = input[11];
+                    output[6] = input[12];
+                    output[7] = input[13];
+                    output[8] = input[14];
+                    output[9] = input[15] + input[1];
+                    output[10] = 1;
+                    return 1;
+                }
+
+                if (interactionKind === PACKED_INTERACTION_MIRROR) {
+                    const dot = input[11] * input[5] + input[12] * input[6] + input[13] * input[7];
+                    if (dot >= 0) {
+                        output[0] = 2;
+                        return 1;
+                    }
+                    output[0] = 1;
+                    output[2] = input[2];
+                    output[3] = input[3];
+                    output[4] = input[4];
+                    output[5] = input[11] - 2 * dot * input[5];
+                    output[6] = input[12] - 2 * dot * input[6];
+                    output[7] = input[13] - 2 * dot * input[7];
+                    output[8] = input[14];
+                    output[9] = input[15] + input[1];
+                    output[10] = -1;
+                    return 1;
+                }
+
+                return 0;
             },
             solver3_generate_first_hit_hints: (_headerPtr, _worldToLocalPtr, _localBoundsPtr, componentCount, _sampleScalarsPtr, sampleCount, maxCandidates, countsPtr, indicesPtr, tNearPtr) => {
                 const counts = new Uint8Array(memory.buffer, countsPtr, sampleCount);
@@ -130,9 +195,9 @@ describe('Solver 3 wasm backend boundary', () => {
         )]]);
         const context = solver3.getKernelContext();
 
-        const registry = globalThis as typeof globalThis & { __BOMB_SOLVER3_WASM__?: Solver3WasmModule };
-        const previous = registry.__BOMB_SOLVER3_WASM__;
-        registry.__BOMB_SOLVER3_WASM__ = makeValidModule();
+        const registry = globalThis as typeof globalThis & { __MICROSCOPE_SOLVER3_WASM__?: Solver3WasmModule };
+        const previous = registry.__MICROSCOPE_SOLVER3_WASM__;
+        registry.__MICROSCOPE_SOLVER3_WASM__ = makeValidModule();
 
         try {
             expect(readRegisteredSolver3WasmModule()).not.toBeNull();
@@ -143,7 +208,7 @@ describe('Solver 3 wasm backend boundary', () => {
             expect(result.resX).toBe(4);
             expect(result.resY).toBe(4);
         } finally {
-            registry.__BOMB_SOLVER3_WASM__ = previous;
+            registry.__MICROSCOPE_SOLVER3_WASM__ = previous;
         }
     });
 
@@ -180,6 +245,42 @@ describe('Solver 3 wasm backend boundary', () => {
         expect(packet!.sampleScalars[11]).toBe(0);
     });
 
+    test('JS packed camera sampling can stripe rows across workers', () => {
+        const camera = new Camera(4, 4, 'Striped Camera');
+        camera.setPosition(0, 25, 0);
+        camera.setRotation(Math.PI / 2, 0, 0);
+        camera.sensorResX = 4;
+        camera.sensorResY = 4;
+        camera.samplesPerPixel = 1;
+
+        const packet = createJsPackedCameraSamples(
+            {
+                id: camera.id,
+                name: camera.name,
+                width: camera.width,
+                height: camera.height,
+                sensorResX: camera.sensorResX,
+                sensorResY: camera.sensorResY,
+                sensorNA: camera.sensorNA,
+                samplesPerPixel: camera.samplesPerPixel,
+                position: new Vector3(0, 25, 0),
+                forward: new Vector3(0, -1, 0),
+                uAxis: new Vector3(-1, 0, 0),
+                vAxis: new Vector3(0, 0, -1),
+            },
+            null,
+            16,
+            1,
+            2,
+        );
+
+        expect(packet.sampleCount).toBe(8);
+        expect(Array.from(packet.rowOffsets)).toEqual([0, 0, 4, 4, 8]);
+        for (let i = 0; i < packet.sampleCount; i++) {
+            expect(packet.sampleScalars[i * PACKED_CAMERA_SAMPLE_STRIDE + 1] % 2).toBe(1);
+        }
+    });
+
     test('reads first-hit hint packets from a wasm module', () => {
         const camera = new Camera(4, 4, 'Hint Camera');
         camera.setPosition(0, 25, 0);
@@ -212,5 +313,57 @@ describe('Solver 3 wasm backend boundary', () => {
         expect(Array.from(hints!.candidateCounts)).toEqual([2, 2]);
         expect(Array.from(hints!.candidateIndices)).toEqual([0, 1, 0, 1]);
         expect(Array.from(hints!.candidateTNear)).toEqual([0, 0.5, 1, 1.5]);
+    });
+
+    test('wraps wasm packed aperture and mirror interactions as Solver 3 interaction results', () => {
+        const aperture = new Aperture(4, 20, 'Packed Aperture');
+        const apertureBackend = createWasmPackedInteractionBackend(makeValidModule(), createPackedTraceScene([aperture]));
+        expect(apertureBackend).not.toBeNull();
+
+        const ray: Ray = {
+            origin: new Vector3(0, 0, -5),
+            direction: new Vector3(0, 0, 1),
+            wavelength: 532e-9,
+            intensity: 0.5,
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            opticalPathLength: 2,
+            footprintRadius: 0.1,
+            coherenceMode: Coherence.Incoherent,
+        };
+        const hit: HitRecord = {
+            t: 5,
+            point: new Vector3(0, 0, 0),
+            normal: new Vector3(0, 0, -1),
+            localPoint: new Vector3(0, 0, 0),
+            localNormal: new Vector3(0, 0, -1),
+        };
+        const passed = apertureBackend!.tryInteract(0, ray, hit);
+        expect(passed).not.toBeNull();
+        expect(passed!.passthrough).toBe(true);
+        expect(passed!.rays).toHaveLength(1);
+        expect(passed!.rays[0].opticalPathLength).toBe(7);
+        expect(passed!.rays[0].intensity).toBe(0.5);
+
+        const blocked = apertureBackend!.tryInteract(0, ray, {
+            ...hit,
+            localPoint: new Vector3(3, 0, 0),
+        });
+        expect(blocked).not.toBeNull();
+        expect(blocked!.rays).toHaveLength(0);
+
+        const mirror = new Mirror(10, 4, 'Packed Mirror');
+        const mirrorBackend = createWasmPackedInteractionBackend(makeValidModule(), createPackedTraceScene([mirror]));
+        expect(mirrorBackend).not.toBeNull();
+        const mirrored = mirrorBackend!.tryInteract(0, ray, {
+            ...hit,
+            t: 8,
+            localPoint: new Vector3(0, 0, -2),
+            localNormal: new Vector3(0, 0, -1),
+        });
+        expect(mirrored).not.toBeNull();
+        expect(mirrored!.passthrough).toBe(false);
+        expect(mirrored!.rays[0].direction.z).toBe(-1);
+        expect(mirrored!.rays[0].polarization.x.re).toBe(-1);
+        expect(mirrored!.rays[0].opticalPathLength).toBe(10);
     });
 });

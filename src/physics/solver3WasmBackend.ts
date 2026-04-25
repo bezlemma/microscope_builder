@@ -5,6 +5,8 @@ import {
     PACKED_COMPONENT_BOUNDS_STRIDE,
     PACKED_COMPONENT_MATRIX_STRIDE,
     PACKED_DETECTOR_BASIS_STRIDE,
+    PACKED_INTERACTION_INPUT_STRIDE,
+    PACKED_INTERACTION_OUTPUT_STRIDE,
     SOLVER3_KERNEL_ABI_VERSION,
     SOLVER3_KERNEL_STATUS_OK,
     SOLVER3_KERNEL_STATUS_UNIMPLEMENTED,
@@ -54,6 +56,17 @@ export interface Solver3WasmExports {
         candidateTNearPtr: number,
     ): number;
     solver3_surface_param_stride?(): number;
+    solver3_interaction_input_stride?(): number;
+    solver3_interaction_output_stride?(): number;
+    solver3_apply_packed_interaction?(
+        headerPtr: number,
+        localToWorldPtr: number,
+        interactionKindsPtr: number,
+        surfaceParamsPtr: number,
+        componentCount: number,
+        inputPtr: number,
+        outputPtr: number,
+    ): number;
     solver3_analytic_narrow_phase?(
         headerPtr: number,
         worldToLocalPtr: number,
@@ -109,6 +122,14 @@ export function validateSolver3WasmModule(module: Solver3WasmModule | null | und
     if (module.exports.solver3_beam_segment_scalar_stride() !== PACKED_BEAM_SEGMENT_SCALAR_STRIDE) {
         return { ok: false, reason: 'beam stride mismatch' };
     }
+    if (typeof module.exports.solver3_interaction_input_stride === 'function'
+        && module.exports.solver3_interaction_input_stride() !== PACKED_INTERACTION_INPUT_STRIDE) {
+        return { ok: false, reason: 'interaction input stride mismatch' };
+    }
+    if (typeof module.exports.solver3_interaction_output_stride === 'function'
+        && module.exports.solver3_interaction_output_stride() !== PACKED_INTERACTION_OUTPUT_STRIDE) {
+        return { ok: false, reason: 'interaction output stride mismatch' };
+    }
 
     return { ok: true };
 }
@@ -138,14 +159,23 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
             ? this.module.exports.solver3_validate_packet_header(headerPtr)
             : SOLVER3_KERNEL_STATUS_UNIMPLEMENTED;
 
-        const packet = (headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK)
+        const useWasmSampler = !request.activePixelMask && (request.rowWorkerCount === undefined || request.rowWorkerCount <= 1);
+        const packet = (useWasmSampler && headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK)
             ? createPackedCameraSamplesFromWasm(this.module, header, request.packet)
             : null;
 
-        if (packet) {
-            const hints = createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, packet);
-            const analytic = hints ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, packet, hints) : null;
-            return this.fallback.renderCameraSamples(request, packet, hints ?? undefined, analytic ?? undefined);
+        if (headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK) {
+            const resolvedPacket = packet ?? createJsPackedCameraSamples(
+                request.snapshot,
+                null,
+                request.snapshot.sensorResX * request.snapshot.sensorResY * Math.max(1, request.snapshot.samplesPerPixel),
+                request.rowWorkerId,
+                request.rowWorkerCount,
+                request.activePixelMask,
+            );
+            const hints = createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket);
+            const analytic = hints ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, hints) : null;
+            return this.fallback.renderCameraSamples(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
         }
 
         if (typeof this.module.exports.solver3_render_camera_stub === 'function' && headerPtr !== null) {
@@ -155,7 +185,14 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
             }
         }
 
-        const jsPacket = createJsPackedCameraSamples(request.snapshot);
+        const jsPacket = createJsPackedCameraSamples(
+            request.snapshot,
+            null,
+            request.snapshot.sensorResX * request.snapshot.sensorResY * Math.max(1, request.snapshot.samplesPerPixel),
+            request.rowWorkerId,
+            request.rowWorkerCount,
+            request.activePixelMask,
+        );
         return this.fallback.renderCameraSamples(request, jsPacket);
     }
 
@@ -167,14 +204,22 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
         const valid = headerPtr !== null
             ? this.module.exports.solver3_validate_packet_header(headerPtr)
             : SOLVER3_KERNEL_STATUS_UNIMPLEMENTED;
-        const packet = (headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK)
+        const useWasmSampler = !request.activePixelMask && (request.rowWorkerCount === undefined || request.rowWorkerCount <= 1);
+        const packet = (useWasmSampler && headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK)
             ? createPackedCameraSamplesFromWasm(this.module, header, request.packet)
             : null;
-        const resolvedPacket = packet ?? createJsPackedCameraSamples(request.snapshot);
-        const hints = packet
+        const resolvedPacket = packet ?? createJsPackedCameraSamples(
+            request.snapshot,
+            null,
+            request.snapshot.sensorResX * request.snapshot.sensorResY * Math.max(1, request.snapshot.samplesPerPixel),
+            request.rowWorkerId,
+            request.rowWorkerCount,
+            request.activePixelMask,
+        );
+        const hints = (headerPtr !== null && valid === SOLVER3_KERNEL_STATUS_OK)
             ? createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket)
             : null;
-        const analytic = (packet && hints)
+        const analytic = hints
             ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, hints)
             : null;
         return yield* this.fallback.renderCameraSamplesGenerator(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
@@ -190,7 +235,7 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
 }
 
 export function readRegisteredSolver3WasmModule(): Solver3WasmModule | null {
-    const candidate = (globalThis as typeof globalThis & { __BOMB_SOLVER3_WASM__?: Solver3WasmModule }).__BOMB_SOLVER3_WASM__;
+    const candidate = (globalThis as typeof globalThis & { __MICROSCOPE_SOLVER3_WASM__?: Solver3WasmModule }).__MICROSCOPE_SOLVER3_WASM__;
     const validation = validateSolver3WasmModule(candidate);
     return validation.ok ? candidate! : null;
 }

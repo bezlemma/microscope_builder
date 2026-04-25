@@ -52,7 +52,7 @@ export const ControlsHelp: React.FC = () => {
                         fontSize: '11px',
                         lineHeight: '1.6',
                         zIndex: 100,
-                        maxHeight: 'calc(100vh - 80px)',
+                        maxHeight: 'calc(var(--app-height, 100dvh) - 80px)',
                         overflowY: 'auto',
                     }}
                 >

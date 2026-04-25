@@ -9,10 +9,11 @@ import {
     Type,
     ArrowRight,
     Redo2,
+    X,
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, presetDescriptionAtom } from '../state/store';
+import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom } from '../state/store';
 import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
@@ -21,7 +22,11 @@ import { useIsMobile, useIsLandscape } from './useIsMobile';
 
 const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: string, label: string, icon: any, onDragStarted?: () => void }) => {
     const isMobile = useIsMobile();
+    const [hovered, setHovered] = useState(false);
+    const [dragging, setDragging] = useState(false);
+    const active = hovered || dragging;
     const handleDragStart = (e: React.DragEvent) => {
+        setDragging(true);
         e.dataTransfer.setData('componentType', type);
         e.dataTransfer.effectAllowed = 'copy';
         onDragStarted?.();
@@ -31,32 +36,27 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
         <div
             draggable
             onDragStart={handleDragStart}
+            onDragEnd={() => setDragging(false)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
             style={{
                 display: 'flex',
                 alignItems: 'center',
                 padding: isMobile ? '4px 6px 4px 16px' : '6px 12px 6px 24px',
                 margin: isMobile ? '1px 0' : '2px 0',
-                backgroundColor: '#252525',
+                backgroundColor: active ? '#303842' : '#252525',
                 cursor: 'grab',
-                border: '1px solid transparent',
+                border: `1px solid ${active ? '#4b6b7a' : 'transparent'}`,
                 borderRadius: '4px',
                 transition: 'all 0.15s ease',
                 userSelect: 'none',
                 fontSize: isMobile ? '11px' : '13px',
-                color: '#ccc'
-            }}
-            onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#333';
-                e.currentTarget.style.borderColor = '#555';
-                e.currentTarget.style.color = '#fff';
-            }}
-            onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = '#252525';
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.color = '#ccc';
+                color: active ? '#fff' : '#ccc',
+                boxShadow: active ? 'inset 0 0 0 1px rgba(100,255,218,0.16), 0 2px 8px rgba(0,0,0,0.18)' : 'none',
+                transform: active ? 'translateX(2px)' : 'translateX(0)',
             }}
         >
-            <Icon size={isMobile ? 11 : 14} style={{ marginRight: isMobile ? '5px' : '8px', color: '#64ffda', flexShrink: 0 }} />
+            <Icon size={isMobile ? 11 : 14} style={{ marginRight: isMobile ? '5px' : '8px', color: active ? '#9dfdeb' : '#64ffda', flexShrink: 0 }} />
             <span style={{ fontWeight: 400 }}>{label}</span>
         </div>
     );
@@ -98,6 +98,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#64ffda',
         items: [
             { type: 'lens', label: 'Spherical Lens', icon: Circle },
+            { type: 'asphericLens', label: 'Aspheric Lens', icon: Circle },
             { type: 'cylindricalLens', label: 'Cylindrical Lens', icon: Circle },
             { type: 'idealLens', label: 'Ideal Lens', icon: Circle },
             { type: 'achromatDoublet', label: 'Achromatic Doublet', icon: Circle },
@@ -151,6 +152,7 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'sampleSlide', label: '2D Sample Holder', icon: Box },
             { type: 'sample', label: 'Sample (Mickey)', icon: Box },
             { type: 'lChamber', label: 'X Sample Holder', icon: Box },
+            { type: 'trappedBead', label: 'Trapped Bead', icon: Circle },
             { type: 'mediumVolume', label: 'Medium Volume', icon: Box },
         ]
     },
@@ -293,7 +295,6 @@ const ComponentGroupSection = ({
 
 export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
-    const [presetDescription] = useAtom(presetDescriptionAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [components] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
@@ -416,7 +417,7 @@ export const Sidebar: React.FC = () => {
                         top: 0,
                         left: 0,
                         width: '100vw',
-                        height: '100vh',
+                        height: 'var(--app-height, 100dvh)',
                         backgroundColor: 'rgba(0,0,0,0.4)',
                         zIndex: 14,
                     }}
@@ -468,27 +469,56 @@ export const Sidebar: React.FC = () => {
                 flexDirection: 'column',
                 transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
                 transition: 'transform 0.25s ease',
+                fontFamily: 'var(--ui-font)',
             }}>
-                {/* Mobile close button */}
-                {isMobile && (
-                    <button
-                        onClick={() => setMobileOpen(false)}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    marginBottom: isMobile ? 6 : 10,
+                }}>
+                    <a
+                        href="https://bezialemma.com/"
                         style={{
-                            alignSelf: 'flex-end',
-                            background: 'none',
-                            border: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
                             color: '#888',
-                            fontSize: '20px',
-                            cursor: 'pointer',
-                            padding: '4px 8px',
-                            marginBottom: 4,
+                            fontSize: isMobile ? '10px' : '11px',
+                            textDecoration: 'none',
+                            transition: 'color 0.15s',
                         }}
+                        onMouseOver={(e) => { e.currentTarget.style.color = '#64ffda'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.color = '#888'; }}
                     >
-                        ✕
-                    </button>
-                )}
+                        ← Bezia Lemma
+                    </a>
+                    {isMobile && (
+                        <button
+                            type="button"
+                            aria-label="Close sidebar"
+                            title="Close sidebar"
+                            onClick={() => setMobileOpen(false)}
+                            style={{
+                                width: 28,
+                                height: 28,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'transparent',
+                                border: '1px solid transparent',
+                                borderRadius: 4,
+                                color: '#888',
+                                cursor: 'pointer',
+                                padding: 0,
+                            }}
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
                 <div style={{ flex: 1 }}>
-                    {/* BOMB brand — giant caps inlined in "Bez's Optics & Microscope Builder" on one line. */}
+                    {/* Brand mark: giant caps inlined in "Bez's Optics & Microscope Builder" on one line. */}
                     <div style={{ marginBottom: isMobile ? 6 : 10 }}>
                         {(() => {
                             const smallPx = isMobile ? 10 : 12;
@@ -505,7 +535,7 @@ export const Sidebar: React.FC = () => {
                             };
                             return (
                                 <div style={{
-                                    fontFamily: 'Inter, sans-serif',
+                                    fontFamily: 'var(--ui-font)',
                                     color: '#007fff',
                                     textShadow: '0 0 8px rgba(0,127,255,0.85), 0 0 16px rgba(0,127,255,0.5)',
                                     // Desktop fits the whole title on one line; mobile's 170px sidebar
@@ -524,35 +554,6 @@ export const Sidebar: React.FC = () => {
                             );
                         })()}
                     </div>
-                    {presetDescription && (
-                        <div style={{
-                            marginBottom: isMobile ? 8 : 12,
-                            padding: isMobile ? '5px 7px' : '8px 10px',
-                            border: '1px solid #1e3b5a',
-                            borderRadius: 5,
-                            background: 'rgba(0,127,255,0.06)',
-                            fontSize: isMobile ? '10px' : '11px',
-                            lineHeight: 1.35,
-                            color: '#c6d8e8',
-                        }}>
-                            {presetDescription}
-                        </div>
-                    )}
-                    <a
-                        href="https://bezialemma.com/"
-                        style={{
-                            display: 'block',
-                            color: '#888',
-                            fontSize: '10px',
-                            textDecoration: 'none',
-                            marginBottom: '8px',
-                            transition: 'color 0.15s',
-                        }}
-                        onMouseOver={(e) => { e.currentTarget.style.color = '#64ffda'; }}
-                        onMouseOut={(e) => { e.currentTarget.style.color = '#888'; }}
-                    >
-                        ← Bezia Lemma
-                    </a>
                     <h3 style={{
                         color: '#fff',
                         marginBottom: '12px',
@@ -726,6 +727,11 @@ export const Sidebar: React.FC = () => {
                             active={activePreset === PresetName.MZInterferometer}
                             onClick={() => handlePresetClick(PresetName.MZInterferometer)}
                         />
+                        <PresetButton
+                            label="Optical Trap"
+                            active={activePreset === PresetName.OpticalTrap}
+                            onClick={() => handlePresetClick(PresetName.OpticalTrap)}
+                        />
                     </PresetCategory>
 
                     <PresetCategory
@@ -745,6 +751,11 @@ export const Sidebar: React.FC = () => {
                         isOpen={openPresetCat === 'Debugs'}
                         onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
                     >
+                        <PresetButton
+                            label="Tutorial"
+                            active={activePreset === PresetName.Tutorial}
+                            onClick={() => handlePresetClick(PresetName.Tutorial)}
+                        />
                         <PresetButton
                             label="Lens Zoo"
                             active={activePreset === PresetName.LensZoo}

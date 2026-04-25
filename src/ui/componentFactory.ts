@@ -1,5 +1,6 @@
 import { OpticalComponent } from '../physics/Component';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AsphericLens } from '../physics/components/AsphericLens';
 import { Mirror } from '../physics/components/Mirror';
 import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
@@ -38,6 +39,7 @@ import { FaradayIsolator } from '../physics/components/FaradayIsolator';
 import { QPD } from '../physics/components/QPD';
 import { AOD } from '../physics/components/AOD';
 import { Annotation } from '../physics/components/Annotation';
+import { TrappedBead } from '../physics/components/TrappedBead';
 import { SpectralProfile } from '../physics/SpectralProfile';
 
 const FOLD_MIRROR_NORMAL = [Math.SQRT1_2, -Math.SQRT1_2, 0] as const;
@@ -51,12 +53,14 @@ const FOLD_OPTIC_TYPES = new Set([
 
 const AXIAL_OPTIC_TYPES = new Set([
     'lens',
+    'asphericLens',
     'laser',
     'lamp',
     'blocker',
     'card',
     'sample',
     'sampleSlide',
+    'trappedBead',
     'idealLens',
     'objective',
     'camera',
@@ -91,6 +95,7 @@ const AXIAL_OPTIC_TYPES = new Set([
 
 export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'lens') return new SphericalLens(1 / 50, 15, 4, 'New Lens');
+    if (type === 'asphericLens') return new AsphericLens({ name: 'Aspheric Lens' });
     if (type === 'mirror') return new Mirror(25, 2, 'New Mirror');
     if (type === 'laser') return new Laser('New Laser');
     if (type === 'lamp') return new Lamp('New Lamp');
@@ -98,6 +103,7 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'card') return new Card(20, 20, 'Viewing Card');
     if (type === 'sample') return new Sample('New Sample');
     if (type === 'sampleSlide') return new Sample('2D Sample Holder');
+    if (type === 'trappedBead') return new TrappedBead(1.0, 1.59, 1.33, 'Trapped Bead');
     if (type === 'idealLens') return new IdealLens(50, 15, 'Ideal Lens');
     if (type === 'objective') return new Objective({ magnification: 10, NA: 0.25, name: 'New Objective' });
     if (type === 'camera') return new Camera(13, 13, 'New Camera');

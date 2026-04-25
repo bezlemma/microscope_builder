@@ -5,10 +5,21 @@ pub const PACKED_DETECTOR_BASIS_STRIDE: u32 = 12;
 pub const PACKED_BEAM_SEGMENT_SCALAR_STRIDE: u32 = 27;
 pub const PACKED_CAMERA_SAMPLE_STRIDE: u32 = 10;
 pub const PACKED_SURFACE_PARAM_STRIDE: u32 = 8;
+pub const PACKED_INTERACTION_INPUT_STRIDE: u32 = 16;
+pub const PACKED_INTERACTION_OUTPUT_STRIDE: u32 = 16;
 
 pub const SURFACE_KIND_UNSUPPORTED: u8 = 0;
 pub const SURFACE_KIND_FLAT_DISC: u8 = 1;        // params: inner_r, outer_r, absorbs_ring (1|0)
 pub const SURFACE_KIND_THICK_LENS: u8 = 2;       // params: R1, R2, thickness, aperture, ior
+pub const SURFACE_KIND_MIRROR_DISC: u8 = 3;      // params: radius, half_thickness
+
+pub const INTERACTION_KIND_UNSUPPORTED: u8 = 0;
+pub const INTERACTION_KIND_APERTURE: u8 = 1;
+pub const INTERACTION_KIND_MIRROR: u8 = 2;
+
+pub const INTERACTION_STATUS_UNSUPPORTED: f64 = 0.0;
+pub const INTERACTION_STATUS_RAY: f64 = 1.0;
+pub const INTERACTION_STATUS_ABSORBED: f64 = 2.0;
 
 pub const STATUS_OK: u32 = 0;
 pub const STATUS_UNSUPPORTED_ABI: u32 = 1;
@@ -56,6 +67,16 @@ pub extern "C" fn solver3_camera_sample_stride() -> u32 {
 #[no_mangle]
 pub extern "C" fn solver3_surface_param_stride() -> u32 {
     PACKED_SURFACE_PARAM_STRIDE
+}
+
+#[no_mangle]
+pub extern "C" fn solver3_interaction_input_stride() -> u32 {
+    PACKED_INTERACTION_INPUT_STRIDE
+}
+
+#[no_mangle]
+pub extern "C" fn solver3_interaction_output_stride() -> u32 {
+    PACKED_INTERACTION_OUTPUT_STRIDE
 }
 
 #[no_mangle]
@@ -575,6 +596,42 @@ fn ray_thick_lens(
     })
 }
 
+fn ray_mirror_disc(
+    origin: (f64, f64, f64),
+    direction: (f64, f64, f64),
+    radius: f64,
+    half_thickness: f64,
+) -> Option<AnalyticHit> {
+    let dw = direction.2;
+    if dw.abs() < 1e-6 {
+        return None;
+    }
+
+    let mut best: Option<AnalyticHit> = None;
+    for plane_z in [-half_thickness, half_thickness] {
+        let t = (plane_z - origin.2) / dw;
+        if t < 0.001 {
+            continue;
+        }
+        if best.map_or(false, |b| t >= b.t) {
+            continue;
+        }
+        let hx = origin.0 + direction.0 * t;
+        let hy = origin.1 + direction.1 * t;
+        if hx * hx + hy * hy > radius * radius {
+            continue;
+        }
+        best = Some(AnalyticHit {
+            t,
+            point: [hx, hy, plane_z],
+            normal: [0.0, 0.0, if plane_z > 0.0 { 1.0 } else { -1.0 }],
+            is_blocked: 0,
+            _pad: [0; 7],
+        });
+    }
+    best
+}
+
 /// Batch analytic narrow-phase: for each sample ray, walks its candidate list
 /// (from `solver3_generate_first_hit_hints`) and, for each candidate whose
 /// surface_kind is supported, computes the analytic hit in local frame.
@@ -689,6 +746,12 @@ pub extern "C" fn solver3_analytic_narrow_phase(
                     params[2],
                     params[3],
                 ),
+                SURFACE_KIND_MIRROR_DISC => ray_mirror_disc(
+                    local_origin,
+                    local_direction,
+                    params[0],
+                    params[1],
+                ),
                 _ => None,
             };
             if let Some(h) = hit {
@@ -721,6 +784,160 @@ pub extern "C" fn solver3_analytic_narrow_phase(
     found
 }
 
+/// Apply one deterministic component interaction using the same packed scene
+/// representation as the analytic narrow phase.
+///
+/// This intentionally handles only interactions that are single-output and do
+/// not depend on spectral/branching component state outside the packed scene:
+///   - Aperture: absorb on the annulus, otherwise pass through.
+///   - Mirror: reflect from the front face with a pi phase flip.
+///
+/// Input layout (PACKED_INTERACTION_INPUT_STRIDE f64s):
+///   [0] component index
+///   [1] hit t
+///   [2..5] local hit point
+///   [5..8] local hit normal
+///   [8..11] world ray origin (reserved for future kernels)
+///   [11..14] world ray direction
+///   [14] ray intensity
+///   [15] ray optical path length
+///
+/// Output layout (PACKED_INTERACTION_OUTPUT_STRIDE f64s):
+///   [0] status: 0 unsupported, 1 one child ray, 2 absorbed
+///   [1] passthrough flag
+///   [2..5] child origin
+///   [5..8] child direction
+///   [8] child intensity
+///   [9] child optical path length
+///   [10..12] scalar complex polarization multiplier
+#[no_mangle]
+pub extern "C" fn solver3_apply_packed_interaction(
+    header_ptr: *const Solver3PacketHeader,
+    local_to_world_ptr: *const f64,
+    interaction_kinds_ptr: *const u8,
+    surface_params_ptr: *const f64,
+    component_count: u32,
+    input_ptr: *const f64,
+    output_ptr: *mut f64,
+) -> u32 {
+    if solver3_validate_packet_header(header_ptr) != STATUS_OK {
+        return 0;
+    }
+    if local_to_world_ptr.is_null()
+        || interaction_kinds_ptr.is_null()
+        || surface_params_ptr.is_null()
+        || input_ptr.is_null()
+        || output_ptr.is_null()
+    {
+        return 0;
+    }
+
+    let cc = component_count as usize;
+    let local_to_world = unsafe {
+        std::slice::from_raw_parts(local_to_world_ptr, cc * PACKED_COMPONENT_MATRIX_STRIDE as usize)
+    };
+    let interaction_kinds = unsafe { std::slice::from_raw_parts(interaction_kinds_ptr, cc) };
+    let surface_params = unsafe {
+        std::slice::from_raw_parts(surface_params_ptr, cc * PACKED_SURFACE_PARAM_STRIDE as usize)
+    };
+    let input = unsafe {
+        std::slice::from_raw_parts(input_ptr, PACKED_INTERACTION_INPUT_STRIDE as usize)
+    };
+    let output = unsafe {
+        std::slice::from_raw_parts_mut(output_ptr, PACKED_INTERACTION_OUTPUT_STRIDE as usize)
+    };
+
+    for value in output.iter_mut() {
+        *value = 0.0;
+    }
+
+    if !input[0].is_finite() || input[0] < 0.0 {
+        return 0;
+    }
+    let ci = input[0] as usize;
+    if ci >= cc {
+        return 0;
+    }
+
+    let kind = interaction_kinds[ci];
+    if kind == INTERACTION_KIND_UNSUPPORTED {
+        return 0;
+    }
+
+    let hit_t = input[1];
+    let local_point = (input[2], input[3], input[4]);
+    let local_normal = normalize3(input[5], input[6], input[7]);
+    let world_dir = normalize3(input[11], input[12], input[13]);
+    let intensity = input[14].max(0.0);
+    let optical_path_length = input[15] + hit_t.max(0.0);
+
+    let matrix_base = ci * PACKED_COMPONENT_MATRIX_STRIDE as usize;
+    let l2w = &local_to_world[matrix_base..matrix_base + PACKED_COMPONENT_MATRIX_STRIDE as usize];
+    let world_point = transform_point(l2w, local_point);
+
+    match kind {
+        INTERACTION_KIND_APERTURE => {
+            let param_base = ci * PACKED_SURFACE_PARAM_STRIDE as usize;
+            let params = &surface_params[param_base..param_base + PACKED_SURFACE_PARAM_STRIDE as usize];
+            let inner_r = params[0].max(0.0);
+            let outer_r = params[1].max(inner_r);
+            let absorbing_ring = params[2] >= 0.5;
+            let r_sq = local_point.0 * local_point.0 + local_point.1 * local_point.1;
+            if r_sq > outer_r * outer_r + 1e-9 || !absorbing_ring {
+                return 0;
+            }
+            if r_sq >= inner_r * inner_r {
+                output[0] = INTERACTION_STATUS_ABSORBED;
+                return 1;
+            }
+            output[0] = INTERACTION_STATUS_RAY;
+            output[1] = 1.0; // passthrough
+            output[2] = world_point.0;
+            output[3] = world_point.1;
+            output[4] = world_point.2;
+            output[5] = world_dir.0;
+            output[6] = world_dir.1;
+            output[7] = world_dir.2;
+            output[8] = intensity;
+            output[9] = optical_path_length;
+            output[10] = 1.0;
+            output[11] = 0.0;
+            return 1;
+        }
+        INTERACTION_KIND_MIRROR => {
+            let world_normal = transform_direction(l2w, local_normal);
+            let dot = world_dir.0 * world_normal.0
+                + world_dir.1 * world_normal.1
+                + world_dir.2 * world_normal.2;
+            if dot >= 0.0 {
+                output[0] = INTERACTION_STATUS_ABSORBED;
+                return 1;
+            }
+            let reflected = normalize3(
+                world_dir.0 - 2.0 * dot * world_normal.0,
+                world_dir.1 - 2.0 * dot * world_normal.1,
+                world_dir.2 - 2.0 * dot * world_normal.2,
+            );
+            output[0] = INTERACTION_STATUS_RAY;
+            output[1] = 0.0;
+            output[2] = world_point.0;
+            output[3] = world_point.1;
+            output[4] = world_point.2;
+            output[5] = reflected.0;
+            output[6] = reflected.1;
+            output[7] = reflected.2;
+            output[8] = intensity;
+            output[9] = optical_path_length;
+            output[10] = -1.0;
+            output[11] = 0.0;
+            return 1;
+        }
+        _ => {}
+    }
+
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -733,6 +950,8 @@ mod tests {
         assert_eq!(solver3_detector_basis_stride(), 12);
         assert_eq!(solver3_beam_segment_scalar_stride(), 27);
         assert_eq!(solver3_camera_sample_stride(), 10);
+        assert_eq!(solver3_interaction_input_stride(), 16);
+        assert_eq!(solver3_interaction_output_stride(), 16);
     }
 
     #[test]
@@ -877,5 +1096,125 @@ mod tests {
         let hit = ray_thick_lens((0.0, 0.0, -10.0), (0.0, 0.0, 1.0), 1e9, -50.0, 3.0, 12.0).unwrap();
         // Flat front apex at -1.5.
         assert!((hit.t - 8.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mirror_disc_hits_nearest_face() {
+        let hit = ray_mirror_disc((0.0, 0.0, -10.0), (0.0, 0.0, 1.0), 5.0, 2.0).unwrap();
+        assert!((hit.t - 8.0).abs() < 1e-9);
+        assert_eq!(hit.normal, [0.0, 0.0, -1.0]);
+        assert!(ray_mirror_disc((6.0, 0.0, -10.0), (0.0, 0.0, 1.0), 5.0, 2.0).is_none());
+    }
+
+    #[test]
+    fn packed_aperture_interaction_passes_opening_and_absorbs_ring() {
+        let header = Solver3PacketHeader {
+            abi_version: SOLVER3_KERNEL_ABI_VERSION,
+            trace_component_count: 1,
+            beam_branch_count: 0,
+            beam_segment_count: 0,
+            detector_kind: 1,
+        };
+        let local_to_world = [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ];
+        let kinds = [INTERACTION_KIND_APERTURE];
+        let params = [2.0, 10.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let pass_input = [
+            0.0, 5.0,
+            0.0, 0.0, 0.0,
+            0.0, 0.0, -1.0,
+            0.0, 0.0, -5.0,
+            0.0, 0.0, 1.0,
+            0.75, 2.0,
+        ];
+        let mut output = [0.0; PACKED_INTERACTION_OUTPUT_STRIDE as usize];
+
+        let handled = solver3_apply_packed_interaction(
+            &header,
+            local_to_world.as_ptr(),
+            kinds.as_ptr(),
+            params.as_ptr(),
+            1,
+            pass_input.as_ptr(),
+            output.as_mut_ptr(),
+        );
+
+        assert_eq!(handled, 1);
+        assert_eq!(output[0], INTERACTION_STATUS_RAY);
+        assert_eq!(output[1], 1.0);
+        assert_eq!(output[8], 0.75);
+        assert_eq!(output[9], 7.0);
+
+        let blocked_input = [
+            0.0, 5.0,
+            4.0, 0.0, 0.0,
+            0.0, 0.0, -1.0,
+            4.0, 0.0, -5.0,
+            0.0, 0.0, 1.0,
+            1.0, 0.0,
+        ];
+        let mut blocked_output = [0.0; PACKED_INTERACTION_OUTPUT_STRIDE as usize];
+        let blocked = solver3_apply_packed_interaction(
+            &header,
+            local_to_world.as_ptr(),
+            kinds.as_ptr(),
+            params.as_ptr(),
+            1,
+            blocked_input.as_ptr(),
+            blocked_output.as_mut_ptr(),
+        );
+
+        assert_eq!(blocked, 1);
+        assert_eq!(blocked_output[0], INTERACTION_STATUS_ABSORBED);
+    }
+
+    #[test]
+    fn packed_mirror_interaction_reflects_front_face_and_phase_flips() {
+        let header = Solver3PacketHeader {
+            abi_version: SOLVER3_KERNEL_ABI_VERSION,
+            trace_component_count: 1,
+            beam_branch_count: 0,
+            beam_segment_count: 0,
+            detector_kind: 1,
+        };
+        let local_to_world = [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ];
+        let kinds = [INTERACTION_KIND_MIRROR];
+        let params = [5.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let input = [
+            0.0, 8.0,
+            0.0, 0.0, -2.0,
+            0.0, 0.0, -1.0,
+            0.0, 0.0, -10.0,
+            0.0, 0.0, 1.0,
+            1.0, 3.0,
+        ];
+        let mut output = [0.0; PACKED_INTERACTION_OUTPUT_STRIDE as usize];
+
+        let handled = solver3_apply_packed_interaction(
+            &header,
+            local_to_world.as_ptr(),
+            kinds.as_ptr(),
+            params.as_ptr(),
+            1,
+            input.as_ptr(),
+            output.as_mut_ptr(),
+        );
+
+        assert_eq!(handled, 1);
+        assert_eq!(output[0], INTERACTION_STATUS_RAY);
+        assert_eq!(output[5], 0.0);
+        assert_eq!(output[6], 0.0);
+        assert_eq!(output[7], -1.0);
+        assert_eq!(output[9], 11.0);
+        assert_eq!(output[10], -1.0);
     }
 }

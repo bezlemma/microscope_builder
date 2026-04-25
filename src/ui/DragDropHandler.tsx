@@ -5,6 +5,7 @@ import { componentsAtom, pushUndoAtom, activeZLevelAtom, railPlacementAtom } fro
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { applyDefaultPlacementOrientation, createComponentForType } from './componentFactory';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
+import { useHaptic } from './useHaptic';
 
 export const DragDropHandler: React.FC = () => {
     const { camera, gl } = useThree();
@@ -12,6 +13,7 @@ export const DragDropHandler: React.FC = () => {
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [activeZ] = useAtom(activeZLevelAtom);
     const [, setRailPlacement] = useAtom(railPlacementAtom);
+    const haptic = useHaptic();
 
     useEffect(() => {
         const handleDragOver = (e: DragEvent) => {
@@ -23,9 +25,7 @@ export const DragDropHandler: React.FC = () => {
             const type = e.dataTransfer?.getData('componentType');
             if (!type) return;
 
-            if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(50);
-            }
+            haptic.tap();
 
             // Rails and arrow annotations use two-click placement: first
             // click = start hole, second click = end hole, then the actual
@@ -48,8 +48,7 @@ export const DragDropHandler: React.FC = () => {
             raycaster.setFromCamera(new Vector2(x, y), camera);
             const plane = new Plane(new Vector3(0, 0, 1), -activeZ);
             const target = new Vector3();
-            raycaster.ray.intersectPlane(plane, target);
-            if (!target) return;
+            if (!raycaster.ray.intersectPlane(plane, target)) return;
 
             const newComp = createComponentForType(type);
             if (newComp) {
@@ -72,7 +71,7 @@ export const DragDropHandler: React.FC = () => {
             targetEl.removeEventListener('dragover', handleDragOver);
             targetEl.removeEventListener('drop', handleDrop);
         };
-    }, [camera, gl, setComponents, pushUndo, activeZ, setRailPlacement]);
+    }, [camera, gl, setComponents, pushUndo, activeZ, setRailPlacement, haptic]);
 
     return null;
 };

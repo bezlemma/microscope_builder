@@ -112,6 +112,7 @@ export const AxesWidget: React.FC = () => {
             pointerEvents: 'none',
         }}>
             <Canvas
+                dpr={[1, 1.5]}
                 camera={{ position: [0, 0, 5], fov: 50 }}
                 style={{ pointerEvents: 'auto' }}
                 gl={{ alpha: true, antialias: true }}

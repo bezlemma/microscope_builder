@@ -34,11 +34,6 @@ export interface UnpackedCameraSample {
     polarization: { x: number; y: number };
 }
 
-function normalizeDirection(x: number, y: number, z: number): [number, number, number] {
-    const len = Math.hypot(x, y, z) || 1;
-    return [x / len, y / len, z / len];
-}
-
 function alignOffset(offset: number, alignment: number): number {
     return Math.ceil(offset / alignment) * alignment;
 }
@@ -59,11 +54,20 @@ export function createJsPackedCameraSamples(
     camera: CameraKernelSnapshot,
     pupil: PupilTarget | null = null,
     raysPerPass: number = 1024,
+    rowWorkerId: number = 0,
+    rowWorkerCount: number = 1,
+    activePixelMask?: Uint8Array,
 ): PackedCameraSamples {
     const resX = camera.sensorResX;
     const resY = camera.sensorResY;
     const rowOffsets = new Uint32Array(resY + 1);
     const sinThetaMax = Math.min(camera.sensorNA, 1.0);
+    const workerCount = Math.max(1, rowWorkerCount | 0);
+    const workerId = Math.max(0, Math.min(workerCount - 1, rowWorkerId | 0));
+    const camX = camera.position.x, camY = camera.position.y, camZ = camera.position.z;
+    const fX = camera.forward.x, fY = camera.forward.y, fZ = camera.forward.z;
+    const uX = camera.uAxis.x, uY = camera.uAxis.y, uZ = camera.uAxis.z;
+    const vX = camera.vAxis.x, vY = camera.vAxis.y, vZ = camera.vAxis.z;
 
     // Build an orthonormal pupil basis if a pupil target is provided.
     let pupilU: Vector3 | null = null;
@@ -87,34 +91,36 @@ export function createJsPackedCameraSamples(
     // additional samples (we'd need progressive accumulation to benefit).
     const pixelCount = resX * resY;
     const samplesPerPixel = Math.min(8, Math.max(1, Math.ceil(raysPerPass / pixelCount)));
-    const sampleCount = samplesPerPixel * pixelCount;
-    const sampleScalars = new Float64Array(sampleCount * PACKED_CAMERA_SAMPLE_STRIDE);
-    const samplesPerRow: { px: number; jitterX: number; jitterY: number }[][] = Array.from({ length: resY }, () => []);
+    let assignedPixels = 0;
     for (let py = 0; py < resY; py++) {
-        const row = samplesPerRow[py];
-        for (let px = 0; px < resX; px++) {
-            for (let s = 0; s < samplesPerPixel; s++) {
-                row.push({
-                    px,
-                    jitterX: Math.random() - 0.5,
-                    jitterY: Math.random() - 0.5,
-                });
+        if ((py % workerCount) !== workerId) continue;
+        if (!activePixelMask) {
+            assignedPixels += resX;
+        } else {
+            for (let px = 0; px < resX; px++) {
+                if (activePixelMask[py * resX + px] !== 0) assignedPixels++;
             }
         }
     }
+    const sampleCount = samplesPerPixel * assignedPixels;
+    const sampleScalars = new Float64Array(sampleCount * PACKED_CAMERA_SAMPLE_STRIDE);
 
     let sampleIndex = 0;
     for (let py = 0; py < resY; py++) {
         rowOffsets[py] = sampleIndex;
-        for (const sample of samplesPerRow[py]) {
-            const { px, jitterX, jitterY } = sample;
-            const u = ((px + 0.5 + jitterX) / resX - 0.5) * camera.width;
-            const v = ((py + 0.5 + jitterY) / resY - 0.5) * camera.height;
-            const sensorPoint = camera.position.clone()
-                .add(camera.uAxis.clone().multiplyScalar(u))
-                .add(camera.vAxis.clone().multiplyScalar(v));
+        if ((py % workerCount) !== workerId) continue;
+        for (let px = 0; px < resX; px++) {
+            if (activePixelMask && activePixelMask[py * resX + px] === 0) continue;
+            for (let s = 0; s < samplesPerPixel; s++) {
+                const jitterX = Math.random() - 0.5;
+                const jitterY = Math.random() - 0.5;
+                const u = ((px + 0.5 + jitterX) / resX - 0.5) * camera.width;
+                const v = ((py + 0.5 + jitterY) / resY - 0.5) * camera.height;
+                const sensorX = camX + uX * u + vX * v;
+                const sensorY = camY + uY * u + vY * v;
+                const sensorZ = camZ + uZ * u + vZ * v;
 
-            let dx: number, dy: number, dz: number;
+                let dx: number, dy: number, dz: number;
 
                 if (pupil && pupilU && pupilV) {
                     // Sample a uniform point on the pupil disc and aim the
@@ -124,14 +130,18 @@ export function createJsPackedCameraSamples(
                     // Mickey image in microscope presets).
                     const phiP = Math.random() * 2 * Math.PI;
                     const rP = pupil.radius * Math.sqrt(Math.random());
-                    const target = pupil.center.clone()
-                        .addScaledVector(pupilU, rP * Math.cos(phiP))
-                        .addScaledVector(pupilV, rP * Math.sin(phiP));
-                    const dir = target.sub(sensorPoint);
-                    const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
-                    dx = dir.x / len;
-                    dy = dir.y / len;
-                    dz = dir.z / len;
+                    const cosP = Math.cos(phiP);
+                    const sinP = Math.sin(phiP);
+                    const targetX = pupil.center.x + pupilU.x * (rP * cosP) + pupilV.x * (rP * sinP);
+                    const targetY = pupil.center.y + pupilU.y * (rP * cosP) + pupilV.y * (rP * sinP);
+                    const targetZ = pupil.center.z + pupilU.z * (rP * cosP) + pupilV.z * (rP * sinP);
+                    const dirX = targetX - sensorX;
+                    const dirY = targetY - sensorY;
+                    const dirZ = targetZ - sensorZ;
+                    const len = Math.hypot(dirX, dirY, dirZ) || 1;
+                    dx = dirX / len;
+                    dy = dirY / len;
+                    dz = dirZ / len;
                     // If sensorNA adds extra angular jitter, stir it in around the
                     // pupil-target direction so users can broaden the cone for
                     // quick convergence without breaking pupil coverage.
@@ -139,22 +149,25 @@ export function createJsPackedCameraSamples(
                         const jPhi = Math.random() * 2 * Math.PI;
                         const jSin = sinThetaMax * Math.sqrt(Math.random()) * 0.25;
                         const jCos = Math.sqrt(1 - jSin * jSin);
-                        const [nx, ny, nz] = normalizeDirection(
-                            dx * jCos + camera.uAxis.x * (jSin * Math.cos(jPhi)) + camera.vAxis.x * (jSin * Math.sin(jPhi)),
-                            dy * jCos + camera.uAxis.y * (jSin * Math.cos(jPhi)) + camera.vAxis.y * (jSin * Math.sin(jPhi)),
-                            dz * jCos + camera.uAxis.z * (jSin * Math.cos(jPhi)) + camera.vAxis.z * (jSin * Math.sin(jPhi)),
-                        );
-                        dx = nx; dy = ny; dz = nz;
+                        const cosJ = Math.cos(jPhi);
+                        const sinJ = Math.sin(jPhi);
+                        const nx = dx * jCos + uX * (jSin * cosJ) + vX * (jSin * sinJ);
+                        const ny = dy * jCos + uY * (jSin * cosJ) + vY * (jSin * sinJ);
+                        const nz = dz * jCos + uZ * (jSin * cosJ) + vZ * (jSin * sinJ);
+                        const nLen = Math.hypot(nx, ny, nz) || 1;
+                        dx = nx / nLen; dy = ny / nLen; dz = nz / nLen;
                     }
                 } else {
                     const phi = Math.random() * 2 * Math.PI;
                     const sinTheta = sinThetaMax * Math.sqrt(Math.random());
                     const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
-                    [dx, dy, dz] = normalizeDirection(
-                        camera.forward.x * cosTheta + camera.uAxis.x * (sinTheta * Math.cos(phi)) + camera.vAxis.x * (sinTheta * Math.sin(phi)),
-                        camera.forward.y * cosTheta + camera.uAxis.y * (sinTheta * Math.cos(phi)) + camera.vAxis.y * (sinTheta * Math.sin(phi)),
-                        camera.forward.z * cosTheta + camera.uAxis.z * (sinTheta * Math.cos(phi)) + camera.vAxis.z * (sinTheta * Math.sin(phi)),
-                    );
+                    const cosP = Math.cos(phi);
+                    const sinP = Math.sin(phi);
+                    const nx = fX * cosTheta + uX * (sinTheta * cosP) + vX * (sinTheta * sinP);
+                    const ny = fY * cosTheta + uY * (sinTheta * cosP) + vY * (sinTheta * sinP);
+                    const nz = fZ * cosTheta + uZ * (sinTheta * cosP) + vZ * (sinTheta * sinP);
+                    const nLen = Math.hypot(nx, ny, nz) || 1;
+                    dx = nx / nLen; dy = ny / nLen; dz = nz / nLen;
                 }
                 const polAngle = Math.random() * Math.PI;
 
@@ -162,9 +175,9 @@ export function createJsPackedCameraSamples(
                 sampleScalars.set([
                     px,
                     py,
-                    sensorPoint.x,
-                    sensorPoint.y,
-                    sensorPoint.z,
+                    sensorX,
+                    sensorY,
+                    sensorZ,
                     dx,
                     dy,
                     dz,
@@ -172,6 +185,7 @@ export function createJsPackedCameraSamples(
                     Math.sin(polAngle),
                 ], base);
                 sampleIndex += 1;
+            }
         }
     }
     rowOffsets[resY] = sampleIndex;

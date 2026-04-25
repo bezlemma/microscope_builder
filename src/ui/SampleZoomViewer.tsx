@@ -51,6 +51,8 @@ const MiniView: React.FC<MiniViewProps> = ({
     return (
         <div style={{ position: 'relative', width: cellSize, height: cellSize, background: '#1a1d22', borderRadius: 2 }}>
             <Canvas
+                dpr={[1, 1.5]}
+                gl={{ antialias: true, powerPreference: 'low-power' }}
                 camera={{ position: cameraPos, up: upVec, fov: 35, near: 0.05, far: 200 }}
                 style={{ width: '100%', height: '100%' }}
             >

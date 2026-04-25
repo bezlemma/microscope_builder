@@ -14,6 +14,7 @@ import { Laser } from '../physics/components/Laser';
 import { getComponentTypeName } from '../physics/ComponentRegistry';
 import { Lamp } from '../physics/components/Lamp';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AsphericLens } from '../physics/components/AsphericLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Mirror } from '../physics/components/Mirror';
 import { Blocker } from '../physics/components/Blocker';
@@ -45,7 +46,15 @@ import { QPD } from '../physics/components/QPD';
 import { Rail } from '../physics/components/Rail';
 import { MediumVolume } from '../physics/components/MediumVolume';
 import { PupilMaskElement } from '../physics/components/PupilMaskElement';
+import { TrappedBead } from '../physics/components/TrappedBead';
+import { PointSource2D } from '../physics/components/PointSource2D';
+import { PointSource3D } from '../physics/components/PointSource3D';
+import { ConeSource3D } from '../physics/components/ConeSource3D';
+import { WedgeSource2D } from '../physics/components/WedgeSource2D';
+import { StructuredSource } from '../physics/components/StructuredSource';
+import { Annotation, type AnnotationKind } from '../physics/components/Annotation';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
+import type { ZernikeCoefficient } from '../physics/PupilFunction';
 
 // ════════════════════════════════════════════════════════════
 //  SERIALIZE
@@ -96,6 +105,38 @@ function fmt(n: number): string {
     return parseFloat(n.toFixed(8)).toString();
 }
 
+type SourceLike = {
+    wavelength: number;
+    beamRadius: number;
+    power: number;
+};
+
+function writeSourceProps(source: SourceLike, lines: string[]) {
+    lines.push(`wavelength = ${fmt(source.wavelength)}`);
+    lines.push(`beamRadius = ${fmt(source.beamRadius)}`);
+    lines.push(`power = ${fmt(source.power)}`);
+}
+
+function escapeTextValue(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+}
+
+function unescapeTextValue(value: string): string {
+    let result = '';
+    for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        if (ch !== '\\' || i === value.length - 1) {
+            result += ch;
+            continue;
+        }
+        const next = value[++i];
+        if (next === 'n') result += '\n';
+        else if (next === 'r') result += '\r';
+        else result += next;
+    }
+    return result;
+}
+
 function getTypeName(comp: OpticalComponent): string | null {
     return getComponentTypeName(comp);
 }
@@ -109,6 +150,28 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
         lines.push(`spectralWavelengths = ${comp.spectralWavelengths.map(w => fmt(w)).join(', ')}`);
+    } else if (comp instanceof PointSource2D || comp instanceof PointSource3D) {
+        writeSourceProps(comp, lines);
+    } else if (comp instanceof ConeSource3D) {
+        writeSourceProps(comp, lines);
+        lines.push(`halfAngle = ${fmt(comp.halfAngle)}`);
+    } else if (comp instanceof WedgeSource2D) {
+        writeSourceProps(comp, lines);
+        lines.push(`subtendedAngle = ${fmt(comp.subtendedAngle)}`);
+    } else if (comp instanceof StructuredSource) {
+        writeSourceProps(comp, lines);
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`asciiChar = ${escapeTextValue(comp.asciiChar)}`);
+    } else if (comp instanceof AsphericLens) {
+        lines.push(`r1 = ${fmt(comp.r1)}`);
+        lines.push(`r2 = ${fmt(comp.r2)}`);
+        lines.push(`k1 = ${fmt(comp.k1)}`);
+        lines.push(`k2 = ${fmt(comp.k2)}`);
+        if (comp.A1.length > 0) lines.push(`a1 = ${comp.A1.map(fmt).join(',')}`);
+        if (comp.A2.length > 0) lines.push(`a2 = ${comp.A2.map(fmt).join(',')}`);
+        lines.push(`aperture = ${fmt(comp.apertureRadius)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`ior = ${fmt(comp.ior)}`);
     } else if (comp instanceof SphericalLens) {
         lines.push(`curvature = ${fmt(comp.curvature)}`);
         lines.push(`aperture = ${fmt(comp.apertureRadius)}`);
@@ -155,6 +218,16 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`absorption = ${fmt(comp.absorption)}`);
         lines.push(`specimenRotation = ${fmt(comp.specimenRotation.x)}, ${fmt(comp.specimenRotation.y)}, ${fmt(comp.specimenRotation.z)}`);
         lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
+    } else if (comp instanceof TrappedBead) {
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`iorBead = ${fmt(comp.iorBead)}`);
+        lines.push(`iorMedium = ${fmt(comp.iorMedium)}`);
+        lines.push(`viscosity = ${fmt(comp.viscosity)}`);
+        lines.push(`temperatureK = ${fmt(comp.temperatureK)}`);
+        lines.push(`displayScale = ${fmt(comp.displayScale)}`);
+        // Save the running offset so a serialized scene reloads with the
+        // bead at wherever it had drifted to.
+        lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
     } else if (comp instanceof Sample) {
         writeSpectralProfile(comp.excitationSpectrum, lines, 'excitation');
         writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
@@ -169,6 +242,13 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`workingDistance = ${fmt(comp.workingDistance)}`);
         lines.push(`tubeLensFocal = ${fmt(comp.tubeLensFocal)}`);
         lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`coverslipThickness = ${fmt(comp.coverslipThickness)}`);
+        lines.push(`fieldNumber = ${fmt(comp.fieldNumber)}`);
+        lines.push(`immersionMediumKind = ${comp.immersionMediumKind}`);
+        if (comp.pupil?.aberrations && comp.pupil.aberrations.coefficients.length > 0) {
+            lines.push(`pupilReferenceWavelengthNm = ${fmt(comp.pupil.aberrations.referenceWavelengthNm)}`);
+            lines.push(`pupilZernike = ${comp.pupil.aberrations.coefficients.map(({ index, coefficient }) => `${index}:${fmt(coefficient)}`).join('; ')}`);
+        }
     } else if (comp instanceof PolygonScanner) {
         lines.push(`numFaces = ${fmt(comp.numFaces)}`);
         lines.push(`inscribedRadius = ${fmt(comp.inscribedRadius)}`);
@@ -285,6 +365,12 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof Rail) {
         lines.push(`holeA = ${fmt(comp.holeA.x)}, ${fmt(comp.holeA.y)}, ${fmt(comp.holeA.z)}`);
         lines.push(`holeB = ${fmt(comp.holeB.x)}, ${fmt(comp.holeB.y)}, ${fmt(comp.holeB.z)}`);
+    } else if (comp instanceof Annotation) {
+        lines.push(`kind = ${comp.kind}`);
+        lines.push(`text = ${escapeTextValue(comp.text)}`);
+        lines.push(`length = ${fmt(comp.length)}`);
+        lines.push(`fontSize = ${fmt(comp.fontSize)}`);
+        lines.push(`color = ${comp.color}`);
     }
 }
 
@@ -446,6 +532,28 @@ function parseFaceROC(props: PropMap): number[] | null {
     return values.every((value) => Number.isFinite(value) || value === Infinity) ? values : null;
 }
 
+function applySourceProps(source: SourceLike, props: PropMap) {
+    source.wavelength = num(props, 'wavelength', 532);
+    source.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 0.25));
+    source.power = num(props, 'power', 1);
+}
+
+function parseZernikeCoefficients(raw: string | undefined): ZernikeCoefficient[] {
+    if (!raw) return [];
+    return raw
+        .split(';')
+        .map(part => part.trim())
+        .filter(Boolean)
+        .map(part => {
+            const [indexRaw, coefficientRaw] = part.split(':').map(value => value.trim());
+            const index = parseInt(indexRaw, 10);
+            const coefficient = parseFloat(coefficientRaw);
+            if (!Number.isFinite(index) || !Number.isFinite(coefficient)) return null;
+            return { index, coefficient };
+        })
+        .filter((entry): entry is ZernikeCoefficient => entry !== null);
+}
+
 function createComponent(type: string, props: PropMap): OpticalComponent | null {
     switch (type) {
         case 'Laser': {
@@ -464,6 +572,38 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             }
             return c;
         }
+        case 'PointSource2D': {
+            const c = new PointSource2D(str(props, 'name', 'Point Source 2D'));
+            applySourceProps(c, props);
+            return c;
+        }
+        case 'PointSource3D': {
+            const c = new PointSource3D(str(props, 'name', 'Point Source 3D'));
+            applySourceProps(c, props);
+            return c;
+        }
+        case 'ConeSource3D': {
+            const c = new ConeSource3D(str(props, 'name', 'Cone Source 3D'));
+            applySourceProps(c, props);
+            c.halfAngle = num(props, 'halfAngle', num(props, 'coneAngle', c.halfAngle));
+            return c;
+        }
+        case 'WedgeSource2D': {
+            const c = new WedgeSource2D(str(props, 'name', 'Wedge Source 2D'));
+            applySourceProps(c, props);
+            c.subtendedAngle = num(props, 'subtendedAngle', c.subtendedAngle);
+            if (props['coneAngle'] !== undefined && props['subtendedAngle'] === undefined) {
+                c.coneAngle = num(props, 'coneAngle', c.coneAngle);
+            }
+            return c;
+        }
+        case 'StructuredSource': {
+            const c = new StructuredSource(str(props, 'name', 'Structured Source'));
+            applySourceProps(c, props);
+            c.diameter = num(props, 'diameter', c.diameter);
+            c.asciiChar = unescapeTextValue(str(props, 'asciiChar', c.asciiChar));
+            return c;
+        }
         case 'SphericalLens': {
             const curvature = num(props, 'curvature', 0.02);
             const aperture = num(props, 'aperture', 10);
@@ -472,6 +612,20 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             const r1 = props['r1'] !== undefined ? parseFloat(props['r1']) : undefined;
             const r2 = props['r2'] !== undefined ? parseFloat(props['r2']) : undefined;
             return new SphericalLens(curvature, aperture, thickness, str(props, 'name', 'Lens'), r1, r2, ior);
+        }
+        case 'AsphericLens': {
+            const parseArr = (key: string): number[] => {
+                if (!props[key]) return [];
+                return props[key].split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+            };
+            return new AsphericLens({
+                name: str(props, 'name', 'Aspheric Lens'),
+                front: { R: num(props, 'r1', 13), k: num(props, 'k1', -0.7), A: parseArr('a1') },
+                back: { R: num(props, 'r2', 1e9), k: num(props, 'k2', 0), A: parseArr('a2') },
+                apertureRadius: num(props, 'aperture', 12.7),
+                thickness: num(props, 'thickness', 4),
+                ior: num(props, 'ior', 1.5168),
+            });
         }
         case 'CurvedMirror': {
             return new CurvedMirror(
@@ -587,8 +741,24 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             }
             return c;
         }
+        case 'TrappedBead': {
+            const c = new TrappedBead(
+                num(props, 'diameter', 1.0),
+                num(props, 'iorBead', 1.59),
+                num(props, 'iorMedium', 1.33),
+                str(props, 'name', 'Trapped Bead'),
+            );
+            c.viscosity = num(props, 'viscosity', 1e-3);
+            c.temperatureK = num(props, 'temperatureK', 295);
+            c.displayScale = num(props, 'displayScale', 50);
+            if (props['specimenOffset']) {
+                const [ox, oy, oz] = props['specimenOffset'].split(',').map(s => parseFloat(s.trim()));
+                c.specimenOffset.set(ox, oy, oz);
+            }
+            return c;
+        }
         case 'Objective': {
-            return new Objective({
+            const c = new Objective({
                 NA: num(props, 'NA', 0.25),
                 magnification: num(props, 'magnification', 10),
                 immersionIndex: num(props, 'immersionIndex', 1),
@@ -597,6 +767,21 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 diameter: num(props, 'diameter', 20),
                 name: str(props, 'name', 'Objective'),
             });
+            c.coverslipThickness = num(props, 'coverslipThickness', c.coverslipThickness);
+            c.fieldNumber = num(props, 'fieldNumber', c.fieldNumber);
+            c.immersionMediumKind = str(props, 'immersionMediumKind', c.immersionMediumKind) as Objective['immersionMediumKind'];
+            const coefficients = parseZernikeCoefficients(props['pupilZernike']);
+            if (coefficients.length > 0) {
+                c.pupil = {
+                    aberrations: {
+                        coefficients,
+                        referenceWavelengthNm: num(props, 'pupilReferenceWavelengthNm', 550),
+                    },
+                    apodization: null,
+                };
+            }
+            c.recalculate();
+            return c;
         }
         case 'PrismLens': {
             const prism = new PrismLens(
@@ -792,6 +977,17 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c._updateFromEndpoints();
             return c;
         }
+        case 'Annotation': {
+            const kind = str(props, 'kind', 'text') as AnnotationKind;
+            return new Annotation(
+                kind,
+                str(props, 'name', kind === 'text' ? 'Text Label' : 'Annotation'),
+                unescapeTextValue(str(props, 'text', '')),
+                num(props, 'length', 60),
+                num(props, 'fontSize', 12),
+                str(props, 'color', '#007fff'),
+            );
+        }
         default:
             return null;
     }
@@ -831,8 +1027,13 @@ export async function downloadUbz(components: OpticalComponent[], filename: stri
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+    }, 0);
 }
 
 /** Open file picker and load a .ubz file, returns parsed components */
@@ -841,17 +1042,29 @@ export function openUbzFilePicker(): Promise<OpticalComponent[]> {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.ubz';
+        input.style.display = 'none';
+        const cleanup = () => input.remove();
         input.onchange = async () => {
-            const file = input.files?.[0];
-            if (!file) { reject(new Error('No file selected')); return; }
-            const text = await file.text();
             try {
+                const file = input.files?.[0];
+                if (!file) {
+                    reject(new Error('No file selected'));
+                    return;
+                }
+                const text = await file.text();
                 const components = deserializeScene(text);
                 resolve(components);
             } catch (e) {
                 reject(e);
+            } finally {
+                cleanup();
             }
         };
+        input.oncancel = () => {
+            cleanup();
+            reject(new Error('No file selected'));
+        };
+        document.body.appendChild(input);
         input.click();
     });
 }

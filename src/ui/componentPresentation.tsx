@@ -2,11 +2,13 @@ import React from 'react';
 import { OpticalComponent } from '../physics/Component';
 import { Mirror } from '../physics/components/Mirror';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AsphericLens } from '../physics/components/AsphericLens';
 import { Laser } from '../physics/components/Laser';
 import { Lamp } from '../physics/components/Lamp';
 import { Blocker } from '../physics/components/Blocker';
 import { Card } from '../physics/components/Card';
 import { Sample } from '../physics/components/Sample';
+import { TrappedBead } from '../physics/components/TrappedBead';
 import { Objective } from '../physics/components/Objective';
 import { ObjectiveCasing } from '../physics/components/ObjectiveCasing';
 import { IdealLens } from '../physics/components/IdealLens';
@@ -44,6 +46,7 @@ import { Annotation } from '../physics/components/Annotation';
 import { AnnotationVisualizer } from './visualizers/AnnotationVisualizer';
 import {
     AchromatDoubletVisualizer,
+    AsphericLensVisualizer,
     ApertureVisualizer,
     BeamSplitterVisualizer,
     BlockerVisualizer,
@@ -79,6 +82,7 @@ import {
     QPDVisualizer,
     AODVisualizer,
     GhostVisualizer,
+    TrappedBeadVisualizer,
 } from './visualizers/ComponentVisualizers';
 
 export interface ComponentCapabilities {
@@ -86,6 +90,7 @@ export interface ComponentCapabilities {
     isMirror: boolean;
     isBlocker: boolean;
     isLens: boolean;
+    isAsphericLens: boolean;
     isIdealLens: boolean;
     isObjective: boolean;
     isLaser: boolean;
@@ -140,12 +145,16 @@ const VISUALIZER_ENTRIES: VisualizerEntry[] = [
     { matches: (component) => component instanceof Objective, render: (component) => <ObjectiveVisualizer component={component as Objective} /> },
     { matches: (component) => component instanceof IdealLens, render: (component) => <IdealLensVisualizer component={component as IdealLens} /> },
     { matches: (component) => component instanceof AchromatDoublet, render: (component) => <AchromatDoubletVisualizer component={component as AchromatDoublet} /> },
+    { matches: (component) => component instanceof AsphericLens, render: (component) => <AsphericLensVisualizer component={component as AsphericLens} /> },
     { matches: (component) => component instanceof SphericalLens, render: (component) => <LensVisualizer component={component as SphericalLens} /> },
     { matches: (component) => component instanceof Laser, render: (component) => <SourceVisualizer component={component as Laser} /> },
     { matches: (component) => component instanceof Lamp, render: (component) => <LampVisualizer component={component as Lamp} /> },
     { matches: (component) => component instanceof Blocker, render: (component) => <BlockerVisualizer component={component as Blocker} /> },
     { matches: (component) => component instanceof Card, render: (component) => <CardVisualizer component={component as Card} /> },
     { matches: (component) => component instanceof SampleChamber, render: (component) => <SampleChamberVisualizer component={component as SampleChamber} /> },
+    // TrappedBead before Sample because TrappedBead is a standalone class —
+    // belt-and-braces ordering even though they're unrelated.
+    { matches: (component) => component instanceof TrappedBead, render: (component) => <TrappedBeadVisualizer component={component as TrappedBead} /> },
     { matches: (component) => component instanceof Sample, render: (component) => <SampleVisualizer component={component as Sample} /> },
     { matches: (component) => component instanceof Camera, render: (component) => <CameraVisualizer component={component as Camera} /> },
     { matches: (component) => component instanceof QPD, render: (component) => <QPDVisualizer component={component as QPD} /> },
@@ -183,6 +192,7 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
     const isMirror = component instanceof Mirror;
     const isBlocker = component instanceof Blocker;
     const isLens = component instanceof SphericalLens;
+    const isAsphericLens = component instanceof AsphericLens;
     const isIdealLens = component instanceof IdealLens;
     const isObjective = component instanceof Objective;
     const isLaser = component instanceof Laser;
@@ -222,6 +232,7 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
         isMirror,
         isBlocker,
         isLens,
+        isAsphericLens,
         isIdealLens,
         isObjective,
         isLaser,

@@ -338,9 +338,10 @@ export function createSourceRays(
         src.updateMatrices();
         const origin = src.position.clone();
         const wavelengthM = src.wavelength * 1e-9;
-        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
-        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
-        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
+        const n = mode === 'full' ? Math.max(4, rayCount) : 0;
+        const totalEmittedRays = mode === 'full' ? n + 1 : 1;
+        const perRayPower = src.power / totalEmittedRays;
+        const footprint = estimateBeamletFootprint(src.beamRadius, totalEmittedRays);
 
         // Center (forward) main ray first
         const { forward } = makeBasis(src.rotation);
@@ -364,10 +365,11 @@ export function createSourceRays(
         src.updateMatrices();
         const origin = src.position.clone();
         const wavelengthM = src.wavelength * 1e-9;
-        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
-        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 0;
+        const totalEmittedRays = mode === 'full' ? n + 1 : 1;
+        const perRayPower = src.power / totalEmittedRays;
+        const footprint = estimateBeamletFootprint(src.beamRadius, totalEmittedRays);
         const { forward, right } = makeBasis(src.rotation);
-        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
 
         sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
         if (mode !== 'full') continue;
@@ -386,12 +388,13 @@ export function createSourceRays(
         src.updateMatrices();
         const origin = src.position.clone();
         const wavelengthM = src.wavelength * 1e-9;
-        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
-        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 0;
+        const totalEmittedRays = mode === 'full' ? n + 1 : 1;
+        const perRayPower = src.power / totalEmittedRays;
+        const footprint = estimateBeamletFootprint(src.beamRadius, totalEmittedRays);
         const { forward, right, up } = makeBasis(src.rotation);
         const halfAngle = Math.max(1e-6, src.halfAngle);
         const cosHalf = Math.cos(halfAngle);
-        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
 
         sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
         if (mode !== 'full') continue;
@@ -416,12 +419,13 @@ export function createSourceRays(
         src.updateMatrices();
         const origin = src.position.clone();
         const wavelengthM = src.wavelength * 1e-9;
-        const perRayPower = Math.max(1e-6, src.power / Math.max(1, rayCount));
-        const footprint = estimateBeamletFootprint(src.beamRadius, rayCount + 1);
+        const n = mode === 'full' ? Math.max(4, rayCount) : 0;
+        const totalEmittedRays = mode === 'full' ? n + 1 : 1;
+        const perRayPower = src.power / totalEmittedRays;
+        const footprint = estimateBeamletFootprint(src.beamRadius, totalEmittedRays);
         const { forward, right } = makeBasis(src.rotation);
         const subtended = Math.max(1e-6, src.subtendedAngle);
         const halfFan = subtended / 2;
-        const n = mode === 'full' ? Math.max(4, rayCount) : 1;
 
         sourceRays.push(makeSourceRay(origin, forward, wavelengthM, perRayPower, footprint, src.id, true));
         if (mode !== 'full') continue;
@@ -468,7 +472,7 @@ export function createSourceRays(
             continue;
         }
 
-        const perRayPower = Math.max(1e-6, src.power / totalRays);
+        const perRayPower = src.power / totalRays;
 
         for (let i = 0; i < totalRays; i++) {
             // Deterministic stratified traversal over lit pixels — when rayCount

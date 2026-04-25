@@ -209,4 +209,22 @@ describe("SphericalLens", () => {
             expect(Math.abs(outRay.origin.x)).toBeLessThan(5);
         }
     });
+
+    test("plano lens presets preserve their flat side", () => {
+        const cases = [
+            { type: 'plano-convex', flat: 'R1', sign: 1 },
+            { type: 'convex-plano', flat: 'R2', sign: 1 },
+            { type: 'plano-concave', flat: 'R1', sign: -1 },
+            { type: 'concave-plano', flat: 'R2', sign: -1 },
+        ] as const;
+
+        for (const { type, flat, sign } of cases) {
+            const testLens = new SphericalLens(0.02, 10, 5, "Preset Lens");
+            testLens.setFromLensType(type);
+
+            expect(testLens.getLensType()).toBe(type);
+            expect(Math.abs(testLens.getRadii()[flat])).toBeGreaterThan(1e8);
+            expect(Math.sign(testLens.focalLength)).toBe(sign);
+        }
+    });
 });

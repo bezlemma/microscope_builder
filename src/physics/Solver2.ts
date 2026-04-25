@@ -77,6 +77,7 @@ export interface GaussianBeamSegment {
     
     // Performance caches
     bounds?: Float64Array;
+    basis?: Float64Array;
     length?: number;
 }
 
@@ -85,7 +86,135 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getSegmentLength(segment: GaussianBeamSegment): number {
-    return segment.start.distanceTo(segment.end);
+    if (segment.length === undefined) {
+        segment.length = segment.start.distanceTo(segment.end);
+    }
+    return segment.length;
+}
+
+function ensureSegmentBounds(seg: GaussianBeamSegment): Float64Array {
+    const segLength = getSegmentLength(seg);
+    if (!seg.bounds) {
+        const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
+        const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
+        let startR = Math.max(seg.footprintStart ?? seg.footprintEnd ?? 0.05, 0.05);
+        let endR = Math.max(seg.footprintEnd ?? seg.footprintStart ?? 0.05, 0.05);
+        if (seg.footprintStart === undefined && seg.footprintEnd === undefined) {
+            const midRadii = legacySegmentBeamRadii(seg, segLength * 0.5);
+            const startRadii = legacySegmentBeamRadii(seg, 0);
+            const endRadii = legacySegmentBeamRadii(seg, segLength);
+            startR = Math.max(startRadii.wx, startRadii.wy, midRadii.wx, midRadii.wy, 0.05);
+            endR = Math.max(endRadii.wx, endRadii.wy, midRadii.wx, midRadii.wy, 0.05);
+        }
+        const maxR = Math.max(startR, endR) * 10.0;
+        seg.bounds = new Float64Array([
+            Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
+            Math.max(sx, ex) + maxR, Math.max(sy, ey) + maxR, Math.max(sz, ez) + maxR,
+        ]);
+    }
+    return seg.bounds;
+}
+
+function getSegmentBasis(segment: GaussianBeamSegment): Float64Array {
+    if (segment.basis) return segment.basis;
+
+    const dx = segment.direction.x;
+    const dy = segment.direction.y;
+    const dz = segment.direction.z;
+    let upX = 0, upY = 1, upZ = 0;
+    if (Math.abs(dy) > 0.99) { upX = 1; upY = 0; upZ = 0; }
+
+    let rightX = dy * upZ - dz * upY;
+    let rightY = dz * upX - dx * upZ;
+    let rightZ = dx * upY - dy * upX;
+    const rightL = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+    if (rightL > 0) { rightX /= rightL; rightY /= rightL; rightZ /= rightL; }
+
+    let localUpX = rightY * dz - rightZ * dy;
+    let localUpY = rightZ * dx - rightX * dz;
+    let localUpZ = rightX * dy - rightY * dx;
+    const localUpL = Math.sqrt(localUpX * localUpX + localUpY * localUpY + localUpZ * localUpZ);
+    if (localUpL > 0) { localUpX /= localUpL; localUpY /= localUpL; localUpZ /= localUpL; }
+
+    segment.basis = new Float64Array([rightX, rightY, rightZ, localUpX, localUpY, localUpZ]);
+    return segment.basis;
+}
+
+interface PreparedBranch {
+    segments: GaussianBeamSegment[];
+    wavelength: number;
+    sourceKey: string;
+    coherent: boolean;
+    bounds: Float64Array;
+}
+
+interface BeamFieldQueryPlan {
+    branches: PreparedBranch[];
+    wavelengthCache: Map<number, PreparedBranch[]>;
+}
+
+const beamFieldPlanCache = new WeakMap<GaussianBeamSegment[][], BeamFieldQueryPlan>();
+
+function createPreparedBranch(branch: GaussianBeamSegment[], _fallbackIndex: number): PreparedBranch | null {
+    if (branch.length === 0) return null;
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (const seg of branch) {
+        const b = ensureSegmentBounds(seg);
+        if (b[0] < minX) minX = b[0];
+        if (b[1] < minY) minY = b[1];
+        if (b[2] < minZ) minZ = b[2];
+        if (b[3] > maxX) maxX = b[3];
+        if (b[4] > maxY) maxY = b[4];
+        if (b[5] > maxZ) maxZ = b[5];
+    }
+    const first = branch[0];
+    const mode = first.coherenceMode;
+    return {
+        segments: branch,
+        wavelength: first.wavelength,
+        sourceKey: first.sourceId ?? '__anonymous__',
+        coherent: mode === Coherence.Coherent || mode === undefined,
+        bounds: new Float64Array([minX, minY, minZ, maxX, maxY, maxZ]),
+    };
+}
+
+function getBeamFieldQueryPlan(allSegments: GaussianBeamSegment[][]): BeamFieldQueryPlan {
+    let plan = beamFieldPlanCache.get(allSegments);
+    if (plan) return plan;
+
+    const branches: PreparedBranch[] = [];
+    for (let i = 0; i < allSegments.length; i++) {
+        const prepared = createPreparedBranch(allSegments[i], i);
+        if (prepared) branches.push(prepared);
+    }
+
+    plan = { branches, wavelengthCache: new Map() };
+    beamFieldPlanCache.set(allSegments, plan);
+    return plan;
+}
+
+function preparedBranchesForWavelength(
+    allSegments: GaussianBeamSegment[][],
+    targetWavelength?: number,
+): PreparedBranch[] {
+    const plan = getBeamFieldQueryPlan(allSegments);
+    if (targetWavelength === undefined) return plan.branches;
+
+    const key = Math.round(targetWavelength * 1e12);
+    const cached = plan.wavelengthCache.get(key);
+    if (cached) return cached;
+
+    const filtered = plan.branches.filter(branch =>
+        Math.abs(branch.wavelength - targetWavelength) <= 15e-9
+    );
+    plan.wavelengthCache.set(key, filtered);
+    return filtered;
+}
+
+function branchContainsPoint(branch: PreparedBranch, px: number, py: number, pz: number): boolean {
+    const b = branch.bounds;
+    return px >= b[0] && py >= b[1] && pz >= b[2] && px <= b[3] && py <= b[4] && pz <= b[5];
 }
 
 function legacySegmentBeamRadii(
@@ -166,39 +295,18 @@ export class Solver2 {
         let bestT = 0;
 
         for (const seg of segments) {
-            if (seg.length === undefined) {
-                seg.length = seg.start.distanceTo(seg.end);
-            }
-            if (!seg.bounds) {
-                const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
-                const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
-                let startR = Math.max(seg.footprintStart ?? seg.footprintEnd ?? 0.05, 0.05);
-                let endR = Math.max(seg.footprintEnd ?? seg.footprintStart ?? 0.05, 0.05);
-                if (seg.footprintStart === undefined && seg.footprintEnd === undefined) {
-                    const midRadii = legacySegmentBeamRadii(seg, seg.length * 0.5);
-                    const startRadii = legacySegmentBeamRadii(seg, 0);
-                    const endRadii = legacySegmentBeamRadii(seg, seg.length);
-                    startR = Math.max(startRadii.wx, startRadii.wy, midRadii.wx, midRadii.wy, 0.05);
-                    endR = Math.max(endRadii.wx, endRadii.wy, midRadii.wx, midRadii.wy, 0.05);
-                }
-                const maxR = Math.max(startR, endR) * 10.0;
-                seg.bounds = new Float64Array([
-                    Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
-                    Math.max(sx, ex) + maxR, Math.max(sy, ey) + maxR, Math.max(sz, ez) + maxR,
-                ]);
-            }
-            
-            const b = seg.bounds;
+            const segLength = getSegmentLength(seg);
+            const b = ensureSegmentBounds(seg);
             if (px < b[0] || py < b[1] || pz < b[2] || px > b[3] || py > b[4] || pz > b[5]) continue;
 
             const dx = seg.direction.x, dy = seg.direction.y, dz = seg.direction.z;
             const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
             const toPx = px - sx, toPy = py - sy, toPz = pz - sz;
             
-            if (seg.length < 1e-6) continue;
+            if (segLength < 1e-6) continue;
 
             const along = toPx * dx + toPy * dy + toPz * dz;
-            const t = clamp(along, 0, seg.length);
+            const t = clamp(along, 0, segLength);
 
             const cx = sx + dx * t;
             const cy = sy + dy * t;
@@ -235,20 +343,9 @@ export class Solver2 {
         const transY = toPy - dy * along;
         const transZ = toPz - dz * along;
 
-        let upX = 0, upY = 1, upZ = 0;
-        if (Math.abs(dy) > 0.99) { upX = 1; upY = 0; upZ = 0; }
-        
-        let rightX = dy * upZ - dz * upY;
-        let rightY = dz * upX - dx * upZ;
-        let rightZ = dx * upY - dy * upX;
-        let rightL = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
-        if (rightL > 0) { rightX /= rightL; rightY /= rightL; rightZ /= rightL; }
-
-        let localUpX = rightY * dz - rightZ * dy;
-        let localUpY = rightZ * dx - rightX * dz;
-        let localUpZ = rightX * dy - rightY * dx;
-        let localUpL = Math.sqrt(localUpX * localUpX + localUpY * localUpY + localUpZ * localUpZ);
-        if (localUpL > 0) { localUpX /= localUpL; localUpY /= localUpL; localUpZ /= localUpL; }
+        const basis = getSegmentBasis(seg);
+        const rightX = basis[0], rightY = basis[1], rightZ = basis[2];
+        const localUpX = basis[3], localUpY = basis[4], localUpZ = basis[5];
 
         const x = transX * rightX + transY * rightY + transZ * rightZ;
         const y = transX * localUpX + transY * localUpY + transZ * localUpZ;
@@ -283,33 +380,79 @@ export class Solver2 {
         allSegments: GaussianBeamSegment[][],
         targetWavelength?: number
     ): number {
+        const wavelengthBranches = preparedBranchesForWavelength(allSegments, targetWavelength);
+        if (wavelengthBranches.length === 0) return 0;
+
+        const branches: PreparedBranch[] = [];
+        for (const branch of wavelengthBranches) {
+            if (branchContainsPoint(branch, px, py, pz)) {
+                branches.push(branch);
+            }
+        }
+        if (branches.length === 0) return 0;
+
+        if (branches.length === 1) {
+            const result = Solver2.queryIntensity(px, py, pz, branches[0].segments);
+            return result?.intensity ?? 0;
+        }
+
+        let sameCoherentSource: string | null = null;
+        let allSameCoherentSource = true;
+        let allIncoherent = true;
+        for (const branch of branches) {
+            if (branch.coherent) {
+                allIncoherent = false;
+                if (sameCoherentSource === null) sameCoherentSource = branch.sourceKey;
+                else if (sameCoherentSource !== branch.sourceKey) allSameCoherentSource = false;
+            } else {
+                allSameCoherentSource = false;
+            }
+        }
+
+        if (allIncoherent) {
+            let total = 0;
+            for (const branch of branches) {
+                const result = Solver2.queryIntensity(px, py, pz, branch.segments);
+                if (result && result.intensity >= 1e-12) total += result.intensity;
+            }
+            return total;
+        }
+
+        if (allSameCoherentSource) {
+            let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
+            for (const branch of branches) {
+                const result = Solver2.queryIntensity(px, py, pz, branch.segments);
+                if (!result || result.intensity < 1e-12) continue;
+
+                const amplitude = Math.sqrt(result.intensity);
+                const cosPhi = Math.cos(result.phase);
+                const sinPhi = Math.sin(result.phase);
+                const jx = result.polarization.x;
+                const jy = result.polarization.y;
+
+                exRe += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
+                exIm += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
+                eyRe += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
+                eyIm += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+            }
+            return exRe * exRe + exIm * exIm + eyRe * eyRe + eyIm * eyIm;
+        }
+
         // Per-coherence-group accumulators: keyed by sourceId (or a stable fallback).
         const groups = new Map<string, { ex_re: number; ex_im: number; ey_re: number; ey_im: number }>();
         let incoherentSum = 0;
 
-        for (const branch of allSegments) {
-            if (branch.length === 0) continue;
-
-            if (targetWavelength !== undefined) {
-                const branchWl = branch[0].wavelength;
-                if (Math.abs(branchWl - targetWavelength) > 15e-9) {
-                    continue;
-                }
-            }
-
-            const result = Solver2.queryIntensity(px, py, pz, branch);
+        for (const branch of branches) {
+            const result = Solver2.queryIntensity(px, py, pz, branch.segments);
             if (!result || result.intensity < 1e-12) continue;
 
-            const mode = branch[0].coherenceMode;
-
-            if (mode === Coherence.Coherent || mode === undefined) {
+            if (branch.coherent) {
                 // Branches from the same source may interfere; branches from different
                 // sources (different lasers, different lamp wavelengths) must not.
-                const sourceKey = branch[0].sourceId ?? '__anonymous__';
-                let acc = groups.get(sourceKey);
+                let acc = groups.get(branch.sourceKey);
                 if (!acc) {
                     acc = { ex_re: 0, ex_im: 0, ey_re: 0, ey_im: 0 };
-                    groups.set(sourceKey, acc);
+                    groups.set(branch.sourceKey, acc);
                 }
 
                 const amplitude = Math.sqrt(result.intensity);
@@ -350,33 +493,26 @@ export class Solver2 {
         targetWavelength?: number
     ): number {
         let totalIntegral = 0;
+        const lineEndX = pxStart + dx * len;
+        const lineEndY = pyStart + dy * len;
+        const lineEndZ = pzStart + dz * len;
         
-        for (const branch of allSegments) {
-            if (branch.length === 0) continue;
-            if (targetWavelength !== undefined && Math.abs(branch[0].wavelength - targetWavelength) > 15e-9) continue;
+        for (const branch of preparedBranchesForWavelength(allSegments, targetWavelength)) {
+            const branchBounds = branch.bounds;
+            if (Math.min(pxStart, lineEndX) > branchBounds[3] || Math.max(pxStart, lineEndX) < branchBounds[0]) continue;
+            if (Math.min(pyStart, lineEndY) > branchBounds[4] || Math.max(pyStart, lineEndY) < branchBounds[1]) continue;
+            if (Math.min(pzStart, lineEndZ) > branchBounds[5] || Math.max(pzStart, lineEndZ) < branchBounds[2]) continue;
 
-            for (const seg of branch) {
-                if (seg.length === undefined) seg.length = seg.start.distanceTo(seg.end);
+            for (const seg of branch.segments) {
+                const segLength = getSegmentLength(seg);
                 
                 // Fast lazy bounds
-                if (!seg.bounds) {
-                    const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
-                    const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
-                    const sr = Math.max(seg.footprintStart ?? 0.05, 0.05);
-                    const er = Math.max(seg.footprintEnd ?? 0.05, 0.05);
-                    const maxR = Math.max(sr, er) * 10;
-                    seg.bounds = new Float64Array([
-                        Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
-                        Math.max(sx, ex) + maxR, Math.max(sy, ey) + maxR, Math.max(sz, ez) + maxR,
-                    ]);
-                }
-                const b = seg.bounds;
+                const b = ensureSegmentBounds(seg);
                 
                 // Line AABB check: check start, end, and simple bounding box overlap
-                const ex = pxStart + dx * len, ey = pyStart + dy * len, ez = pzStart + dz * len;
-                if (Math.min(pxStart, ex) > b[3] || Math.max(pxStart, ex) < b[0]) continue;
-                if (Math.min(pyStart, ey) > b[4] || Math.max(pyStart, ey) < b[1]) continue;
-                if (Math.min(pzStart, ez) > b[5] || Math.max(pzStart, ez) < b[2]) continue;
+                if (Math.min(pxStart, lineEndX) > b[3] || Math.max(pxStart, lineEndX) < b[0]) continue;
+                if (Math.min(pyStart, lineEndY) > b[4] || Math.max(pyStart, lineEndY) < b[1]) continue;
+                if (Math.min(pzStart, lineEndZ) > b[5] || Math.max(pzStart, lineEndZ) < b[2]) continue;
 
                 const segDx = seg.direction.x, segDy = seg.direction.y, segDz = seg.direction.z;
                 const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
@@ -386,7 +522,7 @@ export class Solver2 {
                 const midY = pyStart + dy * (len / 2);
                 const midZ = pzStart + dz * (len / 2);
                 const alongMid = (midX - sx)*segDx + (midY - sy)*segDy + (midZ - sz)*segDz;
-                const tMid = clamp(alongMid, 0, seg.length);
+                const tMid = clamp(alongMid, 0, segLength);
                 const { wx, wy } = segmentBeamRadii(seg, tMid);
                 if (wx <= 0 || wy <= 0) continue;
 
@@ -404,20 +540,9 @@ export class Solver2 {
                 const dTransY = dy - segDy*dAlong;
                 const dTransZ = dz - segDz*dAlong;
 
-                let upX = 0, upY = 1, upZ = 0;
-                if (Math.abs(segDy) > 0.99) { upX = 1; upY = 0; upZ = 0; }
-                
-                let rightX = segDy*upZ - segDz*upY;
-                let rightY = segDz*upX - segDx*upZ;
-                let rightZ = segDx*upY - segDy*upX;
-                const rightL = Math.sqrt(rightX*rightX + rightY*rightY + rightZ*rightZ);
-                if (rightL > 0) { rightX /= rightL; rightY /= rightL; rightZ /= rightL; }
-
-                let localUpX = rightY*segDz - rightZ*segDy;
-                let localUpY = rightZ*segDx - rightX*segDz;
-                let localUpZ = rightX*segDy - rightY*segDx;
-                const localUpL = Math.sqrt(localUpX*localUpX + localUpY*localUpY + localUpZ*localUpZ);
-                if (localUpL > 0) { localUpX /= localUpL; localUpY /= localUpL; localUpZ /= localUpL; }
+                const basis = getSegmentBasis(seg);
+                const rightX = basis[0], rightY = basis[1], rightZ = basis[2];
+                const localUpX = basis[3], localUpY = basis[4], localUpZ = basis[5];
 
                 const x0 = trans0X*rightX + trans0Y*rightY + trans0Z*rightZ;
                 const y0 = trans0X*localUpX + trans0Y*localUpY + trans0Z*localUpZ;

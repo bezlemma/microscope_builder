@@ -1,6 +1,7 @@
 import type { PackedTraceScene, Solver3PacketHeader } from './kernelPackets';
-import { SOLVER3_KERNEL_ABI_VERSION } from './kernelPackets';
+import { PACKED_COMPONENT_BOUNDS_STRIDE, PACKED_COMPONENT_MATRIX_STRIDE, SOLVER3_KERNEL_ABI_VERSION } from './kernelPackets';
 import type { PackedCameraSamples } from './solver3Sampling';
+import { PACKED_CAMERA_SAMPLE_STRIDE } from './solver3Sampling';
 import type { Solver3WasmModule } from './solver3WasmBackend';
 
 export const PACKED_FIRST_HIT_HINTS_DEFAULT_MAX_CANDIDATES = 4;
@@ -37,6 +38,132 @@ export function unpackFirstHitHintCandidates(
         });
     }
     return out;
+}
+
+function transformPoint(matrix: Float64Array, offset: number, x: number, y: number, z: number): [number, number, number] {
+    return [
+        matrix[offset] * x + matrix[offset + 4] * y + matrix[offset + 8] * z + matrix[offset + 12],
+        matrix[offset + 1] * x + matrix[offset + 5] * y + matrix[offset + 9] * z + matrix[offset + 13],
+        matrix[offset + 2] * x + matrix[offset + 6] * y + matrix[offset + 10] * z + matrix[offset + 14],
+    ];
+}
+
+function transformDirection(matrix: Float64Array, offset: number, x: number, y: number, z: number): [number, number, number] {
+    const dx = matrix[offset] * x + matrix[offset + 4] * y + matrix[offset + 8] * z;
+    const dy = matrix[offset + 1] * x + matrix[offset + 5] * y + matrix[offset + 9] * z;
+    const dz = matrix[offset + 2] * x + matrix[offset + 6] * y + matrix[offset + 10] * z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    return [dx / len, dy / len, dz / len];
+}
+
+function rayAabbTNear(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    bounds: Float64Array,
+    offset: number,
+): number | null {
+    let tMin = -Infinity;
+    let tMax = Infinity;
+
+    const slab = (origin: number, dir: number, min: number, max: number): boolean => {
+        if (Math.abs(dir) <= 1e-12) {
+            return origin >= min && origin <= max;
+        }
+        const inv = 1 / dir;
+        let t1 = (min - origin) * inv;
+        let t2 = (max - origin) * inv;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        return tMin <= tMax;
+    };
+
+    if (!slab(ox, dx, bounds[offset], bounds[offset + 3])) return null;
+    if (!slab(oy, dy, bounds[offset + 1], bounds[offset + 4])) return null;
+    if (!slab(oz, dz, bounds[offset + 2], bounds[offset + 5])) return null;
+    if (tMax <= 0) return null;
+    return Math.max(0, tMin);
+}
+
+function insertCandidate(
+    candidateIndices: Int32Array,
+    candidateTNear: Float64Array,
+    base: number,
+    count: number,
+    maxCandidates: number,
+    componentIndex: number,
+    tNear: number,
+): number {
+    let insertAt = 0;
+    while (insertAt < count && candidateTNear[base + insertAt] <= tNear) insertAt++;
+    if (count < maxCandidates) {
+        for (let i = count; i > insertAt; i--) {
+            candidateIndices[base + i] = candidateIndices[base + i - 1];
+            candidateTNear[base + i] = candidateTNear[base + i - 1];
+        }
+        candidateIndices[base + insertAt] = componentIndex;
+        candidateTNear[base + insertAt] = tNear;
+        return count + 1;
+    }
+    if (insertAt >= maxCandidates) return count;
+    for (let i = maxCandidates - 1; i > insertAt; i--) {
+        candidateIndices[base + i] = candidateIndices[base + i - 1];
+        candidateTNear[base + i] = candidateTNear[base + i - 1];
+    }
+    candidateIndices[base + insertAt] = componentIndex;
+    candidateTNear[base + insertAt] = tNear;
+    return count;
+}
+
+export function createPackedFirstHitHintsJs(
+    tracePacket: PackedTraceScene,
+    cameraSamples: PackedCameraSamples,
+    maxCandidates: number = PACKED_FIRST_HIT_HINTS_DEFAULT_MAX_CANDIDATES,
+): PackedFirstHitHints {
+    const sampleCount = cameraSamples.sampleCount;
+    const componentCount = tracePacket.componentKinds.length;
+    const candidateCounts = new Uint8Array(sampleCount);
+    const candidateIndices = new Int32Array(sampleCount * maxCandidates);
+    const candidateTNear = new Float64Array(sampleCount * maxCandidates);
+    candidateIndices.fill(-1);
+    candidateTNear.fill(Infinity);
+
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+        const sampleBase = sampleIndex * PACKED_CAMERA_SAMPLE_STRIDE;
+        const ox = cameraSamples.sampleScalars[sampleBase + 2];
+        const oy = cameraSamples.sampleScalars[sampleBase + 3];
+        const oz = cameraSamples.sampleScalars[sampleBase + 4];
+        const dx = cameraSamples.sampleScalars[sampleBase + 5];
+        const dy = cameraSamples.sampleScalars[sampleBase + 6];
+        const dz = cameraSamples.sampleScalars[sampleBase + 7];
+        const hintBase = sampleIndex * maxCandidates;
+        let count = 0;
+
+        for (let componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+            const matrixBase = componentIndex * PACKED_COMPONENT_MATRIX_STRIDE;
+            const boundsBase = componentIndex * PACKED_COMPONENT_BOUNDS_STRIDE;
+            const localOrigin = transformPoint(tracePacket.worldToLocalMatrices, matrixBase, ox, oy, oz);
+            const localDirection = transformDirection(tracePacket.worldToLocalMatrices, matrixBase, dx, dy, dz);
+            const tNear = rayAabbTNear(
+                localOrigin[0], localOrigin[1], localOrigin[2],
+                localDirection[0], localDirection[1], localDirection[2],
+                tracePacket.localBounds,
+                boundsBase,
+            );
+            if (tNear === null) continue;
+            count = insertCandidate(candidateIndices, candidateTNear, hintBase, count, maxCandidates, componentIndex, tNear);
+        }
+        candidateCounts[sampleIndex] = Math.min(count, 255);
+    }
+
+    return {
+        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        sampleCount,
+        maxCandidates,
+        candidateCounts,
+        candidateIndices,
+        candidateTNear,
+    };
 }
 
 export function createPackedFirstHitHintsFromWasm(

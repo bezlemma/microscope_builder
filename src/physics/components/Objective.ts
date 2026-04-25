@@ -25,7 +25,8 @@ export type ImmersionMediumKind = 'air' | 'oil' | 'water' | 'silicone' | 'custom
  * Derived:
  *   - focalLength    = tubeLensFocal / magnification
  *   - maxAngle       = arcsin(NA / immersionIndex)
- *   - apertureRadius = focalLength × (NA / immersionIndex) (Exact Abbe Sine relation)
+ *   - apertureRadius = focalLength × NA (back-pupil radius in this air-space model)
+ *   - frontRadius    = workingDistance × tan(asin(NA / immersionIndex))
  *
  * TODO: Solver 2 still uses the paraxial q-parameter transfer [[1,0],[-1/f,1]].
  *       That remains separate from the surface-by-surface ray interaction here.
@@ -61,7 +62,7 @@ export class Objective extends OpticalComponent {
     maxAngle: number;
     apertureRadius: number;     // Optical clear aperture from NA — used for ray clipping
 
-    // Extended properties (BOMB compatibility)
+    // Extended properties retained for older saved scenes.
     coverslipThickness: number = 0.17;  // mm — standard #1.5 coverslip
     fieldNumber: number = 22;           // mm — field of view at the intermediate image plane
     immersionMediumKind: ImmersionMediumKind = 'air';
@@ -99,6 +100,7 @@ export class Objective extends OpticalComponent {
         this.maxAngle = Math.asin(indexRatio);
         // Abbe Sine Condition: h = f * NA (back focal plane beam height)
         this.apertureRadius = this.focalLength * NA;
+        this.pupilRadius = this.apertureRadius;
 
         this._updateBounds();
     }
@@ -109,6 +111,7 @@ export class Objective extends OpticalComponent {
         const indexRatio = Math.min(this.NA / this.immersionIndex, 1.0);
         this.maxAngle = Math.asin(indexRatio);
         this.apertureRadius = this.focalLength * this.NA;
+        this.pupilRadius = this.apertureRadius;
         this._updateBounds();
         this.version++;
     }
@@ -175,8 +178,8 @@ export class Objective extends OpticalComponent {
         const zBack = Math.max(-f + parfocalDistance, zFront + 20);
 
         const immersionIdx = this.immersionIndex || 1;
-        const maxSin = this.NA / immersionIdx;
-        const maxTan = maxSin / Math.sqrt(1 - maxSin * maxSin);
+        const maxSin = Math.min(Math.max(this.NA / immersionIdx, 0), 0.999999);
+        const maxTan = maxSin / Math.sqrt(Math.max(1 - maxSin * maxSin, 1e-9));
         const opticalFrontRadius = wd * maxTan; 
         const frontRadius = Math.max(opticalFrontRadius + 0.5, 2);
 
@@ -517,7 +520,7 @@ export class Objective extends OpticalComponent {
 
     /** Optical aperture radius at the sample side based on NA and working distance. */
     getOpticalFrontRadius(): number {
-        const maxSin = Math.min(this.NA / this.immersionIndex, 1.0);
+        const maxSin = Math.min(Math.max(this.NA / this.immersionIndex, 0), 0.999999);
         const maxTan = maxSin / Math.sqrt(Math.max(1 - maxSin * maxSin, 1e-9));
         return this.workingDistance * maxTan;
     }

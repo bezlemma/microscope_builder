@@ -3,9 +3,11 @@ import { useAtom } from 'jotai';
 import { undoAtom, undoStackAtom, mobileSnapEnabledAtom, selectionAtom, componentsAtom, pushUndoAtom, mobileCameraModeAtom } from '../state/store';
 import { Undo2, Magnet, Trash2, RotateCcw, Move3d, Move } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
+import { useHaptic } from './useHaptic';
 
 export const MobileActionBar: React.FC = () => {
     const isMobile = useIsMobile();
+    const haptic = useHaptic();
     const [undoStack] = useAtom(undoStackAtom);
     const [, triggerUndo] = useAtom(undoAtom);
     const [mobileSnap, setMobileSnap] = useAtom(mobileSnapEnabledAtom);
@@ -66,7 +68,7 @@ export const MobileActionBar: React.FC = () => {
         }}>
             <button
                 onClick={() => {
-                    if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
+                    haptic.tap();
                     triggerUndo();
                 }}
                 disabled={!hasUndo}
@@ -90,7 +92,7 @@ export const MobileActionBar: React.FC = () => {
 
             <button
                 onClick={() => {
-                    if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
+                    haptic.confirm();
                     setMobileSnap(!mobileSnap);
                 }}
                 className="cyber-btn primary"
@@ -116,7 +118,7 @@ export const MobileActionBar: React.FC = () => {
              *  to the other mode; the active mode is highlighted. */}
             <button
                 onClick={() => {
-                    if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
+                    haptic.confirm();
                     setCameraMode(cameraMode === 'pan' ? 'rotate' : 'pan');
                 }}
                 className="cyber-btn primary"
@@ -147,7 +149,7 @@ export const MobileActionBar: React.FC = () => {
                     <div style={{ width: '1px', backgroundColor: '#444', margin: '4px 0' }} />
                     <button
                         onClick={() => {
-                            if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
+                            haptic.tap();
                             handleRotate();
                         }}
                         className="cyber-btn primary"
@@ -168,7 +170,7 @@ export const MobileActionBar: React.FC = () => {
                     </button>
                     <button
                         onClick={() => {
-                            if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate([50, 50, 50]);
+                            haptic.delete();
                             handleDelete();
                         }}
                         className="cyber-btn danger"

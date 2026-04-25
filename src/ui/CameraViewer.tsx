@@ -189,49 +189,10 @@ const sliderStyle: React.CSSProperties = {
     cursor: 'pointer',
 };
 
-// ─── Bomb Loading Overlay ────────────────────────────────────────────
-//
-// Displayed on top of the camera canvas while Solver-3 is running. It's a
-// black circular bomb with a sparking fuse and the loading % in the middle,
-// on brand with the BOMB logo. All CSS keyframes inject themselves the first
-// time the overlay mounts so the animations survive HMR.
+// ─── Loading Overlay ─────────────────────────────────────────────────
 
-const BOMB_ANIM_STYLE_ID = 'bomb-anim-keyframes';
-function ensureBombAnimationStyle() {
-    if (typeof document === 'undefined') return;
-    if (document.getElementById(BOMB_ANIM_STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = BOMB_ANIM_STYLE_ID;
-    style.textContent = `
-        @keyframes bomb-fuse-spark {
-            0%   { transform: scale(1);   opacity: 1; }
-            50%  { transform: scale(1.45); opacity: 0.7; }
-            100% { transform: scale(1);   opacity: 1; }
-        }
-        @keyframes bomb-fuse-flicker {
-            0%   { opacity: 0.9; filter: hue-rotate(0deg); }
-            33%  { opacity: 0.6; filter: hue-rotate(20deg); }
-            66%  { opacity: 1.0; filter: hue-rotate(-10deg); }
-            100% { opacity: 0.9; filter: hue-rotate(0deg); }
-        }
-        @keyframes bomb-pulse {
-            0%   { filter: drop-shadow(0 0 8px rgba(0,127,255,0.25)); }
-            50%  { filter: drop-shadow(0 0 16px rgba(0,127,255,0.55)); }
-            100% { filter: drop-shadow(0 0 8px rgba(0,127,255,0.25)); }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-const BombLoadingOverlay: React.FC<{ percent: number }> = ({ percent }) => {
-    useEffect(() => { ensureBombAnimationStyle(); }, []);
-    const size = 96;
-    const half = size / 2;
-    const bodyR = 26;
-    // Fuse arc endpoints — start at top of body, curl up and to the right.
-    const fuseStart = { x: half + 10, y: half - bodyR + 4 };
-    const fuseTip = { x: half + 34, y: half - bodyR - 18 };
-    const fuseCtrl = { x: half + 10, y: half - bodyR - 22 };
+const LoadingOverlay: React.FC<{ percent: number }> = ({ percent }) => {
+    const clamped = Math.max(0, Math.min(100, percent));
     return (
         <div style={{
             position: 'absolute',
@@ -240,68 +201,40 @@ const BombLoadingOverlay: React.FC<{ percent: number }> = ({ percent }) => {
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
+            background: 'rgba(0,0,0,0.28)',
         }}>
             <div style={{
-                background: 'rgba(0,0,0,0.35)',
-                borderRadius: '50%',
-                padding: 4,
-                animation: 'bomb-pulse 1.4s ease-in-out infinite',
+                width: 112,
+                padding: '10px 12px',
+                borderRadius: 6,
+                background: 'rgba(18,18,18,0.92)',
+                border: '1px solid rgba(255,255,255,0.14)',
+                boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
             }}>
-                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                    {/* Bomb body — round, dark, with a hint of blue rim-light. */}
-                    <defs>
-                        <radialGradient id="bomb-body" cx="35%" cy="30%" r="75%">
-                            <stop offset="0%" stopColor="#3a3f45" />
-                            <stop offset="60%" stopColor="#141416" />
-                            <stop offset="100%" stopColor="#050507" />
-                        </radialGradient>
-                    </defs>
-                    <circle
-                        cx={half}
-                        cy={half + 2}
-                        r={bodyR}
-                        fill="url(#bomb-body)"
-                        stroke="#007fff"
-                        strokeWidth={1}
-                        opacity={0.95}
-                    />
-                    {/* Bomb highlight dot. */}
-                    <circle cx={half - 8} cy={half - 6} r={3} fill="rgba(255,255,255,0.5)" />
-                    {/* Fuse — curved path from body to spark. */}
-                    <path
-                        d={`M ${fuseStart.x} ${fuseStart.y} Q ${fuseCtrl.x} ${fuseCtrl.y} ${fuseTip.x} ${fuseTip.y}`}
-                        stroke="#c8b070"
-                        strokeWidth={2}
-                        fill="none"
-                        strokeLinecap="round"
-                    />
-                    {/* Spark at fuse tip — flickering orange + white core. */}
-                    <g style={{ transformOrigin: `${fuseTip.x}px ${fuseTip.y}px`, animation: 'bomb-fuse-spark 0.45s ease-in-out infinite' }}>
-                        <circle
-                            cx={fuseTip.x}
-                            cy={fuseTip.y}
-                            r={6}
-                            fill="#ff9a2e"
-                            style={{ animation: 'bomb-fuse-flicker 0.3s ease-in-out infinite' }}
-                        />
-                        <circle cx={fuseTip.x} cy={fuseTip.y} r={2.2} fill="#ffe7a0" />
-                    </g>
-                    {/* Percent in the center of the bomb. */}
-                    <text
-                        x={half}
-                        y={half + 6}
-                        textAnchor="middle"
-                        fontFamily="Inter, sans-serif"
-                        fontWeight={800}
-                        fontSize={16}
-                        fill="#007fff"
-                        style={{
-                            filter: 'drop-shadow(0 0 3px rgba(0,127,255,0.9))',
-                        }}
-                    >
-                        {percent}%
-                    </text>
-                </svg>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: 7,
+                    fontFamily: 'monospace',
+                    color: '#ddd',
+                }}>
+                    <span style={{ fontSize: 10 }}>Tracing</span>
+                    <span style={{ fontSize: 11, color: '#9fd0ff' }}>{clamped}%</span>
+                </div>
+                <div style={{
+                    height: 4,
+                    borderRadius: 999,
+                    background: 'rgba(255,255,255,0.12)',
+                    overflow: 'hidden',
+                }}>
+                    <div style={{
+                        width: `${clamped}%`,
+                        height: '100%',
+                        borderRadius: 999,
+                        background: '#9fd0ff',
+                    }} />
+                </div>
             </div>
         </div>
     );
@@ -502,7 +435,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                     }}
                 />
                 {isRendering && !hasImage && (
-                    <BombLoadingOverlay percent={Math.round(scanProgress * 100)} />
+                    <LoadingOverlay percent={Math.round(scanProgress * 100)} />
                 )}
 
                 {/* Overlay: channel / normalize / mapping toggle buttons */}

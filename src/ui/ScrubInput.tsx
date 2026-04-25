@@ -199,6 +199,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             <div style={{ position: 'relative', width: '100%' }}>
                 <input
                     type="text"
+                    inputMode="decimal"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     onBlur={() => onCommit(value)}
@@ -230,7 +231,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                         color: '#777',
                         pointerEvents: 'none',
                         userSelect: 'none',
-                        fontFamily: 'Inter, sans-serif',
+                        fontFamily: 'var(--ui-font)',
                     }}>
                         {suffix}
                     </span>

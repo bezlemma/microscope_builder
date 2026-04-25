@@ -1,5 +1,17 @@
 /* ─── Cross-browser baseline ─────────────────────────────── */
 
+:root {
+  --app-height: 100vh;
+  --ui-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --workspace-font-size: 12px;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -7,16 +19,26 @@
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  height: var(--app-height, 100dvh);
   overflow: hidden;
   background-color: #000;
   color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--ui-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 
   /* Prevent pull-to-refresh / overscroll bounce on mobile */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
 }
 
 /* R3F Canvas — critical for Safari & mobile touch event routing.

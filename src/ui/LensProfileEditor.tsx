@@ -3,6 +3,7 @@ import { useAtom } from 'jotai';
 import { componentsAtom, pushUndoAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { SphericalLens } from '../physics/components/SphericalLens';
+import { AsphericLens, asphereSagFromApex } from '../physics/components/AsphericLens';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { Mirror } from '../physics/components/Mirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
@@ -30,6 +31,7 @@ const TEXT_COLOR = '#6f6f6f';
 
 type EditableProfileComponent =
     | SphericalLens
+    | AsphericLens
     | CylindricalLens
     | Mirror
     | CurvedMirror
@@ -114,6 +116,7 @@ function isPolygonEditable(component: OpticalComponent): component is AbstractPo
 function isEditableProfileComponent(component: OpticalComponent): component is EditableProfileComponent {
     return (
         component instanceof SphericalLens ||
+        component instanceof AsphericLens ||
         component instanceof CylindricalLens ||
         component instanceof Mirror ||
         component instanceof CurvedMirror ||
@@ -282,6 +285,95 @@ function LensProfilePanel({
             <text x={CENTER_X + 4} y={topEdgeY - 4} fill="#888" fontSize={9}>R</text>
             <text x={4} y={PANEL_H - 10} fill={TEXT_COLOR} fontSize={9}>
                 {isCylindrical ? 'Cylindrical lens profile' : `f=${component.focalLength.toFixed(1)}mm`}
+            </text>
+        </>
+    );
+}
+
+function asphericProfileToScreen(
+    component: AsphericLens,
+    scale: number,
+    segments: number = 48,
+): { front: number[]; back: number[]; rim: number[] } {
+    const front = component.frontSurface;
+    const back = component.backSurface;
+    const apertureRadius = component.apertureRadius;
+    const thickness = component.thickness;
+    const frontApex = -thickness / 2;
+    const backApex = thickness / 2;
+    const frontPts: number[] = [];
+    const backPts: number[] = [];
+
+    for (let i = 0; i <= segments; i++) {
+        const r = (i / segments) * apertureRadius;
+        const fz = frontApex + asphereSagFromApex(front, r);
+        const bz = backApex + asphereSagFromApex(back, r);
+        frontPts.push(CENTER_X + fz * scale, CENTER_Y - r * scale);
+        backPts.push(CENTER_X + bz * scale, CENTER_Y - r * scale);
+    }
+    for (let i = segments; i >= 0; i--) {
+        const r = (i / segments) * apertureRadius;
+        const fz = frontApex + asphereSagFromApex(front, r);
+        const bz = backApex + asphereSagFromApex(back, r);
+        frontPts.push(CENTER_X + fz * scale, CENTER_Y + r * scale);
+        backPts.push(CENTER_X + bz * scale, CENTER_Y + r * scale);
+    }
+
+    const rimTopF = frontApex + asphereSagFromApex(front, apertureRadius);
+    const rimTopB = backApex + asphereSagFromApex(back, apertureRadius);
+    const rim = [
+        CENTER_X + rimTopF * scale, CENTER_Y - apertureRadius * scale,
+        CENTER_X + rimTopB * scale, CENTER_Y - apertureRadius * scale,
+        CENTER_X + rimTopB * scale, CENTER_Y + apertureRadius * scale,
+        CENTER_X + rimTopF * scale, CENTER_Y + apertureRadius * scale,
+    ];
+    return { front: frontPts, back: backPts, rim };
+}
+
+function AsphericLensProfilePanel({
+    component,
+    activeHandle,
+    startDrag,
+}: {
+    component: AsphericLens;
+    activeHandle: HandleId;
+    startDrag: (id: string) => void;
+}) {
+    const scale = useMemo(
+        () => (DRAW_H * 0.8) / Math.max(component.apertureRadius * 2, component.thickness, 1),
+        [component.apertureRadius, component.thickness],
+    );
+    const scaleRef = useRef(scale);
+    if (!activeHandle) scaleRef.current = scale;
+
+    const profile = useMemo(
+        () => asphericProfileToScreen(component, scaleRef.current),
+        [
+            component,
+            component.r1, component.r2, component.k1, component.k2,
+            component.A1, component.A2, component.apertureRadius, component.thickness,
+            activeHandle,
+        ],
+    );
+
+    const frontApexX = CENTER_X + (-component.thickness / 2) * scaleRef.current;
+    const topEdgeY = CENTER_Y - component.apertureRadius * scaleRef.current;
+    const fLabel = Math.abs(component.focalLength) < 1e5 ? `f=${component.focalLength.toFixed(1)}mm` : 'f=∞';
+
+    return (
+        <>
+            <polyline points={pointsToAttr(profile.front)} fill="none" stroke={SURFACE_COLOR} strokeWidth={2} />
+            <polyline points={pointsToAttr(profile.back)} fill="none" stroke={SURFACE_COLOR_DIM} strokeWidth={2} />
+            <line x1={profile.rim[0]} y1={profile.rim[1]} x2={profile.rim[2]} y2={profile.rim[3]} stroke={RIM_COLOR} strokeWidth={1} />
+            <line x1={profile.rim[4]} y1={profile.rim[5]} x2={profile.rim[6]} y2={profile.rim[7]} stroke={RIM_COLOR} strokeWidth={1} />
+
+            <ProfileHandle id="thickness" x={frontApexX} y={CENTER_Y} activeHandle={activeHandle} startDrag={startDrag} />
+            <ProfileHandle id="aperture" x={CENTER_X} y={topEdgeY} activeHandle={activeHandle} startDrag={startDrag} />
+
+            <text x={frontApexX - 2} y={CENTER_Y + 18} fill="#888" fontSize={9}>t</text>
+            <text x={CENTER_X + 4} y={topEdgeY - 4} fill="#888" fontSize={9}>R</text>
+            <text x={4} y={PANEL_H - 10} fill={TEXT_COLOR} fontSize={9}>
+                {`Asphere  ${fLabel}  k₁=${component.k1.toFixed(2)}  k₂=${component.k2.toFixed(2)}`}
             </text>
         </>
     );
@@ -828,6 +920,30 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
                 return;
             }
 
+            if (editable instanceof AsphericLens) {
+                const s = scaleStableRef.current;
+                if (handle === 'thickness') {
+                    const newThickness = Math.max(0.1, (CENTER_X - x) * 2 / s);
+                    commitChange((entry) => {
+                        if (entry instanceof AsphericLens) {
+                            entry.thickness = newThickness;
+                            entry.invalidateMesh();
+                        }
+                    });
+                } else if (handle === 'aperture') {
+                    const requestedRadius = Math.max(1, (CENTER_Y - y) / s);
+                    commitChange((entry) => {
+                        if (entry instanceof AsphericLens) {
+                            const r1 = Math.abs(entry.r1) < 1e6 ? Math.abs(entry.r1) * 0.95 : 200;
+                            const r2 = Math.abs(entry.r2) < 1e6 ? Math.abs(entry.r2) * 0.95 : 200;
+                            entry.apertureRadius = Math.min(requestedRadius, r1, r2);
+                            entry.invalidateMesh();
+                        }
+                    });
+                }
+                return;
+            }
+
             if (editable instanceof SphericalLens || editable instanceof CylindricalLens) {
                 const s = scaleStableRef.current;
                 if (handle === 'thickness') {
@@ -957,7 +1073,7 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
             // Return the vertical scale (for aperture); horizontal scale computed separately in drag handler
             return (DRAW_H * 0.8) / Math.max(editable.apertureRadius * 2, 1);
         }
-        if (editable instanceof SphericalLens || editable instanceof CylindricalLens) {
+        if (editable instanceof SphericalLens || editable instanceof CylindricalLens || editable instanceof AsphericLens) {
             return (DRAW_H * 0.8) / Math.max(editable.apertureRadius * 2, editable.thickness, 1);
         }
         if (editable instanceof CurvedMirror) {
@@ -992,6 +1108,8 @@ export const LensProfileEditor: React.FC<{ component: OpticalComponent }> = ({ c
                             selectedSurface={doubletSelectedSurface}
                             onSelectSurface={setDoubletSelectedSurface}
                         />
+                    ) : editable instanceof AsphericLens ? (
+                        <AsphericLensProfilePanel component={editable} activeHandle={activeHandle} startDrag={startDrag} />
                     ) : editable instanceof SphericalLens || editable instanceof CylindricalLens ? (
                         <LensProfilePanel component={editable} activeHandle={activeHandle} startDrag={startDrag} />
                     ) : editable instanceof CurvedMirror ? (
