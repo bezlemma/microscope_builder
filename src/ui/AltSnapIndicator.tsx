@@ -88,7 +88,11 @@ export const AltSnapIndicator: React.FC = () => {
                 // World-space bottom of the component: transform local bounds to
                 // world and take min Z.  This is the first edge the post meets
                 // coming up from the table — stop there instead of driving into
-                // the component body.
+                // the component body.  updateMatrices() refreshes localToWorld
+                // when position / rotation changed since the last read; without
+                // this, OpenSPIM's setRotation()-rotated mirrors / lenses leave
+                // a stale identity matrix and the post overshoots into the body.
+                c.updateMatrices();
                 const worldBounds = c.bounds.clone().applyMatrix4(c.localToWorld) as Box3;
                 out.push({ id: c.id, target, componentBottomZ: worldBounds.min.z });
             }

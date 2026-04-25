@@ -27,6 +27,12 @@ export interface BundleWaveSegment {
     coherenceMode: Coherence;
     memberCount: number;
     profile: BundleEnvelopeSample[];
+    /** Reverse-traced ray bundle.  The wave animation flips direction so the
+     *  visible wave crests propagate from the sample toward the source/camera,
+     *  matching the physical direction of the actual emitted/scattered light
+     *  (the reverse trace runs camera→sample for sampling reasons; the wave
+     *  view cares about the physical light path, which is the opposite). */
+    isBackward?: boolean;
 }
 
 export interface BundleWavePath {
@@ -397,7 +403,11 @@ export function buildBundleWaveSegmentsFromRayPaths(paths: Ray[][]): BundleWaveS
     const branches = paths
         .map((path, pathIndex) => buildReverseBranch(path, pathIndex))
         .filter(branch => branch.length > 0);
-    return buildBundleWaveSegments(branches);
+    const bundles = buildBundleWaveSegments(branches);
+    // Stamp reverse-trace flag so the visualizer can animate wave crests
+    // running toward the source (camera) instead of away from it.
+    for (const b of bundles) b.isBackward = true;
+    return bundles;
 }
 
 function normalizeJones(jones: JonesVector): JonesVector {

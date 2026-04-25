@@ -18,6 +18,8 @@ export interface WaveRenderSample {
     opticalDistance: number;
     polarization: JonesVector;
     refractiveIndex: number;
+    /** True for reverse-trace bundle samples — see BundleWaveSegment.isBackward. */
+    isBackward?: boolean;
 }
 
 export interface WavePathRenderData {
@@ -111,6 +113,7 @@ function sampleSegment(segment: BundleWaveSegment, fraction: number): WaveRender
         opticalDistance: segment.opticalPathLength + fraction * segLength * (segment.refractiveIndex || 1.0),
         polarization: segment.polarization,
         refractiveIndex: segment.refractiveIndex || 1.0,
+        isBackward: segment.isBackward,
     };
 }
 
@@ -214,6 +217,7 @@ function buildInterfaceTransition(
             opticalDistance: prevAnchor.opticalDistance + incomingArc * prevAnchor.refractiveIndex,
             polarization: prevAnchor.polarization,
             refractiveIndex: prevAnchor.refractiveIndex,
+            isBackward: prevAnchor.isBackward,
         });
     }
 
@@ -226,6 +230,7 @@ function buildInterfaceTransition(
         opticalDistance: boundaryOpticalDistance,
         polarization: nextBoundary.polarization,
         refractiveIndex: nextBoundary.refractiveIndex,
+        isBackward: nextBoundary.isBackward,
     });
 
     let outgoingArc = 0;
@@ -248,6 +253,7 @@ function buildInterfaceTransition(
             opticalDistance: boundaryOpticalDistance + outgoingArc * nextAnchor.refractiveIndex,
             polarization: nextAnchor.polarization,
             refractiveIndex: nextAnchor.refractiveIndex,
+            isBackward: nextAnchor.isBackward,
         });
     }
 

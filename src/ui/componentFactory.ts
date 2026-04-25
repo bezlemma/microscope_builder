@@ -187,6 +187,14 @@ export function applyDefaultPlacementOrientation(comp: OpticalComponent, type: s
         return;
     }
 
+    // Annotations lie flat on the table — local +Z (face / forward) → world +Z
+    // so the camera looking down sees text upright and arrows as horizontal
+    // lines aligned with the grid.
+    if (type === 'textAnnotation' || type === 'arrowAnnotation' || type === 'curvedArrowAnnotation') {
+        comp.pointAlong(0, 0, 1);
+        return;
+    }
+
     if (AXIAL_OPTIC_TYPES.has(type)) {
         comp.pointAlong(1, 0, 0);
         // Cylindrical lens: default roll = 90° so the cylinder axis is

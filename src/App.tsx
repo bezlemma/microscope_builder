@@ -186,7 +186,7 @@ function App() {
             <OpticalTable />
 
             <EffectComposer>
-              <Bloom luminanceThreshold={0.9} mipmapBlur luminanceSmoothing={0.9} intensity={0.35} />
+              <Bloom luminanceThreshold={1.0} mipmapBlur luminanceSmoothing={0.9} intensity={0.15} />
             </EffectComposer>
           </Canvas>
         </CanvasErrorBoundary>

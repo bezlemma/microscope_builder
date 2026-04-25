@@ -12,7 +12,7 @@ import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { AnimationChannel } from '../physics/PropertyAnimator';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
-import { IdealLens } from '../physics/components/IdealLens';
+import { createObjectiveBridgeToPoint } from './immersionBridge';
 
 import { Vector3 } from 'three';
 
@@ -102,12 +102,24 @@ export function createConfocalScene(): ConfocalPresetResult {
     scene.push(scanHead, scanHead.mirror1, scanHead.mirror2);
 
     // ═══ Bottom horizontal microscope row at z = mirrorSpacing ═══
-    const scanLens = new IdealLens(50, 12.5, 'Scan Lens (f=50)');
+    const scanLens = new AchromatDoublet(
+        19.4, -21.9, 72.8,
+        6.0, 2.5,
+        12.5,
+        1.658, 1.750,
+        'Scan Lens (f≈50)'
+    );
     scanLens.setPosition(37.5, 12.5, zExcitation);
     scanLens.pointAlong(-1, 0, 0);
     scene.push(scanLens);
 
-    const tubeLens = new IdealLens(200, 12.5, 'Tube Lens (f=200)');
+    const tubeLens = new AchromatDoublet(
+        77.4, -87.6, 291.1,
+        4.0, 2.5,
+        12.5,
+        1.658, 1.750,
+        'Tube Lens (f≈200)'
+    );
     tubeLens.setPosition(-212.5, 12.5, zExcitation);
     tubeLens.pointAlong(-1, 0, 0);
     scene.push(tubeLens);
@@ -133,12 +145,12 @@ export function createConfocalScene(): ConfocalPresetResult {
     sample.pointAlong(1, 0, 0);
     sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
     scene.push(sample);
-
-    // Immersion bridge from objective to sample
-    // scene.push(createObjectiveBridgeToPoint(
-    //     objective, holderCenter,
-    //     'Objective Immersion Bridge', 0.8,
-    // ));
+    scene.push(createObjectiveBridgeToPoint(
+        objective,
+        holderCenter,
+        'Objective Immersion Bridge',
+        0.8,
+    ));
 
     const blocker = new Blocker(30, 2, 'Beam Stop');
     const blockerCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(25));
@@ -169,13 +181,13 @@ export function createConfocalScene(): ConfocalPresetResult {
     const pmt = new PMT(10, 10, 'PMT');
     pmt.setPosition(-287.5, 62.5, 0);
     pmt.pointAlong(1, 0, 0);
-    // Sensor NA matches the angular acceptance at the PMT after the tube lens:
-    // objective NA / magnification ≈ 0.05. Without a large enough acceptance
-    // cone, backward rays from the PMT miss the pinhole and never reach the
-    // sample, so the Mickey confocal image stays blank.
-    pmt.sensorNA = 0.05;
-    pmt.samplesPerPixel = 24;
+    pmt.sensorNA = 0.01;
     pmt.pmtSampleHz = 1024;
+    // Coarse 16×16 raster by default — each pixel runs a full forward
+    // trace, so 256 steps is a reasonable first-frame budget. User can
+    // crank resolution up in the Inspector for higher-quality images.
+    pmt.scanResX = 16;
+    pmt.scanResY = 16;
     scene.push(pmt);
 
     // Galvo scan parameters

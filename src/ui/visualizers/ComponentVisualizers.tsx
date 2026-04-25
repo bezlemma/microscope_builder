@@ -5,7 +5,7 @@
  * Grouped here to keep OpticalTable.tsx focused on the solver/render loop.
  */
 import React, { useMemo, useState, useRef, useCallback, useContext, createContext } from 'react';
-import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, BoxGeometry, ShapeGeometry } from 'three';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry } from 'three';
 import { useAtom } from 'jotai';
 import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom } from '../../state/store';
 import { Text, Edges, Line } from '@react-three/drei';
@@ -464,14 +464,17 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 64]} />
                 <meshPhysicalMaterial
-                    color="#ffffff"
-                    metalness={0.95}
-                    roughness={0.05}
+                    color="#eef1f5"
+                    metalness={0.35}
+                    roughness={0.18}
                     clearcoat={1.0}
-                    clearcoatRoughness={0.05}
+                    clearcoatRoughness={0.04}
+                    emissive="#c8d2dc"
+                    emissiveIntensity={0.4}
+                    side={DoubleSide}
                 />
             </mesh>
         </group>
@@ -513,10 +516,14 @@ export const GalvoScanHeadVisualizer = ({ component }: { component: GalvoScanHea
 };
 
 export const DualGalvoScanHeadVisualizer = ({ component }: { component: DualGalvoScanHead }) => {
-    const radius = component.mirrorDiameter / 2;
-    const halfS = component.mirrorSpacing / 2;
-    const housingW = component.mirrorSpacing + component.mirrorDiameter;
-    const housingH = component.mirrorDiameter * 1.2;
+    // Housing only — child Mirror components (component.mirror1/mirror2) are
+    // pushed into the scene alongside this component and render themselves
+    // through MirrorVisualizer at the world transforms _syncMirrors() sets.
+    // Drawing decorative cylinders here would diverge from the physics mirror
+    // positions any time the scan head was rotated or the scan angles moved.
+    const spacing = component.mirrorSpacing;
+    const housingW = component.mirrorDiameter * 1.2;
+    const housingH = spacing + component.mirrorDiameter;
     const housingD = component.mirrorDiameter * 1.2;
 
     return (
@@ -525,35 +532,18 @@ export const DualGalvoScanHeadVisualizer = ({ component }: { component: DualGalv
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            {/* Shared housing */}
-            <mesh>
+            <mesh position={[0, spacing / 2, 0]}>
                 <boxGeometry args={[housingW, housingH, housingD]} />
-                <meshStandardMaterial color="#111" metalness={0.4} roughness={0.8} transparent opacity={0.6} />
+                <meshStandardMaterial
+                    color="#111"
+                    metalness={0.4}
+                    roughness={0.8}
+                    transparent
+                    opacity={0.15}
+                    depthWrite={false}
+                />
+                <EdgeOutline />
             </mesh>
-
-            {/* Mirror 1 (X) */}
-            <group position={[-halfS, 0, 0]} rotation={[0, 0, component.scanX]}>
-                <mesh rotation={[0, 0, -Math.PI/4]}>
-                    <cylinderGeometry args={[radius, radius, 1, 32]} />
-                    <meshPhysicalMaterial color="#fff" metalness={1} roughness={0.05} />
-                </mesh>
-                <mesh position={[0, radius + 2, 0]}>
-                    <boxGeometry args={[0.5, 4, 0.5]} />
-                    <meshBasicMaterial color="red" />
-                </mesh>
-            </group>
-
-            {/* Mirror 2 (Y) */}
-            <group position={[halfS, 0, 0]} rotation={[0, component.scanY, 0]}>
-                <mesh rotation={[0, 0, Math.PI/4]}>
-                    <cylinderGeometry args={[radius, radius, 1, 32]} />
-                    <meshPhysicalMaterial color="#fff" metalness={1} roughness={0.05} />
-                </mesh>
-                <mesh position={[0, radius + 2, 0]}>
-                    <boxGeometry args={[4, 0.5, 0.5]} />
-                    <meshBasicMaterial color="blue" />
-                </mesh>
-            </group>
         </group>
     );
 };
@@ -1184,13 +1174,18 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
         >
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
-                    color="#ccffff"
-                    transmission={0.99}
-                    opacity={0.6}
+                    color="#aaddff"
+                    transmission={0.85}
+                    opacity={0.5}
                     transparent
-                    roughness={0}
-                    side={2}
-                    depthWrite={false}
+                    roughness={0.05}
+                    metalness={0}
+                    ior={1.5168}
+                    thickness={1.0}
+                    attenuationColor="#aaddff"
+                    attenuationDistance={5}
+                    side={DoubleSide}
+                    depthWrite={true}
                     clearcoat={1.0}
                     clearcoatRoughness={0.02}
                 />

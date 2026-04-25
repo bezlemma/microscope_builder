@@ -1,47 +1,46 @@
 import { OpticalComponent } from '../physics/Component';
-import { Laser } from '../physics/components/Laser';
+import { Lamp } from '../physics/components/Lamp';
 import { Card } from '../physics/components/Card';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { PrismLens } from '../physics/components/PrismLens';
 
 import { PresetResult } from '../state/store';
 
 /**
- * Tutorial Preset — a folded 3× reflective Keplerian beam expander the user assembles.
+ * Tutorial Preset — folded 3× reflective Keplerian beam expander, broadband.
  *
- *   Laser (611 nm) at (-87.5, 12.5) shoots +X.
- *   M1 target at (12.5, 12.5)           — concave, folds beam to +Y.
- *   M2 target at (12.5, 12.5 + D)       — concave, folds beam to +X.
- *   Card    at (212.5, 12.5 + D)        — opaque screen, catches the expanded beam.
+ *   Lamp   at (-87.5, 12.5)              — emits white light along +X.
+ *   M1 target at (12.5, 12.5)            — concave, folds beam to +Y.
+ *   M2 target at (12.5, 12.5 + D)        — concave, folds beam to +X.
+ *   Prism  at (162.5, 12.5 + D)          — disperses the expanded white beam.
+ *   Card    at (337.5, 12.5 + D + 30)    — screen, catches the rainbow spectrum.
  *
- * CurvedMirror convention in this codebase: radiusOfCurvature < 0 = concave (focusing).
- * Each mirror sits at a 45° fold.  The effective tangential focal length at that
- * incidence is f_t = |R| · cos 45° / 2, so a Keplerian expander collimates when
- *   D = f_t1 + f_t2 = (|R1| + |R2|) · cos 45° / 2.
- * Pick |R1| = 100 mm, |R2| = 300 mm → 3× magnification and D ≈ 141.42 mm.
- *
- * The laser sits on a 25 mm grid hole.  M2 and the card end up ~9 mm off-grid
- * along Y — Alt-drag snaps to ghost centers regardless of grid alignment.
+ * CurvedMirror convention: radiusOfCurvature < 0 = concave (focusing).  Each
+ * mirror sits at a 45° fold; the effective tangential focal length is
+ *   f_t = |R| · cos 45° / 2,
+ * so the Keplerian expander collimates when D = (|R1| + |R2|) · cos 45° / 2.
+ * |R1| = 100 mm and |R2| = 300 mm give 3× magnification and D ≈ 141.42 mm.
  */
 export function createTutorialScene(): PresetResult {
     const scene: OpticalComponent[] = [];
 
-    const R1 = -100;   // concave, f_paraxial = 50 mm
-    const R2 = -300;   // concave, f_paraxial = 150 mm
+    const R1 = -100;
+    const R2 = -300;
     const D = (Math.abs(R1) + Math.abs(R2)) * Math.SQRT1_2 / 2; // 141.42 mm
 
     const M1_POS = { x: 12.5, y: 12.5 };
     const M2_POS = { x: 12.5, y: 12.5 + D };
 
-    // Laser — 611 nm, emits along +X.
-    const laser = new Laser("Laser Source");
-    laser.wavelength = 611;
-    laser.beamRadius = 2;
-    laser.setPosition(-87.5, 12.5, 0);
-    laser.pointAlong(1, 0, 0);
-    scene.push(laser);
+    // Lamp — broadband white light source, emits along +X.  The prism farther
+    // down the path will fan its discrete wavelengths into a rainbow on the
+    // screen, which is the visual payoff for the tutorial.
+    const lamp = new Lamp("Lamp Source");
+    lamp.setPosition(-87.5, 12.5, 0);
+    lamp.pointAlong(1, 0, 0);
+    lamp.beamRadius = 1.2;
+    scene.push(lamp);
 
-    // Ghost 1 — target outline for M1 (excluded from ray tracing).
-    // pan = -π/4 so the reflective front faces up-left (toward the incoming +X beam).
+    // Ghost 1 — target outline for M1.
     const m1Ghost = new CurvedMirror(25.4, R1, 1, "M1 Target");
     m1Ghost.isGhost = true;
     m1Ghost.setPosition(M1_POS.x, M1_POS.y, 0);
@@ -50,7 +49,6 @@ export function createTutorialScene(): PresetResult {
     scene.push(m1Ghost);
 
     // Ghost 2 — target outline for M2.
-    // pan = +3π/4 so the reflective front faces down-right (toward the +Y beam arriving from M1).
     const m2Ghost = new CurvedMirror(25.4, R2, 1, "M2 Target");
     m2Ghost.isGhost = true;
     m2Ghost.setPosition(M2_POS.x, M2_POS.y, 0);
@@ -72,17 +70,29 @@ export function createTutorialScene(): PresetResult {
     m2.recomputeRotation();
     scene.push(m2);
 
-    // Card — opaque screen that catches the expanded beam.
-    const card = new Card(60, 60, "Screen");
+    // Prism — placed at x = 40 along the +X expanded beam from M2.  Equilateral
+    // triangle, oriented so the beam enters one face at moderate incidence
+    // and exits dispersed downward.
+    const prism = new PrismLens(Math.PI/3, 30, 30, "Dispersion Prism", 1.5168);
+    prism.setPosition(80, 150, 0);
+    prism.panAngle = 55;
+    prism.tiltAngle = 0;
+    prism.rollAngle = Math.PI / 2;
+    prism.recomputeRotation();
+    scene.push(prism);
+
+    // Card — screen positioned at (237.5, 87.5) to catch the dispersed rainbow
+    // after the prism bends the beam downward.
+    const card = new Card(80, 80, "Screen");
     card.opaque = true;
-    card.setPosition(212.5, M2_POS.y, 0);
-    card.panAngle = Math.PI;
+    card.setPosition(180.5, 50.5, 0);
+    card.panAngle = Math.PI - Math.PI / 6;
     card.recomputeRotation();
     scene.push(card);
 
     return {
         scene,
         description:
-            "Hold Alt while dragging to snap to the target. Once both mirrors are in place the laser expands into a beam ~3× wider that lights up the screen.",
+            "Drag the mirrors to make a beam expander. The prism then splits the white light into a rainbow on the screen. Try adding components from the left bar, or explore the other presets.",
     };
 }

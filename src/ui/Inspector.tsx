@@ -190,7 +190,7 @@ const SolverPanel: React.FC<{
     animator: PropertyAnimator;
     animPlaying: boolean;
     setAnimPlaying: (v: boolean) => void;
-}> = ({ rayConfig, setrayConfig, setVisualizationMode, isRendering, setImageFormationTrigger, animator, animPlaying, setAnimPlaying }) => {
+}> = ({ rayConfig, setrayConfig, setVisualizationMode, isRendering, setImageFormationTrigger: _setImageFormationTrigger, animator, animPlaying, setAnimPlaying }) => {
     const isMobile = useIsMobile();
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
@@ -411,7 +411,7 @@ const SolverPanel: React.FC<{
                                     sliderPositionToCount(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
                                 ),
                             })}
-                            style={{ width: '120px' }}
+                            style={{ width: '80px' }}
                         />
                         <input
                             type="number"
@@ -446,71 +446,18 @@ const SolverPanel: React.FC<{
                             }}
                             title="Exact forward source rods per source. Slider sticks near symmetric shell counts."
                         />
-                        <span style={{ minWidth: '92px' }} title="Exact rods per source. Slider sticks near symmetric shell counts.">
-                            {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)} rods/source
-                        </span>
-                    </div>
-                    <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                        <input
-                            type="range"
-                            min="0"
-                            max={String(COUNT_SLIDER_STEPS)}
-                            step="1"
-                            value={countToSliderPosition(
-                                clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
-                                MIN_REVERSE_PATH_COUNT,
-                                MAX_REVERSE_PATH_COUNT,
-                            )}
-                            onChange={(e) => setrayConfig({
-                                ...rayConfig,
-                                reversePathCount: clampValue(
-                                    sliderPositionToCount(parseInt(e.target.value), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
-                                    MIN_REVERSE_PATH_COUNT,
-                                    MAX_REVERSE_PATH_COUNT,
-                                ),
-                            })}
-                            style={{ width: '80px' }}
-                        />
-                        <input
-                            type="number"
-                            min={MIN_REVERSE_PATH_COUNT}
-                            max={MAX_REVERSE_PATH_COUNT}
-                            step={1}
-                            value={rayConfig.reversePathCount}
-                            onChange={(e) => setrayConfig({
-                                ...rayConfig,
-                                reversePathCount: parseInt(e.target.value, 10) || rayConfig.reversePathCount,
-                            })}
-                            onBlur={(e) => setrayConfig({
-                                ...rayConfig,
-                                reversePathCount: clampValue(parseInt(e.target.value || String(MIN_REVERSE_PATH_COUNT), 10), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
-                            })}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setrayConfig({
-                                        ...rayConfig,
-                                        reversePathCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_REVERSE_PATH_COUNT), 10), MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT),
-                                    });
-                                    (e.target as HTMLInputElement).blur();
-                                }
-                            }}
-                            style={{
-                                width: '64px',
-                                background: '#111',
-                                color: '#ddd',
-                                border: '1px solid #444',
-                                borderRadius: '3px',
-                                padding: '1px 4px',
-                            }}
-                            title="Actual reverse detector rods. For cameras this is rods per pixel."
-                        />
                         <span
-                            style={{ minWidth: '74px', color: '#aaa', fontSize: '10px' }}
-                            title="Actual reverse detector rods. For cameras this is rods per pixel."
+                            style={{ minWidth: '74px', color: '#aaa', fontSize: '10px', whiteSpace: 'nowrap' }}
+                            title="Exact rods per source. Slider sticks near symmetric shell counts."
                         >
-                            {clampValue(rayConfig.reversePathCount, MIN_REVERSE_PATH_COUNT, MAX_REVERSE_PATH_COUNT)} Reverse/Px
+                            {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)} rods/src
                         </span>
                     </div>
+                    {/* Reverse/Px slider intentionally removed: each progressive
+                        round contributes one sample/pixel and the accumulator
+                        builds the running average across rounds, so the knob
+                        was redundant.  reversePathCount is locked to 1 in
+                        DEFAULT_RAY_CONFIG. */}
 
                     <div style={{ display: 'flex', gap: '6px', marginTop: 8 }}>
                         {(['rods', 'wave'] as const).map(mode => {
@@ -5051,6 +4998,38 @@ export const Inspector: React.FC = () => {
                                     title="Edge steepness — smaller = sharper transition"
                                 />
                             </div>
+                        </div>
+                    );
+                })()}
+
+                {/* ── Zoom Viewer pin (works for Sample + SampleChamber) ── */}
+                {isSample && selectedComponent && (() => {
+                    const id = selectedComponent.id;
+                    const isPinned = pinnedIds.has(id);
+                    return (
+                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '11px', color: '#aaa' }}>Zoom Viewer</span>
+                            <button
+                                onClick={() => {
+                                    const next = new Set(pinnedIds);
+                                    if (isPinned) next.delete(id);
+                                    else next.add(id);
+                                    setPinnedIds(next);
+                                }}
+                                title={isPinned ? 'Unpin sample zoom viewer' : 'Pin a 3D zoom viewer that shows rays hitting and exiting the sample in real time'}
+                                style={{
+                                    background: isPinned ? '#333' : 'none',
+                                    border: isPinned ? '1px solid #555' : '1px solid #444',
+                                    borderRadius: 3,
+                                    color: isPinned ? '#fff' : '#888',
+                                    cursor: 'pointer',
+                                    fontSize: 11,
+                                    padding: '1px 6px',
+                                    lineHeight: 1.2,
+                                }}
+                            >
+                                📌 {isPinned ? 'Pinned' : 'Pin'}
+                            </button>
                         </div>
                     );
                 })()}

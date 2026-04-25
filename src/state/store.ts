@@ -19,6 +19,7 @@ import { createConfocalScene } from '../presets/confocal';
 import { createBlankScene } from '../presets/blank';
 import { createOpticalTrapScene } from '../presets/opticalTrap';
 import { createTutorialScene } from '../presets/tutorial';
+import { createCheHangYu2026Scene } from '../presets/CheHangYu2026';
 
 // --- State Types ---
 export interface RayConfig {
@@ -38,7 +39,11 @@ export const MAX_REVERSE_PATH_COUNT = 30000;
 
 export const DEFAULT_RAY_CONFIG: RayConfig = {
     rayCount: 32,
-    reversePathCount: 4,
+    // Always 1: each progressive round adds one sample/pixel and the
+    // accumulator builds the running average across rounds, so a "samples
+    // per pixel" knob is redundant.  Kept as a constant so older save files
+    // referencing the field still load cleanly.
+    reversePathCount: 1,
     showFootprint: false,
     solver2Enabled: false,
     viewerMode: 'rods',
@@ -63,6 +68,7 @@ export enum PresetName {
     Confocal = "Confocal Scanning",
     OpticalTrap = "Optical Trap",
     Tutorial = "Tutorial",
+    CheHangYu2026 = "Papers: Yu 2026 (Nisam 2x)",
 }
 
 export type ViewMode = 'schematic' | 'realistic';
@@ -83,6 +89,9 @@ export interface PresetResult {
     channels?: import('../physics/PropertyAnimator').AnimationChannel[];
     animationPlaying?: boolean;
     animationSpeed?: number;
+    /** Override the forward (rod-tracer) ray-per-source count when this preset
+     *  loads.  Falls back to DEFAULT_RAY_CONFIG.rayCount when omitted. */
+    rayCount?: number;
 }
 
 // Action to load a preset
@@ -96,10 +105,11 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.PolarizationZoo, () => ({ scene: createPolarizationZooScene() })],
     [PresetName.MZInterferometer, () => ({ scene: createMZInterferometerScene() })],
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
-    [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene() })],
+    [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
     [PresetName.OpticalTrap, () => ({ scene: createOpticalTrapScene() })],
     [PresetName.Tutorial, () => createTutorialScene()],
+    [PresetName.CheHangYu2026, () => createCheHangYu2026Scene()],
 ]);
 
 export const loadPresetAtom = atom(
@@ -114,6 +124,12 @@ export const loadPresetAtom = atom(
         const factory = presetFactories.get(presetName);
         if (!factory) return;
         const result = factory();
+
+        // Per-preset forward ray count override (OpenSPIM wants more rays for
+        // a visible light sheet, etc.).
+        if (result.rayCount !== undefined) {
+            set(rayConfigAtom, prev => ({ ...prev, rayCount: result.rayCount! }));
+        }
 
         set(componentsAtom, result.scene);
         set(presetDescriptionAtom, result.description || "");
@@ -147,10 +163,32 @@ export const loadPresetAtom = atom(
             const pinned = new Set(get(pinnedViewersAtom));
             for (const cam of cameras) pinned.add(cam.id);
             for (const pmt of pmts) pinned.add(pmt.id);
+            // OpenSPIM is the one preset where seeing rays land on the sample
+            // is the *point* of the layout (the light sheet itself isn't
+            // visible without it), so we also pin every Sample / SampleChamber
+            // automatically.  Other presets leave the user to pin manually.
+            if (presetName === PresetName.OpenSPIM) {
+                for (const comp of result.scene) {
+                    const isSampleLike =
+                        comp.constructor.name === 'Sample'
+                        || comp.constructor.name === 'SampleChamber';
+                    if (isSampleLike) pinned.add(comp.id);
+                }
+            }
             set(pinnedViewersAtom, pinned);
             // Bumping the trigger atom causes OpticalTable's Solver-3 effect to
             // run. It reads `components` at render time and will see the new scene.
             set(solver3RenderTriggerAtom, get(solver3RenderTriggerAtom) + 1);
+        }
+
+        // Auto-start PMT raster scans the same way cameras auto-render.  PMTs
+        // build their image by raster-scanning galvo channels, so they need
+        // `scanAccumTriggerAtom` bumped — without this, presets like Confocal
+        // load a configured PMT that just sits blank until the user manually
+        // hits the scan refresh button.
+        if (pmts.length > 0 && result.channels && result.channels.length > 0) {
+            const prev = get(scanAccumTriggerAtom);
+            set(scanAccumTriggerAtom, { steps: prev.steps, trigger: prev.trigger + 1 });
         }
     }
 );
@@ -203,6 +241,10 @@ export const handleDraggingAtom = atom<boolean>(false);
 
 // 6. Pinned Viewer Panels — card IDs whose viewer panels are toggled on
 export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
+
+// 6a. Forward ray paths — published whenever Solver 1 traces.  Other viewers
+// (e.g. SampleZoomViewer) read from this so they don't have to re-trace.
+export const forwardRaysAtom = atom<import('../physics/types').Ray[][]>([]);
 
 // 7. Solver 3 render trigger — incrementing this value triggers a Solver 3 render
 export const solver3RenderTriggerAtom = atom<number>(0);
@@ -321,9 +363,18 @@ export const cameraBlendAtom = atom<number>(0);
 export const mobileCameraModeAtom = atom<'pan' | 'rotate'>('pan');
 
 // ════════════════════════════════════════════════════════════
-//  16. RAIL PLACEMENT — Two-click rail placement workflow
+//  16. TWO-HOLE PLACEMENT — pick a starting hole, then an ending
+//  hole.  Reused by Rails and by arrow / curved-arrow annotations.
 // ════════════════════════════════════════════════════════════
-export const railPlacementAtom = atom<{ active: boolean; firstHole: import('three').Vector3 | null }>({ active: false, firstHole: null });
+export type TwoHolePlacementKind = 'rail' | 'arrowAnnotation' | 'curvedArrowAnnotation';
+
+export interface TwoHolePlacementState {
+    active: boolean;
+    kind: TwoHolePlacementKind;
+    firstHole: import('three').Vector3 | null;
+}
+
+export const railPlacementAtom = atom<TwoHolePlacementState>({ active: false, kind: 'rail', firstHole: null });
 
 // ════════════════════════════════════════════════════════════
 //  17. SOLVER DIAGNOSTICS — elapsed time, step count

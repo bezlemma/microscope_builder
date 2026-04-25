@@ -53,7 +53,12 @@ function fieldVectorForSample(
 
     const displayLambda = DISPLAY_WAVELENGTH_BASE * (sample.wavelength / REFERENCE_WAVELENGTH);
     const k = (2 * Math.PI) / displayLambda;
-    const phase = k * sample.opticalDistance - ANIM_SPEED * time;
+    // For reverse-trace samples the segment chain runs camera→sample, so the
+    // unflipped phase would animate wave crests AWAY from the camera.  Flip
+    // the time term on those samples so crests propagate toward the camera —
+    // i.e. in the direction the actual photons would travel.
+    const timeSign = sample.isBackward ? -1 : 1;
+    const phase = k * sample.opticalDistance - ANIM_SPEED * time * timeSign;
 
     const ex = axAmp * Math.cos(phase + phiX);
     const ey = ayAmp * Math.cos(phase + phiY);

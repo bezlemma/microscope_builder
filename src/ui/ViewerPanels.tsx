@@ -12,9 +12,12 @@ import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderT
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { Sample } from '../physics/components/Sample';
+import { SampleChamber } from '../physics/components/SampleChamber';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { PMTViewer } from './PMTViewer';
+import { SampleZoomViewer } from './SampleZoomViewer';
 import { OpticalComponent } from '../physics/Component';
 import { useIsMobile } from './useIsMobile';
 
@@ -44,10 +47,16 @@ export const ViewerPanels: React.FC = () => {
         }
     }, [isMobile, pinnedIds]);
 
-    // Resolve pinned IDs to actual Card or Camera instances (filter stale IDs)
+    // Resolve pinned IDs to actual Card / Camera / PMT / Sample instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
         .map(id => components.find(c => c.id === id))
-        .filter((c): c is OpticalComponent => c instanceof Card || c instanceof Camera || (c instanceof PMT && (c as PMT).hasValidAxes()));
+        .filter((c): c is OpticalComponent =>
+            c instanceof Card
+            || c instanceof Camera
+            || (c instanceof PMT && (c as PMT).hasValidAxes())
+            || c instanceof Sample
+            || c instanceof SampleChamber
+        );
 
     if (pinnedComponents.length === 0) return null;
 
@@ -161,6 +170,9 @@ export const ViewerPanels: React.FC = () => {
                                 }
                             }}
                         />
+                    )}
+                    {!minimizedIds.has(comp.id) && (comp instanceof Sample || comp instanceof SampleChamber) && (
+                        <SampleZoomViewer sample={comp as Sample | SampleChamber} size={isMobile ? 160 : 240} />
                     )}
                     {!minimizedIds.has(comp.id) && comp instanceof PMT && (() => {
                         const pmt = comp as PMT;

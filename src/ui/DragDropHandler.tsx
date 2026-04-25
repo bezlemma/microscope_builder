@@ -27,9 +27,15 @@ export const DragDropHandler: React.FC = () => {
                 window.navigator.vibrate(50);
             }
 
-            // Rail uses two-click placement mode instead of drop
+            // Rails and arrow annotations use two-click placement: first
+            // click = start hole, second click = end hole, then the actual
+            // component lands stretched between them.
             if (type === 'rail') {
-                setRailPlacement({ active: true, firstHole: null });
+                setRailPlacement({ active: true, kind: 'rail', firstHole: null });
+                return;
+            }
+            if (type === 'arrowAnnotation' || type === 'curvedArrowAnnotation') {
+                setRailPlacement({ active: true, kind: type, firstHole: null });
                 return;
             }
 

@@ -43,6 +43,14 @@ export interface RenderRequest {
     reversePathCount: number;
     forwardRayCount: number;
     solver2Enabled: boolean;
+    /** While true the worker uses a coarse preview pass: 16×16 sensor, 1 sample/pixel.
+     *  Lets dragging/rotation feel real-time; full quality returns when the flag flips. */
+    previewMode?: boolean;
+    /** Row-stripe assignment for a worker pool.  A worker only traces rows where
+     *  `py % workerCount === workerId`.  When unset, the worker traces every row
+     *  (single-worker fallback). */
+    workerId?: number;
+    workerCount?: number;
 }
 
 export interface CancelRequest {
@@ -221,11 +229,26 @@ async function runJob(req: RenderRequest) {
 
         const sample = components.find((c): c is Sample => c instanceof Sample);
 
+        // Preview mode: collapse every Lamp's discrete wavelength list to a
+        // single representative band so the inner trace loop runs once per
+        // ray instead of N times.
+        if (req.previewMode) {
+            for (const c of components) {
+                const lamp = c as { spectralWavelengths?: number[] };
+                if (Array.isArray(lamp.spectralWavelengths) && lamp.spectralWavelengths.length > 1) {
+                    lamp.spectralWavelengths = [lamp.spectralWavelengths[Math.floor(lamp.spectralWavelengths.length / 2)]];
+                }
+            }
+        }
+
         // Solver-3 needs beam segments (even a coarse estimate) to compute
         // illumination at the sample, so we always run a forward pass here —
         // mirror the "traceFullBeamSegments()" fallback used by the main thread.
         const solver1 = new Solver1(components);
-        const sourceRays = createSourceRays(components, req.forwardRayCount, 'full');
+        const forwardRays = req.previewMode
+            ? Math.max(8, Math.min(req.forwardRayCount, 16))
+            : req.forwardRayCount;
+        const sourceRays = createSourceRays(components, forwardRays, 'full');
         let beamSegs: ReturnType<typeof solver1.traceWithBeamSegments>['beamSegments'] = [];
         try {
             beamSegs = solver1.traceWithBeamSegments(sourceRays).beamSegments;
@@ -238,7 +261,15 @@ async function runJob(req: RenderRequest) {
         // argument to renderGenerator is just the visualization-path reservoir
         // size, not the ray count.)
         for (const cam of cameras) {
-            cam.samplesPerPixel = Math.max(1, req.reversePathCount);
+            if (req.previewMode) {
+                // Preview mode: blocky 16×16, 1 sample/pixel.  Topology-only
+                // feedback while the user is actively dragging.
+                cam.sensorResX = 16;
+                cam.sensorResY = 16;
+                cam.samplesPerPixel = 1;
+            } else {
+                cam.samplesPerPixel = Math.max(1, req.reversePathCount);
+            }
         }
 
         // Make sure the Rust kernel is available before instantiating Solver3

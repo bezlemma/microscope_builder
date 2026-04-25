@@ -13,7 +13,7 @@ import {
 
 import { useAtom } from 'jotai';
 import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, presetDescriptionAtom } from '../state/store';
-import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
+import { downloadUbz, openUbzFilePicker } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
 // ─── Draggable component item ─────────────────────────────────────────
@@ -297,11 +297,12 @@ export const Sidebar: React.FC = () => {
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [components] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
-    const [selection, setSelection] = useAtom(selectionAtom);
-    const [, zoomTo] = useAtom(zoomToComponentAtom);
+    const [_selection, _setSelection] = useAtom(selectionAtom);
+    const [, _zoomTo] = useAtom(zoomToComponentAtom);
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
-    const isLandscape = useIsLandscape();
+    const _isLandscape = useIsLandscape();
+    void _selection; void _setSelection; void _zoomTo; void _isLandscape;
 
 
 
@@ -681,6 +682,18 @@ export const Sidebar: React.FC = () => {
                             label="Interferometer"
                             active={activePreset === PresetName.MZInterferometer}
                             onClick={() => handlePresetClick(PresetName.MZInterferometer)}
+                        />
+                    </PresetCategory>
+
+                    <PresetCategory
+                        label="Papers"
+                        isOpen={openPresetCat === 'Papers'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Papers' ? null : 'Papers')}
+                    >
+                        <PresetButton
+                            label="CheHang Yu 2026"
+                            active={activePreset === PresetName.CheHangYu2026}
+                            onClick={() => handlePresetClick(PresetName.CheHangYu2026)}
                         />
                     </PresetCategory>
 

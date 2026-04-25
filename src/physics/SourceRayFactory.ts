@@ -37,7 +37,8 @@ function buildRadiusFractions(): number[] {
 }
 
 /** Cached radius fractions — only computed once. */
-const RADIUS_FRACTIONS = buildRadiusFractions();
+const _RADIUS_FRACTIONS = buildRadiusFractions();
+void _RADIUS_FRACTIONS;
 
 /** Ray counts per ring — outer ring is 24, inner rings are 12 each. */
 const FIRST_RING_COUNT = 24;
@@ -175,11 +176,15 @@ function generateRingRays(
     // tiling of a 2D disc for smooth coverage at any ray count.
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
-    // Radii from the inverse CDF of the 2D Gaussian beam.
-    // CDF(r) = 1 - exp(-2 r² / w²)  ⇒  r = w · √(-ln(1-u) / 2).
-    // Use stratified u values (i + 0.5)/N for variance reduction.
+    // Radii from the inverse CDF of the 2D Gaussian beam, capped at the 1/e²
+    // waist (u = 1 - e⁻² ≈ 0.865).  Without the cap, stratified u values
+    // u = (i + 0.5)/N drive the outermost ray's radius arbitrarily large
+    // (r ∝ √(-ln(1-u))), which appears as a single "stray" beam well below
+    // / outside the rest of the bundle in lamp visualisations.  Capping at the
+    // waist keeps the outer ray just at the visible beam edge.
+    const U_MAX = 1 - Math.exp(-2); // ≈ 0.864664716...
     for (let i = 0; i < requested; i++) {
-        const u = (i + 0.5) / requested;
+        const u = U_MAX * (i + 0.5) / requested;
         const r = beamRadius * Math.sqrt(-Math.log(1 - u) / 2);
         const phi = i * goldenAngle;
 
