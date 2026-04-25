@@ -5,7 +5,8 @@ import { Laser } from '../physics/components/Laser';
 import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
 import { Waveplate } from '../physics/components/Waveplate';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
-import { IdealLens } from '../physics/components/IdealLens';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
+import { SphericalLens } from '../physics/components/SphericalLens';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { Objective } from '../physics/components/Objective';
 import { Sample } from '../physics/components/Sample';
@@ -18,7 +19,7 @@ import type { PresetResult } from '../state/store';
  * Yu et al., Optica 13(3):409 (March 2026):
  *   "Non-inertial scan angle multiplier for expanded fields-of-view"
  *
- * Reproduces Figure 3 — the angle-doubled two-photon microscope. The trick:
+ * Reproduces Figure 3 — the angle-doubled microscope layout. The trick:
  * the scanned beam is sent through a 4-f relay to a (slow) retroreflecting
  * mirror, which sends it back to strike the SAME resonant mirror a second
  * time. Each bounce contributes 2Δθ, so a ±5° resonant scanner produces a
@@ -34,12 +35,12 @@ import type { PresetResult } from '../state/store';
  * Beam path (emission, descanned NDD):
  *   sample → objective → dichroic (reflect 510 nm) → collection lens → PMT
  *
- * Hardware called out by the paper (modeled with idealized equivalents):
+ * Hardware called out by the paper (modeled with thick approximations):
  *   - Resonant scanner: CRS 12 kHz, ±5° optical (Cambridge Technology)
  *   - Slow galvo: 6220H, ±20° (Cambridge Technology), used as retroreflector
  *   - Scan lenses: LSM54-1050, EFL 54 mm (Thorlabs) ×2
  *   - Tube lens: TTL200MP, EFL 200 mm (Thorlabs)
- *   - Dichroic: DI03-R785-T1 (AVR Optics) — longpass at 785 nm
+ *   - Dichroic: visible surrogate — shortpass near 485 nm
  *   - Objective: Nikon 16×/0.8 NA water immersion (EFL 12.5 mm)
  *   - PBS: PBS513 (Thorlabs); QWP: 39-046 (Edmund Optics)
  *   - PMT: PMT2102 (Thorlabs)
@@ -49,14 +50,49 @@ export function createCheHangYu2026Scene(): PresetResult {
 
     // Geometry — top-down view, all components on z = 0.
     // Vertical column at x = 20 carries PBS, imaging arm, and objective.
-    // Horizontal arm at y = 100 carries the angle-doubling 4-f relay.
+    // Horizontal arm carries the angle-doubling 4-f relay.
     const xCol = 20;
-    const yArm = 100;
+    const yArm = 36;
     const fScan = 54;   // mm — LSM54-1050 effective focal length
     const fTube = 200;  // mm — TTL200MP effective focal length
+    const achromat200 = {
+        r1: 77.4, r2: -87.6, r3: 291.1,
+        t1: 4.0, t2: 2.5,
+        ior1: 1.658, ior2: 1.750,
+    };
+    const makeScaledAchromat = (
+        focalLengthMm: number,
+        apertureRadius: number,
+        name: string,
+    ) => {
+        const scale = focalLengthMm / 200;
+        return new AchromatDoublet(
+            achromat200.r1 * scale,
+            achromat200.r2 * scale,
+            achromat200.r3 * scale,
+            achromat200.t1,
+            achromat200.t2,
+            apertureRadius,
+            achromat200.ior1,
+            achromat200.ior2,
+            name,
+        );
+    };
+    const makePlanoConvex = (
+        focalLengthMm: number,
+        apertureRadius: number,
+        thickness: number,
+        name: string,
+    ) => {
+        const ior = 1.5168;
+        const radius = (ior - 1) * focalLengthMm;
+        return new SphericalLens(1 / focalLengthMm, apertureRadius, thickness, name, radius, undefined, ior);
+    };
 
-    // ── Laser: 920 nm Ti:Sapph, 5 mm beam ──────────────────────────────────
-    const laser = new Laser('920 nm Ti:Sapph');
+    // ── Laser: visible surrogate excitation, 5 mm beam ─────────────────────
+    // The scan-angle multiplier is geometric; 460 nm keeps the preset readable
+    // in the renderer while using physically compatible 460/510 fluorescence.
+    const laser = new Laser('460 nm excitation laser');
     laser.setPosition(-300, 0, 0);
     laser.pointAlong(1, 0, 0);
     laser.wavelength = 460;
@@ -92,13 +128,13 @@ export function createCheHangYu2026Scene(): PresetResult {
     scene.push(resonant);
 
     // Scan lens 1 of the angle-doubling 4-f relay.
-    const scanLens1 = new IdealLens(fScan, 12.5, 'LSM54-1050 (f=54)');
+    const scanLens1 = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Scan Lens 1 (thick f=54)');
     scanLens1.setPosition(xCol + fScan, yArm, 0);
     scanLens1.pointAlong(1, 0, 0);
     scene.push(scanLens1);
 
     // Scan lens 2 of the angle-doubling 4-f relay.
-    const scanLens2 = new IdealLens(fScan, 12.5, 'LSM54-1050 (f=54)');
+    const scanLens2 = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Scan Lens 2 (thick f=54)');
     scanLens2.setPosition(xCol + 3 * fScan, yArm, 0);
     scanLens2.pointAlong(1, 0, 0);
     scene.push(scanLens2);
@@ -126,26 +162,28 @@ export function createCheHangYu2026Scene(): PresetResult {
     // doubled scan angle.
 
     // Scan lens of the imaging arm (forms intermediate scan focus).
-    const imagingScanLens = new IdealLens(fScan, 12.5, 'Imaging Scan Lens (f=54)');
-    imagingScanLens.setPosition(xCol, -fScan, 0);
+    const imagingScanLens = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Imaging Scan Lens (thick f=54)');
+    const yImagingScanLens = yArm - fScan;
+    imagingScanLens.setPosition(xCol, yImagingScanLens, 0);
     imagingScanLens.pointAlong(0, -1, 0);
     scene.push(imagingScanLens);
 
     // Tube lens (TTL200MP). Combined with the scan lens, this gives a
     // 200/54 ≈ 3.7× beam expansion onto the objective back aperture and
     // a 0.27× angle minification, matching the paper's geometry.
-    const tubeLens = new IdealLens(fTube, 18, 'TTL200MP Tube Lens (f=200)');
-    tubeLens.setPosition(xCol, -fScan - fTube, 0);
+    const tubeLens = makeScaledAchromat(fTube, 22.5, 'TTL200MP Tube Lens (thick f=200)');
+    const yTubeLens = yImagingScanLens - (fScan + fTube);
+    tubeLens.setPosition(xCol, yTubeLens, 0);
     tubeLens.pointAlong(0, -1, 0);
     scene.push(tubeLens);
 
-    // Dichroic: longpass @ 785 nm — transmits 920 nm excitation toward the
+    // Dichroic: visible surrogate — transmits 460 nm excitation toward the
     // objective, reflects ~510 nm GCaMP emission sideways into the PMT arm.
-    const yDichroic = -fScan - fTube - 60;
+    const yDichroic = yTubeLens - 100;
     const dichroic = new DichroicMirror(
         50.8, 2,
-        new SpectralProfile('longpass', 390, [], 10),
-        'Dichroic DI03-R785 (LP 785)',
+        new SpectralProfile('shortpass', 485, [], 10),
+        'Visible Dichroic (SP 485)',
     );
     dichroic.setPosition(xCol, yDichroic, 0);
     // Reflect emission from -Y-traveling fluorescence to +X.
@@ -164,8 +202,8 @@ export function createCheHangYu2026Scene(): PresetResult {
         name: 'Nikon 16×/0.8 W',
     });
     objective.setImmersionMedium('water');
-    objective.setPosition(xCol, yDichroic - 60, 0);
-    objective.pointAlong(0, -1, 0);
+    objective.setPosition(xCol, yTubeLens - fTube, 0);
+    objective.pointAlong(0, 1, 0);
     scene.push(objective);
 
     // Sample: place at the objective's front focal plane.
@@ -176,8 +214,7 @@ export function createCheHangYu2026Scene(): PresetResult {
     const holderCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(sampleHolderGapMm));
 
     const sample = new Sample('GCaMP6s mouse cortex (V1)');
-    // GCaMP6s 2P excitation peak ~920 nm, emission ~510 nm.
-    sample.excitationSpectrum = new SpectralProfile('bandpass', 920, [{ center: 920, width: 80 }]);
+    sample.excitationSpectrum = new SpectralProfile('bandpass', 460, [{ center: 460, width: 40 }]);
     sample.emissionSpectrum = new SpectralProfile('bandpass', 510, [{ center: 510, width: 50 }]);
     sample.fluorescenceEfficiency = 0.6;
     sample.setPosition(holderCenter.x, holderCenter.y, holderCenter.z);
@@ -186,25 +223,36 @@ export function createCheHangYu2026Scene(): PresetResult {
     scene.push(sample);
 
     // ── PMT collection arm (off the dichroic, +X side) ─────────────────────
-    const collectionLens = new IdealLens(50, 12.5, 'Collection Lens (f=50)');
-    collectionLens.setPosition(xCol + 80, yDichroic, 0);
+    const collectionLens = makePlanoConvex(100, 12.5, 3.6, 'LA1050-A-ML Collection Lens (thick f=100)');
+    collectionLens.setPosition(xCol + 70, yDichroic, 0);
     collectionLens.pointAlong(1, 0, 0);
     scene.push(collectionLens);
 
+    const pmtCondenser = makeScaledAchromat(20, 10, 'ACL2520U-A PMT Condenser (thick f≈20)');
+    pmtCondenser.setPosition(xCol + 125, yDichroic, 0);
+    pmtCondenser.pointAlong(1, 0, 0);
+    scene.push(pmtCondenser);
+
     const pmt = new PMT(10, 10, 'PMT2102');
-    pmt.setPosition(xCol + 160, yDichroic, 0);
+    pmt.setPosition(xCol + 170, yDichroic, 0);
     pmt.pointAlong(-1, 0, 0);
     pmt.sensorNA = 0.05;
-    pmt.samplesPerPixel = 24;
+    pmt.samplesPerPixel = 12;
     pmt.pmtSampleHz = 4096;
-    pmt.connectGalvo(resonant);
+    pmt.scanResX = 32;
+    pmt.scanResY = 32;
+    pmt.xAxisComponentId = resonant.id;
+    pmt.xAxisProperty = 'scanX';
+    pmt.yAxisComponentId = slow.id;
+    pmt.yAxisProperty = 'scanY';
     scene.push(pmt);
 
     // ── Animation channels ─────────────────────────────────────────────────
-    // Resonant scanner: ±5° optical (= ±2.5° mechanical) at 12 kHz.
-    // Slow galvo: ±5° optical at 32 Hz, frame-rate-ish pacing for the demo.
-    const RES_HALF_ANGLE_RAD = (5 * Math.PI) / 180;
-    const SLOW_HALF_ANGLE_RAD = (5 * Math.PI) / 180;
+    // GalvoScanHead properties are mechanical mirror angles. Reflection doubles
+    // them optically, so ±2.5° mechanical gives the paper's ±5° optical scan
+    // before the non-inertial second bounce, then ±10° after the multiplier.
+    const RES_HALF_ANGLE_RAD = (2.5 * Math.PI) / 180;
+    const SLOW_HALF_ANGLE_RAD = (2.5 * Math.PI) / 180;
 
     const channels: AnimationChannel[] = [
         {
@@ -239,7 +287,7 @@ export function createCheHangYu2026Scene(): PresetResult {
         animationSpeed: 0.1,
         description:
             'Yu et al., Optica 13(3):409 (2026) — "Non-inertial scan angle multiplier for expanded ' +
-            'fields-of-view." Angle-doubled two-photon microscope: a 4-f relay sends the scanned ' +
+            'fields-of-view." Angle-doubled microscope layout: a 4-f relay sends the scanned ' +
             'beam to a slow-galvo retroreflector and back through the SAME resonant mirror, doubling ' +
             'the optical scan angle (±5° → ±10°) with no loss in scan frequency or mirror size.',
     };

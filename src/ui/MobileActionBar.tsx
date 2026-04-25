@@ -111,27 +111,34 @@ export const MobileActionBar: React.FC = () => {
                 <Magnet size={20} />
             </button>
 
+            {/* Pan / Rotate toggle — labeled inline so the mode is obvious
+             *  without having to remember which icon means what.  Tap to flip
+             *  to the other mode; the active mode is highlighted. */}
             <button
                 onClick={() => {
                     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
                     setCameraMode(cameraMode === 'pan' ? 'rotate' : 'pan');
                 }}
                 className="cyber-btn primary"
-                title={cameraMode === 'pan' ? "Switch to 3D Rotate" : "Switch to 2D Pan"}
+                title={cameraMode === 'pan' ? "Currently 2D pan — tap to rotate in 3D" : "Currently 3D rotate — tap to pan in 2D"}
                 style={{
-                    background: cameraMode === 'rotate' ? 'rgba(255, 150, 50, 0.2)' : 'none',
-                    border: 'none',
-                    color: cameraMode === 'rotate' ? '#ffb266' : '#fff',
+                    background: cameraMode === 'rotate' ? 'rgba(255, 150, 50, 0.25)' : 'rgba(80, 80, 80, 0.4)',
+                    border: cameraMode === 'rotate' ? '1px solid #ffb266' : '1px solid #555',
+                    color: cameraMode === 'rotate' ? '#ffb266' : '#ddd',
                     cursor: 'pointer',
-                    padding: '8px',
+                    padding: '6px 10px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: '6px',
                     borderRadius: '8px',
                     transition: 'all 0.2s',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    letterSpacing: '0.3px',
                 }}
             >
-                {cameraMode === 'pan' ? <Move size={20} /> : <Move3d size={20} />}
+                {cameraMode === 'pan' ? <Move size={18} /> : <Move3d size={18} />}
+                <span>{cameraMode === 'pan' ? '2D' : '3D'}</span>
             </button>
 
             {/* Contextual actions when something is selected */}

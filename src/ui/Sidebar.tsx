@@ -13,7 +13,7 @@ import {
 
 import { useAtom } from 'jotai';
 import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, presetDescriptionAtom } from '../state/store';
-import { downloadUbz, openUbzFilePicker } from '../state/ubzSerializer';
+import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
 // ─── Draggable component item ─────────────────────────────────────────
@@ -301,6 +301,7 @@ export const Sidebar: React.FC = () => {
     const [, _zoomTo] = useAtom(zoomToComponentAtom);
     const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
+    const [shareLabel, setShareLabel] = useState('Share');
     const _isLandscape = useIsLandscape();
     void _selection; void _setSelection; void _zoomTo; void _isLandscape;
 
@@ -507,12 +508,16 @@ export const Sidebar: React.FC = () => {
                                     fontFamily: 'Inter, sans-serif',
                                     color: '#007fff',
                                     textShadow: '0 0 8px rgba(0,127,255,0.85), 0 0 16px rgba(0,127,255,0.5)',
-                                    whiteSpace: 'nowrap',
+                                    // Desktop fits the whole title on one line; mobile's 170px sidebar
+                                    // doesn't, so we let it wrap and use an explicit break after "& "
+                                    // so the natural break point is between "Optics &" and "Microscope".
+                                    whiteSpace: isMobile ? 'normal' : 'nowrap',
                                     userSelect: 'none',
                                     display: 'inline-block',
                                 }}>
                                     <span style={capStyle}>B</span><span style={smStyle}>ez's </span>
-                                    <span style={capStyle}>O</span><span style={smStyle}>ptics &amp; </span>
+                                    <span style={capStyle}>O</span><span style={smStyle}>ptics &amp;</span>
+                                    {isMobile ? <br /> : <span style={smStyle}> </span>}
                                     <span style={capStyle}>M</span><span style={smStyle}>icroscope </span>
                                     <span style={capStyle}>B</span><span style={smStyle}>uilder</span>
                                 </div>
@@ -571,7 +576,12 @@ export const Sidebar: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Save / Load buttons */}
+                {/* Save / Load / Share buttons — hidden on mobile because file
+                 *  pickers and clipboard access are unreliable on touch devices,
+                 *  and the sidebar real estate is too tight to surface them
+                 *  without crowding the components/presets the user actually
+                 *  came here for.  Desktop users keep all three. */}
+                {!isMobile && (
                 <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Scene</h4>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
@@ -620,8 +630,41 @@ export const Sidebar: React.FC = () => {
                         >
                             Load
                         </button>
+                        <button
+                            onClick={async () => {
+                                const url = generateSceneUrl(components);
+                                try {
+                                    await navigator.clipboard.writeText(url);
+                                    setShareLabel('Copied!');
+                                } catch {
+                                    // Clipboard blocked (insecure context, permissions). Fall back to
+                                    // putting the URL in the address bar so the user can copy manually.
+                                    window.history.replaceState(null, '', url);
+                                    setShareLabel('In URL bar');
+                                }
+                                setTimeout(() => setShareLabel('Share'), 1800);
+                            }}
+                            title="Copy a URL that restores this exact scene"
+                            style={{
+                                flex: 1,
+                                padding: '8px 0',
+                                background: '#2a2a2a',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#363636'; e.currentTarget.style.borderColor = '#666'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
+                        >
+                            {shareLabel}
+                        </button>
                     </div>
                 </div>
+                )}
 
 
                 {/* Presets Section — categorized dropdowns */}

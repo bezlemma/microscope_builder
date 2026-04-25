@@ -30,14 +30,16 @@ describe('Component factory placement defaults', () => {
         }
     });
 
-    test('prism keeps its old clocking when dropped', () => {
+    test('prism drops with its triangular profile visible top-down', () => {
         const prism = createComponentForType('prism');
         expect(prism).toBeDefined();
         applyDefaultPlacementOrientation(prism!, 'prism');
-        const forward = new Vector3(0, 0, 1).applyQuaternion(prism!.rotation).normalize();
-        const up = new Vector3(0, 1, 0).applyQuaternion(prism!.rotation).normalize();
-        expect(forward.x).toBeGreaterThan(0.99);
-        expect(up.y).toBeGreaterThan(0.99);
+        const extrusion = new Vector3(1, 0, 0).applyQuaternion(prism!.rotation).normalize();
+        const apexAxis = new Vector3(0, 1, 0).applyQuaternion(prism!.rotation).normalize();
+        const baseAxis = new Vector3(0, 0, 1).applyQuaternion(prism!.rotation).normalize();
+        expect(extrusion.z).toBeGreaterThan(0.99);
+        expect(apexAxis.x).toBeGreaterThan(0.99);
+        expect(baseAxis.y).toBeGreaterThan(0.99);
     });
 
     test('sample chamber keeps its bowl/base geometry upright on the table', () => {

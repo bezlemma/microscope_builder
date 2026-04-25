@@ -3,7 +3,7 @@ import { Camera } from './components/Camera';
 import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { GaussianBeamSegment } from './Solver2';
-import { type Solver3Result } from './solver3Kernel';
+import { type PMTPixelResult, type Solver3Result } from './solver3Kernel';
 import {
     createCameraKernelRequest,
     createDefaultSolver3Backend,
@@ -47,7 +47,7 @@ export class Solver3 {
         return yield* this.backend.renderCameraGenerator(createCameraKernelRequest(camera, maxVisPaths));
     }
 
-    renderPMTPixel(pmt: PMT): { radiance: number; bestPath: Ray[] | null } {
+    renderPMTPixel(pmt: PMT): PMTPixelResult {
         return this.backend.renderPMTPixel(createPMTKernelRequest(pmt));
     }
 

@@ -125,5 +125,6 @@ export function createPMTKernelSnapshot(pmt: PMT): PMTKernelSnapshot {
         vAxis: cloneDirection(matrix, new Vector3(0, 1, 0)),
         sensorNA: pmt.sensorNA,
         samplesPerPixel: pmt.samplesPerPixel,
+        sampleOffset: pmt.sampleOffset,
     };
 }

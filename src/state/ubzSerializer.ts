@@ -58,6 +58,15 @@ export function serializeScene(components: OpticalComponent[]): string {
     lines.push('');
 
     for (const comp of components) {
+        // Skip non-persistent components:
+        //   - Ghost components are tutorial / preview scaffolding, not part of
+        //     the user's scene. Persisting them would turn drag-target hints
+        //     into permanent real components on the next load.
+        //   - Subcomponents (e.g. DualGalvoScanHead's child mirrors) are
+        //     auto-recreated by their parent's deserializer; persisting them
+        //     would produce duplicate orphan mirrors.
+        if (comp.isGhost || comp.isSubComponent) continue;
+
         const typeName = getTypeName(comp);
         if (!typeName) continue;
 

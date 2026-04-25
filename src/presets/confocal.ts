@@ -12,7 +12,6 @@ import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { SpectralProfile } from '../physics/SpectralProfile';
 import { AnimationChannel } from '../physics/PropertyAnimator';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
-import { createObjectiveBridgeToPoint } from './immersionBridge';
 
 import { Vector3 } from 'three';
 
@@ -21,6 +20,8 @@ export interface ConfocalPresetResult {
     channels: AnimationChannel[];
     animationPlaying: boolean;
     animationSpeed: number;
+    description?: string;
+    rayCount?: number;
 }
 
 /**
@@ -145,12 +146,15 @@ export function createConfocalScene(): ConfocalPresetResult {
     sample.pointAlong(1, 0, 0);
     sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
     scene.push(sample);
-    scene.push(createObjectiveBridgeToPoint(
-        objective,
-        holderCenter,
-        'Objective Immersion Bridge',
-        0.8,
-    ));
+    // Immersion bridge disabled — produced ~4% Fresnel back-reflections that
+    // retraced the entire microscope, creating visible noise. Re-enable once
+    // MediumVolume.interact suppresses sub-significant back-reflections.
+    // scene.push(createObjectiveBridgeToPoint(
+    //     objective,
+    //     holderCenter,
+    //     'Objective Immersion Bridge',
+    //     0.8,
+    // ));
 
     const blocker = new Blocker(30, 2, 'Beam Stop');
     const blockerCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(25));
@@ -182,12 +186,12 @@ export function createConfocalScene(): ConfocalPresetResult {
     pmt.setPosition(-287.5, 62.5, 0);
     pmt.pointAlong(1, 0, 0);
     pmt.sensorNA = 0.01;
+    pmt.samplesPerPixel = 12;
     pmt.pmtSampleHz = 1024;
-    // Coarse 16×16 raster by default — each pixel runs a full forward
-    // trace, so 256 steps is a reasonable first-frame budget. User can
-    // crank resolution up in the Inspector for higher-quality images.
-    pmt.scanResX = 16;
-    pmt.scanResY = 16;
+    // 32×32 keeps the default raster quick while giving enough pixels for the
+    // Mickey specimen to read as a shape instead of a handful of dots.
+    pmt.scanResX = 32;
+    pmt.scanResY = 32;
     scene.push(pmt);
 
     // Galvo scan parameters
@@ -205,5 +209,7 @@ export function createConfocalScene(): ConfocalPresetResult {
         channels: scanHead.getAnimationChannels(),
         animationPlaying: false,
         animationSpeed: 0.1,
+        rayCount: 16,
+        description: 'Laser-scanning confocal microscope with a descanned PMT and pinhole.',
     };
 }

@@ -417,6 +417,11 @@ export const EditorControls: React.FC = () => {
 
     // ─── Auto-zoom to fit when preset changes or resetViewSignal fires ───
     useEffect(() => {
+        // Skip if the canvas hasn't been measured yet — happens on mobile when
+        // the orientation/sidebar layout settles after the React effect fires.
+        // The size dep below re-runs us once the dimensions arrive.
+        if (size.width <= 0 || size.height <= 0) return;
+
         const controls = controlsRef.current;
         if (!controls || components.length === 0) return;
 
@@ -478,8 +483,10 @@ export const EditorControls: React.FC = () => {
                 ctrl.update();
             }, 200);
         }
+        // size.width/height are in deps so the fit re-runs once the canvas is
+        // actually measured — on mobile the first tick can fire with size=0.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activePreset, resetViewSignal]);
+    }, [activePreset, resetViewSignal, size.width, size.height]);
 
     // ─── Zoom-to-component: center view on a single component ───
     useEffect(() => {

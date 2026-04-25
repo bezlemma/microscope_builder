@@ -74,4 +74,5 @@ export interface CameraKernelSnapshot extends DetectorBasisSnapshot {
 export interface PMTKernelSnapshot extends DetectorBasisSnapshot {
     sensorNA: number;
     samplesPerPixel: number;
+    sampleOffset: number;
 }

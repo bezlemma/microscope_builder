@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, solver3RenderTriggerAtom, animatorAtom, scanAccumTriggerAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
@@ -33,9 +33,6 @@ export const ViewerPanels: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
-    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
-    const [animator] = useAtom(animatorAtom);
-    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
 
     // On mobile, start with all pinned viewers minimized
@@ -71,7 +68,10 @@ export const ViewerPanels: React.FC = () => {
             bottom: isMobile ? '8px' : '20px',
             left: isMobile ? '8px' : `${sidebarWidth + 20}px`,
             right: isMobile ? undefined : '20px',
-            maxWidth: isMobile ? '40vw' : undefined,
+            // Mobile gives the pinned viewer roughly the bottom-left eighth of
+            // the screen — wide enough that the camera/PMT image is readable,
+            // bounded so it doesn't swallow the whole bottom half.
+            maxWidth: isMobile ? '50vw' : undefined,
             display: 'flex',
             flexDirection: 'row',
             flexWrap: 'wrap',
@@ -90,9 +90,15 @@ export const ViewerPanels: React.FC = () => {
                         padding: isMobile && comp instanceof Camera ? '0' : '6px',
                         fontFamily: 'sans-serif',
                         pointerEvents: 'auto',
+                        // Don't clip Camera content on mobile — the inner viewer
+                        // is laid out at 256px display width plus its controls;
+                        // the previous 12vh cap chopped the image in half on
+                        // any phone-sized screen. 35vh (≈ a quarter of screen
+                        // height) lets the whole image breathe while still
+                        // capping the panel's growth.
                         overflow: 'hidden',
-                        maxHeight: isMobile && comp instanceof Camera ? '12vh' : undefined,
-                        maxWidth: isMobile && comp instanceof Camera ? '40vw' : undefined,
+                        maxHeight: isMobile && comp instanceof Camera ? '35vh' : undefined,
+                        maxWidth: isMobile && comp instanceof Camera ? '50vw' : undefined,
                         display: 'flex',
                         flexDirection: 'column',
                     }}
@@ -160,15 +166,6 @@ export const ViewerPanels: React.FC = () => {
                             camera={comp}
                             isRendering={isRendering}
                             isMobile={isMobile}
-                            onRefresh={() => {
-                                if (isRendering) return;
-                                if (animator.channels.length > 0) {
-                                    // Animation channels present — auto scan accumulation
-                                    setScanAccumConfig({ steps: scanAccumConfig.steps, trigger: scanAccumConfig.trigger + 1 });
-                                } else {
-                                    setSolver3Trigger(n => n + 1);
-                                }
-                            }}
                         />
                     )}
                     {!minimizedIds.has(comp.id) && (comp instanceof Sample || comp instanceof SampleChamber) && (
@@ -181,12 +178,6 @@ export const ViewerPanels: React.FC = () => {
                                 pmt={pmt}
                                 isRendering={isRendering}
                                 compact
-                                onRefresh={() => {
-                                    if (isRendering) return;
-                                    pmt.markScanStale();
-                                    pmt.version++;
-                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
-                                }}
                             />
                         );
                     })()}

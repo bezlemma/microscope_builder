@@ -12,7 +12,7 @@ import {
 import { createPackedFirstHitHintsFromWasm } from './solver3FirstHitHints';
 import { createPackedAnalyticHitsFromWasm } from './solver3AnalyticNarrowPhase';
 import { createJsPackedCameraSamples, createPackedCameraSamplesFromWasm } from './solver3Sampling';
-import type { Solver3Result } from './solver3Kernel';
+import type { PMTPixelResult, Solver3Result } from './solver3Kernel';
 import type {
     CameraKernelRequest,
     JsSolver3Backend,
@@ -180,7 +180,7 @@ export class WasmSolver3Backend implements Solver3KernelBackend {
         return yield* this.fallback.renderCameraSamplesGenerator(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
     }
 
-    renderPMTPixel(request: PMTKernelRequest): { radiance: number; bestPath: Ray[] | null } {
+    renderPMTPixel(request: PMTKernelRequest): PMTPixelResult {
         return this.fallback.renderPMTPixel(request);
     }
 

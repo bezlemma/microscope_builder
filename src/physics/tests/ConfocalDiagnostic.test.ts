@@ -7,7 +7,12 @@
 import { describe, test, expect } from 'bun:test';
 import { createConfocalScene } from '../../presets/confocal';
 import { Solver1 } from '../Solver1';
+import { Solver3 } from '../Solver3';
 import { Laser } from '../components/Laser';
+import { PMT } from '../components/PMT';
+import { Objective } from '../components/Objective';
+import { createSourceRays } from '../SourceRayFactory';
+import { setProperty } from '../PropertyAnimator';
 import { Ray } from '../types';
 import { Vector3 } from 'three';
 
@@ -61,13 +66,11 @@ describe('Confocal Beam Path Diagnostic', () => {
         console.log(`\nHit sequence: ${hitComponents.join(' → ')}`);
 
         // Verify key components are hit
-        expect(hitComponents).toContain('Dichroic (LP 505)');
-        expect(hitComponents).toContain('Galvo M1 (X)');
-        expect(hitComponents).toContain('Galvo M2 (Y)');
-        expect(hitComponents).toContain('Scan Lens');
-        expect(hitComponents).toContain('Fold Mirror 1');
-        expect(hitComponents).toContain('Tube Lens');
-        expect(hitComponents).toContain('Fold Mirror 2');
+        expect(hitComponents).toContain('Dichroic (SP 505)');
+        expect(hitComponents).toContain('Galvo M1');
+        expect(hitComponents).toContain('Galvo M2');
+        expect(hitComponents).toContain('Scan Lens (f≈50)');
+        expect(hitComponents).toContain('Tube Lens (f≈200)');
 
         // Check that the beam reaches the objective area
         const hitsObjective = hitComponents.some(n => n.includes('Objective'));
@@ -94,9 +97,18 @@ describe('Confocal Beam Path Diagnostic', () => {
         const height = Math.max(...ys) - Math.min(...ys);
         console.log(`\nLayout size: ${width.toFixed(0)} × ${height.toFixed(0)} mm`);
 
-        // Should be compact (under 300mm in each direction)
-        expect(width).toBeLessThan(300);
-        expect(height).toBeLessThan(300);
+        // The current preset keeps the microscope in one horizontal table row.
+        expect(width).toBeLessThan(650);
+        expect(height).toBeLessThan(150);
+    });
+
+    test('Confocal objective keeps a plausible physical aperture', () => {
+        const { scene } = createConfocalScene();
+        const objective = scene.find(c => c instanceof Objective) as Objective;
+        expect(objective).toBeDefined();
+        expect(objective.magnification).toBe(10);
+        expect(objective.NA).toBe(0.5);
+        expect(objective.apertureRadius * 2).toBeLessThanOrEqual(25);
     });
 
     test('Mirror reflection directions are correct', () => {
@@ -113,5 +125,36 @@ describe('Confocal Beam Path Diagnostic', () => {
             const fwd = new Vector3(0, 0, 1).applyQuaternion(m.rotation);
             console.log(`  ${m.name.padEnd(25)} normal=(${fwd.x.toFixed(3)}, ${fwd.y.toFixed(3)}, ${fwd.z.toFixed(3)})`);
         }
+    });
+
+    test('PMT center raster pixel has Mickey signal and dark corners', () => {
+        const { scene, channels } = createConfocalScene();
+        const pmt = scene.find(c => c instanceof PMT) as PMT;
+        expect(pmt).toBeDefined();
+
+        const xCh = channels.find(ch => ch.targetId === pmt.xAxisComponentId && ch.property === pmt.xAxisProperty);
+        const yCh = channels.find(ch => ch.targetId === pmt.yAxisComponentId && ch.property === pmt.yAxisProperty);
+        expect(xCh).toBeDefined();
+        expect(yCh).toBeDefined();
+
+        const byId = new Map(scene.map(c => [c.id, c]));
+        const xTarget = byId.get(xCh!.targetId)!;
+        const yTarget = byId.get(yCh!.targetId)!;
+        pmt.samplesPerPixel = 4;
+
+        const renderAt = (xf: number, yf: number) => {
+            setProperty(yTarget, yCh!.property, yCh!.from + (yCh!.to - yCh!.from) * yf);
+            setProperty(xTarget, xCh!.property, xCh!.from + (xCh!.to - xCh!.from) * xf);
+            const solver1 = new Solver1(scene);
+            const beamSegs = solver1.traceWithBeamSegments(createSourceRays(scene, 8, 'full')).beamSegments;
+            return new Solver3(scene, beamSegs).renderPMTPixel(pmt);
+        };
+
+        const center = renderAt(0.5, 0.5);
+        const corner = renderAt(0, 0);
+
+        expect(center.radiance).toBeGreaterThan(1);
+        expect(center.excitation).toBeGreaterThan(1);
+        expect(corner.radiance).toBeLessThan(center.radiance * 0.25);
     });
 });

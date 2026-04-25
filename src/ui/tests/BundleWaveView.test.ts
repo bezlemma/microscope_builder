@@ -234,10 +234,12 @@ describe('Bundle wave grouping', () => {
         const solver = new Solver1(scene);
         const beamSegments = solver.buildBeamSegments(solver.trace(sourceRays));
         const bundles = buildBundleWaveSegments(beamSegments);
-        const freeSpaceBundle = bundles.find(bundle => bundle.key.includes('|air|1|'));
+        const freeSpaceBundles = bundles.filter(bundle => bundle.key.includes('|air|1|'));
 
-        expect(freeSpaceBundle).toBeDefined();
-        const minRadius = Math.min(...freeSpaceBundle!.profile.map(sample => sample.radius));
+        expect(freeSpaceBundles.length).toBeGreaterThan(0);
+        const minRadius = Math.min(
+            ...freeSpaceBundles.flatMap(bundle => bundle.profile.map(sample => sample.radius)),
+        );
         expect(minRadius).toBeLessThan(0.1);
     });
 

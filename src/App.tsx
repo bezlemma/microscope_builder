@@ -71,7 +71,8 @@ import { ControlsHelp } from './ui/ControlsHelp'
 import { ZLevelBar } from './ui/ZLevelBar'
 import { RailPlacementOverlay } from './ui/RailPlacementOverlay'
 import { AltSnapIndicator } from './ui/AltSnapIndicator'
-import { loadPresetAtom, PresetName, setBundleDataEnabledAtom } from './state/store';
+import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom } from './state/store';
+import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
 
 // ── Canvas Error Boundary ──────────────────────────────────
@@ -124,11 +125,26 @@ const presetSlugMap = new Map<string, PresetName>(
 
 function App() {
   const [, loadPreset] = useAtom(loadPresetAtom);
+  const [, loadScene] = useAtom(loadSceneAtom);
   const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
 
-  // URL-based preset loading: ?preset=EpiFluorescence or ?preset=epi-fluorescence
-  // Also supports ?solver2=on to auto-enable Solver 2
+  // URL-based scene/preset loading.
+  //   #scene=<base64> — full custom scene (from the Share button); takes priority
+  //   ?preset=EpiFluorescence or ?preset=epi-fluorescence — built-in preset
+  //   ?solver2=on — auto-enable Solver 2
   useEffect(() => {
+    // Try a Share-link scene first; if it loads, skip the preset path so the
+    // user-shared scene wins over any preset hint left in the same URL.
+    try {
+      const restored = loadSceneFromUrlHash();
+      if (restored && restored.length > 0) {
+        loadScene(restored);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to restore scene from URL hash:', e);
+    }
+
     const params = new URLSearchParams(window.location.search);
     const presetParam = params.get('preset');
     if (presetParam) {

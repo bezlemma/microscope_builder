@@ -112,10 +112,27 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.CheHangYu2026, () => createCheHangYu2026Scene()],
 ]);
 
+/** URL-friendly slug for a preset name (e.g. "Papers: Yu 2026 (Nisam 2x)"
+ *  → "papers-yu-2026-nisam-2x"). Mirrors the slug derivation in App.tsx so
+ *  preset URLs are stable across the URL effect and `loadPresetAtom`. */
+function presetSlug(name: PresetName): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/** Replace the address bar with a clean preset URL, dropping any leftover
+ *  `#scene=` hash from a Share link or stale `?preset=` slug. No reload. */
+function syncUrlToPreset(presetName: PresetName | null): void {
+    if (typeof window === 'undefined') return;
+    const base = window.location.pathname;
+    const next = presetName ? `${base}?preset=${presetSlug(presetName)}` : base;
+    window.history.replaceState(null, '', next);
+}
+
 export const loadPresetAtom = atom(
     null,
     (get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
+        syncUrlToPreset(presetName);
         // Reset bundle-view state for fresh preset
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(undoStackAtom, []); // Clear undo history on preset load
@@ -131,9 +148,6 @@ export const loadPresetAtom = atom(
             set(rayConfigAtom, prev => ({ ...prev, rayCount: result.rayCount! }));
         }
 
-        set(componentsAtom, result.scene);
-        set(presetDescriptionAtom, result.description || "");
-
         const animator = get(animatorAtom);
         animator.clearAll();
         animator.reset();
@@ -143,6 +157,9 @@ export const loadPresetAtom = atom(
                 animator.addChannel(ch);
             }
         }
+
+        set(componentsAtom, result.scene);
+        set(presetDescriptionAtom, result.description || "");
 
         if (result.animationPlaying !== undefined) {
             set(animationPlayingAtom, result.animationPlaying);
@@ -183,9 +200,8 @@ export const loadPresetAtom = atom(
 
         // Auto-start PMT raster scans the same way cameras auto-render.  PMTs
         // build their image by raster-scanning galvo channels, so they need
-        // `scanAccumTriggerAtom` bumped — without this, presets like Confocal
-        // load a configured PMT that just sits blank until the user manually
-        // hits the scan refresh button.
+        // `scanAccumTriggerAtom` bumped when the same preset is clicked again;
+        // otherwise a configured PMT can keep showing its previous run.
         if (pmts.length > 0 && result.channels && result.channels.length > 0) {
             const prev = get(scanAccumTriggerAtom);
             set(scanAccumTriggerAtom, { steps: prev.steps, trigger: prev.trigger + 1 });
@@ -281,6 +297,10 @@ export const loadSceneAtom = atom(
         set(solver3RenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(activeZLevelAtom, 0);
+        // The scene is now whatever the user just loaded — no preset matches it,
+        // and any pasted Share-link hash that brought us here is now consumed.
+        // Wipe the address bar so the user isn't stuck looking at the old URL.
+        syncUrlToPreset(null);
     }
 );
 

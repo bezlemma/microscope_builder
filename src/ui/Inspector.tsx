@@ -14,7 +14,6 @@ import {
     animatorAtom,
     animationPlayingAtom,
     animationSpeedAtom,
-    scanAccumTriggerAtom,
     scanAccumProgressAtom,
     solverDiagnosticsAtom,
     selectedRodAtom,
@@ -197,27 +196,12 @@ const SolverPanel: React.FC<{
     const hasChannels = animator.channels.length > 0;
     const [components] = useAtom(componentsAtom);
     const [rayCounter] = useAtom(reverseRayCounterAtom);
-    const isChannelBoundToPMT = React.useCallback((channelId: string, property: string) => {
-        return components.some(c => {
-            const pmt = c as any;
-            if (pmt && typeof pmt.hasValidAxes === 'function' && pmt.hasValidAxes()) {
-                if (pmt.xAxisComponentId === channelId && pmt.xAxisProperty === property) return true;
-                if (pmt.yAxisComponentId === channelId && pmt.yAxisProperty === property) return true;
-            }
-            return false;
-        });
-    }, [components]);
-    const hasFreeChannels = animator.channels.some(ch => !isChannelBoundToPMT(ch.targetId, ch.property));
-    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
     const [solverDiag] = useAtom(solverDiagnosticsAtom);
     const [drawnRayCounts] = useAtom(drawnRayCountsAtom);
     const opacityTrackRef = React.useRef<HTMLDivElement | null>(null);
     const [activeOpacityHandle, setActiveOpacityHandle] = React.useState<'min' | 'max' | null>(null);
     // newVisualStyleAtom removed — new style is always on
-
-    // Scan accumulation UI state
-    const [localScanSteps, setLocalScanSteps] = React.useState<string>('16');
 
     React.useEffect(() => {
         if (!activeOpacityHandle) return;
@@ -572,60 +556,11 @@ const SolverPanel: React.FC<{
                                 transition: 'background-color 0.2s'
                             }}></div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                {hasChannels ? (
-                                    <button
-                                        onClick={() => {
-                                            if (isRendering) return;
-                                            const steps = parseInt(localScanSteps) || 16;
-                                            setScanAccumConfig({ steps, trigger: scanAccumConfig.trigger + 1 });
-                                        }}
-                                        disabled={isRendering}
-                                        title='Scan accumulation: cycle through animation and render'
-                                        style={{
-                                            padding: '3px 10px',
-                                            background: isRendering ? '#333' : '#1a5a2a',
-                                            border: '1px solid #444',
-                                            borderRadius: '4px',
-                                            color: isRendering ? '#666' : '#8f8',
-                                            cursor: isRendering ? 'not-allowed' : 'pointer',
-                                            fontSize: '11px',
-                                            fontFamily: 'monospace',
-                                            transition: 'background 0.2s',
-                                        }}
-                                    >
-                                        {isRendering && scanProgress > 0 && scanProgress < 1
-                                            ? `⏳ Scanning ${Math.round(scanProgress * 100)}%`
-                                            : isRendering ? '⏳ Scanning…' : 'Scan & Accumulate'}
-                                    </button>
-                                ) : (
-                                    <span style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace' }}>
-                                        {isRendering
-                                            ? `Reverse Tracing Image… ${Math.round(scanProgress * 100)}%`
-                                            : `${drawnRayCounts.forward}↦ forward · ${drawnRayCounts.reverse}↤ reverse rays drawn`}
-                                    </span>
-                                )}
-                                {hasFreeChannels && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
-                                        <span style={{ fontSize: '10px', color: '#888' }}>Steps</span>
-                                        <input
-                                            type="number"
-                                            value={localScanSteps}
-                                            min={1}
-                                            max={256}
-                                            onChange={(e) => setLocalScanSteps(e.target.value)}
-                                            style={{
-                                                width: '36px',
-                                                background: '#222',
-                                                color: '#ccc',
-                                                border: '1px solid #444',
-                                                borderRadius: '3px',
-                                                fontSize: '10px',
-                                                padding: '1px 3px',
-                                                textAlign: 'center'
-                                            }}
-                                        />
-                                    </div>
-                                )}
+                                <span style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace' }}>
+                                    {isRendering
+                                        ? `Image tracing… ${Math.round(scanProgress * 100)}%`
+                                        : `${drawnRayCounts.forward}↦ forward · ${drawnRayCounts.reverse}↤ reverse rays drawn`}
+                                </span>
                             </div>
                         </div>
                         {isRendering && scanProgress > 0 && scanProgress < 1 && (
@@ -830,8 +765,37 @@ const DualGalvoControls: React.FC<{
     );
 };
 
+// Inject a one-time CSS rule that flows the mobile inspector's property
+// blocks into a row-major grid (left → right, then next row).  Each block
+// is a grid cell; auto-fit + minmax(140px, 1fr) means the column count
+// scales naturally with the screen — 2 cols on a 360 px phone, 3 cols
+// around 480 px, 4 cols at landscape / tablet widths.  We use Grid (not
+// CSS multi-column) because multicol needs an explicit container height
+// to wrap into additional columns; without it, all content piles into
+// column 1 and the rest stay empty.
+const INSPECTOR_MOBILE_STYLE_ID = 'inspector-mobile-multicol';
+function ensureInspectorMobileStyle() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById(INSPECTOR_MOBILE_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = INSPECTOR_MOBILE_STYLE_ID;
+    style.textContent = `
+        .inspector-multicol-mobile {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px 14px;
+            align-items: start;
+        }
+        .inspector-multicol-mobile > * {
+            min-width: 0;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 export const Inspector: React.FC = () => {
     const isMobile = useIsMobile();
+    useEffect(() => { if (isMobile) ensureInspectorMobileStyle(); }, [isMobile]);
     const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
@@ -845,7 +809,6 @@ export const Inspector: React.FC = () => {
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
     const [animPlaying] = useAtom(animationPlayingAtom);
     const [animSpeed, setAnimSpeed] = useAtom(animationSpeedAtom);
-    const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [selectedRodRef, setSelectedRodRef] = useAtom(selectedRodAtom);
     const [rodPaths] = useAtom(rodPathsAtom);
     // Bumped on channel add/remove to force re-render of galvo scan UI
@@ -1887,7 +1850,11 @@ export const Inspector: React.FC = () => {
             right: isMobile ? 0 : 20,
             width: isMobile ? '100vw' : 'min(280px, calc(100% - 40px))',
             maxWidth: isMobile ? '100vw' : 'calc(100% - 40px)',
-            maxHeight: isMobile ? '45vh' : 'calc(100% - 40px)',
+            // Mobile inspector spans the full screen width and ~2/3 of the
+            // height; combined with the multi-column inner layout (see below),
+            // this gives the property fields enough room that the user
+            // doesn't run off the bottom of the panel.
+            maxHeight: isMobile ? '70vh' : 'calc(100% - 40px)',
             borderBottomLeftRadius: isMobile ? 0 : 16,
             borderBottomRightRadius: isMobile ? 0 : 16,
             borderTopLeftRadius: isMobile ? 24 : 16,
@@ -1897,6 +1864,10 @@ export const Inspector: React.FC = () => {
             WebkitBackdropFilter: 'blur(24px)',
             color: '#eee',
             padding: 16,
+            // iOS Safari hides ~30-50px under its bottom URL bar / home
+            // indicator. Without this padding the last property row gets
+            // hidden, which is the user-reported "cut off at the bottom".
+            paddingBottom: isMobile ? 'max(env(safe-area-inset-bottom, 16px), 24px)' : 16,
             border: '1px solid rgba(255,255,255,0.06)',
             fontFamily: 'Inter, sans-serif',
             boxShadow: '0 12px 60px rgba(0,0,0,0.8)',
@@ -1971,7 +1942,17 @@ export const Inspector: React.FC = () => {
                 </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div
+                className={isMobile ? 'inspector-multicol-mobile' : undefined}
+                style={isMobile
+                    // Mobile: row-major CSS Grid (defined in
+                    // ensureInspectorMobileStyle).  Property blocks become
+                    // grid cells flowing left → right, then to the next row,
+                    // so the panel actually uses the screen width instead of
+                    // stacking everything into one tall column.
+                    ? {}
+                    : { display: 'flex', flexDirection: 'column', gap: 10 }
+                }>
                 {/* Position — X / Y / Z */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                     {(['x', 'y', 'z'] as const).map((axis, i) => {
@@ -5917,26 +5898,6 @@ export const Inspector: React.FC = () => {
                                         <div style={{ display: 'flex', gap: '4px' }}>
                                             <button
                                                 onClick={() => {
-                                                    if (isRendering) return;
-                                                    setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 });
-                                                }}
-                                                disabled={isRendering}
-                                                title="Re-run raster scan"
-                                                style={{
-                                                    background: isRendering ? '#333' : '#1a5a2a',
-                                                    border: '1px solid #444',
-                                                    borderRadius: '3px',
-                                                    color: isRendering ? '#666' : '#8f8',
-                                                    cursor: isRendering ? 'not-allowed' : 'pointer',
-                                                    fontSize: '11px',
-                                                    padding: '1px 5px',
-                                                    lineHeight: 1.2,
-                                                }}
-                                            >
-                                                🔄
-                                            </button>
-                                            <button
-                                                onClick={() => {
                                                     const next = new Set(pinnedIds);
                                                     if (pinnedIds.has(pmt.id)) next.delete(pmt.id);
                                                     else next.add(pmt.id);
@@ -5961,7 +5922,6 @@ export const Inspector: React.FC = () => {
                                     <PMTViewer
                                         pmt={pmt}
                                         isRendering={isRendering}
-                                        onRefresh={() => setScanAccumConfig({ steps: 16, trigger: scanAccumConfig.trigger + 1 })}
                                     />
                                 </div>
                             )}

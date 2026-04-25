@@ -35,6 +35,7 @@ export class PMT extends OpticalComponent {
     // Solver 3 backward trace parameters (PMT acts as a 1-pixel camera)
     sensorNA: number = 0.01;        // Acceptance cone half-angle (matches Camera default)
     samplesPerPixel: number = 4;     // Monte Carlo samples per galvo position
+    sampleOffset: number = 0;        // Progressive sampler offset for repeated raster passes
 
     // Raster scan result
     scanResX: number = 64;
@@ -66,6 +67,7 @@ export class PMT extends OpticalComponent {
     /** Clear scan data entirely (called at the start of a new scan). */
     clearScan(): void {
         this.scanImage = null;
+        this.scanExcitationImage = null;
         this.scanStale = true;
         this.scanVersionSnapshot = null;
     }

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, activeZLevelAtom, mobileSnapEnabledAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Rail } from '../physics/components/Rail';
+import { useIsMobile } from './useIsMobile';
 
 interface DraggableProps {
     component: OpticalComponent;
@@ -19,8 +20,8 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const { controls, camera } = useThree();
     const [isDragging, setIsDragging] = useState(false);
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
-    const [activeZ] = useAtom(activeZLevelAtom);
     const [mobileSnap] = useAtom(mobileSnapEnabledAtom);
+    const isMobile = useIsMobile();
 
     // Store offset from center to click point to prevent jumping
     const dragOffset = useRef(new Vector3(0, 0, 0));
@@ -130,10 +131,19 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         let finalY = targetY;
         let finalZ = targetZ;
 
-        // Axis lock enforcement: prevent movement on locked axes
+        // Axis lock enforcement: prevent movement on locked axes.
+        //
+        // Z is locked by default. The locked behaviour MUST be "keep the
+        // component's current z" — never "snap to the active z level". The
+        // active z is only for placing newly-added components (see
+        // DragDropHandler) and for filtering the view; using it here meant
+        // dragging a component on the y=12.5 microscope row while the user
+        // had z=0 selected would yank that component down to z=0 and break
+        // the optical path. Z only changes when the user explicitly unlocks
+        // it from the Inspector.
         if (component.axisLock.x) finalX = component.position.x;
         if (component.axisLock.y) finalY = component.position.y;
-        if (component.axisLock.z) finalZ = activeZ; // Z-locked components use the active Z level
+        if (component.axisLock.z) finalZ = component.position.z;
 
 
         // Snapping (If ALT key is held OR mobile snap is active)
@@ -290,6 +300,22 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         return 15;
     }, [component.bounds]);
 
+    // Mobile tap-target radius — fingertips are ~10mm wide, and a thin mirror
+    // / blocker / lens on the simulator's mm scale is way under that. Without
+    // an enlarged invisible hit zone the user has to pinch-zoom in just to
+    // tap them. This radius is "the bigger of the component's footprint or
+    // 22 mm", which is generous but still prevents two adjacent components
+    // from overlapping each other's hit zones at typical preset spacings
+    // (~25 mm grid).
+    const tapTargetRadius = useMemo(() => {
+        const b = component.bounds;
+        if (b) {
+            const size = b.max.clone().sub(b.min);
+            return Math.max(size.x, size.y, 22) * 0.65;
+        }
+        return 22;
+    }, [component.bounds]);
+
     if (component.isGhost) {
         return <group>{children}</group>;
     }
@@ -301,6 +327,21 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             onPointerMove={handlePointerMove}
         >
             {children}
+
+            {/* Mobile-only: invisible disc that catches taps near the
+             *  component, so thin mirrors/blockers/lenses don't require
+             *  pixel-precise stabbing. Sits just above the table surface so
+             *  it raycasts against finger taps but doesn't occlude any
+             *  component visualization that draws above z=0.05. */}
+            {isMobile && (
+                <mesh
+                    position={[component.position.x, component.position.y, component.position.z + 0.05]}
+                    rotation={[0, 0, 0]}
+                >
+                    <circleGeometry args={[tapTargetRadius, 24]} />
+                    <meshBasicMaterial transparent opacity={0} depthWrite={false} side={DoubleSide} />
+                </mesh>
+            )}
 
             {/* Selection highlight ring -- glowing torus on the table surface */}
             {isSelected && (

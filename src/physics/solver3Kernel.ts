@@ -15,11 +15,29 @@ export interface Solver3Result {
     resY: number;
 }
 
+export interface PMTPixelResult {
+    radiance: number;
+    excitation: number;
+    bestPath: Ray[] | null;
+}
+
+function radicalInverseVdC(index: number): number {
+    let bits = index >>> 0;
+    bits = (bits << 16) | (bits >>> 16);
+    bits = ((bits & 0x55555555) << 1) | ((bits & 0xaaaaaaaa) >>> 1);
+    bits = ((bits & 0x33333333) << 2) | ((bits & 0xcccccccc) >>> 2);
+    bits = ((bits & 0x0f0f0f0f) << 4) | ((bits & 0xf0f0f0f0) >>> 4);
+    bits = ((bits & 0x00ff00ff) << 8) | ((bits & 0xff00ff00) >>> 8);
+    return bits * 2.3283064365386963e-10;
+}
+
 interface PathBundleReservoir {
     selected: Ray[][][];
     seen: number;
     maxBundles: number;
 }
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 function createPathBundleReservoir(maxBundles: number): PathBundleReservoir {
     return {
@@ -250,27 +268,30 @@ export class Solver3Kernel {
         };
     }
 
-    renderPMTPixel(pmt: PMTKernelSnapshot): { radiance: number; bestPath: Ray[] | null } {
+    renderPMTPixel(pmt: PMTKernelSnapshot): PMTPixelResult {
         const sample = this.traceScene.sample;
         const activeWavelengths = new Set<number>();
         const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
             ? sample.getEmissionWavelength() * 1e-9
             : null;
-        if (sampleEmissionWl) activeWavelengths.add(sampleEmissionWl);
-
-        const hasLamp = this.traceScene.components.some(component => component.kind === 'lamp');
-        if (hasLamp) activeWavelengths.add(550e-9);
-        for (const branch of this.beamField.branches) {
-            if (branch.length === 0) continue;
-            const wl = branch[0].wavelength;
-            if (hasLamp && wl >= 300e-9 && wl <= 850e-9) continue;
-            activeWavelengths.add(wl);
+        if (sampleEmissionWl) {
+            activeWavelengths.add(sampleEmissionWl);
+        } else {
+            const hasLamp = this.traceScene.components.some(component => component.kind === 'lamp');
+            if (hasLamp) activeWavelengths.add(550e-9);
+            for (const branch of this.beamField.branches) {
+                if (branch.length === 0) continue;
+                const wl = branch[0].wavelength;
+                if (hasLamp && wl >= 300e-9 && wl <= 850e-9) continue;
+                activeWavelengths.add(wl);
+            }
         }
         const wlList = Array.from(activeWavelengths);
         if (wlList.length === 0) wlList.push(532e-9);
 
         const sinThetaMax = Math.min(pmt.sensorNA, 1.0);
-        const N = pmt.samplesPerPixel;
+        const N = Math.max(1, pmt.samplesPerPixel);
+        const sampleOffset = Math.max(0, pmt.sampleOffset | 0);
         let targetApertureCenter: Vector3 | null = null;
         let targetApertureRadius = 0;
 
@@ -281,27 +302,35 @@ export class Solver3Kernel {
             if (!hit || hit.t >= 100) continue;
             if (component.kind === 'aperture' || component.kind === 'slitAperture') {
                 targetApertureCenter = hit.point;
-                targetApertureRadius = 1.0;
+                // Use the actual clear-aperture radius from the snapshot.
+                // The previous hardcoded 1.0 mm dwarfed real confocal pinholes
+                // (~0.025 mm) and meant ~99.9% of "targeted" backward rays were
+                // immediately absorbed by the aperture ring, leaving the PMT
+                // image essentially black.
+                targetApertureRadius = component.openingRadius ?? 1.0;
                 break;
             }
         }
 
         let radianceSum = 0;
+        let excitationSum = 0;
         let bestPath: Ray[] | null = null;
         let bestRadiance = 0;
 
         for (let s = 0; s < N; s++) {
+            const sampleIndex = sampleOffset + s;
             let backwardDir: Vector3;
-            if (targetApertureCenter && Math.random() < 0.9) {
-                const phi = Math.random() * 2 * Math.PI;
-                const r = targetApertureRadius * Math.sqrt(Math.random());
+            if (targetApertureCenter) {
+                const phi = sampleIndex * GOLDEN_ANGLE;
+                const u = sampleIndex === 0 ? 0 : radicalInverseVdC(sampleIndex);
+                const r = targetApertureRadius * Math.sqrt(Math.max(0, Math.min(1, u)));
                 const pointInHole = targetApertureCenter.clone()
                     .add(pmt.uAxis.clone().multiplyScalar(r * Math.cos(phi)))
                     .add(pmt.vAxis.clone().multiplyScalar(r * Math.sin(phi)));
                 backwardDir = pointInHole.clone().sub(pmt.position).normalize();
             } else {
-                const phi = Math.random() * 2 * Math.PI;
-                const sinTheta = sinThetaMax * Math.sqrt(Math.random());
+                const phi = sampleIndex * GOLDEN_ANGLE;
+                const sinTheta = sinThetaMax * Math.sqrt(radicalInverseVdC(sampleIndex + 1));
                 const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
                 backwardDir = pmt.forward.clone().multiplyScalar(cosTheta)
                     .add(pmt.uAxis.clone().multiplyScalar(sinTheta * Math.cos(phi)))
@@ -310,7 +339,7 @@ export class Solver3Kernel {
             }
 
             for (const wl of wlList) {
-                const polAngle = Math.random() * Math.PI;
+                const polAngle = ((sampleIndex * 0.6180339887498948) % 1) * Math.PI;
                 const backwardRay: Ray = {
                     origin: pmt.position.clone(),
                     direction: backwardDir,
@@ -319,13 +348,14 @@ export class Solver3Kernel {
                     polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
                     opticalPathLength: 0,
                     footprintRadius: 0.1,
-                    coherenceMode: Coherence.Coherent,
+                    coherenceMode: Coherence.Incoherent,
                     isBackward: true,
-                    sourceId: `pmt_bw_s${s}_wl${Math.round(wl * 1e9)}`,
+                    sourceId: `pmt_bw_s${sampleIndex}_wl${Math.round(wl * 1e9)}`,
                 };
 
                 const result = this.traceBackward(backwardRay, pmt.id);
                 radianceSum += result.radiance;
+                excitationSum += result.excitation;
                 if (result.radiance > bestRadiance && result.path.length > 1) {
                     bestRadiance = result.radiance;
                     bestPath = result.path;
@@ -333,7 +363,12 @@ export class Solver3Kernel {
             }
         }
 
-        return { radiance: radianceSum / (N * wlList.length), bestPath };
+        const norm = N * wlList.length;
+        return {
+            radiance: radianceSum / norm,
+            excitation: excitationSum / norm,
+            bestPath,
+        };
     }
 
     traceBackward(
@@ -496,7 +531,7 @@ export class Solver3Kernel {
                     const invNumSamples = 1 / numSamples;
                     let segRadianceSum = 0;
                     for (let i = 0; i < numSamples; i++) {
-                        const fraction = (i + Math.random()) * invNumSamples;
+                        const fraction = (i + 0.5) * invNumSamples;
                         const t = segment.tStart + fraction * segLen;
                         const intensity = Solver2.queryIntensityMultiBeam(
                             ox + dx * t, oy + dy * t, oz + dz * t,

@@ -172,8 +172,15 @@ export class Solver2 {
             if (!seg.bounds) {
                 const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
                 const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
-                const startR = Math.max(seg.footprintStart ?? 0.05, 0.05);
-                const endR = Math.max(seg.footprintEnd ?? 0.05, 0.05);
+                let startR = Math.max(seg.footprintStart ?? seg.footprintEnd ?? 0.05, 0.05);
+                let endR = Math.max(seg.footprintEnd ?? seg.footprintStart ?? 0.05, 0.05);
+                if (seg.footprintStart === undefined && seg.footprintEnd === undefined) {
+                    const midRadii = legacySegmentBeamRadii(seg, seg.length * 0.5);
+                    const startRadii = legacySegmentBeamRadii(seg, 0);
+                    const endRadii = legacySegmentBeamRadii(seg, seg.length);
+                    startR = Math.max(startRadii.wx, startRadii.wy, midRadii.wx, midRadii.wy, 0.05);
+                    endR = Math.max(endRadii.wx, endRadii.wy, midRadii.wx, midRadii.wy, 0.05);
+                }
                 const maxR = Math.max(startR, endR) * 10.0;
                 seg.bounds = new Float64Array([
                     Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,

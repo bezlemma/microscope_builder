@@ -20,7 +20,7 @@ import {
 import { GaussianBeamSegment } from './Solver2';
 import type { PackedFirstHitHints } from './solver3FirstHitHints';
 import type { PackedAnalyticHits } from './solver3AnalyticNarrowPhase';
-import { Solver3Kernel, type Solver3Result } from './solver3Kernel';
+import { Solver3Kernel, type PMTPixelResult, type Solver3Result } from './solver3Kernel';
 import { readRegisteredSolver3WasmModule, WasmSolver3Backend } from './solver3WasmBackend';
 import type { PackedCameraSamples } from './solver3Sampling';
 import type { BeamFieldSnapshot, CameraKernelSnapshot, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
@@ -47,7 +47,7 @@ export interface PMTKernelRequest {
 export interface Solver3KernelBackend {
     renderCamera(request: CameraKernelRequest): Solver3Result;
     renderCameraGenerator(request: CameraKernelRequest): Generator<{ progress: number }, Solver3Result, void>;
-    renderPMTPixel(request: PMTKernelRequest): { radiance: number; bestPath: Ray[] | null };
+    renderPMTPixel(request: PMTKernelRequest): PMTPixelResult;
     traceBackward(startRay: Ray, originatorId?: string): { radiance: number; excitation: number; path: Ray[]; absorbed: boolean };
 }
 
@@ -105,7 +105,7 @@ export class JsSolver3Backend implements Solver3KernelBackend {
         return yield* this.kernel.renderGenerator(request.snapshot, request.maxVisPaths);
     }
 
-    renderPMTPixel(request: PMTKernelRequest): { radiance: number; bestPath: Ray[] | null } {
+    renderPMTPixel(request: PMTKernelRequest): PMTPixelResult {
         void request.packet;
         void this.context.tracePacket;
         void this.context.beamPacket;
