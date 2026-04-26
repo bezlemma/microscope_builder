@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { Trash2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { activePresetAtom, presetDescriptionAtom } from '../state/store';
 import { useIsMobile } from './useIsMobile';
 
@@ -32,14 +32,9 @@ export const PresetTooltip: React.FC = () => {
     const description = useAtomValue(presetDescriptionAtom);
     const isMobile = useIsMobile();
     const tooltipKey = useMemo(() => activePreset ?? 'custom-scene', [activePreset]);
-    const [closedKey, setClosedKey] = useState<string | null>(null);
     const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => readDismissedKeys());
 
-    useEffect(() => {
-        setClosedKey(null);
-    }, [tooltipKey]);
-
-    if (!description || closedKey === tooltipKey || dismissedKeys.has(tooltipKey)) {
+    if (!description || dismissedKeys.has(tooltipKey)) {
         return null;
     }
 
@@ -93,19 +88,10 @@ export const PresetTooltip: React.FC = () => {
                     type="button"
                     title="Close tooltip"
                     aria-label="Close tooltip"
-                    onClick={() => setClosedKey(tooltipKey)}
-                    style={iconButton}
-                >
-                    <X size={14} />
-                </button>
-                <button
-                    type="button"
-                    title="Delete tooltip for this preset"
-                    aria-label="Delete tooltip for this preset"
                     onClick={dismissPermanently}
                     style={iconButton}
                 >
-                    <Trash2 size={14} />
+                    <X size={14} />
                 </button>
             </div>
         </div>

@@ -181,6 +181,9 @@ export function getComponentVisualizer(component: OpticalComponent): React.React
     if (component.isGhost) {
         return <GhostVisualizer component={component} />;
     }
+    if (component instanceof TrappedBead && component.isSubComponent) {
+        return null;
+    }
     for (const entry of VISUALIZER_ENTRIES) {
         if (entry.matches(component)) return entry.render(component);
     }

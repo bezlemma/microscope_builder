@@ -1,10 +1,12 @@
 import { OpticalComponent } from '../physics/Component';
+import { Camera } from '../physics/components/Camera';
 import { Lamp } from '../physics/components/Lamp';
 import { Card } from '../physics/components/Card';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { PrismLens } from '../physics/components/PrismLens';
+import { createBrightfieldScene } from './brightfield';
 
-import { PresetResult } from '../state/store';
+import type { PresetResult } from '../state/store';
 
 /**
  * Tutorial Preset — folded 3× reflective Keplerian beam expander, broadband.
@@ -94,5 +96,44 @@ export function createTutorialScene(): PresetResult {
         scene,
         description:
             "Drag the mirrors to make a beam expander. The prism then splits the white light into a rainbow on the screen. Try adding components from the left bar, or explore the other presets.",
+    };
+}
+
+function copyCameraSettings(source: Camera, target: Camera): void {
+    target.sensorResX = source.sensorResX;
+    target.sensorResY = source.sensorResY;
+    target.sensorNA = source.sensorNA;
+    target.samplesPerPixel = source.samplesPerPixel;
+    target.detectorLaunchModel = source.detectorLaunchModel;
+    target.fieldPixelPitchOverrideX = source.fieldPixelPitchOverrideX;
+    target.fieldPixelPitchOverrideY = source.fieldPixelPitchOverrideY;
+}
+
+/**
+ * Tutorial 2 — the smallest useful transmitted-light microscope exercise.
+ *
+ * It starts from the known-good brightfield microscope, removes the real
+ * camera, and leaves a ghost detector target for the user to complete.
+ */
+export function createTutorialMicroscopeScene(): PresetResult {
+    const brightfield = createBrightfieldScene();
+    const realCamera = brightfield.find((c): c is Camera => c instanceof Camera);
+    const scene = brightfield.filter(c => !(c instanceof Camera));
+
+    if (realCamera) {
+        const ghostCamera = new Camera(realCamera.width, realCamera.height, 'Camera Target');
+        ghostCamera.isGhost = true;
+        copyCameraSettings(realCamera, ghostCamera);
+        ghostCamera.setPosition(realCamera.position.x, realCamera.position.y, realCamera.position.z);
+        ghostCamera.panAngle = realCamera.panAngle;
+        ghostCamera.tiltAngle = realCamera.tiltAngle;
+        ghostCamera.rollAngle = realCamera.rollAngle;
+        ghostCamera.recomputeRotation();
+        scene.push(ghostCamera);
+    }
+
+    return {
+        scene,
+        description: "Drag a camera from Detectors onto the ghost camera target to complete the simplest brightfield microscope.",
     };
 }

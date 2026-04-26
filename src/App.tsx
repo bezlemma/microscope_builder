@@ -75,6 +75,7 @@ import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom } f
 import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
 import { PresetTooltip } from './ui/PresetTooltip';
+import { TutorialDomOverlay } from './ui/TutorialDomOverlay';
 
 // ── Canvas Error Boundary ──────────────────────────────────
 class CanvasErrorBoundary extends React.Component<
@@ -116,13 +117,42 @@ class CanvasErrorBoundary extends React.Component<
   }
 }
 
+function presetSlug(name: PresetName): string {
+  if (name === PresetName.Tutorial2) return 'tutorial2';
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 // URL-friendly slug → PresetName mapping
 const presetSlugMap = new Map<string, PresetName>(
-  Object.values(PresetName).map(name => [
-    name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, ''),
-    name as PresetName
-  ])
+  Object.values(PresetName).flatMap(name => {
+    const preset = name as PresetName;
+    const slug = presetSlug(preset);
+    return [
+      [slug, preset],
+      [name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), preset],
+    ] as [string, PresetName][];
+  })
 );
+
+function matchPresetSlug(raw: string | null): PresetName | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const exactMatch = Object.values(PresetName).find(
+    (name) => name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === normalized
+  ) as PresetName | undefined;
+  return exactMatch || presetSlugMap.get(raw.toLowerCase());
+}
+
+function presetFromHash(): PresetName | undefined {
+  const rawHash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!rawHash || rawHash.startsWith('scene=')) return undefined;
+  if (rawHash.startsWith('preset=')) {
+    return matchPresetSlug(decodeURIComponent(rawHash.slice('preset='.length)));
+  }
+  return matchPresetSlug(decodeURIComponent(rawHash));
+}
 
 function App() {
   const [, loadPreset] = useAtom(loadPresetAtom);
@@ -170,7 +200,8 @@ function App() {
 
   // URL-based scene/preset loading.
   //   #scene=<base64> — full custom scene (from the Share button); takes priority
-  //   ?preset=EpiFluorescence or ?preset=epi-fluorescence — built-in preset
+  //   #preset=brightfield — built-in preset
+  //   ?preset=brightfield — legacy preset URL, still accepted
   //   ?solver2=on — auto-enable Solver 2
   useEffect(() => {
     // Try a Share-link scene first; if it loads, skip the preset path so the
@@ -186,15 +217,9 @@ function App() {
     }
 
     const params = new URLSearchParams(window.location.search);
-    const presetParam = params.get('preset');
-    if (presetParam) {
-      const exactMatch = Object.values(PresetName).find(
-        (n) => n.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === presetParam.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-      );
-      const match = exactMatch || presetSlugMap.get(presetParam.toLowerCase());
-      if (match) {
-        loadPreset(match);
-      }
+    const match = presetFromHash() || matchPresetSlug(params.get('preset'));
+    if (match) {
+      loadPreset(match);
     }
 
     const solver2Param = params.get('solver2');
@@ -216,6 +241,7 @@ function App() {
         }}>
   
           <PresetTooltip />
+          <TutorialDomOverlay />
 
           {/* Advanced mobile toolbar layered on top */}
           <MobileActionBar />

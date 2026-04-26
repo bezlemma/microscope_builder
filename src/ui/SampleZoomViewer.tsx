@@ -6,6 +6,7 @@ import { Vector3, Euler } from 'three';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Camera as OpticCamera } from '../physics/components/Camera';
+import { TrappedBead } from '../physics/components/TrappedBead';
 import { forwardRaysAtom, componentsAtom, cameraImageTickAtom } from '../state/store';
 import { wavelengthToCSS } from '../physics/spectral';
 import type { Ray } from '../physics/types';
@@ -22,9 +23,32 @@ interface MiniViewProps {
     upVec: [number, number, number];
     orbit?: boolean;
     sample: Sample | SampleChamber;
-    mickey: { c: Vector3; r: number }[];
+    specimenSpheres: RenderSphere[];
+    flowCell: FlowCellRender | null;
+    trapBeads: RenderSphere[];
     segments: { points: [number, number, number][]; color: string }[];
     focus: { x: number; y: number; z: number };
+}
+
+interface RenderSphere {
+    id?: string;
+    c: Vector3;
+    r: number;
+    color: string;
+    opacity?: number;
+    emissive?: string;
+    emissiveIntensity?: number;
+    glowRadius?: number;
+    glowColor?: string;
+    trapCaptureRadius?: number;
+    trapAxialCaptureRange?: number;
+}
+
+interface FlowCellRender {
+    width: number;
+    height: number;
+    depth: number;
+    glassThickness: number;
 }
 
 const MICKEY_COLORS = ['#ffd0aa', '#3a2a22', '#3a2a22'];
@@ -36,7 +60,9 @@ const MiniView: React.FC<MiniViewProps> = ({
     upVec,
     orbit,
     sample,
-    mickey,
+    specimenSpheres,
+    flowCell,
+    trapBeads,
     segments,
     focus,
 }) => {
@@ -65,24 +91,72 @@ const MiniView: React.FC<MiniViewProps> = ({
                         position={[sample.position.x, sample.position.y, sample.position.z]}
                         quaternion={sampleQuat}
                     >
-                        <group position={specimenOffset} rotation={specimenRot}>
-                            {mickey.map((s, i) => (
-                                <mesh key={i} position={[s.c.x, s.c.y, s.c.z]} renderOrder={1}>
-                                    <sphereGeometry args={[s.r, 24, 24]} />
-                                    <meshStandardMaterial
-                                        color={MICKEY_COLORS[i] ?? '#888'}
-                                        roughness={0.45}
-                                        metalness={0.05}
-                                        emissive={MICKEY_COLORS[i] ?? '#888'}
-                                        emissiveIntensity={0.25}
+                        {flowCell && (
+                            <>
+                                <mesh>
+                                    <boxGeometry args={[flowCell.width, flowCell.height, flowCell.depth]} />
+                                    <meshPhysicalMaterial
+                                        color="#7fd8ff"
+                                        transmission={0.85}
                                         transparent
-                                        opacity={0.45}
+                                        opacity={0.16}
+                                        roughness={0.05}
                                         depthWrite={false}
                                     />
                                 </mesh>
+                                <mesh position={[0, 0, -flowCell.depth / 2 - flowCell.glassThickness / 2]}>
+                                    <boxGeometry args={[flowCell.width, flowCell.height, flowCell.glassThickness]} />
+                                    <meshPhysicalMaterial color="#d8f3ff" transmission={0.92} transparent opacity={0.24} roughness={0.02} depthWrite={false} />
+                                </mesh>
+                                <mesh position={[0, 0, flowCell.depth / 2 + flowCell.glassThickness / 2]}>
+                                    <boxGeometry args={[flowCell.width, flowCell.height, flowCell.glassThickness]} />
+                                    <meshPhysicalMaterial color="#d8f3ff" transmission={0.92} transparent opacity={0.24} roughness={0.02} depthWrite={false} />
+                                </mesh>
+                            </>
+                        )}
+                        <group position={specimenOffset} rotation={specimenRot}>
+                            {specimenSpheres.map((s, i) => (
+                                <group key={i} position={[s.c.x, s.c.y, s.c.z]}>
+                                    {s.glowRadius && (
+                                        <mesh renderOrder={1}>
+                                            <sphereGeometry args={[s.glowRadius, 24, 12]} />
+                                            <meshBasicMaterial
+                                                color={s.glowColor ?? s.emissive ?? s.color}
+                                                transparent
+                                                opacity={0.22}
+                                                depthWrite={false}
+                                            />
+                                        </mesh>
+                                    )}
+                                    <mesh renderOrder={2}>
+                                        <sphereGeometry args={[Math.max(s.r, 0.006), 24, 18]} />
+                                        <meshStandardMaterial
+                                            color={s.color}
+                                            roughness={0.35}
+                                            metalness={0.05}
+                                            emissive={s.emissive ?? s.color}
+                                            emissiveIntensity={s.emissiveIntensity ?? 0.25}
+                                            transparent
+                                            opacity={s.opacity ?? 0.5}
+                                            depthWrite={false}
+                                        />
+                                    </mesh>
+                                </group>
                             ))}
                         </group>
                     </group>
+                    {trapBeads.map((bead, i) => (
+                        <group key={`trap-${i}`} position={[bead.c.x, bead.c.y, bead.c.z]}>
+                            <mesh renderOrder={2}>
+                                <sphereGeometry args={[bead.glowRadius ?? 0.16, 32, 16]} />
+                                <meshBasicMaterial color={bead.glowColor ?? '#007fff'} transparent opacity={0.26} depthWrite={false} />
+                            </mesh>
+                            <mesh renderOrder={3}>
+                                <sphereGeometry args={[Math.max(bead.r, 0.006), 24, 16]} />
+                                <meshStandardMaterial color={bead.color} emissive={bead.emissive ?? '#007fff'} emissiveIntensity={0.65} roughness={0.2} transparent opacity={0.9} />
+                            </mesh>
+                        </group>
+                    ))}
                     {segments.map((seg, idx) => (
                         <Line
                             key={idx}
@@ -124,6 +198,153 @@ const MiniView: React.FC<MiniViewProps> = ({
     );
 };
 
+const BLUE = '#007fff';
+
+const TrapCloseupViewer: React.FC<{
+    sample: Sample;
+    size: number;
+    flowCell: FlowCellRender | null;
+    specimenSpheres: RenderSphere[];
+    trapBeads: RenderSphere[];
+}> = ({ sample, size, flowCell, specimenSpheres, trapBeads }) => {
+    const historyRef = useRef<Vector3[]>([]);
+    const primary = useMemo(() => {
+        sample.updateMatrices();
+        let best: (RenderSphere & { local: Vector3 }) | null = null;
+        let bestDistanceSq = Infinity;
+        for (const bead of trapBeads) {
+            const local = bead.c.clone().applyMatrix4(sample.worldToLocal);
+            const distanceSq = local.lengthSq();
+            if (distanceSq < bestDistanceSq) {
+                bestDistanceSq = distanceSq;
+                best = { ...bead, local };
+            }
+        }
+        return best;
+    }, [sample, sample.version, trapBeads]);
+
+    useEffect(() => {
+        historyRef.current = [];
+    }, [sample.id, primary?.id]);
+
+    useEffect(() => {
+        if (!primary) return;
+        const p = primary.local.clone();
+        const h = historyRef.current;
+        const last = h[h.length - 1];
+        if (!last || last.distanceToSquared(p) > 1e-12 || h.length < 2) {
+            h.push(p);
+            if (h.length > 160) h.splice(0, h.length - 160);
+        }
+    }, [primary?.local.x, primary?.local.y, primary?.local.z]);
+
+    const gutter = 2;
+    const sideHeight = Math.max(36, Math.min(72, Math.round(size * 0.28)));
+    const xyHeight = Math.max(1, size - sideHeight - gutter);
+    const gradientId = `trap-closeup-blue-${sample.id}`;
+    const halfSpan = 0.03; // 60 um full window around the trap focus.
+    const halfDepth = Math.max(0.006, flowCell?.depth ?? 0.08) / 2;
+    const zSpan = Math.max(0.05, halfDepth * 1.25);
+    const cx = size / 2;
+    const cy = xyHeight / 2;
+    const toX = (x: number) => cx + (x / halfSpan) * (size / 2);
+    const toY = (y: number) => cy - (y / halfSpan) * (xyHeight / 2);
+    const toSideX = (x: number) => cx + (x / halfSpan) * (size / 2);
+    const toSideY = (z: number) => sideHeight / 2 - (z / zSpan) * (sideHeight / 2);
+    const inXY = (p: Vector3, margin = 0) =>
+        Math.abs(p.x) <= halfSpan + margin && Math.abs(p.y) <= halfSpan + margin;
+    const visiblePassive = specimenSpheres.filter(s => inXY(s.c, s.r));
+    const beadPx = primary ? Math.max(4, primary.r / halfSpan * (size / 2)) : 0;
+    const glowPx = primary ? Math.max(beadPx + 3, Math.min(beadPx + 7, beadPx * 1.35)) : 0;
+    const trailXY = historyRef.current
+        .filter(p => inXY(p, primary?.r ?? 0))
+        .map(p => `${toX(p.x).toFixed(1)},${toY(p.y).toFixed(1)}`)
+        .join(' ');
+    const trailSide = historyRef.current
+        .filter(p => Math.abs(p.x) <= halfSpan + (primary?.r ?? 0) && Math.abs(p.z) <= zSpan)
+        .map(p => `${toSideX(p.x).toFixed(1)},${toSideY(p.z).toFixed(1)}`)
+        .join(' ');
+    const capturePx = primary?.trapCaptureRadius
+        ? Math.max(4, primary.trapCaptureRadius / halfSpan * (size / 2))
+        : Math.max(18, beadPx * 2.4);
+    const axialCapture = primary?.trapAxialCaptureRange ?? 0;
+    const scaleBarMm = 0.02;
+    const scaleBarPx = scaleBarMm / halfSpan * (size / 2);
+
+    return (
+        <div
+            style={{
+                width: size,
+                height: size,
+                background: '#0c0e12',
+                borderRadius: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: gutter,
+                overflow: 'hidden',
+                color: '#c7d3df',
+                fontFamily: 'inherit',
+            }}
+        >
+            <svg width={size} height={xyHeight} viewBox={`0 0 ${size} ${xyHeight}`} style={{ background: '#171c22' }}>
+                <defs>
+                    <radialGradient id={gradientId} cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor={BLUE} stopOpacity="0.32" />
+                        <stop offset="100%" stopColor={BLUE} stopOpacity="0" />
+                    </radialGradient>
+                </defs>
+                <circle cx={cx} cy={cy} r={capturePx} fill="none" stroke={BLUE} strokeOpacity="0.26" strokeWidth="1.25" strokeDasharray="4 4" />
+                <line x1={cx - 8} y1={cy} x2={cx + 8} y2={cy} stroke={BLUE} strokeOpacity="0.42" strokeWidth="1" />
+                <line x1={cx} y1={cy - 8} x2={cx} y2={cy + 8} stroke={BLUE} strokeOpacity="0.42" strokeWidth="1" />
+                {trailXY.length > 0 && (
+                    <polyline points={trailXY} fill="none" stroke={BLUE} strokeOpacity="0.42" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                )}
+                {visiblePassive.map((s, i) => {
+                    const r = Math.max(2, s.r / halfSpan * (size / 2));
+                    return (
+                        <g key={i}>
+                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r + 2} fill={BLUE} opacity="0.12" />
+                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r} fill="#dcecff" opacity={s.opacity ?? 0.8} />
+                        </g>
+                    );
+                })}
+                {primary && (
+                    <g>
+                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={glowPx} fill={`url(#${gradientId})`} />
+                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={beadPx} fill="#dcecff" opacity="0.92" />
+                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={beadPx} fill="none" stroke={BLUE} strokeOpacity="0.75" strokeWidth="1" />
+                    </g>
+                )}
+                <line x1={size - scaleBarPx - 12} y1={xyHeight - 14} x2={size - 12} y2={xyHeight - 14} stroke="#c7d3df" strokeOpacity="0.85" strokeWidth="2" />
+                <text x={size - 12} y={xyHeight - 18} textAnchor="end" fill="#c7d3df" opacity="0.85" fontSize="9">20 um</text>
+                <text x="6" y="13" fill="#9aaab8" fontSize="9" fontWeight="700">Trap XY</text>
+            </svg>
+            <svg width={size} height={sideHeight} viewBox={`0 0 ${size} ${sideHeight}`} style={{ background: '#12161c' }}>
+                <line x1="0" y1={toSideY(-halfDepth)} x2={size} y2={toSideY(-halfDepth)} stroke="#d8f3ff" strokeOpacity="0.3" strokeWidth="1" />
+                <line x1="0" y1={toSideY(halfDepth)} x2={size} y2={toSideY(halfDepth)} stroke="#d8f3ff" strokeOpacity="0.3" strokeWidth="1" />
+                {axialCapture > 0 && (
+                    <>
+                        <line x1="0" y1={toSideY(-axialCapture)} x2={size} y2={toSideY(-axialCapture)} stroke={BLUE} strokeOpacity="0.28" strokeWidth="1" strokeDasharray="4 4" />
+                        <line x1="0" y1={toSideY(axialCapture)} x2={size} y2={toSideY(axialCapture)} stroke={BLUE} strokeOpacity="0.28" strokeWidth="1" strokeDasharray="4 4" />
+                    </>
+                )}
+                <line x1="0" y1={toSideY(0)} x2={size} y2={toSideY(0)} stroke={BLUE} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 4" />
+                <line x1={cx} y1="0" x2={cx} y2={sideHeight} stroke={BLUE} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 4" />
+                {trailSide.length > 0 && (
+                    <polyline points={trailSide} fill="none" stroke={BLUE} strokeOpacity="0.38" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                )}
+                {primary && (
+                    <g>
+                        <circle cx={toSideX(primary.local.x)} cy={toSideY(primary.local.z)} r={Math.max(2, beadPx * 0.55)} fill={BLUE} opacity="0.16" />
+                        <circle cx={toSideX(primary.local.x)} cy={toSideY(primary.local.z)} r={Math.max(1.5, beadPx * 0.35)} fill="#dcecff" opacity="0.9" />
+                    </g>
+                )}
+                <text x="6" y="13" fill="#9aaab8" fontSize="9" fontWeight="700">Axial gap</text>
+            </svg>
+        </div>
+    );
+};
+
 /**
  * Pinnable mini 3D viewer that frames the sample tightly so the user can see
  * how forward / reverse rays hit and exit the specimen in real time as they
@@ -143,20 +364,92 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     // the segments memo wouldn't otherwise re-run.  cameraImageTickAtom bumps
     // on every camera-done, which gives us the trigger we need.
     const [cameraImageTick] = useAtom(cameraImageTickAtom);
+    const hasTrapBeads = components.some(c => c instanceof TrappedBead);
+    const [trapViewerTick, setTrapViewerTick] = React.useState(0);
 
-    // Mickey-only inline geometry — see note in earlier turn: the full
-    // SampleVisualizer paints a 40 mm holder frame and tinted glass plate that
-    // would sit between the zoom-camera and the specimen at our camera
-    // distances.
-    const mickey = useMemo(() => {
+    useEffect(() => {
+        if (!hasTrapBeads) return;
+        let raf = 0;
+        let lastTick = 0;
+        const tick = () => {
+            const now = performance.now();
+            if (now - lastTick > 66) {
+                lastTick = now;
+                setTrapViewerTick(t => (t + 1) % 1_000_000);
+            }
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [hasTrapBeads]);
+
+    const specimenSpheres = useMemo<RenderSphere[]>(() => {
+        if (sample instanceof Sample && sample.specimenKind === 'colloids') {
+            return sample.colloidSpheres.map(colloid => ({
+                c: colloid.center.clone(),
+                r: colloid.radius,
+                color: '#dcecff',
+                opacity: 0.9,
+                emissive: colloid.glowColor ?? sample.colloidGlowColor,
+                emissiveIntensity: 0.75,
+                glowRadius: Math.max(0.006, colloid.radius * 2.5),
+                glowColor: colloid.glowColor ?? sample.colloidGlowColor,
+            }));
+        }
+
         const scale = 2 / 3;
         const center = new Vector3(0, 0.125, 0);
         return [
-            { c: new Vector3(0, 0, 0).sub(center).multiplyScalar(scale), r: 0.5 * scale },
-            { c: new Vector3(-0.5, 0.5, 0).sub(center).multiplyScalar(scale), r: 0.25 * scale },
-            { c: new Vector3(0.5, 0.5, 0).sub(center).multiplyScalar(scale), r: 0.25 * scale },
+            { c: new Vector3(0, 0, 0).sub(center).multiplyScalar(scale), r: 0.5 * scale, color: MICKEY_COLORS[0], opacity: 0.45 },
+            { c: new Vector3(-0.5, 0.5, 0).sub(center).multiplyScalar(scale), r: 0.25 * scale, color: MICKEY_COLORS[1], opacity: 0.45 },
+            { c: new Vector3(0.5, 0.5, 0).sub(center).multiplyScalar(scale), r: 0.25 * scale, color: MICKEY_COLORS[2], opacity: 0.45 },
         ];
-    }, []);
+    }, [sample, sample.version, trapViewerTick]);
+
+    const flowCell = useMemo<FlowCellRender | null>(() => {
+        if (!(sample instanceof Sample) || sample.specimenKind !== 'colloids') return null;
+        return {
+            width: sample.flowCellWidth,
+            height: sample.flowCellHeight,
+            depth: sample.flowCellDepth,
+            glassThickness: sample.flowCellGlassThickness,
+        };
+    }, [sample, sample.version]);
+
+    const trapBeads = useMemo<RenderSphere[]>(() => {
+        return components
+            .filter((c): c is TrappedBead => c instanceof TrappedBead)
+            .map(bead => {
+                const center = bead.getConfinedSpecimenOffset().clone()
+                    .applyQuaternion(bead.rotation)
+                    .add(bead.position);
+                return {
+                    id: bead.id,
+                    c: center,
+                    r: bead.radius,
+                    color: '#dcecff',
+                    opacity: 0.95,
+                    emissive: bead.glowColor,
+                    emissiveIntensity: 0.8,
+                    glowRadius: Math.max(bead.radius * 1.4, bead.visualGlowRadius),
+                    glowColor: bead.glowColor,
+                    trapCaptureRadius: bead.trapCaptureRadius,
+                    trapAxialCaptureRange: bead.trapAxialCaptureRange,
+                };
+            });
+    }, [components, cameraImageTick, sample.version, trapViewerTick]);
+
+    if (sample instanceof Sample && sample.specimenKind === 'colloids' && trapBeads.length > 0) {
+        return (
+            <TrapCloseupViewer
+                sample={sample}
+                size={size}
+                flowCell={flowCell}
+                specimenSpheres={specimenSpheres}
+                trapBeads={trapBeads}
+            />
+        );
+    }
 
     const focus = sample.position;
 
@@ -203,7 +496,9 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     // small gutter between cells.
     const gutter = 2;
     const cellSize = (size - gutter) / 2;
-    const camDist = 2.5;
+    const camDist = flowCell
+        ? Math.max(3.5, Math.max(flowCell.width, flowCell.height) * 1.35)
+        : 2.5;
 
     // Camera positions for the axis-locked panes.  All look at world origin
     // (after the outer -focus translate that centres the sample).  "X axis"
@@ -259,7 +554,9 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
                 cameraPos={xAxisPos}
                 upVec={[0, 0, 1]}
                 sample={sample}
-                mickey={mickey}
+                specimenSpheres={specimenSpheres}
+                flowCell={flowCell}
+                trapBeads={trapBeads}
                 segments={segments}
                 focus={focus}
             />
@@ -269,7 +566,9 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
                 cameraPos={yAxisPos}
                 upVec={[0, 0, 1]}
                 sample={sample}
-                mickey={mickey}
+                specimenSpheres={specimenSpheres}
+                flowCell={flowCell}
+                trapBeads={trapBeads}
                 segments={segments}
                 focus={focus}
             />
@@ -279,7 +578,9 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
                 cameraPos={zAxisPos}
                 upVec={[0, 1, 0]}
                 sample={sample}
-                mickey={mickey}
+                specimenSpheres={specimenSpheres}
+                flowCell={flowCell}
+                trapBeads={trapBeads}
                 segments={segments}
                 focus={focus}
             />
@@ -290,7 +591,9 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
                 upVec={persUp}
                 orbit
                 sample={sample}
-                mickey={mickey}
+                specimenSpheres={specimenSpheres}
+                flowCell={flowCell}
+                trapBeads={trapBeads}
                 segments={segments}
                 focus={focus}
             />

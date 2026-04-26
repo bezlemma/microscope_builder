@@ -340,7 +340,7 @@ This section gives one entry per concrete `OpticalComponent` subclass. Each entr
 
 | Class | Model | Notes |
 | ----- | ----- | ----- |
-| `Aperture` | Annular iris: clear inner disc + opaque ring inside outer housing | `intersect` flags `isBlocked = true` for ring hits; `interact` returns `[]` when blocked, `[passthrough]` otherwise. `openingDiameter`/2 is exposed as `openingRadius` on the kernel snapshot for Solver 3 importance sampling. |
+| `Aperture` | Annular iris/tube: clear inner bore + opaque ring/barrel inside outer housing | `thickness` controls body length along the optical axis. `intersect` flags `isBlocked = true` for ring, barrel, and bore-wall hits; clear-bore cap hits pass through so targeting still sees the aperture. `openingDiameter`/2 is exposed as `openingRadius` on the kernel snapshot for Solver 3 importance sampling. |
 | `SlitAperture` | Rectangular slit | `getParaxialProfile()` returns axis-asymmetric apertures (only X is clipped). |
 | `DoubleSlit` | Two parallel rectangular slits separated by `slitSeparation` | For interference demos. Pass / absorb. |
 | `Blocker` | Solid opaque cylinder | All hits absorbed. |

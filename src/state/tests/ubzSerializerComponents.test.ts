@@ -1,9 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import { Vector3 } from 'three';
 import { Annotation } from '../../physics/components/Annotation';
+import { Aperture } from '../../physics/components/Aperture';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { Objective } from '../../physics/components/Objective';
 import { PointSource2D } from '../../physics/components/PointSource2D';
+import { QPD } from '../../physics/components/QPD';
+import { Sample } from '../../physics/components/Sample';
 import { StructuredSource } from '../../physics/components/StructuredSource';
+import { TrappedBead } from '../../physics/components/TrappedBead';
 import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
 import { deserializeScene, serializeScene } from '../ubzSerializer';
 
@@ -95,5 +100,99 @@ describe('UBZ registered components', () => {
             { index: 4, coefficient: 0.12 },
             { index: 11, coefficient: -0.03 },
         ]);
+    });
+
+    test('round-trips trapped bead confinement and clamps stale offsets', () => {
+        const bead = new TrappedBead(0.5, 1.59, 1.33, 'Confined bead');
+        bead.confinementHalfSize = new Vector3(2, 3, 4);
+        bead.specimenOffset.set(10, -10, 10);
+        bead.surfaceReflectionScale = 0.7;
+        bead.visualGlowRadius = 0.25;
+        bead.trapCaptureRadius = 0.03;
+        bead.trapAxialCaptureRange = 0.012;
+
+        const scene = deserializeScene(serializeScene([bead]));
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(TrappedBead);
+
+        const loaded = scene[0] as TrappedBead;
+        expect(loaded.confinementHalfSize?.toArray()).toEqual([2, 3, 4]);
+        const limit = loaded.getConfinementLimit()!;
+        expect(Math.abs(loaded.specimenOffset.x)).toBeLessThanOrEqual(limit.x);
+        expect(Math.abs(loaded.specimenOffset.y)).toBeLessThanOrEqual(limit.y);
+        expect(Math.abs(loaded.specimenOffset.z)).toBeLessThanOrEqual(limit.z);
+        expect(loaded.surfaceReflectionScale).toBeCloseTo(0.7, 6);
+        expect(loaded.visualGlowRadius).toBeCloseTo(0.25, 6);
+        expect(loaded.trapCaptureRadius).toBeCloseTo(0.03, 6);
+        expect(loaded.trapAxialCaptureRange).toBeCloseTo(0.012, 6);
+    });
+
+    test('round-trips thick aperture tube geometry', () => {
+        const tube = new Aperture(6, 18, 'Tube Stop', 14);
+
+        const scene = deserializeScene(serializeScene([tube]));
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(Aperture);
+
+        const loaded = scene[0] as Aperture;
+        expect(loaded.openingDiameter).toBeCloseTo(6, 6);
+        expect(loaded.housingDiameter).toBeCloseTo(18, 6);
+        expect(loaded.thickness).toBeCloseTo(14, 6);
+        expect(loaded.bounds.min.z).toBeCloseTo(-7, 6);
+        expect(loaded.bounds.max.z).toBeCloseTo(7, 6);
+    });
+
+    test('round-trips colloid flow-cell sample variant and QPD backstop leakage', () => {
+        const sample = new Sample('Colloid cell').configureColloidFlowCell({
+            count: 10,
+            radius: 0.0025,
+            width: 4,
+            height: 3,
+            depth: 0.08,
+            temperatureK: 310,
+            viscosity: 0.0008,
+            diffusionScale: 12,
+        });
+        const qpd = new QPD(20, 'QPD');
+        qpd.backstopTransmission = 0.02;
+
+        const scene = deserializeScene(serializeScene([sample, qpd]));
+        expect(scene[0]).toBeInstanceOf(Sample);
+        expect(scene[1]).toBeInstanceOf(QPD);
+
+        const loadedSample = scene[0] as Sample;
+        expect(loadedSample.specimenKind).toBe('colloids');
+        expect(loadedSample.colloidSpheres).toHaveLength(10);
+        expect(loadedSample.flowCellWidth).toBeCloseTo(4, 6);
+        expect(loadedSample.flowCellDepth).toBeCloseTo(0.08, 6);
+        expect(loadedSample.colloidTemperatureK).toBeCloseTo(310, 6);
+        expect(loadedSample.colloidViscosity).toBeCloseTo(0.0008, 6);
+        expect(loadedSample.colloidDiffusionScale).toBeCloseTo(12, 6);
+
+        const loadedQpd = scene[1] as QPD;
+        expect(loadedQpd.backstopTransmission).toBeCloseTo(0.02, 6);
+    });
+
+    test('persists a managed trapped bead as part of its flow-cell sample', () => {
+        const sample = new Sample('Trap Flow Cell').configureColloidFlowCell({
+            count: 12,
+            width: 8,
+            height: 8,
+            depth: 0.0075,
+        });
+        const bead = new TrappedBead(0.005, 1.59, 1.33, 'Trapped Colloid');
+        bead.parentSampleId = sample.id;
+        bead.isSubComponent = true;
+        bead.visualGlowRadius = 0.012;
+
+        const scene = deserializeScene(serializeScene([sample, bead]));
+        expect(scene).toHaveLength(2);
+        expect(scene[0]).toBeInstanceOf(Sample);
+        expect(scene[1]).toBeInstanceOf(TrappedBead);
+
+        const loadedBead = scene[1] as TrappedBead;
+        expect(loadedBead.parentSampleId).toBe(sample.id);
+        expect(loadedBead.isSubComponent).toBe(true);
+        expect(loadedBead.visualGlowRadius).toBeCloseTo(0.012, 6);
     });
 });

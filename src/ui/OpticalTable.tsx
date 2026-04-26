@@ -16,7 +16,6 @@ import {
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
     activeZLevelAtom,
-    reverseRayCounterAtom,
     drawnRayCountsAtom,
     cameraImageTickAtom,
     isDraggingAtom,
@@ -25,11 +24,11 @@ import {
 import type { AnimationChannel } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
 
-import { Ray } from '../physics/types';
+import { Coherence, Ray } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
 import { Card } from '../physics/components/Card';
-import { Sample } from '../physics/components/Sample';
+import { Sample, type ColloidTrapZone } from '../physics/components/Sample';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
 import { TrappedBead } from '../physics/components/TrappedBead';
@@ -61,6 +60,75 @@ function rehydratePath(path: SerializedPath): Ray[] {
             ? new Vector3(r.terminationPoint.x, r.terminationPoint.y, r.terminationPoint.z)
             : undefined,
     }));
+}
+
+function syncManagedTrapBeads(components: OpticalComponent[]): boolean {
+    const samples = new Map<string, Sample>();
+    for (const component of components) {
+        if (component instanceof Sample) samples.set(component.id, component);
+    }
+
+    let changed = false;
+    for (const component of components) {
+        if (!(component instanceof TrappedBead) || !component.parentSampleId) continue;
+        const sample = samples.get(component.parentSampleId);
+        if (!sample) continue;
+
+        const rotationChanged = Math.abs(component.rotation.dot(sample.rotation)) < 1 - 1e-10;
+        const positionChanged = !component.position.equals(sample.position);
+        if (positionChanged || rotationChanged) {
+            component.position.copy(sample.position);
+            component.rotation.copy(sample.rotation);
+            component.version++;
+            changed = true;
+        }
+
+        const nextHalfSize = new Vector3(
+            sample.flowCellWidth / 2,
+            sample.flowCellHeight / 2,
+            sample.flowCellDepth / 2,
+        );
+        if (!component.confinementHalfSize || !component.confinementHalfSize.equals(nextHalfSize)) {
+            component.confinementHalfSize = nextHalfSize;
+            component.constrainToFlowCell();
+            changed = true;
+        }
+        if (component.iorMedium !== sample.fillMediumIndex) {
+            component.iorMedium = sample.fillMediumIndex;
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+function trapBeamHasPower(beamSegments: GaussianBeamSegment[][]): boolean {
+    return beamSegments.some(branch => branch.some(segment =>
+        segment.coherenceMode === Coherence.Coherent && segment.power > 1e-9
+    ));
+}
+
+function colloidTrapZonesBySample(
+    components: OpticalComponent[],
+    beamSegments: GaussianBeamSegment[][],
+): Map<string, ColloidTrapZone[]> {
+    const zones = new Map<string, ColloidTrapZone[]>();
+    if (!trapBeamHasPower(beamSegments)) return zones;
+
+    for (const component of components) {
+        if (!(component instanceof TrappedBead) || !component.parentSampleId) continue;
+        const zone: ColloidTrapZone = {
+            center: new Vector3(0, 0, 0),
+            lateralRadius: component.trapCaptureRadius,
+            axialRange: component.trapAxialCaptureRange,
+            stiffnessPerSecond: 14,
+        };
+        const sampleZones = zones.get(component.parentSampleId) ?? [];
+        sampleZones.push(zone);
+        zones.set(component.parentSampleId, sampleZones);
+    }
+
+    return zones;
 }
 
 import { Draggable } from './Draggable';
@@ -139,7 +207,6 @@ export const OpticalTable: React.FC = () => {
     const [solver3Rendering] = useAtom(solver3RenderingAtom);
     const [scanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
-    const [, setReverseRayCounter] = useAtom(reverseRayCounterAtom);
     const [, setDrawnRayCounts] = useAtom(drawnRayCountsAtom);
     const [, setCameraImageTick] = useAtom(cameraImageTickAtom);
     const haptic = useHaptic();
@@ -174,6 +241,8 @@ export const OpticalTable: React.FC = () => {
 
     // Guard ref: when true, scan accumulation is running — skip useFrame and Solver 1
     const scanAccumActiveRef = useRef(false);
+    const trapBeamSegsRef = useRef<GaussianBeamSegment[][]>([]);
+    const lastTrapRedrawMsRef = useRef(0);
 
     useFrame((_, delta) => {
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
@@ -193,26 +262,36 @@ export const OpticalTable: React.FC = () => {
     // global "play" button shouldn't freeze a trap any more than turning off
     // your monitor freezes one in a real lab.
     //
-    // Sequencing per frame:
-    //   1. Solver 1's most recent trace already deposited per-ray photon
-    //      momentum into every TrappedBead's `forceAccumulator`.
-    //   2. We call `applyForceStep(now)` here, which integrates the
-    //      overdamped Langevin update, mutates `specimenOffset`, resets the
-    //      accumulator, and bumps `version`.
-    //   3. The version bump invalidates `opticsFingerprint`, scheduling a
-    //      fresh trace next render — which re-fills the accumulator with
-    //      forces evaluated at the bead's NEW position.  That's the closed
-    //      feedback loop.
+    // Solver 1 is intentionally not re-run for every bead Brownian/force step:
+    // doing so continuously remounts thousands of ray line geometries and can
+    // grow browser memory until interaction crashes the page. Static optics
+    // changes rebuild the beam field; bead motion samples that cached field.
     useFrame(() => {
         if (scanAccumActiveRef.current) return;
-        const beads = componentsRef.current.filter(c => c instanceof TrappedBead) as TrappedBead[];
-        if (beads.length === 0) return;
+        const currentComponents = componentsRef.current;
         const now = performance.now();
-        let anyMoved = false;
+        let anyMoved = syncManagedTrapBeads(currentComponents);
+        const trapBeamSegs = trapBeamSegsRef.current;
+        const sampleTrapZones = colloidTrapZonesBySample(currentComponents, trapBeamSegs);
+
+        for (const sample of currentComponents) {
+            const zones = sampleTrapZones.get(sample.id) ?? [];
+            if (sample instanceof Sample && sample.stepColloidDiffusion(now, zones)) {
+                anyMoved = true;
+            }
+        }
+
+        const beads = currentComponents.filter(c => c instanceof TrappedBead) as TrappedBead[];
         for (const bead of beads) {
+            if (trapBeamSegs.length > 0) {
+                bead.accumulateGradientTrapForce(trapBeamSegs);
+            }
             if (bead.applyForceStep(now)) anyMoved = true;
         }
-        if (anyMoved) setAnimTickRef.current(t => t + 1);
+        if (anyMoved && now - lastTrapRedrawMsRef.current > 33) {
+            lastTrapRedrawMsRef.current = now;
+            setAnimTickRef.current(t => t + 1);
+        }
     });
 
     // ─── Optics fingerprint: changes only when non-Card components change ───
@@ -237,6 +316,7 @@ export const OpticalTable: React.FC = () => {
     const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
 
     const traceCenterBeamSegments = () => {
+        syncManagedTrapBeads(components);
         const solver1 = new Solver1(components);
         // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
         // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
@@ -247,6 +327,7 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         if (!components) return;
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
+        syncManagedTrapBeads(components);
         const sceneChanged = lastOpticsFingerprintRef.current !== opticsFingerprint;
         lastOpticsFingerprintRef.current = opticsFingerprint;
 
@@ -512,9 +593,7 @@ export const OpticalTable: React.FC = () => {
                 console.warn('Solver 2 error:', e);
             }
         }
-        for (const bead of trappedBeads) {
-            bead.accumulateGradientTrapForce(beamSegs);
-        }
+        trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
         const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
         setBeamSegments(visibleBeamSegs);
         beamSegsRef.current = visibleBeamSegs;
@@ -702,8 +781,6 @@ export const OpticalTable: React.FC = () => {
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = msg.raysTraced;
                     if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
-                        const totalRays = workerRayCountsRef.current.reduce((sum, count) => sum + (count || 0), 0);
-                        setReverseRayCounter(totalRays);
                         setScanAccumProgress(1);
                         setSolver3Rendering(false);
                         if (workerErrorRef.current) haptic.error();
@@ -715,8 +792,6 @@ export const OpticalTable: React.FC = () => {
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = 0;
                     if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
-                        const totalRays = workerRayCountsRef.current.reduce((sum, count) => sum + (count || 0), 0);
-                        setReverseRayCounter(totalRays);
                         setSolver3Rendering(false);
                         setScanAccumProgress(0);
                         haptic.error();
@@ -760,7 +835,6 @@ export const OpticalTable: React.FC = () => {
 
         setSolver3Rendering(true);
         setScanAccumProgress(0);
-        setReverseRayCounter(0);
 
         const sceneText = serializeScene(components);
         for (let w = 0; w < workers.length; w++) {
@@ -1023,7 +1097,9 @@ export const OpticalTable: React.FC = () => {
         const ownsRenderingState = !components.some(c => c instanceof Camera);
         const workerCount = SOLVER3_WORKER_COUNT;
         const rasterWorkers: Worker[] = [];
-        const serializableComponents = components.filter(c => !c.isSubComponent);
+        const serializableComponents = components.filter(c =>
+            !c.isSubComponent || (c instanceof TrappedBead && Boolean(c.parentSampleId))
+        );
         const sceneText = serializeScene(serializableComponents);
         const jobId = Math.floor(performance.now() * 1000);
         const totalFirstFramePixels = plans.reduce((sum, { pmt }) => sum + pmt.scanResX * pmt.scanResY, 0);

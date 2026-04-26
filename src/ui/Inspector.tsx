@@ -23,7 +23,6 @@ import {
     MAX_REVERSE_PATH_COUNT,
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
-    reverseRayCounterAtom,
     drawnRayCountsAtom,
 } from '../state/store';
 import { RodPropertiesPanel } from './RodPropertiesPanel';
@@ -56,6 +55,7 @@ import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
+import { TrappedBead } from '../physics/components/TrappedBead';
 import { PMT, derivePMTScanResolution } from '../physics/components/PMT';
 import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { MediumVolume } from '../physics/components/MediumVolume';
@@ -197,7 +197,6 @@ const SolverPanel: React.FC<{
     const isVisible = !isMobile || mobileOpen;
     const hasChannels = animator.channels.length > 0;
     const [components] = useAtom(componentsAtom);
-    const [rayCounter] = useAtom(reverseRayCounterAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
     const [solverDiag] = useAtom(solverDiagnosticsAtom);
     const [drawnRayCounts] = useAtom(drawnRayCountsAtom);
@@ -287,7 +286,7 @@ const SolverPanel: React.FC<{
                         cursor: 'pointer',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
                     }}
-                    title="Physics Solvers"
+                    title="Ray display"
                 >
                     ⚙
                 </button>
@@ -337,12 +336,7 @@ const SolverPanel: React.FC<{
                 {/* Header row — title + play/pause inline */}
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>
-                        Physics Solvers
-                        {rayCounter > 0 && (
-                            <span style={{ marginLeft: '8px', fontSize: '10px', color: '#aaa', background: '#222', border: '1px solid #444', padding: '1px 6px', borderRadius: '10px', fontWeight: 'normal' }}>
-                                {(rayCounter / 1000).toFixed(1)}k rays
-                            </span>
-                        )}
+                        Ray Display
                     </span>
                     {hasChannels && (
                         <button
@@ -375,69 +369,67 @@ const SolverPanel: React.FC<{
                     )}
                 </div>
 
-                    {/* Rod Tracer (always on) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4f4' }}></div>
-                        <span>Rod Tracer</span>
-                    </div>
-                    <div style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4 }}>
-                        <input
-                            type="range"
-                            min="0"
-                            max={String(COUNT_SLIDER_STEPS)}
-                            step="1"
-                            value={countToSliderPosition(
-                                clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
-                                MIN_FORWARD_RAY_COUNT,
-                                MAX_FORWARD_RAY_COUNT,
-                            )}
-                            onChange={(e) => setrayConfig({
-                                ...rayConfig,
-                                rayCount: stickyForwardRodCount(
-                                    sliderPositionToCount(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
-                                ),
-                            })}
-                            style={{ width: '80px' }}
-                        />
-                        <input
-                            type="number"
-                            min={MIN_FORWARD_RAY_COUNT}
-                            max={MAX_FORWARD_RAY_COUNT}
-                            step={1}
-                            value={rayConfig.rayCount}
-                            onChange={(e) => setrayConfig({
-                                ...rayConfig,
-                                rayCount: parseInt(e.target.value, 10) || rayConfig.rayCount,
-                            })}
-                            onBlur={(e) => setrayConfig({
-                                ...rayConfig,
-                                rayCount: clampValue(parseInt(e.target.value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
-                            })}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setrayConfig({
-                                        ...rayConfig,
-                                        rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
-                                    });
-                                    (e.target as HTMLInputElement).blur();
-                                }
-                            }}
-                            style={{
-                                width: '64px',
-                                background: '#111',
-                                color: '#ddd',
-                                border: '1px solid #444',
-                                borderRadius: '3px',
-                                padding: '1px 4px',
-                            }}
-                            title="Exact forward source rods per source. Slider sticks near symmetric shell counts."
-                        />
-                        <span
-                            style={{ minWidth: '74px', color: '#aaa', fontSize: '10px', whiteSpace: 'nowrap' }}
-                            title="Exact rods per source. Slider sticks near symmetric shell counts."
-                        >
-                            {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)} rods/src
-                        </span>
+                    <div style={{ marginTop: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ color: '#aaa', fontSize: '10px' }}>Rays per source</span>
+                            <span style={{ color: '#777', fontSize: '10px' }}>
+                                {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                                type="range"
+                                min="0"
+                                max={String(COUNT_SLIDER_STEPS)}
+                                step="1"
+                                value={countToSliderPosition(
+                                    clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                    MIN_FORWARD_RAY_COUNT,
+                                    MAX_FORWARD_RAY_COUNT,
+                                )}
+                                onChange={(e) => setrayConfig({
+                                    ...rayConfig,
+                                    rayCount: stickyForwardRodCount(
+                                        sliderPositionToCount(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                    ),
+                                })}
+                                style={{ flex: 1, minWidth: 0 }}
+                                title="Approximate forward source rays per source"
+                            />
+                            <input
+                                type="number"
+                                min={MIN_FORWARD_RAY_COUNT}
+                                max={MAX_FORWARD_RAY_COUNT}
+                                step={1}
+                                value={rayConfig.rayCount}
+                                onChange={(e) => setrayConfig({
+                                    ...rayConfig,
+                                    rayCount: parseInt(e.target.value, 10) || rayConfig.rayCount,
+                                })}
+                                onBlur={(e) => setrayConfig({
+                                    ...rayConfig,
+                                    rayCount: clampValue(parseInt(e.target.value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                })}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        setrayConfig({
+                                            ...rayConfig,
+                                            rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                        });
+                                        (e.target as HTMLInputElement).blur();
+                                    }
+                                }}
+                                style={{
+                                    width: '64px',
+                                    background: '#111',
+                                    color: '#ddd',
+                                    border: '1px solid #444',
+                                    borderRadius: '3px',
+                                    padding: '1px 4px',
+                                }}
+                                title="Exact forward source rays per source. Slider sticks near symmetric shell counts."
+                            />
+                        </div>
                     </div>
                     {/* Reverse/Px slider intentionally removed: each progressive
                         round contributes one sample/pixel and the accumulator
@@ -454,7 +446,7 @@ const SolverPanel: React.FC<{
                                     key={mode}
                                     onClick={() => setVisualizationMode(mode)}
                                     title={mode === 'rods'
-                                        ? 'Draw individual traced rods'
+                                        ? 'Draw individual traced rays'
                                         : 'Draw grouped bundles with a representative wave'}
                                     style={{
                                         padding: '2px 8px',
@@ -518,7 +510,7 @@ const SolverPanel: React.FC<{
                                     cursor: 'ew-resize',
                                     padding: 0,
                                 }}
-                                title="Minimum opacity for the dimmest visible rods"
+                                title="Minimum opacity for the dimmest visible rays"
                             />
                             <button
                                 type="button"
@@ -538,7 +530,7 @@ const SolverPanel: React.FC<{
                                     cursor: 'ew-resize',
                                     padding: 0,
                                 }}
-                                title="Maximum opacity for the brightest rods"
+                                title="Maximum opacity for the brightest visible rays"
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#666', marginTop: 2 }}>
@@ -561,7 +553,7 @@ const SolverPanel: React.FC<{
                                 <span style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace' }}>
                                     {isRendering
                                         ? `Image tracing… ${Math.round(scanProgress * 100)}%`
-                                        : `${drawnRayCounts.forward}↦ forward · ${drawnRayCounts.reverse}↤ reverse rays drawn`}
+                                        : `${drawnRayCounts.forward} forward · ${drawnRayCounts.reverse} reverse rays drawn`}
                                 </span>
                             </div>
                         </div>
@@ -974,6 +966,7 @@ export const Inspector: React.FC = () => {
 
 
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
+    const [localApertureThickness, setLocalApertureThickness] = useState<string>('1');
     const [localSlitWidth, setLocalSlitWidth] = useState<string>('5');
     const [localSlitRotation, setLocalSlitRotation] = useState<string>('0');
 
@@ -1243,6 +1236,7 @@ export const Inspector: React.FC = () => {
                 // PrismLens sync removed — unified under AbstractPolygonOptic above
                 if (selectedComponent instanceof Aperture) {
                     setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
+                    setLocalApertureThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
                 if (selectedComponent instanceof SlitAperture) {
                     setLocalSlitWidth(String(Math.round(selectedComponent.slitWidth * 100) / 100));
@@ -1947,7 +1941,11 @@ export const Inspector: React.FC = () => {
                 <button
                     onClick={() => {
                         pushUndo();  // snapshot before delete
-                        setComponents(components.filter(c => c.id !== selection[0]));
+                        const deletedId = selection[0];
+                        setComponents(components.filter(c =>
+                            c.id !== deletedId &&
+                            !(c instanceof TrappedBead && c.parentSampleId === deletedId)
+                        ));
                         setSelection([]);
                     }}
                     className="cyber-btn danger"
@@ -4700,7 +4698,7 @@ export const Inspector: React.FC = () => {
                 {isAperture && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Aperture / Iris</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <ScrubInput
                                 label="Opening ∅"
                                 suffix="mm"
@@ -4723,6 +4721,29 @@ export const Inspector: React.FC = () => {
                                 min={0}
                                 max={24}
                                 title="Opening diameter of the iris aperture"
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localApertureThickness}
+                                onChange={setLocalApertureThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof Aperture) {
+                                            c.thickness = Math.max(0.1, Math.min(val, 100));
+                                            c.updateBounds();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={0.1}
+                                max={100}
+                                title="Body length along the optical axis. Larger values make a tube stop."
                             />
                         </div>
                     </div>

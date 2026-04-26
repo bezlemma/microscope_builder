@@ -16,6 +16,34 @@ import { PMT } from '../../physics/components/PMT';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
 
 describe('Confocal preset loading', () => {
+    test('preset loads write hash preset URLs', () => {
+        const previousWindow = (globalThis as any).window;
+        let replacedUrl = '';
+        (globalThis as any).window = {
+            location: { pathname: '/builder', hash: '', search: '' },
+            history: {
+                replaceState: (_state: unknown, _title: string, url: string) => {
+                    replacedUrl = url;
+                },
+            },
+        };
+
+        try {
+            const store = createStore();
+            store.set(loadPresetAtom, PresetName.Confocal);
+            expect(replacedUrl).toBe('/builder#preset=confocal-scanning');
+
+            store.set(loadPresetAtom, PresetName.Tutorial2);
+            expect(replacedUrl).toBe('/builder#preset=tutorial2');
+        } finally {
+            if (previousWindow === undefined) {
+                delete (globalThis as any).window;
+            } else {
+                (globalThis as any).window = previousWindow;
+            }
+        }
+    });
+
     test('arms an immediately resolvable PMT raster scan', () => {
         const store = createStore();
         const before = store.get(scanAccumTriggerAtom).trigger;
@@ -39,6 +67,17 @@ describe('Confocal preset loading', () => {
         expect(animator.channels.some(ch => ch.targetId === scanHead!.id && ch.property === 'scanY')).toBe(true);
         expect(store.get(scanAccumTriggerAtom).trigger).toBe(before + 1);
         expect(store.get(rayConfigAtom).rayCount).toBe(16);
+    });
+
+    test('optical trap preset uses dense dim ray defaults', () => {
+        const store = createStore();
+
+        store.set(loadPresetAtom, PresetName.OpticalTrap);
+
+        const rayConfig = store.get(rayConfigAtom);
+        expect(rayConfig.rayCount).toBe(500);
+        expect(rayConfig.minRayOpacity).toBe(0);
+        expect(rayConfig.maxRayOpacity).toBeCloseTo(0.4, 6);
     });
 
     test('undo restores scene animation channels', () => {

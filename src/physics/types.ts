@@ -81,7 +81,8 @@ export interface InteractionResult {
  *
  * The `...ray` spread pattern copies ALL fields from the incoming ray into
  * the child, including visualization metadata (`internalPath`, `terminationPoint`,
- * `entryPoint`, `interactionDistance`) that belong to the PARENT's history.
+ * `entryPoint`, `interactionDistance`) and the parent's interaction target that
+ * belong to the PARENT's history.
  * When components are chained (e.g. prism → lens), this causes the parent's
  * internal bounce points to "leak" into the child's visualization, creating
  * phantom ray segments that appear to jump back to a previous component.
@@ -97,6 +98,7 @@ export function childRay(parent: Ray, overrides: Partial<Ray>): Ray {
         internalPath: undefined,
         terminationPoint: undefined,
         interactionDistance: undefined,
+        interactionComponentId: undefined,
         exitSurfaceId: undefined,
         // Apply caller's overrides last — these win
         ...overrides

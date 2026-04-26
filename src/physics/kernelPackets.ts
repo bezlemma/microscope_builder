@@ -146,6 +146,7 @@ function packSurfaceParams(component: OpticalComponent, out: Float64Array, offse
         out[offset + 0] = component.openingDiameter / 2;
         out[offset + 1] = component.housingDiameter / 2;
         out[offset + 2] = 1;
+        out[offset + 3] = component.thickness;
         return SURFACE_KIND_FLAT_DISC;
     }
     if (component instanceof Filter) {

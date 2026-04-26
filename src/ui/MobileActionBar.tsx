@@ -4,6 +4,7 @@ import { undoAtom, undoStackAtom, mobileSnapEnabledAtom, selectionAtom, componen
 import { Undo2, Magnet, Trash2, RotateCcw, Move3d, Move } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useHaptic } from './useHaptic';
+import { TrappedBead } from '../physics/components/TrappedBead';
 
 export const MobileActionBar: React.FC = () => {
     const isMobile = useIsMobile();
@@ -23,7 +24,13 @@ export const MobileActionBar: React.FC = () => {
         if (!hasSelection) return;
         pushUndo();
         // Delete all selected items
-        const newComponents = components.filter(c => !selection.includes(c.id));
+        const idsToRemove = new Set(selection);
+        for (const component of components) {
+            if (component instanceof TrappedBead && component.parentSampleId && idsToRemove.has(component.parentSampleId)) {
+                idsToRemove.add(component.id);
+            }
+        }
+        const newComponents = components.filter(c => !idsToRemove.has(c.id));
         setComponents(newComponents);
         setSelection([]);
     };

@@ -5,6 +5,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera, PerspectiveCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom } from '../state/store';
+import { TrappedBead } from '../physics/components/TrappedBead';
 
 const PERSP_FOV = 50;
 const WASD_ACCEL = 0.4;
@@ -315,6 +316,11 @@ export const EditorControls: React.FC = () => {
                 e.preventDefault();
                 pushUndo();
                 const idsToRemove = new Set(selection);
+                for (const component of components) {
+                    if (component instanceof TrappedBead && component.parentSampleId && idsToRemove.has(component.parentSampleId)) {
+                        idsToRemove.add(component.id);
+                    }
+                }
                 setComponents(components.filter(c => !idsToRemove.has(c.id)));
                 setSelection([]);
                 return;

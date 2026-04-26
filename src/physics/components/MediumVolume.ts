@@ -15,6 +15,7 @@ import { cauchyIorFromReference } from '../dispersion';
  * Physics: full refraction/reflection at boundaries using Snell's law.
  */
 export class MediumVolume extends OpticalComponent {
+    private static readonly EXIT_NUDGE_MM = 1e-3;
     width: number;
     height: number;
     depth: number;
@@ -212,7 +213,7 @@ export class MediumVolume extends OpticalComponent {
             const reflectedDirection = reflectVector(ray.direction, hit.normal).normalize();
             return {
                 rays: [childRay(ray, {
-                    origin: hit.point,
+                    origin: hit.point.clone().addScaledVector(reflectedDirection, MediumVolume.EXIT_NUDGE_MM),
                     direction: reflectedDirection,
                     opticalPathLength: ray.opticalPathLength + hit.t * n1,
                 })],
@@ -230,7 +231,7 @@ export class MediumVolume extends OpticalComponent {
         const opl = ray.opticalPathLength + hit.t * n1;
 
         const rays = [childRay(ray, {
-            origin: hit.point,
+            origin: hit.point.clone().addScaledVector(dirWorld, MediumVolume.EXIT_NUDGE_MM),
             direction: dirWorld,
             intensity: ray.intensity * (1 - R),
             opticalPathLength: opl,
@@ -240,7 +241,7 @@ export class MediumVolume extends OpticalComponent {
         if (R > 0.01) {
             const reflectedDirection = reflectVector(ray.direction, hit.normal).normalize();
             rays.push(childRay(ray, {
-                origin: hit.point,
+                origin: hit.point.clone().addScaledVector(reflectedDirection, MediumVolume.EXIT_NUDGE_MM),
                 direction: reflectedDirection,
                 intensity: ray.intensity * R,
                 opticalPathLength: opl,

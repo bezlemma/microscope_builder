@@ -4,6 +4,21 @@ import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { SpectralProfile } from '../SpectralProfile';
 import { OpticMesh, NormalFn } from '../OpticMesh';
 
+export type SampleSpecimenKind = 'mickey' | 'colloids';
+
+export interface ColloidSpecimen {
+    center: Vector3;
+    radius: number;
+    glowColor?: string;
+}
+
+export interface ColloidTrapZone {
+    center: Vector3;
+    lateralRadius: number;
+    axialRange: number;
+    stiffnessPerSecond?: number;
+}
+
 /**
  * Sample — Mickey Mouse, roughly 1mm in diameter similar to my normal samples.
  *
@@ -27,6 +42,30 @@ export class Sample extends OpticalComponent {
     // Internal specimen offset: translates the Mickey within the holder, ±5mm.
     // Designed to later integrate with animation channels for scanning.
     specimenOffset: Vector3 = new Vector3(0, 0, 0);
+
+    /** Which specimen is mounted inside the ordinary 2D holder. */
+    specimenKind: SampleSpecimenKind = 'mickey';
+    /** Colloid centers/radii in local holder coordinates, for flow-cell samples. */
+    colloidSpheres: ColloidSpecimen[] = [];
+    /** Width/height of the water-filled flow-cell region, in local holder coordinates. */
+    flowCellWidth: number = 8;
+    flowCellHeight: number = 5;
+    /** Inner water thickness along local W/Z. */
+    flowCellDepth: number = 0.08;
+    /** Coverslip/end-glass thickness at +/- W/Z. */
+    flowCellGlassThickness: number = 0.17;
+    /** Medium inside the holder. This is metadata for viewers/presets for now. */
+    fillMediumIndex: number = 1.33;
+    /** Color used for visible colloid glow halos. */
+    colloidGlowColor: string = '#007fff';
+    /** Brownian medium settings for colloid flow-cell specimens. */
+    colloidTemperatureK: number = 295;
+    colloidViscosity: number = 1e-3;
+    /** Demo time-scale multiplier for passive beads. The physical bead radius
+     *  and trap geometry stay micron-scale; this controls how fast the viewer
+     *  advances diffusion so users can see it during a short interaction. */
+    colloidDiffusionScale: number = 1;
+    private _lastColloidStepTimeMs: number | null = null;
 
     // Mickey Mouse geometry definition (local space)
     // Scaled by 2/3 and centered for better specimen proportions.
@@ -67,6 +106,144 @@ export class Sample extends OpticalComponent {
         }));
     }
 
+    static makeDefaultColloids(
+        count: number = 10,
+        radius: number = 0.0025,
+        width: number = 4,
+        height: number = 3,
+        depth: number = 0.08,
+    ): ColloidSpecimen[] {
+        const seed = [
+            [-2.6, -1.4, -0.018],
+            [-1.7, 0.9, 0.013],
+            [-0.9, -0.3, -0.006],
+            [-0.2, 1.35, 0.021],
+            [0.45, -1.15, -0.015],
+            [1.1, 0.15, 0.003],
+            [1.9, 1.05, -0.024],
+            [2.45, -0.65, 0.018],
+            [-2.25, 1.55, 0.0],
+            [2.75, 0.55, -0.008],
+        ];
+        if (count <= seed.length && width <= 4 && height <= 3 && depth >= 0.04) {
+            return seed.slice(0, count).map(([x, y, z]) => ({
+                center: new Vector3(x, y, z),
+                radius,
+                glowColor: '#007fff',
+            }));
+        }
+
+        const usableW = Math.max(radius * 2, width - radius * 2);
+        const usableH = Math.max(radius * 2, height - radius * 2);
+        const usableD = Math.max(0, depth - radius * 2);
+        return Array.from({ length: count }, (_, i) => {
+            const nearTrap = i < Math.min(12, count);
+            const fx = fract((i + 1) * 0.61803398875);
+            const fy = fract((i + 1) * 0.41421356237);
+            const fz = fract((i + 1) * 0.73205080757);
+            const spread = nearTrap ? 0.07 : 1;
+            const x = (fx - 0.5) * usableW * spread;
+            const y = (fy - 0.5) * usableH * spread;
+            const z = usableD > 0 ? (fz - 0.5) * usableD : 0;
+            return {
+                center: new Vector3(x, y, z),
+                radius,
+                glowColor: '#007fff',
+            };
+        });
+    }
+
+    stepColloidDiffusion(nowMs: number, trapZones: ColloidTrapZone[] = []): boolean {
+        if (this.specimenKind !== 'colloids' || this.colloidSpheres.length === 0) return false;
+        const lastMs = this._lastColloidStepTimeMs;
+        this._lastColloidStepTimeMs = nowMs;
+        if (lastMs === null) return false;
+
+        const dt = Math.max(1e-4, Math.min(0.1, (nowMs - lastMs) / 1000));
+        const meanRadiusMm = this.colloidSpheres.reduce((sum, s) => sum + s.radius, 0) / this.colloidSpheres.length;
+        const radiusMeters = Math.max(meanRadiusMm * 1e-3, 1e-12);
+        const gammaSI = 6 * Math.PI * Math.max(this.colloidViscosity, 1e-8) * radiusMeters;
+        const kBTsi = 1.380649e-23 * this.colloidTemperatureK;
+        const sigmaMm = Math.sqrt(Math.max(0, 2 * kBTsi * dt / gammaSI)) * 1e3 * this.colloidDiffusionScale;
+
+        let movedSq = 0;
+        for (const sphere of this.colloidSpheres) {
+            const oldX = sphere.center.x;
+            const oldY = sphere.center.y;
+            const oldZ = sphere.center.z;
+            sphere.center.x = reflectIntoRange(
+                sphere.center.x + sigmaMm * gaussianRandom(),
+                -this.flowCellWidth / 2 + sphere.radius,
+                this.flowCellWidth / 2 - sphere.radius,
+            );
+            sphere.center.y = reflectIntoRange(
+                sphere.center.y + sigmaMm * gaussianRandom(),
+                -this.flowCellHeight / 2 + sphere.radius,
+                this.flowCellHeight / 2 - sphere.radius,
+            );
+            sphere.center.z = reflectIntoRange(
+                sphere.center.z + sigmaMm * gaussianRandom(),
+                -this.flowCellDepth / 2 + sphere.radius,
+                this.flowCellDepth / 2 - sphere.radius,
+            );
+            for (const zone of trapZones) {
+                const movedByTrap = applyColloidTrapZone(sphere, zone, dt);
+                if (movedByTrap) {
+                    sphere.center.z = reflectIntoRange(
+                        sphere.center.z,
+                        -this.flowCellDepth / 2 + sphere.radius,
+                        this.flowCellDepth / 2 - sphere.radius,
+                    );
+                }
+            }
+            movedSq +=
+                (sphere.center.x - oldX) * (sphere.center.x - oldX) +
+                (sphere.center.y - oldY) * (sphere.center.y - oldY) +
+                (sphere.center.z - oldZ) * (sphere.center.z - oldZ);
+        }
+
+        movedSq += resolveColloidOverlaps(
+            this.colloidSpheres,
+            this.flowCellWidth,
+            this.flowCellHeight,
+            this.flowCellDepth,
+        );
+
+        return movedSq > 1e-12;
+    }
+
+    configureColloidFlowCell(options: {
+        count?: number;
+        radius?: number;
+        width?: number;
+        height?: number;
+        depth?: number;
+        glassThickness?: number;
+        fillMediumIndex?: number;
+        temperatureK?: number;
+        viscosity?: number;
+        diffusionScale?: number;
+    } = {}): this {
+        this.specimenKind = 'colloids';
+        this.flowCellWidth = options.width ?? this.flowCellWidth;
+        this.flowCellHeight = options.height ?? this.flowCellHeight;
+        this.flowCellDepth = options.depth ?? this.flowCellDepth;
+        this.flowCellGlassThickness = options.glassThickness ?? this.flowCellGlassThickness;
+        this.fillMediumIndex = options.fillMediumIndex ?? this.fillMediumIndex;
+        this.colloidTemperatureK = options.temperatureK ?? this.colloidTemperatureK;
+        this.colloidViscosity = options.viscosity ?? this.colloidViscosity;
+        this.colloidDiffusionScale = options.diffusionScale ?? this.colloidDiffusionScale;
+        const radius = options.radius ?? 0.0025;
+        this.colloidSpheres = Sample.makeDefaultColloids(
+            options.count ?? 10,
+            radius,
+            this.flowCellWidth,
+            this.flowCellHeight,
+            this.flowCellDepth,
+        );
+        return this;
+    }
+
     constructor(name: string = "Sample (Mickey)") {
         super(name);
         // GFP-like
@@ -78,9 +255,20 @@ export class Sample extends OpticalComponent {
         this.bounds.set(new Vector3(-20, -20, -1), new Vector3(20, 20, 1));
     }
 
+
+    private getBaseSpecimenSpheres(): { center: Vector3; radius: number }[] {
+        if (this.specimenKind === 'colloids') {
+            return this.colloidSpheres.map(sphere => ({
+                center: sphere.center.clone(),
+                radius: sphere.radius,
+            }));
+        }
+        return Sample.getSpecimenSpheresCanonical();
+    }
+
     getSpecimenSpheresLocal(): { center: Vector3; radius: number }[] {
         const rotation = new Quaternion().setFromEuler(this.specimenRotation);
-        return Sample.getSpecimenSpheresCanonical().map(sphere => ({
+        return this.getBaseSpecimenSpheres().map(sphere => ({
             center: sphere.center.clone().applyQuaternion(rotation).add(this.specimenOffset),
             radius: sphere.radius,
         }));
@@ -93,10 +281,19 @@ export class Sample extends OpticalComponent {
             bounds.expandByPoint(center.clone().addScalar(sphere.radius));
             bounds.expandByPoint(center.clone().addScalar(-sphere.radius));
         }
+        if (bounds.isEmpty()) {
+            bounds.set(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5));
+        }
         return bounds;
     }
 
     getVolumeBoundsLocal(): Box3 {
+        if (this.specimenKind === 'colloids') {
+            return new Box3(
+                new Vector3(-this.flowCellWidth / 2, -this.flowCellHeight / 2, -this.flowCellDepth / 2),
+                new Vector3(this.flowCellWidth / 2, this.flowCellHeight / 2, this.flowCellDepth / 2),
+            );
+        }
         return this.getSpecimenBoundsLocal();
     }
 
@@ -261,7 +458,7 @@ export class Sample extends OpticalComponent {
 
         const segments: { tStart: number; tEnd: number }[] = [];
 
-        for (const sphere of Sample.SPHERES) {
+        for (const sphere of this.getBaseSpecimenSpheres()) {
             const ocX = specOrigin.x - sphere.center.x;
             const ocY = specOrigin.y - sphere.center.y;
             const ocZ = specOrigin.z - sphere.center.z;
@@ -317,4 +514,93 @@ export class Sample extends OpticalComponent {
             })]
         };
     }
+}
+
+function fract(value: number): number {
+    return value - Math.floor(value);
+}
+
+function reflectIntoRange(value: number, min: number, max: number): number {
+    if (max <= min) return (min + max) / 2;
+    let out = value;
+    for (let i = 0; i < 4 && (out < min || out > max); i++) {
+        if (out < min) out = min + (min - out);
+        if (out > max) out = max - (out - max);
+    }
+    return Math.max(min, Math.min(max, out));
+}
+
+function applyColloidTrapZone(sphere: ColloidSpecimen, zone: ColloidTrapZone, dt: number): boolean {
+    const lateralRadius = Math.max(zone.lateralRadius, sphere.radius);
+    const axialRange = Math.max(zone.axialRange, sphere.radius);
+    const dx = sphere.center.x - zone.center.x;
+    const dy = sphere.center.y - zone.center.y;
+    const dz = sphere.center.z - zone.center.z;
+    const lateral = Math.hypot(dx, dy) / lateralRadius;
+    const axial = Math.abs(dz) / axialRange;
+    const normalized = Math.max(lateral, axial);
+    if (normalized >= 1) return false;
+
+    const coreWeight = normalized <= 0.65
+        ? 1
+        : (() => {
+            const t = (1 - normalized) / 0.35;
+            return t * t * (3 - 2 * t);
+        })();
+    const rate = Math.max(0, zone.stiffnessPerSecond ?? 14) * coreWeight;
+    if (rate <= 0) return false;
+    const relaxation = 1 - Math.exp(-rate * dt);
+    const before = sphere.center.clone();
+    sphere.center.lerp(zone.center, relaxation);
+    return sphere.center.distanceToSquared(before) > 1e-18;
+}
+
+function resolveColloidOverlaps(
+    spheres: ColloidSpecimen[],
+    width: number,
+    height: number,
+    depth: number,
+): number {
+    if (spheres.length < 2) return 0;
+    let movedSq = 0;
+    for (let i = 0; i < spheres.length; i++) {
+        for (let j = i + 1; j < spheres.length; j++) {
+            const a = spheres[i];
+            const b = spheres[j];
+            const minDistance = a.radius + b.radius;
+            const dx = b.center.x - a.center.x;
+            const dy = b.center.y - a.center.y;
+            const dz = b.center.z - a.center.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq >= minDistance * minDistance) continue;
+
+            const dist = Math.sqrt(Math.max(distSq, 1e-18));
+            const push = 0.5 * (minDistance - dist);
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const nz = dz / dist;
+            a.center.x -= nx * push;
+            a.center.y -= ny * push;
+            a.center.z -= nz * push;
+            b.center.x += nx * push;
+            b.center.y += ny * push;
+            b.center.z += nz * push;
+            a.center.x = reflectIntoRange(a.center.x, -width / 2 + a.radius, width / 2 - a.radius);
+            a.center.y = reflectIntoRange(a.center.y, -height / 2 + a.radius, height / 2 - a.radius);
+            a.center.z = reflectIntoRange(a.center.z, -depth / 2 + a.radius, depth / 2 - a.radius);
+            b.center.x = reflectIntoRange(b.center.x, -width / 2 + b.radius, width / 2 - b.radius);
+            b.center.y = reflectIntoRange(b.center.y, -height / 2 + b.radius, height / 2 - b.radius);
+            b.center.z = reflectIntoRange(b.center.z, -depth / 2 + b.radius, depth / 2 - b.radius);
+            movedSq += push * push * 2;
+        }
+    }
+    return movedSq;
+}
+
+function gaussianRandom(): number {
+    let u = 0;
+    let v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }

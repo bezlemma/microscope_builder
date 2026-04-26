@@ -56,6 +56,7 @@ import { Solver2, type GaussianBeamSegment } from '../Solver2';
  * scripted or special-cased.
  */
 export class TrappedBead extends OpticalComponent {
+    private static readonly EXIT_NUDGE_MM = 1e-3;
     /** Sphere diameter in **mm**. Real beads are µm; we keep simulator units
      *  consistent (mm) and let `displayScale` exaggerate the dynamics so the
      *  bead is visible against an mm-scale optical bench. */
@@ -77,9 +78,29 @@ export class TrappedBead extends OpticalComponent {
     /** Scale for direct ray momentum. Kept below 1 because the envelope
      *  gradient term below carries the trap stiffness. */
     rayMomentumScale: number;
+    /** Multiplier for the physical bead-surface Fresnel reflection. */
+    surfaceReflectionScale: number;
     /** Scale for the beam-envelope gradient force accumulated from Solver 2
      *  Gaussian segments. */
     gradientForceScale: number;
+    /** Lateral capture radius around the optical focus. Outside this range the
+     *  gradient trap cannot pull a bead back from arbitrary flow-cell positions. */
+    trapCaptureRadius: number;
+    /** Axial capture half-range around focus, in local optical-axis units. */
+    trapAxialCaptureRange: number;
+    /** Brownian motion multiplier; keep at 1 for physical room-temperature diffusion. */
+    thermalMotionScale: number;
+    /** Visible halo color. The core sphere still uses the physical bead radius. */
+    glowColor: string;
+    /** Viewer/table halo radius in mm, separate from the physical bead radius. */
+    visualGlowRadius: number;
+    /** Optional hard-wall flow-cell bounds for specimenOffset in local bead
+     *  coordinates. When set, the bead can move and jitter, but it cannot
+     *  drift through the sample chamber walls. */
+    confinementHalfSize: Vector3 | null = null;
+    /** Sample/flow-cell that owns this bead when it is managed as specimen
+     *  state instead of a separate user-draggable component. */
+    parentSampleId: string | null = null;
 
     /** Per-frame radiation-pressure force accumulator (world frame, mm-scaled
      *  units — we work in arbitrary units throughout; γ below uses the same
@@ -96,6 +117,7 @@ export class TrappedBead extends OpticalComponent {
     /** Last-frame integration timestamp; the integrator computes dt itself
      *  from this so the bead is robust to variable frame rates. */
     private lastStepTimeMs: number | null = null;
+    private smoothedLocalForce: Vector3 = new Vector3();
 
     constructor(
         diameter: number = 1.0,
@@ -113,7 +135,13 @@ export class TrappedBead extends OpticalComponent {
                                      // a few-mm capture region; presets can
                                      // override
         this.rayMomentumScale = 0.02;
+        this.surfaceReflectionScale = 1;
         this.gradientForceScale = 0.08;
+        this.trapCaptureRadius = 0.02;
+        this.trapAxialCaptureRange = 0.006;
+        this.thermalMotionScale = 1;
+        this.glowColor = '#007fff';
+        this.visualGlowRadius = 0.012;
         // AABB encloses the entire range the bead might wander to under load.
         // 10 mm in each direction is plenty of room for the Brownian wiggle
         // before escape; if displayScale is cranked very high a preset can
@@ -131,12 +159,40 @@ export class TrappedBead extends OpticalComponent {
         return this.diameter / 2;
     }
 
+    getConfinementLimit(): Vector3 | null {
+        if (!this.confinementHalfSize) return null;
+        const r = this.radius;
+        return new Vector3(
+            Math.max(0, this.confinementHalfSize.x - r),
+            Math.max(0, this.confinementHalfSize.y - r),
+            Math.max(0, this.confinementHalfSize.z - r),
+        );
+    }
+
+    getConfinedSpecimenOffset(): Vector3 {
+        const limit = this.getConfinementLimit();
+        if (!limit) return this.specimenOffset.clone();
+        return new Vector3(
+            Math.max(-limit.x, Math.min(limit.x, this.specimenOffset.x)),
+            Math.max(-limit.y, Math.min(limit.y, this.specimenOffset.y)),
+            Math.max(-limit.z, Math.min(limit.z, this.specimenOffset.z)),
+        );
+    }
+
+    constrainToFlowCell(): boolean {
+        const confined = this.getConfinedSpecimenOffset();
+        const changed = confined.distanceToSquared(this.specimenOffset) > 1e-18;
+        if (changed) this.specimenOffset.copy(confined);
+        return changed;
+    }
+
     /**
      * Ray-sphere intersection in the bead's local frame, with the sphere
      * centre at `specimenOffset` (NOT the component origin) so the dynamic
      * displacement is honoured by the trace.
      */
     intersect(rayLocal: Ray): HitRecord | null {
+        this.constrainToFlowCell();
         const c = this.specimenOffset;
         const r = this.radius;
         // Solve |o + t·d − c|² = r²
@@ -183,10 +239,11 @@ export class TrappedBead extends OpticalComponent {
             // beyond the simple reflection momentum change to keep the model
             // honest — this branch is mostly defensive.
             const reflectedWorld = reflectVector(ray.direction, hit.normal).normalize();
+            const reflectedOrigin = hit.point.clone().addScaledVector(reflectedWorld, TrappedBead.EXIT_NUDGE_MM);
             this.accumulateMomentum(ray, ray.direction, reflectedWorld);
             return {
                 rays: [childRay(ray, {
-                    origin: hit.point,
+                    origin: reflectedOrigin,
                     direction: reflectedWorld,
                     intensity: ray.intensity,
                     opticalPathLength: ray.opticalPathLength + hit.t * this.iorMedium,
@@ -207,9 +264,10 @@ export class TrappedBead extends OpticalComponent {
         if (discI < 0) {
             // Numerical edge case (entry point right at rim); just pass the
             // ray through unchanged with no force accumulation.
+            const passDirection = ray.direction.clone().normalize();
             return { rays: [childRay(ray, {
-                origin: hit.point,
-                direction: ray.direction.clone(),
+                origin: hit.point.clone().addScaledVector(passDirection, TrappedBead.EXIT_NUDGE_MM),
+                direction: passDirection,
                 intensity: ray.intensity,
                 opticalPathLength: ray.opticalPathLength + hit.t * this.iorMedium,
             })] };
@@ -239,34 +297,41 @@ export class TrappedBead extends OpticalComponent {
             dirOutWorld = dirOutLocal.transformDirection(this.localToWorld).normalize();
         }
 
-        // Total per-ray momentum change (Newton 3rd law on the bead):
-        //   Δp = (n_medium · I / c) · (d_in − d_out)
-        // We absorb the constant (n_medium / c) into a single per-ray
-        // coefficient inside accumulateMomentum.  When the exit was a TIR,
-        // d_out ≠ the original ray's eventual direction, but for the demo
-        // the entry-refraction contribution dominates and we accept the
-        // small error.
-        this.accumulateMomentum(ray, ray.direction, dirOutWorld);
+        const reflectedEntryWorld = reflectVector(ray.direction, hit.normal).normalize();
+        const fresnelR = this.entryReflectionFraction(localDirIn, entryNormal);
+        const transmitFraction = Math.max(0, 1 - fresnelR);
+        const weightedOut = dirOutWorld.clone().multiplyScalar(transmitFraction)
+            .add(reflectedEntryWorld.clone().multiplyScalar(fresnelR));
+        this.accumulateMomentumVector(ray, ray.direction, weightedOut);
 
         const exitWorld = exitLocal.clone().applyMatrix4(this.localToWorld);
+        const exitOrigin = exitWorld.clone().addScaledVector(dirOutWorld, TrappedBead.EXIT_NUDGE_MM);
         const internalChord = tExit;
+        const outRays: Ray[] = [];
+        if (fresnelR > 1e-6) {
+            outRays.push(childRay(ray, {
+                origin: hit.point.clone().addScaledVector(reflectedEntryWorld, TrappedBead.EXIT_NUDGE_MM),
+                direction: reflectedEntryWorld,
+                intensity: ray.intensity * fresnelR,
+                opticalPathLength: ray.opticalPathLength + hit.t * this.iorMedium,
+            }));
+        }
+        outRays.push(childRay(ray, {
+            origin: exitOrigin,
+            direction: dirOutWorld,
+            // Fresnel reflection at the entry surface removes that fraction
+            // from the transmitted branch.
+            intensity: ray.intensity * transmitFraction,
+            opticalPathLength: ray.opticalPathLength
+                + hit.t * this.iorMedium
+                + internalChord * this.iorBead,
+            // Mark the entry/exit so the visualizer can draw the internal
+            // chord nicely if it wants to (currently unused but cheap).
+            entryPoint: hit.point.clone(),
+            terminationPoint: exitedNormally ? undefined : exitWorld.clone(),
+        }));
         return {
-            rays: [childRay(ray, {
-                origin: exitWorld,
-                direction: dirOutWorld,
-                // No Fresnel-driven intensity loss in this first cut — we'd
-                // double-count the radiation pressure if we attenuated rays
-                // here, since the per-ray Δp already accounts for the full
-                // momentum transfer of an intensity-I beam through the sphere.
-                intensity: ray.intensity,
-                opticalPathLength: ray.opticalPathLength
-                    + hit.t * this.iorMedium
-                    + internalChord * this.iorBead,
-                // Mark the entry/exit so the visualizer can draw the internal
-                // chord nicely if it wants to (currently unused but cheap).
-                entryPoint: hit.point.clone(),
-                terminationPoint: exitedNormally ? undefined : exitWorld.clone(),
-            })],
+            rays: outRays,
         };
     }
 
@@ -275,16 +340,28 @@ export class TrappedBead extends OpticalComponent {
      * `dirIn` and `dirOut` are unit vectors in the WORLD frame.
      */
     private accumulateMomentum(ray: Ray, dirIn: Vector3, dirOut: Vector3): void {
+        this.accumulateMomentumVector(ray, dirIn, dirOut);
+    }
+
+    private accumulateMomentumVector(ray: Ray, dirIn: Vector3, weightedOut: Vector3): void {
         // (n_medium · I / c) · (d_in − d_out).  The 1/c (c = 3e8 m/s) makes
         // the absolute force tiny in real units; we fold a single global gain
         // into `displayScale` later, so here we use a normalised coefficient
         // that keeps the per-ray contribution numerically meaningful.
         const coeff = this.iorMedium * Math.max(0, ray.intensity) * this.rayMomentumScale;
         if (coeff <= 0) return;
-        this.forceAccumulator.x += coeff * (dirIn.x - dirOut.x);
-        this.forceAccumulator.y += coeff * (dirIn.y - dirOut.y);
-        this.forceAccumulator.z += coeff * (dirIn.z - dirOut.z);
+        this.forceAccumulator.x += coeff * (dirIn.x - weightedOut.x);
+        this.forceAccumulator.y += coeff * (dirIn.y - weightedOut.y);
+        this.forceAccumulator.z += coeff * (dirIn.z - weightedOut.z);
         this.hitsThisFrame += 1;
+    }
+
+    private entryReflectionFraction(localDirIn: Vector3, outwardNormal: Vector3): number {
+        if (this.surfaceReflectionScale <= 0) return 0;
+        const cosI = Math.max(0, Math.min(1, Math.abs(localDirIn.dot(outwardNormal))));
+        const r0 = Math.pow((this.iorMedium - this.iorBead) / (this.iorMedium + this.iorBead), 2);
+        const schlick = r0 + (1 - r0) * Math.pow(1 - cosI, 5);
+        return Math.max(0, Math.min(0.25, schlick * this.surfaceReflectionScale));
     }
 
     /**
@@ -294,6 +371,9 @@ export class TrappedBead extends OpticalComponent {
      * focused field even before a traced centerline intersects the sphere.
      */
     accumulateGradientTrapForce(beamSegments: GaussianBeamSegment[][]): void {
+        this.constrainToFlowCell();
+        const captureWeight = this.trapCaptureWeight();
+        if (captureWeight <= 0) return;
         const trapBranches: GaussianBeamSegment[][] = [];
         for (const branch of beamSegments) {
             const first = branch[0];
@@ -315,7 +395,12 @@ export class TrappedBead extends OpticalComponent {
 
         this.updateMatrices();
         const center = this.specimenOffset.clone().applyMatrix4(this.localToWorld);
-        const step = Math.max(this.radius * 0.75, 0.15);
+        // Query the beam envelope over a bead-scale probe radius. Sampling too
+        // close to the center lets the discrete ray/beamlet caustic dominate
+        // the finite difference and can flip the apparent gradient between
+        // neighboring beamlets; a finite bead responds to the smoothed field
+        // across its own volume.
+        const step = Math.max(this.radius * 2, 0.0025);
         const intensityAt = (x: number, y: number, z: number) => {
             let total = 0;
             for (const branch of trapBranches) {
@@ -345,8 +430,23 @@ export class TrappedBead extends OpticalComponent {
         if (polarizabilityScale <= 0) return;
 
         this.forceAccumulator.add(
-            new Vector3(dx, dy, dz).multiplyScalar(this.gradientForceScale * polarizabilityScale),
+            new Vector3(dx, dy, dz).multiplyScalar(this.gradientForceScale * polarizabilityScale * captureWeight),
         );
+    }
+
+    private trapCaptureWeight(): number {
+        const lateralLimit = Math.max(this.trapCaptureRadius, 0);
+        const axialLimit = Math.max(this.trapAxialCaptureRange, 0);
+        if (lateralLimit <= 0 && axialLimit <= 0) return 1;
+
+        const offset = this.specimenOffset;
+        const lateral = lateralLimit > 0 ? Math.hypot(offset.x, offset.y) / lateralLimit : 0;
+        const axial = axialLimit > 0 ? Math.abs(offset.z) / axialLimit : 0;
+        const normalized = Math.max(lateral, axial);
+        if (normalized >= 1) return 0;
+        if (normalized <= 0.65) return 1;
+        const t = (1 - normalized) / 0.35;
+        return t * t * (3 - 2 * t);
     }
 
     /**
@@ -363,16 +463,20 @@ export class TrappedBead extends OpticalComponent {
      * faster than the simulator's frame budget, so an overdamped solver is
      * the right asymptotic limit.
      *
-     * Returns true if the bead actually moved this step (so the caller can
-     * decide whether to bump `version` and trigger a re-trace).
+     * Returns true if the bead actually moved this step. Motion is dynamic
+     * state, not an optical layout edit; callers should redraw the bead, but
+     * should not treat it as a component-version change that invalidates the
+     * whole forward trace every frame.
      */
     applyForceStep(nowMs: number): boolean {
         const lastMs = this.lastStepTimeMs;
         this.lastStepTimeMs = nowMs;
         if (lastMs === null) {
-            // First frame — nothing to integrate against.
+            // First frame — nothing to integrate against, but still snap any
+            // loaded/stale bead state back inside the flow cell.
+            const clamped = this.constrainToFlowCell();
             this.resetAccumulator();
-            return false;
+            return clamped;
         }
         const dt = Math.max(1e-4, Math.min(0.1, (nowMs - lastMs) / 1000));
         // Stokes drag: γ = 6π η R.  Using mm for R keeps γ in whatever-units
@@ -384,14 +488,18 @@ export class TrappedBead extends OpticalComponent {
         const gamma = 6 * Math.PI * this.viscosity * r;
         const safeGamma = Math.max(gamma, 1e-9);
 
-        // Brownian kick magnitude per axis: σ = √(2 k_B T γ / dt).  We use a
-        // dimensionless k_B T scaled to the simulator's intensity units; the
-        // user can effectively tune trap depth by changing temperatureK.
-        const kBT = this.temperatureK * 1.38e-5;   // arbitrary-units scaling
-        const sigma = Math.sqrt(Math.max(0, 2 * kBT * safeGamma / dt));
-        const brownianX = sigma * gaussianRandom();
-        const brownianY = sigma * gaussianRandom();
-        const brownianZ = sigma * gaussianRandom();
+        // Brownian displacement per axis in mm:
+        //   σ = sqrt(2 kBT dt / γ), with γ = 6πηr in SI units.
+        // Keep thermal diffusion in real units instead of mixing it into the
+        // arbitrary optical-force scale; otherwise micron-sized beads jump
+        // millimeters per frame and appear to leave the flow cell.
+        const radiusMeters = Math.max(this.radius * 1e-3, 1e-12);
+        const gammaSI = 6 * Math.PI * this.viscosity * radiusMeters;
+        const kBTsi = 1.380649e-23 * this.temperatureK;
+        const brownianSigmaMm = Math.sqrt(Math.max(0, 2 * kBTsi * dt / gammaSI)) * 1e3 * this.thermalMotionScale;
+        const brownianX = brownianSigmaMm * gaussianRandom();
+        const brownianY = brownianSigmaMm * gaussianRandom();
+        const brownianZ = brownianSigmaMm * gaussianRandom();
 
         // Force was accumulated in world frame (because dirIn / dirOut in
         // `interact` are world vectors), but specimenOffset lives in the
@@ -410,35 +518,41 @@ export class TrappedBead extends OpticalComponent {
         // survive — recompose by scaling by the original force magnitude.
         const fmag = worldForce.length();
         if (fmag > 0) localForce.multiplyScalar(fmag);
-        const fx = localForce.x + brownianX;
-        const fy = localForce.y + brownianY;
-        const fz = localForce.z + brownianZ;
+        if (fmag <= 1e-15) {
+            this.smoothedLocalForce.set(0, 0, 0);
+        } else {
+            this.smoothedLocalForce.multiplyScalar(0.65).addScaledVector(localForce, 0.35);
+        }
+        const fx = this.smoothedLocalForce.x;
+        const fy = this.smoothedLocalForce.y;
+        const fz = this.smoothedLocalForce.z;
         // dx = F · dt / γ, blown up by displayScale so the visible drift is
         // legible at mm-world scale.
         const k = (dt / safeGamma) * this.displayScale;
-        const dxX = fx * k;
-        const dxY = fy * k;
-        const dxZ = fz * k;
-        const movedSq = dxX * dxX + dxY * dxY + dxZ * dxZ;
+        const opticalStep = new Vector3(fx * k, fy * k, fz * k);
+        this.limitOpticalStep(opticalStep);
+        const stepX = opticalStep.x + brownianX;
+        const stepY = opticalStep.y + brownianY;
+        const stepZ = opticalStep.z + brownianZ;
+        const movedSq = stepX * stepX + stepY * stepY + stepZ * stepZ;
         // Cap per-step displacement to one bead radius so a transient huge
         // force from numerical edge cases can't yeet the bead off-screen.
-        const maxStep = r * 2;
+        const maxStep = r;
         if (movedSq > maxStep * maxStep) {
             const len = Math.sqrt(movedSq);
             const scale = maxStep / len;
-            this.specimenOffset.x += dxX * scale;
-            this.specimenOffset.y += dxY * scale;
-            this.specimenOffset.z += dxZ * scale;
+            this.specimenOffset.x += stepX * scale;
+            this.specimenOffset.y += stepY * scale;
+            this.specimenOffset.z += stepZ * scale;
         } else {
-            this.specimenOffset.x += dxX;
-            this.specimenOffset.y += dxY;
-            this.specimenOffset.z += dxZ;
+            this.specimenOffset.x += stepX;
+            this.specimenOffset.y += stepY;
+            this.specimenOffset.z += stepZ;
         }
+        const clamped = this.constrainToFlowCell();
 
         this.resetAccumulator();
-        const moved = movedSq > 1e-12;
-        if (moved) this.version += 1;
-        return moved;
+        return movedSq > 1e-12 || clamped;
     }
 
     /** Zero the per-frame accumulator without integrating.  Used on bead
@@ -447,6 +561,21 @@ export class TrappedBead extends OpticalComponent {
         this.forceAccumulator.set(0, 0, 0);
         this.hitsThisFrame = 0;
     }
+
+    private limitOpticalStep(step: Vector3): void {
+        const maxStep = Math.max(this.radius * 0.35, 0.00025);
+        const len = step.length();
+        if (len > maxStep) step.multiplyScalar(maxStep / len);
+
+        const offsetLen = this.specimenOffset.length();
+        if (offsetLen <= 1e-9) return;
+        const towardFocus = step.dot(this.specimenOffset) < 0;
+        if (!towardFocus) return;
+        const maxTowardStep = offsetLen * 0.45;
+        const limitedLen = step.length();
+        if (limitedLen > maxTowardStep) step.multiplyScalar(maxTowardStep / limitedLen);
+    }
+
 }
 
 /** Box-Muller standard-normal sample. */

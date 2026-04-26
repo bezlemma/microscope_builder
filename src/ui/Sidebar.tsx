@@ -35,6 +35,7 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
     return (
         <div
             draggable
+            data-component-type={type}
             onDragStart={handleDragStart}
             onDragEnd={() => setDragging(false)}
             onMouseEnter={() => setHovered(true)}
@@ -150,9 +151,9 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#fd79a8',
         items: [
             { type: 'sampleSlide', label: '2D Sample Holder', icon: Box },
+            { type: 'colloidSampleSlide', label: 'Colloid Flow Cell', icon: Circle },
             { type: 'sample', label: 'Sample (Mickey)', icon: Box },
             { type: 'lChamber', label: 'X Sample Holder', icon: Box },
-            { type: 'trappedBead', label: 'Trapped Bead', icon: Circle },
             { type: 'mediumVolume', label: 'Medium Volume', icon: Box },
         ]
     },
@@ -214,9 +215,14 @@ const ComponentGroupSection = ({
     const isMobile = useIsMobile();
 
     return (
-        <div style={{ marginBottom: '2px' }}>
+        <div
+            data-component-group-root={group.name}
+            data-open={isOpen ? 'true' : 'false'}
+            style={{ marginBottom: '2px' }}
+        >
             {/* Group header */}
             <div
+                data-component-group={group.name}
                 onClick={onToggle}
                 style={{
                     display: 'flex',
@@ -319,11 +325,6 @@ export const Sidebar: React.FC = () => {
     // Auto-close sidebar on mobile after selecting a preset
     const handlePresetClick = (preset: PresetName) => {
         loadPreset(preset);
-        // Clear URL query params (xy1, xy2, preset, etc.) so old camera/zoom
-        // settings don't bleed into the new preset
-        if (window.location.search) {
-            window.history.replaceState({}, '', window.location.pathname);
-        }
         if (isMobile) setMobileOpen(false);
     };
 
@@ -755,6 +756,11 @@ export const Sidebar: React.FC = () => {
                             label="Tutorial"
                             active={activePreset === PresetName.Tutorial}
                             onClick={() => handlePresetClick(PresetName.Tutorial)}
+                        />
+                        <PresetButton
+                            label="Tutorial 2"
+                            active={activePreset === PresetName.Tutorial2}
+                            onClick={() => handlePresetClick(PresetName.Tutorial2)}
                         />
                         <PresetButton
                             label="Lens Zoo"

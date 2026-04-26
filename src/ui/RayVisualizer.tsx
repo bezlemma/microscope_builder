@@ -3,18 +3,69 @@ import { Line } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Color, NormalBlending, AdditiveBlending } from 'three';
 import { Ray, Coherence } from '../physics/types';
-import { wavelengthToRGB, wavelengthToCSS } from '../physics/spectral';
+import { wavelengthToRGB } from '../physics/spectral';
 
-/** Thin wrapper: takes wavelength in meters, returns CSS color + visibility flag. */
-function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
+type DisplayRGB = ReturnType<typeof wavelengthToRGB>;
+
+function rgbToCSS(rgb: Pick<DisplayRGB, 'r' | 'g' | 'b'>, scale = 1): string {
+    return `rgb(${Math.round(rgb.r * 255 * scale)}, ${Math.round(rgb.g * 255 * scale)}, ${Math.round(rgb.b * 255 * scale)})`;
+}
+
+function coherentDisplayRGB(wavelengthMeters: number): DisplayRGB {
     const nm = wavelengthMeters * 1e9;
-    const { isVisible } = wavelengthToRGB(nm);
-    return { color: wavelengthToCSS(nm), isVisible };
+    const rgb = wavelengthToRGB(nm);
+    if (!rgb.isVisible || nm < 700 || nm > 800) return rgb;
+
+    // Far red is physically dim on an sRGB display. Lift it into a nicer
+    // single-line material color instead of rendering a second glow line per ray.
+    const edge = Math.max(0, Math.min(1, (nm - 700) / 100));
+    const lift = 0.14 + 0.18 * edge;
+    return {
+        ...rgb,
+        r: Math.min(1, rgb.r + (1 - rgb.r) * lift),
+        g: Math.min(1, rgb.g + lift * 0.25),
+        b: Math.min(1, rgb.b + lift * 0.12),
+    };
+}
+
+/** Coherent display color: wavelength color plus a cheap far-red display lift. */
+function wavelengthToColor(wavelengthMeters: number): { color: string; isVisible: boolean } {
+    const rgb = coherentDisplayRGB(wavelengthMeters);
+    return { color: rgb.isVisible ? rgbToCSS(rgb) : 'rgb(135, 135, 135)', isVisible: rgb.isVisible };
 }
 
 /** Defensive: accept either a Vector3 or a {x,y,z} plain object and return a Vector3. */
 function toVec3(v: { x: number; y: number; z: number }): Vector3 {
     return v instanceof Vector3 ? v : new Vector3(v.x, v.y, v.z);
+}
+
+const MIN_DRAW_RELATIVE_INTENSITY = 1e-3;
+const OPEN_TAIL_RELATIVE_INTENSITY = 3e-2;
+
+function lastVisibleRay(path: Ray[]): Ray | undefined {
+    const extinctIdx = path.findIndex(r => r.intensity < 1e-6);
+    if (extinctIdx >= 0) return path[Math.max(0, extinctIdx - 1)];
+    return path[path.length - 1];
+}
+
+function relativePathIntensity(path: Ray[], ray: Ray | undefined): number {
+    const sourceIntensity = Math.max(path[0]?.intensity ?? 0, 1e-12);
+    return Math.max(0, Math.min(1, (ray?.intensity ?? 0) / sourceIntensity));
+}
+
+function coherentBranchOpacity(relativeIntensity: number, maxOpacity: number): number {
+    return Math.min(maxOpacity, Math.sqrt(Math.max(0, relativeIntensity)) * maxOpacity);
+}
+
+function redEdgeGlow(wavelengthMeters: number, opacity: number): { color: string; opacity: number; lineWidthBoost: number } | null {
+    const nm = wavelengthMeters * 1e9;
+    if (nm < 700 || nm > 800) return null;
+    const edge = Math.max(0, Math.min(1, (nm - 700) / 100));
+    return {
+        color: 'rgb(255, 74, 48)',
+        opacity: Math.min(0.22, Math.max(0, opacity) * (0.16 + 0.08 * edge)),
+        lineWidthBoost: 2.5 + 1.5 * edge,
+    };
 }
 
 /**
@@ -29,7 +80,7 @@ const PulsatingRayLine: React.FC<{
     opacity?: number;
 }> = ({ points, wavelengthMeters, dashed, opacity = 1 }) => {
     const lineRef = useRef<any>(null);
-    const rgb = wavelengthToRGB(wavelengthMeters * 1e9);
+    const rgb = coherentDisplayRGB(wavelengthMeters);
 
     // Base color at the wavelength's natural brightness
     const baseColor = new Color(rgb.r, rgb.g, rgb.b);
@@ -41,6 +92,7 @@ const PulsatingRayLine: React.FC<{
         rgb.b * 3.0 + 0.4
     );
     const mixedColor = new Color();
+    const redGlow = redEdgeGlow(wavelengthMeters, opacity);
 
     useFrame(({ clock }) => {
         if (!lineRef.current) return;
@@ -67,22 +119,41 @@ const PulsatingRayLine: React.FC<{
 
     const isTransparent = opacity < 0.999;
     return (
-        <Line
-            ref={lineRef}
-            points={points}
-            color={baseColor}
-            lineWidth={4.5}
-            toneMapped={false}
-            transparent={isTransparent}
-            opacity={opacity}
-            depthWrite={!isTransparent}
-            dashed={dashed}
-            dashSize={dashed ? 3 : undefined}
-            gapSize={dashed ? 2 : undefined}
-            depthTest={true}
-            renderOrder={1}
-            blending={NormalBlending}
-        />
+        <group>
+            {redGlow && (
+                <Line
+                    points={points}
+                    color={redGlow.color}
+                    lineWidth={7 + redGlow.lineWidthBoost}
+                    toneMapped={false}
+                    transparent
+                    opacity={redGlow.opacity}
+                    depthWrite={false}
+                    dashed={dashed}
+                    dashSize={dashed ? 3 : undefined}
+                    gapSize={dashed ? 2 : undefined}
+                    depthTest={true}
+                    renderOrder={0}
+                    blending={AdditiveBlending}
+                />
+            )}
+            <Line
+                ref={lineRef}
+                points={points}
+                color={baseColor}
+                lineWidth={4.5}
+                toneMapped={false}
+                transparent={isTransparent}
+                opacity={opacity}
+                depthWrite={!isTransparent}
+                dashed={dashed}
+                dashSize={dashed ? 3 : undefined}
+                gapSize={dashed ? 2 : undefined}
+                depthTest={true}
+                renderOrder={1}
+                blending={NormalBlending}
+            />
+        </group>
     );
 };
 
@@ -138,14 +209,16 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
                 const isMain = path.length > 0 && path[0].isMainRay === true;
                 const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
+                const lastRay = lastVisibleRay(path);
+                const terminalRelativeIntensity = relativePathIntensity(path, lastRay);
 
                 // Add an "infinite" end to the last ray for visualization
                 // (only if the last ray in the built points list has nonzero intensity)
                 if (points.length > 0 && path.length > 0) {
-                    // Find the last ray that was actually included (non-extinct)
-                    const lastIncludedIdx = path.findIndex(r => r.intensity < 1e-6) - 1;
-                    const lastRay = lastIncludedIdx >= 0 ? path[lastIncludedIdx] : path[path.length - 1];
-                    if (lastRay.intensity >= 1e-6 && !lastRay.terminationPoint) {
+                    const shouldDrawOpenTail = isMain
+                        || path[0].coherenceMode === Coherence.Incoherent
+                        || terminalRelativeIntensity >= OPEN_TAIL_RELATIVE_INTENSITY;
+                    if (lastRay && lastRay.intensity >= 1e-6 && !lastRay.terminationPoint && shouldDrawOpenTail) {
                         const dist = lastRay.interactionDistance ?? 1000;
                         const origin = toVec3(lastRay.origin);
                         const direction = toVec3(lastRay.direction);
@@ -194,7 +267,7 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
                 // Coherent (laser) rays: wavelength-colored rendering
                 if (isMain) {
-                    const wc = wavelengthToRGB(wavelength * 1e9);
+                    const wc = coherentDisplayRGB(wavelength);
 
                     // Pulsating glow only when E&M solver is enabled
                     if (glowEnabled) {
@@ -212,46 +285,69 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                     }
 
                     // Static main ray (no glow) — thicker white/wavelength line
-                    const color = `rgb(${Math.round(wc.r * 255)}, ${Math.round(wc.g * 255)}, ${Math.round(wc.b * 255)})`;
+                    const color = rgbToCSS(wc);
                     const mainRawOpacity = Math.min(1, path[0].intensity);
                     const mainOpacity = minOpacity + mainRawOpacity * (maxOpacity - minOpacity);
                     const mainTransparent = mainOpacity < 0.999;
+                    const redGlow = redEdgeGlow(wavelength, mainOpacity);
                     return (
-                        <Line
-                            key={idx}
-                            points={points}
-                            color={wc.isVisible ? color : 'white'}
-                            lineWidth={4}
-                            transparent={mainTransparent}
-                            opacity={mainOpacity}
-                            depthWrite={!mainTransparent}
-                            dashed={!wc.isVisible}
-                            dashSize={!wc.isVisible ? 3 : undefined}
-                            gapSize={!wc.isVisible ? 2 : undefined}
-                            depthTest={true}
-                            renderOrder={1}
-                            toneMapped={false}
-                            blending={NormalBlending}
-                        />
+                        <group key={idx}>
+                            {redGlow && (
+                                <Line
+                                    points={points}
+                                    color={redGlow.color}
+                                    lineWidth={4 + redGlow.lineWidthBoost}
+                                    transparent
+                                    opacity={redGlow.opacity}
+                                    depthWrite={false}
+                                    dashed={!wc.isVisible}
+                                    dashSize={!wc.isVisible ? 3 : undefined}
+                                    gapSize={!wc.isVisible ? 2 : undefined}
+                                    depthTest={true}
+                                    renderOrder={0}
+                                    toneMapped={false}
+                                    blending={AdditiveBlending}
+                                />
+                            )}
+                            <Line
+                                points={points}
+                                color={wc.isVisible ? color : 'white'}
+                                lineWidth={4}
+                                transparent={mainTransparent}
+                                opacity={mainOpacity}
+                                depthWrite={!mainTransparent}
+                                dashed={!wc.isVisible}
+                                dashSize={!wc.isVisible ? 3 : undefined}
+                                gapSize={!wc.isVisible ? 2 : undefined}
+                                depthTest={true}
+                                renderOrder={1}
+                                toneMapped={false}
+                                blending={NormalBlending}
+                            />
+                        </group>
                     );
                 }
 
                 // Non-main coherent rays: static wavelength color
-                const nrGb = wavelengthToRGB(wavelength * 1e9);
+                if (terminalRelativeIntensity < MIN_DRAW_RELATIVE_INTENSITY) {
+                    return null;
+                }
+                const nrGb = coherentDisplayRGB(wavelength);
                 const nScale = noBloom ? 0.18 : 1.0;
+                const wavelengthColor = wavelengthToColor(wavelength);
                 const nColor = noBloom
-                    ? `rgb(${Math.round(nrGb.r * 255 * nScale)}, ${Math.round(nrGb.g * 255 * nScale)}, ${Math.round(nrGb.b * 255 * nScale)})`
-                    : wavelengthToColor(wavelength).color;
-                const isVis = wavelengthToColor(wavelength).isVisible;
-                const nRawOpacity = path.length > 0 ? Math.min(1, path[0].intensity) : 1;
-                const nOpacity = minOpacity + nRawOpacity * (maxOpacity - minOpacity);
+                    ? rgbToCSS(nrGb, nScale)
+                    : wavelengthColor.color;
+                const isVis = wavelengthColor.isVisible;
+                const nOpacity = Math.max(minOpacity * terminalRelativeIntensity, coherentBranchOpacity(terminalRelativeIntensity, maxOpacity));
                 const nTransparent = nOpacity < 0.999;
+                const nLineWidth = 0.75 + 1.25 * Math.sqrt(terminalRelativeIntensity);
                 return (
                     <Line
                         key={idx}
                         points={points}
                         color={nColor}
-                        lineWidth={2}
+                        lineWidth={nLineWidth}
                         transparent={nTransparent}
                         opacity={nOpacity}
                         depthWrite={!nTransparent}

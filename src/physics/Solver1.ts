@@ -54,7 +54,7 @@ function createLegacyQPair(
 }
 
 export class Solver1 {
-    maxDepth: number = 20;
+    maxDepth: number = 32;
     scene: OpticalComponent[];
     private emitters: Set<OpticalComponent>;
 
@@ -196,6 +196,8 @@ export class Solver1 {
 
         if (result.passthrough && result.rays.length === 1) {
             const nextRay = result.rays[0];
+            nextRay.interactionDistance = undefined;
+            nextRay.interactionComponentId = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
 

@@ -7,7 +7,7 @@
  */
 
 import { OpticalComponent } from '../physics/Component';
-import { Euler } from 'three';
+import { Euler, Vector3 } from 'three';
 
 // Component imports
 import { Laser } from '../physics/components/Laser';
@@ -73,8 +73,10 @@ export function serializeScene(components: OpticalComponent[]): string {
         //     into permanent real components on the next load.
         //   - Subcomponents (e.g. DualGalvoScanHead's child mirrors) are
         //     auto-recreated by their parent's deserializer; persisting them
-        //     would produce duplicate orphan mirrors.
-        if (comp.isGhost || comp.isSubComponent) continue;
+        //     would produce duplicate orphan mirrors. Managed trapped beads
+        //     are the exception because their dynamic specimen state belongs
+        //     to the flow-cell sample and needs to survive save/load.
+        if (comp.isGhost || (comp.isSubComponent && !(comp instanceof TrappedBead && comp.parentSampleId))) continue;
 
         const typeName = getTypeName(comp);
         if (!typeName) continue;
@@ -225,9 +227,24 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`viscosity = ${fmt(comp.viscosity)}`);
         lines.push(`temperatureK = ${fmt(comp.temperatureK)}`);
         lines.push(`displayScale = ${fmt(comp.displayScale)}`);
+        lines.push(`thermalMotionScale = ${fmt(comp.thermalMotionScale)}`);
+        lines.push(`rayMomentumScale = ${fmt(comp.rayMomentumScale)}`);
+        lines.push(`surfaceReflectionScale = ${fmt(comp.surfaceReflectionScale)}`);
+        lines.push(`gradientForceScale = ${fmt(comp.gradientForceScale)}`);
+        lines.push(`trapCaptureRadius = ${fmt(comp.trapCaptureRadius)}`);
+        lines.push(`trapAxialCaptureRange = ${fmt(comp.trapAxialCaptureRange)}`);
+        lines.push(`visualGlowRadius = ${fmt(comp.visualGlowRadius)}`);
+        lines.push(`glowColor = ${comp.glowColor}`);
+        if (comp.parentSampleId) {
+            lines.push(`parentSampleId = ${comp.parentSampleId}`);
+            lines.push(`managedBySample = true`);
+        }
         // Save the running offset so a serialized scene reloads with the
         // bead at wherever it had drifted to.
         lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
+        if (comp.confinementHalfSize) {
+            lines.push(`confinementHalfSize = ${fmt(comp.confinementHalfSize.x)}, ${fmt(comp.confinementHalfSize.y)}, ${fmt(comp.confinementHalfSize.z)}`);
+        }
     } else if (comp instanceof Sample) {
         writeSpectralProfile(comp.excitationSpectrum, lines, 'excitation');
         writeSpectralProfile(comp.emissionSpectrum, lines, 'emission');
@@ -235,6 +252,19 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`absorption = ${fmt(comp.absorption)}`);
         lines.push(`specimenRotation = ${fmt(comp.specimenRotation.x)}, ${fmt(comp.specimenRotation.y)}, ${fmt(comp.specimenRotation.z)}`);
         lines.push(`specimenOffset = ${fmt(comp.specimenOffset.x)}, ${fmt(comp.specimenOffset.y)}, ${fmt(comp.specimenOffset.z)}`);
+        lines.push(`specimenKind = ${comp.specimenKind}`);
+        if (comp.specimenKind === 'colloids') {
+            lines.push(`flowCellWidth = ${fmt(comp.flowCellWidth)}`);
+            lines.push(`flowCellHeight = ${fmt(comp.flowCellHeight)}`);
+            lines.push(`flowCellDepth = ${fmt(comp.flowCellDepth)}`);
+            lines.push(`flowCellGlassThickness = ${fmt(comp.flowCellGlassThickness)}`);
+            lines.push(`fillMediumIndex = ${fmt(comp.fillMediumIndex)}`);
+            lines.push(`colloidGlowColor = ${comp.colloidGlowColor}`);
+            lines.push(`colloidTemperatureK = ${fmt(comp.colloidTemperatureK)}`);
+            lines.push(`colloidViscosity = ${fmt(comp.colloidViscosity)}`);
+            lines.push(`colloidDiffusionScale = ${fmt(comp.colloidDiffusionScale)}`);
+            lines.push(`colloids = ${formatColloids(comp)}`);
+        }
     } else if (comp instanceof Objective) {
         lines.push(`NA = ${fmt(comp.NA)}`);
         lines.push(`magnification = ${fmt(comp.magnification)}`);
@@ -270,6 +300,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof Aperture) {
         lines.push(`openingDiameter = ${fmt(comp.openingDiameter)}`);
         lines.push(`housingDiameter = ${fmt(comp.housingDiameter)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
     } else if (comp instanceof SlitAperture) {
         lines.push(`slitWidth = ${fmt(comp.slitWidth)}`);
         lines.push(`slitHeight = ${fmt(comp.slitHeight)}`);
@@ -342,6 +373,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof QPD) {
         lines.push(`activeDiameter = ${fmt(comp.activeDiameter)}`);
         lines.push(`gapWidth = ${fmt(comp.gapWidth)}`);
+        lines.push(`backstopTransmission = ${fmt(comp.backstopTransmission)}`);
     } else if (comp instanceof MediumVolume) {
         lines.push(`width = ${fmt(comp.width)}`);
         lines.push(`height = ${fmt(comp.height)}`);
@@ -499,6 +531,70 @@ function parseSpectralProfile(props: PropMap, prefix: string = 'spectral'): Spec
     }
 
     return new SpectralProfile(preset, cutoffNm, bands.length > 0 ? bands : undefined, edgeSteepness);
+}
+
+function formatColloids(sample: Sample): string {
+    return sample.colloidSpheres.map(sphere => [
+        fmt(sphere.center.x),
+        fmt(sphere.center.y),
+        fmt(sphere.center.z),
+        fmt(sphere.radius),
+        sphere.glowColor ?? sample.colloidGlowColor,
+    ].join(':')).join('; ');
+}
+
+function parseSampleSpecimenProps(sample: Sample, props: PropMap): void {
+    const kind = str(props, 'specimenKind', sample.specimenKind);
+    if (kind !== 'colloids') return;
+
+    sample.specimenKind = 'colloids';
+    sample.flowCellWidth = num(props, 'flowCellWidth', sample.flowCellWidth);
+    sample.flowCellHeight = num(props, 'flowCellHeight', sample.flowCellHeight);
+    sample.flowCellDepth = num(props, 'flowCellDepth', sample.flowCellDepth);
+    sample.flowCellGlassThickness = num(props, 'flowCellGlassThickness', sample.flowCellGlassThickness);
+    sample.fillMediumIndex = num(props, 'fillMediumIndex', sample.fillMediumIndex);
+    sample.colloidGlowColor = str(props, 'colloidGlowColor', sample.colloidGlowColor);
+    sample.colloidTemperatureK = num(props, 'colloidTemperatureK', sample.colloidTemperatureK);
+    sample.colloidViscosity = num(props, 'colloidViscosity', sample.colloidViscosity);
+    sample.colloidDiffusionScale = num(props, 'colloidDiffusionScale', sample.colloidDiffusionScale);
+
+    const raw = props['colloids'];
+    if (!raw) {
+        sample.colloidSpheres = Sample.makeDefaultColloids(
+            10,
+            0.0025,
+            sample.flowCellWidth,
+            sample.flowCellHeight,
+            sample.flowCellDepth,
+        );
+        return;
+    }
+
+    const parsed = raw
+        .split(';')
+        .map(part => part.trim())
+        .filter(Boolean)
+        .map(part => {
+            const [xRaw, yRaw, zRaw, rRaw, colorRaw] = part.split(':').map(v => v.trim());
+            const x = parseFloat(xRaw);
+            const y = parseFloat(yRaw);
+            const z = parseFloat(zRaw);
+            const radius = parseFloat(rRaw);
+            if ([x, y, z, radius].some(Number.isNaN)) return null;
+            return {
+                center: new Vector3(x, y, z),
+                radius,
+                glowColor: colorRaw || sample.colloidGlowColor,
+            };
+        })
+        .filter((sphere): sphere is { center: Vector3; radius: number; glowColor: string } => Boolean(sphere));
+    sample.colloidSpheres = parsed.length > 0 ? parsed : Sample.makeDefaultColloids(
+        10,
+        0.0025,
+        sample.flowCellWidth,
+        sample.flowCellHeight,
+        sample.flowCellDepth,
+    );
 }
 
 function formatVertices(vertices: [number, number][]): string {
@@ -739,6 +835,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 const [ox, oy, oz] = props['specimenOffset'].split(',').map(s => parseFloat(s.trim()));
                 c.specimenOffset.set(ox, oy, oz);
             }
+            parseSampleSpecimenProps(c, props);
             return c;
         }
         case 'TrappedBead': {
@@ -751,9 +848,24 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c.viscosity = num(props, 'viscosity', 1e-3);
             c.temperatureK = num(props, 'temperatureK', 295);
             c.displayScale = num(props, 'displayScale', 50);
+            c.thermalMotionScale = num(props, 'thermalMotionScale', c.thermalMotionScale);
+            c.rayMomentumScale = num(props, 'rayMomentumScale', c.rayMomentumScale);
+            c.surfaceReflectionScale = num(props, 'surfaceReflectionScale', c.surfaceReflectionScale);
+            c.gradientForceScale = num(props, 'gradientForceScale', c.gradientForceScale);
+            c.trapCaptureRadius = num(props, 'trapCaptureRadius', c.trapCaptureRadius);
+            c.trapAxialCaptureRange = num(props, 'trapAxialCaptureRange', c.trapAxialCaptureRange);
+            c.visualGlowRadius = num(props, 'visualGlowRadius', c.visualGlowRadius);
+            c.glowColor = str(props, 'glowColor', c.glowColor);
+            c.parentSampleId = str(props, 'parentSampleId', '') || null;
+            c.isSubComponent = str(props, 'managedBySample', 'false') === 'true';
             if (props['specimenOffset']) {
                 const [ox, oy, oz] = props['specimenOffset'].split(',').map(s => parseFloat(s.trim()));
                 c.specimenOffset.set(ox, oy, oz);
+            }
+            if (props['confinementHalfSize']) {
+                const [x, y, z] = props['confinementHalfSize'].split(',').map(s => parseFloat(s.trim()));
+                c.confinementHalfSize = new Vector3(x, y, z);
+                c.constrainToFlowCell();
             }
             return c;
         }
@@ -815,7 +927,8 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             return new Aperture(
                 num(props, 'openingDiameter', 10),
                 num(props, 'housingDiameter', 25),
-                str(props, 'name', 'Aperture')
+                str(props, 'name', 'Aperture'),
+                num(props, 'thickness', 1)
             );
         }
         case 'SlitAperture': {
@@ -936,6 +1049,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
         case 'QPD': {
             const c = new QPD(num(props, 'activeDiameter', 5), str(props, 'name', 'QPD'));
             c.gapWidth = num(props, 'gapWidth', 0.1);
+            c.backstopTransmission = num(props, 'backstopTransmission', c.backstopTransmission);
             return c;
         }
         case 'MediumVolume': {

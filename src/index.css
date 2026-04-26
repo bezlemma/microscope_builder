@@ -103,3 +103,192 @@ canvas {
   transform: scale(0.92);
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
 }
+
+/* ─── Tutorial HUD ────────────────────────────────────────── */
+
+@keyframes tutorial-button-pulse {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 rgba(0, 127, 255, 0), 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 0 24px rgba(0, 127, 255, 0.48), 0 10px 30px rgba(0, 0, 0, 0.36);
+  }
+}
+
+@keyframes tutorial-arrow-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-8px); }
+}
+
+.tutorial-hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--ui-font);
+  font-size: var(--workspace-font-size);
+  color: #eaf6ff;
+  z-index: 30;
+}
+
+.tutorial-hud-stage1 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 16px 28px;
+}
+
+.tutorial-callout {
+  position: relative;
+  max-width: 280px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 127, 255, 0.42);
+  border-radius: 8px;
+  background: rgba(16, 22, 28, 0.88);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.tutorial-callout.compact {
+  max-width: 340px;
+}
+
+.tutorial-callout-title {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 3px;
+}
+
+.tutorial-callout-body {
+  color: #b9c8d6;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.tutorial-callout-arrow {
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  width: 24px;
+  height: 2px;
+  background: #007fff;
+  animation: tutorial-arrow-nudge 1.15s ease-in-out infinite;
+}
+
+.tutorial-callout-arrow::before,
+.tutorial-callout-arrow::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 9px;
+  height: 2px;
+  background: #007fff;
+}
+
+.tutorial-callout-arrow::before {
+  transform: rotate(38deg);
+  transform-origin: left center;
+}
+
+.tutorial-callout-arrow::after {
+  transform: rotate(-38deg);
+  transform-origin: left center;
+}
+
+.tutorial-complete-button {
+  max-width: min(560px, calc(100vw - 32px));
+  border: 1px solid rgba(0, 127, 255, 0.82);
+  border-radius: 8px;
+  padding: 11px 18px;
+  background: rgba(0, 57, 118, 0.94);
+  color: #ffffff;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: tutorial-button-pulse 1.45s ease-in-out infinite;
+}
+
+.tutorial-complete-button:hover {
+  background: rgba(0, 82, 168, 0.98);
+  border-color: #007fff;
+}
+
+.tutorial-target-pill {
+  padding: 6px 9px;
+  border: 1px solid rgba(0, 127, 255, 0.52);
+  border-radius: 999px;
+  background: rgba(12, 20, 28, 0.82);
+  color: #eaf6ff;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tutorial-sidebar-callout {
+  position: fixed;
+  z-index: 31;
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 127, 255, 0.42);
+  border-radius: 8px;
+  background: rgba(16, 22, 28, 0.9);
+  color: #eaf6ff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  font-family: var(--ui-font);
+  font-size: var(--workspace-font-size);
+  pointer-events: none;
+}
+
+.tutorial-sidebar-arrow {
+  position: absolute;
+  left: -30px;
+  top: 18px;
+  width: 24px;
+  height: 2px;
+  background: #007fff;
+  animation: tutorial-arrow-nudge 1.15s ease-in-out infinite;
+}
+
+.tutorial-sidebar-arrow::before,
+.tutorial-sidebar-arrow::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  width: 9px;
+  height: 2px;
+  background: #007fff;
+}
+
+.tutorial-sidebar-arrow::before {
+  transform: rotate(38deg);
+  transform-origin: left center;
+}
+
+.tutorial-sidebar-arrow::after {
+  transform: rotate(-38deg);
+  transform-origin: left center;
+}
+
+@media (max-width: 720px) {
+  .tutorial-hud-stage1 {
+    padding: 0 10px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
+
+  .tutorial-sidebar-callout {
+    min-width: 0;
+  }
+
+  .tutorial-callout.mobile {
+    max-width: min(250px, calc(100vw - 36px));
+  }
+}

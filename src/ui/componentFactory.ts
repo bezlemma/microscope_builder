@@ -60,6 +60,7 @@ const AXIAL_OPTIC_TYPES = new Set([
     'card',
     'sample',
     'sampleSlide',
+    'colloidSampleSlide',
     'trappedBead',
     'idealLens',
     'objective',
@@ -103,10 +104,30 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'card') return new Card(20, 20, 'Viewing Card');
     if (type === 'sample') return new Sample('New Sample');
     if (type === 'sampleSlide') return new Sample('2D Sample Holder');
-    if (type === 'trappedBead') return new TrappedBead(1.0, 1.59, 1.33, 'Trapped Bead');
+    if (type === 'colloidSampleSlide') {
+        return new Sample('Colloid Flow Cell').configureColloidFlowCell({
+            count: 320,
+            width: 8,
+            height: 8,
+            depth: 0.0075,
+            diffusionScale: 24,
+        });
+    }
+    if (type === 'trappedBead') {
+        const bead = new TrappedBead(0.005, 1.59, 1.33, 'Trapped Bead');
+        bead.displayScale = 1;
+        bead.visualGlowRadius = 0.012;
+        return bead;
+    }
     if (type === 'idealLens') return new IdealLens(50, 15, 'Ideal Lens');
     if (type === 'objective') return new Objective({ magnification: 10, NA: 0.25, name: 'New Objective' });
-    if (type === 'camera') return new Camera(13, 13, 'New Camera');
+    if (type === 'camera') {
+        const camera = new Camera(13, 13, 'New Camera');
+        camera.sensorResX = 32;
+        camera.sensorResY = 32;
+        camera.sensorNA = 0.025;
+        return camera;
+    }
     if (type === 'cylindricalLens') return new CylindricalLens(40, 1e9, 12, 24, 3, 'Cylindrical Lens');
     if (type === 'prism') return new PrismLens(Math.PI / 3, 20, 20, 'Prism');
     if (type === 'abstractPlane') {
@@ -198,6 +219,11 @@ export function applyDefaultPlacementOrientation(comp: OpticalComponent, type: s
     // lines aligned with the grid.
     if (type === 'textAnnotation' || type === 'arrowAnnotation' || type === 'curvedArrowAnnotation') {
         comp.pointAlong(0, 0, 1);
+        return;
+    }
+
+    if (type === 'camera') {
+        comp.pointAlong(-1, 0, 0);
         return;
     }
 

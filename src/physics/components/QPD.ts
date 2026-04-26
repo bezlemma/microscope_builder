@@ -23,6 +23,8 @@ export class QPD extends OpticalComponent {
     activeDiameter: number;
     /** Gap between quadrants in mm (dead zone at the cross). */
     gapWidth: number;
+    /** Optional tiny residual transmission so a downstream safety dump can be shown. */
+    backstopTransmission: number = 0;
 
     /** Accumulated quadrant intensities [A, B, C, D]. */
     quadrants: [number, number, number, number] = [0, 0, 0, 0];
@@ -152,7 +154,19 @@ export class QPD extends OpticalComponent {
             this.totalHits++;
         }
 
-        // Terminal detector: absorb everything
-        return { rays: [] };
+        const leaked = Math.max(0, Math.min(1, this.backstopTransmission));
+        if (leaked <= 0 || ray.intensity * leaked < 1e-6) {
+            return { rays: [] };
+        }
+
+        return {
+            rays: [{
+                ...ray,
+                origin: hit.point.clone().addScaledVector(ray.direction, 6.2),
+                direction: ray.direction.clone(),
+                intensity: ray.intensity * leaked,
+                opticalPathLength: ray.opticalPathLength + hit.t + 6.2,
+            }],
+        };
     }
 }

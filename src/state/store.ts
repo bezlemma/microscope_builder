@@ -18,7 +18,7 @@ import { createOpenSPIMScene } from '../presets/openSPIM';
 import { createConfocalScene } from '../presets/confocal';
 import { createBlankScene } from '../presets/blank';
 import { createOpticalTrapScene } from '../presets/opticalTrap';
-import { createTutorialScene } from '../presets/tutorial';
+import { createTutorialMicroscopeScene, createTutorialScene } from '../presets/tutorial';
 import { createCheHangYu2026Scene } from '../presets/CheHangYu2026';
 
 // --- State Types ---
@@ -68,6 +68,7 @@ export enum PresetName {
     Confocal = "Confocal Scanning",
     OpticalTrap = "Optical Trap",
     Tutorial = "Tutorial",
+    Tutorial2 = "Tutorial 2",
     CheHangYu2026 = "Papers: Yu 2026 (Nisam 2x)",
 }
 
@@ -80,6 +81,9 @@ export const presetDescriptionAtom = atom<string>(INITIAL_TUTORIAL.description ?
 
 export const activePresetAtom = atom<PresetName | null>(PresetName.Tutorial);
 
+export type TutorialStage = 1 | 2;
+export const tutorialStageAtom = atom<TutorialStage>(1);
+
 export const componentsAtom = atom<OpticalComponent[]>(INITIAL_TUTORIAL.scene);
 
 /** Normalized preset result — all presets produce this shape. */
@@ -89,6 +93,8 @@ export interface PresetResult {
     channels?: import('../physics/PropertyAnimator').AnimationChannel[];
     animationPlaying?: boolean;
     animationSpeed?: number;
+    /** Optional full ray-display override for presets with special visibility needs. */
+    rayConfig?: Partial<RayConfig>;
     /** Override the forward (rod-tracer) ray-per-source count when this preset
      *  loads.  Falls back to DEFAULT_RAY_CONFIG.rayCount when omitted. */
     rayCount?: number;
@@ -107,8 +113,13 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
-    [PresetName.OpticalTrap, () => ({ scene: createOpticalTrapScene(), rayCount: 72 })],
+    [PresetName.OpticalTrap, () => ({
+        scene: createOpticalTrapScene(),
+        rayCount: 500,
+        rayConfig: { minRayOpacity: 0, maxRayOpacity: 0.4 },
+    })],
     [PresetName.Tutorial, () => createTutorialScene()],
+    [PresetName.Tutorial2, () => createTutorialMicroscopeScene()],
     [PresetName.CheHangYu2026, () => createCheHangYu2026Scene()],
 ]);
 
@@ -116,6 +127,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
  *  → "papers-yu-2026-nisam-2x"). Mirrors the slug derivation in App.tsx so
  *  preset URLs are stable across the URL effect and `loadPresetAtom`. */
 function presetSlug(name: PresetName): string {
+    if (name === PresetName.Tutorial2) return 'tutorial2';
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
@@ -124,7 +136,7 @@ function presetSlug(name: PresetName): string {
 function syncUrlToPreset(presetName: PresetName | null): void {
     if (typeof window === 'undefined') return;
     const base = window.location.pathname;
-    const next = presetName ? `${base}?preset=${presetSlug(presetName)}` : base;
+    const next = presetName ? `${base}#preset=${presetSlug(presetName)}` : base;
     window.history.replaceState(null, '', next);
 }
 
@@ -132,6 +144,7 @@ export const loadPresetAtom = atom(
     null,
     (get, set, presetName: PresetName) => {
         set(activePresetAtom, presetName);
+        set(tutorialStageAtom, presetName === PresetName.Tutorial2 ? 2 : 1);
         syncUrlToPreset(presetName);
         // Reset bundle-view state for fresh preset
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
@@ -146,6 +159,9 @@ export const loadPresetAtom = atom(
         // a visible light sheet, etc.).
         if (result.rayCount !== undefined) {
             set(rayConfigAtom, prev => ({ ...prev, rayCount: result.rayCount! }));
+        }
+        if (result.rayConfig) {
+            set(rayConfigAtom, prev => ({ ...prev, ...result.rayConfig }));
         }
 
         const animator = get(animatorAtom);
@@ -173,18 +189,18 @@ export const loadPresetAtom = atom(
         // panel is visible immediately. We also kick off the Solver-3
         // backward-trace so the user sees a first image without having to
         // press Render.
-        const cameras = result.scene.filter((c): c is Camera => c instanceof Camera);
+        const cameras = result.scene.filter((c): c is Camera => c instanceof Camera && !c.isGhost);
         const pmts = result.scene.filter((c): c is PMT => c instanceof PMT && (c as PMT).hasValidAxes());
         const hasDetector = cameras.length > 0 || pmts.length > 0;
-        if (hasDetector) {
+        const shouldPinSampleView = presetName === PresetName.OpenSPIM || presetName === PresetName.OpticalTrap;
+        if (hasDetector || shouldPinSampleView) {
             const pinned = new Set(get(pinnedViewersAtom));
             for (const cam of cameras) pinned.add(cam.id);
             for (const pmt of pmts) pinned.add(pmt.id);
-            // OpenSPIM is the one preset where seeing rays land on the sample
-            // is the *point* of the layout (the light sheet itself isn't
-            // visible without it), so we also pin every Sample / SampleChamber
-            // automatically.  Other presets leave the user to pin manually.
-            if (presetName === PresetName.OpenSPIM) {
+            // OpenSPIM and Optical Trap both need the local sample view to
+            // make the core interaction legible: light-sheet placement for
+            // OpenSPIM, bead capture inside the flow cell for Optical Trap.
+            if (shouldPinSampleView) {
                 for (const comp of result.scene) {
                     const isSampleLike =
                         comp.constructor.name === 'Sample'
@@ -195,7 +211,9 @@ export const loadPresetAtom = atom(
             set(pinnedViewersAtom, pinned);
             // Bumping the trigger atom causes OpticalTable's Solver-3 effect to
             // run. It reads `components` at render time and will see the new scene.
-            set(solver3RenderTriggerAtom, get(solver3RenderTriggerAtom) + 1);
+            if (hasDetector) {
+                set(solver3RenderTriggerAtom, get(solver3RenderTriggerAtom) + 1);
+            }
         }
 
         // Auto-start PMT raster scans the same way cameras auto-render.  PMTs
@@ -268,16 +286,41 @@ export const solver3RenderTriggerAtom = atom<number>(0);
 // 8. Solver 3 rendering status — true while render is in progress
 export const solver3RenderingAtom = atom<boolean>(false);
 
-// 8.5. Reverse Ray Counter — tracks number of reverse rays processed
-export const reverseRayCounterAtom = atom<number>(0);
-
-// 8.6. Drawn ray counts — number of forward and reverse rays currently visualized
+// 8.5. Drawn ray counts — number of forward and reverse rays currently visualized
 export const drawnRayCountsAtom = atom<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
 
-// 8.7. Camera image tick — bumped every time Solver-3 refreshes a camera's
+// 8.6. Camera image tick — bumped every time Solver-3 refreshes a camera's
 // emission/excitation image. Lets CameraViewer re-render on each progressive
 // round without having to watch the mutated Camera instance directly.
 export const cameraImageTickAtom = atom<number>(0);
+
+export const startTutorialStage2Atom = atom(
+    null,
+    (get, set) => {
+        const result = createTutorialMicroscopeScene();
+
+        set(tutorialStageAtom, 2);
+        set(activePresetAtom, PresetName.Tutorial2);
+        syncUrlToPreset(PresetName.Tutorial2);
+        set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
+        set(undoStackAtom, []);
+        set(activeZLevelAtom, 0);
+
+        const animator = get(animatorAtom);
+        animator.clearAll();
+        animator.reset();
+        set(animationPlayingAtom, false);
+        set(animationSpeedAtom, 1.0);
+
+        set(componentsAtom, result.scene);
+        set(presetDescriptionAtom, result.description || "");
+        set(selectionAtom, []);
+        set(pinnedViewersAtom, new Set());
+        set(solver3RenderingAtom, false);
+        set(scanAccumProgressAtom, 0);
+        set(cameraImageTickAtom, tick => tick + 1);
+    }
+);
 
 // 9. Load scene from deserialized components (e.g. from .ubz file)
 export const loadSceneAtom = atom(
@@ -289,6 +332,7 @@ export const loadSceneAtom = atom(
 
         set(componentsAtom, components);
         set(activePresetAtom, null);
+        set(tutorialStageAtom, 1);
         set(presetDescriptionAtom, "");
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(selectionAtom, []);

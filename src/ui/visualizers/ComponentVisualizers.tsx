@@ -266,21 +266,33 @@ export const CasingVisualizer = ({ component }: { component: ObjectiveCasing }) 
 export const TrappedBeadVisualizer = ({ component }: { component: TrappedBead }) => {
     void component.version;   // subscribe to version bumps from the integrator
     const r = component.radius;
-    const o = component.specimenOffset;
+    const o = component.getConfinedSpecimenOffset();
+    const haloR = Math.max(component.visualGlowRadius, r * 1.4);
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
+            <mesh position={[o.x, o.y, o.z]} renderOrder={2}>
+                <sphereGeometry args={[haloR, 32, 18]} />
+                <meshBasicMaterial
+                    color={component.glowColor}
+                    transparent
+                    opacity={0.22}
+                    depthWrite={false}
+                />
+            </mesh>
             <mesh position={[o.x, o.y, o.z]}>
-                <sphereGeometry args={[r, 24, 16]} />
+                <sphereGeometry args={[Math.max(r, 0.004), 24, 16]} />
                 <meshStandardMaterial
                     color="#bcd9ff"
                     transparent
-                    opacity={0.55}
+                    opacity={0.78}
                     roughness={0.25}
                     metalness={0.05}
+                    emissive={component.glowColor}
+                    emissiveIntensity={0.35}
                 />
             </mesh>
         </group>
@@ -288,6 +300,76 @@ export const TrappedBeadVisualizer = ({ component }: { component: TrappedBead })
 };
 
 export const SampleVisualizer = ({ component }: { component: Sample }) => {
+    if (component.specimenKind === 'colloids') {
+        const outerW = component.flowCellWidth + 2;
+        const outerH = component.flowCellHeight + 2;
+        const frameT = 0.5;
+        const glassT = component.flowCellGlassThickness;
+        const halfDepth = component.flowCellDepth / 2;
+        const firstColloidRadius = component.colloidSpheres[0]?.radius ?? 0.0025;
+        const glowR = Math.max(0.006, firstColloidRadius * 2.5);
+
+        return (
+            <group
+                position={[component.position.x, component.position.y, component.position.z]}
+                quaternion={component.rotation.clone()}
+                onClick={(e) => { e.stopPropagation(); }}
+            >
+                <mesh>
+                    <boxGeometry args={[component.flowCellWidth, component.flowCellHeight, component.flowCellDepth]} />
+                    <meshPhysicalMaterial
+                        color="#7fd8ff"
+                        transmission={0.85}
+                        transparent
+                        opacity={0.18}
+                        roughness={0.05}
+                        metalness={0}
+                        depthWrite={false}
+                    />
+                    <EdgeOutline color="#6bbcff" />
+                </mesh>
+                <mesh position={[0, 0, -halfDepth - glassT / 2]}>
+                    <boxGeometry args={[component.flowCellWidth, component.flowCellHeight, glassT]} />
+                    <meshPhysicalMaterial color="#cdefff" transparent opacity={0.16} transmission={0.92} roughness={0.02} depthWrite={false} />
+                </mesh>
+                <mesh position={[0, 0, halfDepth + glassT / 2]}>
+                    <boxGeometry args={[component.flowCellWidth, component.flowCellHeight, glassT]} />
+                    <meshPhysicalMaterial color="#cdefff" transparent opacity={0.16} transmission={0.92} roughness={0.02} depthWrite={false} />
+                </mesh>
+                <mesh position={[0, outerH / 2 - frameT / 2, 0]}>
+                    <boxGeometry args={[outerW, frameT, glassT * 1.5]} />
+                    <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
+                </mesh>
+                <mesh position={[0, -outerH / 2 + frameT / 2, 0]}>
+                    <boxGeometry args={[outerW, frameT, glassT * 1.5]} />
+                    <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
+                </mesh>
+                <mesh position={[-outerW / 2 + frameT / 2, 0, 0]}>
+                    <boxGeometry args={[frameT, outerH, glassT * 1.5]} />
+                    <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
+                </mesh>
+                <mesh position={[outerW / 2 - frameT / 2, 0, 0]}>
+                    <boxGeometry args={[frameT, outerH, glassT * 1.5]} />
+                    <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
+                </mesh>
+                <group position={[component.specimenOffset.x, component.specimenOffset.y, component.specimenOffset.z]} rotation={[component.specimenRotation.x, component.specimenRotation.y, component.specimenRotation.z]}>
+                    {component.colloidSpheres.map((colloid, index) => (
+                        <group key={index} position={[colloid.center.x, colloid.center.y, colloid.center.z]}>
+                            <mesh renderOrder={2}>
+                                <sphereGeometry args={[glowR, 24, 12]} />
+                                <meshBasicMaterial color={colloid.glowColor ?? component.colloidGlowColor} transparent opacity={0.2} depthWrite={false} />
+                            </mesh>
+                            <mesh>
+                                <sphereGeometry args={[Math.max(colloid.radius, 0.004), 16, 10]} />
+                                <meshStandardMaterial color="#dcecff" emissive={colloid.glowColor ?? component.colloidGlowColor} emissiveIntensity={0.5} roughness={0.2} />
+                            </mesh>
+                        </group>
+                    ))}
+                </group>
+            </group>
+        );
+    }
+
     const outerSize = 40;
     const innerSize = 30;
     const thickness = 2;
@@ -655,7 +737,7 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
 export const ApertureVisualizer = ({ component }: { component: Aperture }) => {
     const outerR = component.housingDiameter / 2;
     const innerR = component.openingDiameter / 2;
-    const halfT = 0.5;
+    const halfT = Math.max(component.thickness / 2, 0.001);
 
     const points = useMemo(() => [
         new Vector2(innerR, -halfT),
@@ -2010,6 +2092,61 @@ export const AODVisualizer: React.FC<{ component: AOD }> = ({ component }) => {
  */
 export const GhostVisualizer = ({ component }: { component: OpticalComponent }) => {
     const GHOST_COLOR = '#007fff';
+    if (component instanceof Camera) {
+        const width = Camera.BODY_WIDTH;
+        const height = Camera.BODY_HEIGHT;
+        const depth = Camera.BODY_DEPTH;
+        const sensorW = component.width;
+        const sensorH = component.height;
+        const bodyRect: [number, number, number][] = [
+            [-width / 2, -height / 2, 0],
+            [width / 2, -height / 2, 0],
+            [width / 2, height / 2, 0],
+            [-width / 2, height / 2, 0],
+            [-width / 2, -height / 2, 0],
+        ];
+        const sensorRect: [number, number, number][] = [
+            [-sensorW / 2, -sensorH / 2, 0.35],
+            [sensorW / 2, -sensorH / 2, 0.35],
+            [sensorW / 2, sensorH / 2, 0.35],
+            [-sensorW / 2, sensorH / 2, 0.35],
+            [-sensorW / 2, -sensorH / 2, 0.35],
+        ];
+
+        return (
+            <group
+                position={[component.position.x, component.position.y, component.position.z]}
+                quaternion={component.rotation.clone()}
+            >
+                <mesh position={[0, 0, -depth / 2]}>
+                    <boxGeometry args={[width, height, depth]} />
+                    <meshBasicMaterial color={GHOST_COLOR} transparent opacity={0.06} depthWrite={false} />
+                </mesh>
+                <Line
+                    points={bodyRect}
+                    color={GHOST_COLOR}
+                    lineWidth={2.5}
+                    dashed
+                    dashSize={3}
+                    gapSize={2}
+                    transparent
+                    opacity={0.95}
+                />
+                <Line
+                    points={sensorRect}
+                    color={GHOST_COLOR}
+                    lineWidth={2}
+                    transparent
+                    opacity={0.9}
+                />
+                <mesh position={[0, 0, 0.2]}>
+                    <planeGeometry args={[sensorW, sensorH]} />
+                    <meshBasicMaterial color={GHOST_COLOR} transparent opacity={0.14} depthWrite={false} side={DoubleSide} />
+                </mesh>
+            </group>
+        );
+    }
+
     // Guess an aperture radius from the component; fall back to 12.7 mm.
     const anyComp = component as any;
     const radius =

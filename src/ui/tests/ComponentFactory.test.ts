@@ -23,6 +23,7 @@ describe('Component factory placement defaults', () => {
             'laser',
             'lamp',
             'sample',
+            'colloidSampleSlide',
         ]) {
             const forward = forwardDirection(type);
             expect(Math.abs(forward.z)).toBeLessThan(1e-6);
@@ -65,5 +66,34 @@ describe('Component factory placement defaults', () => {
             expect(forward.x).toBeGreaterThan(0.6);
             expect(forward.y).toBeLessThan(-0.6);
         }
+    });
+
+    test('camera drops facing back toward a typical +X-end microscope beam path', () => {
+        const forward = forwardDirection('camera');
+        expect(Math.abs(forward.z)).toBeLessThan(1e-6);
+        expect(forward.x).toBeLessThan(-0.99);
+    });
+
+    test('dragged-out camera starts with brightfield-friendly detector defaults', () => {
+        const camera = createComponentForType('camera') as any;
+        expect(camera.sensorResX).toBe(32);
+        expect(camera.sensorResY).toBe(32);
+        expect(camera.sensorNA).toBe(0.025);
+    });
+
+    test('sample drawer includes a colloid flow-cell holder variant', () => {
+        const sample = createComponentForType('colloidSampleSlide') as any;
+        expect(sample.specimenKind).toBe('colloids');
+        expect(sample.colloidSpheres).toHaveLength(320);
+        expect(sample.flowCellWidth).toBeCloseTo(8, 6);
+        expect(sample.flowCellHeight).toBeCloseTo(8, 6);
+        expect(sample.flowCellDepth).toBeCloseTo(0.0075, 6);
+    });
+
+    test('dragged-out trapped bead uses micron-scale physical size with a visible halo', () => {
+        const bead = createComponentForType('trappedBead') as any;
+        expect(bead.diameter).toBeLessThanOrEqual(0.01);
+        expect(bead.visualGlowRadius).toBeGreaterThan(bead.radius);
+        expect(bead.visualGlowRadius).toBeLessThanOrEqual(0.015);
     });
 });
