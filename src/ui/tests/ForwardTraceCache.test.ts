@@ -4,9 +4,24 @@ import { Solver1 } from '../../physics/Solver1';
 import { createSourceRays, stablePreviewSourceRays } from '../../physics/SourceRayFactory';
 import { Blocker } from '../../physics/components/Blocker';
 import { QPD } from '../../physics/components/QPD';
-import { traceForwardWithDependencyCache, type ForwardTraceCache } from '../OpticalTable';
+import {
+    createDragPreviewSourceRays,
+    DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS,
+    traceForwardWithDependencyCache,
+    type ForwardTraceCache,
+} from '../OpticalTable';
 
 describe('forward trace dependency cache', () => {
+    test('drag preview caps optical trap source rays', () => {
+        const scene = createOpticalTrapScene();
+        const full = createSourceRays(scene, 500, 'full');
+        const preview = createDragPreviewSourceRays(scene, 500);
+
+        expect(full).toHaveLength(501);
+        expect(preview).toHaveLength(DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS + 1);
+        expect(preview.some(ray => ray.isMainRay)).toBe(true);
+    });
+
     test('moving an absorber retraces whole affected source families', () => {
         const scene = createOpticalTrapScene();
         const dump = scene.find((component): component is Blocker =>

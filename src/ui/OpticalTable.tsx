@@ -46,6 +46,17 @@ import { serializeScene } from '../state/ubzSerializer';
 import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
 import type { SerializedBeamSegment, Solver1WorkerRequest, Solver1WorkerResponse } from '../physics/solver1Worker';
 
+export const DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS = 144;
+
+export function createDragPreviewSourceRays(
+    components: OpticalComponent[],
+    forwardRayCount: number,
+): Ray[] {
+    const fullSourceRays = createSourceRays(components, forwardRayCount, 'full');
+    if (forwardRayCount <= DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS) return fullSourceRays;
+    return stablePreviewSourceRays(fullSourceRays, DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS);
+}
+
 /** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
 function rehydratePath(path: SerializedPath): Ray[] {
     return path.map(r => ({
@@ -818,7 +829,7 @@ export const OpticalTable: React.FC = () => {
 
         if (isDragging) {
             syncManagedTrapBeads(components);
-            const makeForwardSourceRays = () => createSourceRays(components, clampedForwardRayCount, 'full');
+            const makeForwardSourceRays = () => createDragPreviewSourceRays(components, clampedForwardRayCount);
             // Correctness during drag is more important than a clever partial
             // update. A cached/preview trace can mix sparse bead-scatter rays
             // with stale families and show physically impossible beam paths.
@@ -829,7 +840,8 @@ export const OpticalTable: React.FC = () => {
                     return solver.trace(makeForwardSourceRays());
                 },
             );
-            traceLiveForwardSideEffects(components, makeForwardSourceRays);
+            // Drag traces are visual previews only. Live QPD/bead force
+            // side effects are recomputed from the full ray set on release.
             setRays(calculatedPaths);
             setForwardRays(calculatedPaths);
             solverPathsRef.current = calculatedPaths;
