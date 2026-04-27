@@ -439,17 +439,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
             });
     }, [components, cameraImageTick, sample.version, trapViewerTick]);
 
-    if (sample instanceof Sample && sample.specimenKind === 'colloids' && trapBeads.length > 0) {
-        return (
-            <TrapCloseupViewer
-                sample={sample}
-                size={size}
-                flowCell={flowCell}
-                specimenSpheres={specimenSpheres}
-                trapBeads={trapBeads}
-            />
-        );
-    }
+    const showTrapCloseup = sample instanceof Sample && sample.specimenKind === 'colloids' && trapBeads.length > 0;
 
     const focus = sample.position;
 
@@ -458,6 +448,8 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     const segments = useMemo(() => {
         type Seg = { points: [number, number, number][]; color: string };
         const out: Seg[] = [];
+        if (showTrapCloseup) return out;
+
         const trace = (paths: Ray[][]) => {
             for (const path of paths) {
                 if (path.length === 0) continue;
@@ -487,7 +479,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
             if (c instanceof OpticCamera && c.solver3Paths) trace(c.solver3Paths);
         }
         return out;
-    }, [forwardRays, components, focus.x, focus.y, focus.z, cameraImageTick]);
+    }, [forwardRays, components, focus.x, focus.y, focus.z, cameraImageTick, showTrapCloseup]);
 
     const tickRef = useRef(0);
     useEffect(() => { tickRef.current++; }, [sample.version]);
@@ -534,6 +526,18 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
             persUp: [earsWorld.x, earsWorld.y, earsWorld.z] as [number, number, number],
         };
     }, [sample, sample.version, camDist]);
+
+    if (showTrapCloseup && sample instanceof Sample) {
+        return (
+            <TrapCloseupViewer
+                sample={sample}
+                size={size}
+                flowCell={flowCell}
+                specimenSpheres={specimenSpheres}
+                trapBeads={trapBeads}
+            />
+        );
+    }
 
     return (
         <div

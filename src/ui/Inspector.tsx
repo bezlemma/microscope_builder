@@ -1652,14 +1652,16 @@ export const Inspector: React.FC = () => {
         const power = parseFloat(localLampPower);
         const sourcePoints = parseInt(localSourcePointCount);
         const emitterR = parseFloat(localEmitterRadius);
-        if (isNaN(radius)) return;
+        if (!Number.isFinite(radius) || radius < 0) return;
 
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Lamp) {
                 c.beamRadius = radius;
-                if (!isNaN(power) && power > 0) c.power = power;
-                if (!isNaN(sourcePoints) && sourcePoints >= 1) c.sourcePointCount = Math.round(sourcePoints);
-                if (!isNaN(emitterR) && emitterR > 0) c.emitterRadius = emitterR;
+                if (Number.isFinite(power) && power >= 0) c.power = power;
+                if (Number.isFinite(sourcePoints) && sourcePoints >= 1) {
+                    c.sourcePointCount = Math.min(32, Math.round(sourcePoints));
+                }
+                if (Number.isFinite(emitterR) && emitterR >= 0) c.emitterRadius = emitterR;
                 c.version++;
                 return c;
             }
@@ -3959,7 +3961,7 @@ export const Inspector: React.FC = () => {
                                 onChange={setLocalLampPower}
                                 onCommit={() => commitLampParams()}
                                 speed={0.1}
-                                min={0.01}
+                                min={0}
                                 max={100}
                             />
                         </div>
@@ -3981,7 +3983,7 @@ export const Inspector: React.FC = () => {
                                 onChange={setLocalEmitterRadius}
                                 onCommit={() => commitLampParams()}
                                 speed={0.1}
-                                min={0.01}
+                                min={0}
                                 max={50}
                             />
                         </div>

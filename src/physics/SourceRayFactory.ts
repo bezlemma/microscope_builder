@@ -17,6 +17,7 @@ import { ConeSource3D } from './components/ConeSource3D';
 import { WedgeSource2D } from './components/WedgeSource2D';
 import { StructuredSource } from './components/StructuredSource';
 import { Ray, Coherence } from './types';
+import { deterministicRandom } from './deterministicRandom';
 
 /**
  * Build radius fractions for hierarchical ring distribution.
@@ -43,10 +44,22 @@ void _RADIUS_FRACTIONS;
 /** Ray counts per ring — outer ring is 24, inner rings are 12 each. */
 const FIRST_RING_COUNT = 24;
 const INNER_RING_COUNT = 12;
+const MAX_LAMP_SOURCE_POINTS = 32;
 
 function estimateBeamletFootprint(beamRadius: number, totalBeamlets: number): number {
     if (totalBeamlets <= 1) return Math.max(beamRadius, 0.05);
     return Math.max(beamRadius / Math.sqrt(totalBeamlets), 0.05);
+}
+
+function finiteNonNegative(value: number, fallback: number): number {
+    return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function lampSpectralWavelengths(lamp: Lamp): number[] {
+    const wavelengths = lamp.spectralWavelengths.filter(wavelength =>
+        Number.isFinite(wavelength) && wavelength > 0
+    );
+    return wavelengths.length > 0 ? wavelengths : [550];
 }
 
 /**
@@ -125,6 +138,49 @@ export function snapToRingBoundary(n: number): number {
     const excess = n - FIRST_RING_COUNT;
     const k = Math.ceil(excess / INNER_RING_COUNT);
     return FIRST_RING_COUNT + k * INNER_RING_COUNT;
+}
+
+export function stablePreviewSourceRays(sourceRays: Ray[], maxNonMainPerSource: number): Ray[] {
+    if (maxNonMainPerSource <= 0) return sourceRays.filter(ray => ray.isMainRay);
+
+    type SourceGroup = { main: Ray[]; nonMain: Ray[] };
+    const groups = new Map<string, SourceGroup>();
+    const order: string[] = [];
+
+    for (let i = 0; i < sourceRays.length; i++) {
+        const ray = sourceRays[i];
+        const key = ray.sourceId ?? `__anonymous_${i}`;
+        let group = groups.get(key);
+        if (!group) {
+            group = { main: [], nonMain: [] };
+            groups.set(key, group);
+            order.push(key);
+        }
+        if (ray.isMainRay) group.main.push(ray);
+        else group.nonMain.push(ray);
+    }
+
+    const preview: Ray[] = [];
+    for (const key of order) {
+        const group = groups.get(key);
+        if (!group) continue;
+        preview.push(...group.main);
+
+        if (group.nonMain.length <= maxNonMainPerSource) {
+            preview.push(...group.nonMain);
+            continue;
+        }
+
+        for (let i = 0; i < maxNonMainPerSource; i++) {
+            const idx = Math.min(
+                group.nonMain.length - 1,
+                Math.floor((i + 0.5) * group.nonMain.length / maxNonMainPerSource),
+            );
+            preview.push(group.nonMain[idx]);
+        }
+    }
+
+    return preview;
 }
 
 /**
@@ -264,43 +320,71 @@ export function createSourceRays(
     // ── Lamps ──
     const lampComps = components.filter(c => c instanceof Lamp) as Lamp[];
     for (const lamp of lampComps) {
-        const origin = lamp.position.clone();
+        const baseOrigin = lamp.position.clone();
         const direction = new Vector3(0, 0, 1).applyQuaternion(lamp.rotation).normalize();
-        origin.add(direction.clone().multiplyScalar(3));
+        baseOrigin.add(direction.clone().multiplyScalar(3));
 
-        const beamRadius = lamp.beamRadius;
-        const intensity = lamp.additiveOpacity;
+        const beamRadius = finiteNonNegative(lamp.beamRadius, 0);
+        const spectralWavelengths = lampSpectralWavelengths(lamp);
+        const rawSourcePointCount = Number.isFinite(lamp.sourcePointCount) ? lamp.sourcePointCount : 1;
+        const sourcePointCount = Math.min(
+            MAX_LAMP_SOURCE_POINTS,
+            Math.max(1, Math.round(rawSourcePointCount)),
+        );
+        const emitterRadius = finiteNonNegative(lamp.emitterRadius, 0);
+        const lampPower = Number.isFinite(lamp.power) ? lamp.power : 0;
+        const effectiveSourcePoints = emitterRadius > 0 ? sourcePointCount : 1;
+        const right = new Vector3(1, 0, 0).applyQuaternion(lamp.rotation).normalize();
+        const up = new Vector3(0, 1, 0).applyQuaternion(lamp.rotation).normalize();
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
-        for (const wavelengthNm of lamp.spectralWavelengths) {
+        const sourceOrigin = (index: number): Vector3 => {
+            if (effectiveSourcePoints <= 1) return baseOrigin.clone();
+            if (index === 0) return baseOrigin.clone();
+            const radius = emitterRadius * Math.sqrt(index / Math.max(1, effectiveSourcePoints - 1));
+            const phi = index * goldenAngle;
+            return baseOrigin.clone()
+                .addScaledVector(right, Math.cos(phi) * radius)
+                .addScaledVector(up, Math.sin(phi) * radius);
+        };
+
+        for (const wavelengthNm of spectralWavelengths) {
             const wavelength = wavelengthNm * 1e-9;
             const defaultRays = Math.max(1, rayCount);
             const totalRays = mode === 'full'
                 ? (defaultRays >= 16 ? Math.max(1, Math.floor(defaultRays / 2)) : defaultRays)
                 : 0;
-            const totalBeamlets = mode === 'full' ? 1 + totalRays : 1;
-            const beamletFootprint = estimateBeamletFootprint(beamRadius, totalBeamlets);
+            const rayDirectionsPerPoint = mode === 'full' ? 1 + totalRays : 1;
+            const totalBeamlets = effectiveSourcePoints * rayDirectionsPerPoint;
+            const beamletFootprint = estimateBeamletFootprint(beamRadius, rayDirectionsPerPoint);
+            const intensityPerRay = (lampPower / spectralWavelengths.length) / totalBeamlets;
+            const sourceId = `${lamp.id}_${wavelengthNm}nm`;
 
-            // Center (main) ray
-            sourceRays.push({
-                origin: origin.clone(),
-                direction: direction.clone(),
-                wavelength,
-                intensity,
-                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
-                opticalPathLength: 0,
-                footprintRadius: beamletFootprint,
-                coherenceMode: Coherence.Incoherent,
-                isMainRay: true,
-                sourceId: `${lamp.id}_${wavelengthNm}nm`,
-            });
+            for (let sourcePointIndex = 0; sourcePointIndex < effectiveSourcePoints; sourcePointIndex++) {
+                const origin = sourceOrigin(sourcePointIndex);
 
-            // Ring rays
-            if (mode === 'full') {
-                sourceRays.push(...generateRingRays(
-                    origin, direction, beamRadius, totalRays,
-                    wavelength, intensity, Coherence.Incoherent,
-                    `${lamp.id}_${wavelengthNm}nm`, beamletFootprint,
-                ));
+                // Center (main) ray
+                sourceRays.push({
+                    origin,
+                    direction: direction.clone(),
+                    wavelength,
+                    intensity: intensityPerRay,
+                    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+                    opticalPathLength: 0,
+                    footprintRadius: beamletFootprint,
+                    coherenceMode: Coherence.Incoherent,
+                    isMainRay: sourcePointIndex === 0,
+                    sourceId,
+                });
+
+                // Ring rays
+                if (mode === 'full') {
+                    sourceRays.push(...generateRingRays(
+                        origin, direction, beamRadius, totalRays,
+                        wavelength, intensityPerRay, Coherence.Incoherent,
+                        sourceId, beamletFootprint,
+                    ));
+                }
             }
         }
     }
@@ -475,15 +559,16 @@ export function createSourceRays(
         const perRayPower = src.power / totalRays;
 
         for (let i = 0; i < totalRays; i++) {
-            // Deterministic stratified traversal over lit pixels — when rayCount
-            // exceeds the pixel count we wrap and jitter so rays don't stack.
+            // Deterministic stratified traversal over lit pixels. When rayCount
+            // exceeds the pixel count we wrap with deterministic sub-pixel offsets
+            // so table-preview rays are stable across drags and retraces.
             const frac = totalRays === 1 ? 0 : i / totalRays;
             const pixIdx = Math.floor(frac * lit.length) % lit.length;
             const { px, py } = lit[pixIdx];
-            // Jitter only when oversampling the pattern; keeps first pass pixel-aligned.
+            // Offset only when oversampling the pattern; keeps first pass pixel-aligned.
             const over = totalRays > lit.length;
-            const ju = over ? (Math.random() - 0.5) : 0;
-            const jv = over ? (Math.random() - 0.5) : 0;
+            const ju = over ? deterministicRandom(i, px, py, size, 17) - 0.5 : 0;
+            const jv = over ? deterministicRandom(i, px, py, size, 53) - 0.5 : 0;
             const u = ((px + 0.5 + ju) / size * 2 - 1) * halfDiam;
             const v = -((py + 0.5 + jv) / size * 2 - 1) * halfDiam;
             const origin = src.position.clone()

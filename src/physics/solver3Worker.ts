@@ -169,7 +169,13 @@ export interface SerializedRay {
     //   terminationPoint marks that a ray ends at an explicit point (and the
     //   extension logic should NOT run for that ray).
     interactionDistance?: number;
+    interactionComponentId?: string;
+    entryPoint?: { x: number; y: number; z: number };
+    internalPath?: { x: number; y: number; z: number }[];
     terminationPoint?: { x: number; y: number; z: number };
+    exitSurfaceId?: string;
+    suppressVisualization?: boolean;
+    suppressOpenTail?: boolean;
 }
 export type SerializedPath = SerializedRay[];
 
@@ -186,9 +192,17 @@ function serializeRay(ray: Ray): SerializedRay {
         isMainRay: ray.isMainRay,
         polarization: ray.polarization,
         interactionDistance: ray.interactionDistance,
+        interactionComponentId: ray.interactionComponentId,
+        entryPoint: ray.entryPoint
+            ? { x: ray.entryPoint.x, y: ray.entryPoint.y, z: ray.entryPoint.z }
+            : undefined,
+        internalPath: ray.internalPath?.map(p => ({ x: p.x, y: p.y, z: p.z })),
         terminationPoint: ray.terminationPoint
             ? { x: ray.terminationPoint.x, y: ray.terminationPoint.y, z: ray.terminationPoint.z }
             : undefined,
+        exitSurfaceId: ray.exitSurfaceId,
+        suppressVisualization: ray.suppressVisualization,
+        suppressOpenTail: ray.suppressOpenTail,
     };
 }
 

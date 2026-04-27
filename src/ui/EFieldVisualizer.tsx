@@ -223,15 +223,15 @@ const SegmentEField: React.FC<SegmentEFieldProps> = ({ segment, segKey, cumulati
 
     const seg = segment;
     const segLen = seg.start.distanceTo(seg.end);
-    if (segLen < 0.1) return null;
+    const tooShort = segLen < 0.1;
 
     const { right, up } = useMemo(() => buildLocalFrame(seg.direction), [seg.direction]);
     const rgb = useMemo(() => wavelengthToRGB(seg.wavelength), [seg.wavelength]);
     const beamColor = useMemo(() => new Color(rgb.r, rgb.g, rgb.b), [rgb]);
 
     // Density-based sample counts proportional to segment length
-    const numCrossSections = Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, Math.round(segLen * SAMPLES_PER_MM)));
-    const numHelixSamples = Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, Math.round(segLen * HELIX_PER_MM)));
+    const numCrossSections = tooShort ? MIN_SAMPLES : Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, Math.round(segLen * SAMPLES_PER_MM)));
+    const numHelixSamples = tooShort ? MIN_SAMPLES : Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, Math.round(segLen * HELIX_PER_MM)));
 
     // Build arrow geometry (lines from axis to E-field tip) — updated each frame
     const arrowPositions = useMemo(() => new Float32Array(numCrossSections * 2 * 3), [numCrossSections]);
@@ -239,6 +239,8 @@ const SegmentEField: React.FC<SegmentEFieldProps> = ({ segment, segKey, cumulati
     const helixPositions = useMemo(() => new Float32Array((numHelixSamples - 1) * 2 * 3), [numHelixSamples]);
 
     useFrame(({ clock }: { clock: { getElapsedTime: () => number } }) => {
+        if (tooShort) return;
+
         const t = clock.getElapsedTime();
 
         // --- Update arrow lines (start→tip per cross-section) ---
@@ -352,6 +354,8 @@ const SegmentEField: React.FC<SegmentEFieldProps> = ({ segment, segKey, cumulati
 
     // ─── Beam-width indicator circles (static, every CIRCLE_SPACING_MM mm) ───
     const circlePositions = useMemo(() => {
+        if (tooShort) return new Float32Array(0);
+
         const numCircles = Math.max(1, Math.floor(segLen / CIRCLE_SPACING_MM));
         // Each circle: CIRCLE_SEGMENTS line segments × 2 endpoints × 3 components
         const posArr = new Float32Array(numCircles * CIRCLE_SEGMENTS * 2 * 3);
@@ -383,7 +387,9 @@ const SegmentEField: React.FC<SegmentEFieldProps> = ({ segment, segKey, cumulati
             }
         }
         return posArr.slice(0, ci);
-    }, [seg, segLen, right, up]);
+    }, [seg, segLen, right, up, tooShort]);
+
+    if (tooShort) return null;
 
     return (
         <group key={segKey}>

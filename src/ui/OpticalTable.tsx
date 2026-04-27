@@ -31,16 +31,20 @@ import { Card } from '../physics/components/Card';
 import { Sample, type ColloidTrapZone } from '../physics/components/Sample';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { QPD } from '../physics/components/QPD';
 import { TrappedBead } from '../physics/components/TrappedBead';
+import { PrismLens } from '../physics/components/PrismLens';
 
 import { RayVisualizer } from './RayVisualizer';
 
 import { BundleWaveVisualizer } from './BundleWaveVisualizer';
 import { GaussianBeamSegment, segmentBeamRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
-import { createSourceRays } from '../physics/SourceRayFactory';
+import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
+import { traceStableTableOverlay } from '../physics/tableTrace';
 import { serializeScene } from '../state/ubzSerializer';
 import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
+import type { SerializedBeamSegment, Solver1WorkerRequest, Solver1WorkerResponse } from '../physics/solver1Worker';
 
 /** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
 function rehydratePath(path: SerializedPath): Ray[] {
@@ -56,10 +60,40 @@ function rehydratePath(path: SerializedPath): Ray[] {
         isMainRay: r.isMainRay,
         polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
         interactionDistance: r.interactionDistance,
+        interactionComponentId: r.interactionComponentId,
+        entryPoint: r.entryPoint
+            ? new Vector3(r.entryPoint.x, r.entryPoint.y, r.entryPoint.z)
+            : undefined,
+        internalPath: r.internalPath?.map(p => new Vector3(p.x, p.y, p.z)),
         terminationPoint: r.terminationPoint
             ? new Vector3(r.terminationPoint.x, r.terminationPoint.y, r.terminationPoint.z)
             : undefined,
+        exitSurfaceId: r.exitSurfaceId,
+        suppressVisualization: r.suppressVisualization,
+        suppressOpenTail: r.suppressOpenTail,
     }));
+}
+
+function rehydrateBeamSegments(branches: SerializedBeamSegment[][]): GaussianBeamSegment[][] {
+    return branches.map(branch => branch.map(segment => ({
+        start: new Vector3(segment.start.x, segment.start.y, segment.start.z),
+        end: new Vector3(segment.end.x, segment.end.y, segment.end.z),
+        direction: new Vector3(segment.direction.x, segment.direction.y, segment.direction.z),
+        wavelength: segment.wavelength,
+        power: segment.power,
+        sourceId: segment.sourceId,
+        bundleKey: segment.bundleKey,
+        qx_start: segment.qx_start,
+        qx_end: segment.qx_end,
+        qy_start: segment.qy_start,
+        qy_end: segment.qy_end,
+        footprintStart: segment.footprintStart,
+        footprintEnd: segment.footprintEnd,
+        polarization: segment.polarization,
+        opticalPathLength: segment.opticalPathLength,
+        refractiveIndex: segment.refractiveIndex,
+        coherenceMode: segment.coherenceMode,
+    })));
 }
 
 function syncManagedTrapBeads(components: OpticalComponent[]): boolean {
@@ -102,6 +136,313 @@ function syncManagedTrapBeads(components: OpticalComponent[]): boolean {
     return changed;
 }
 
+function hasLiveForwardTraceSideEffects(components: OpticalComponent[]): boolean {
+    return components.some(component => component instanceof QPD || component instanceof TrappedBead);
+}
+
+function traceLiveForwardSideEffects(
+    components: OpticalComponent[],
+    makeSourceRays: () => Ray[],
+): void {
+    if (!hasLiveForwardTraceSideEffects(components)) return;
+    new Solver1(components).trace(makeSourceRays());
+}
+
+type BoundsSnapshot = {
+    id: string;
+    version: number;
+    center: Vector3;
+    radius: number;
+};
+
+export type ForwardTraceCache = {
+    componentIds: Set<string>;
+    componentBounds: Map<string, BoundsSnapshot>;
+    sourceKeys: string[];
+    pathsBySourceKey: Map<string, Ray[][]>;
+};
+
+export type ForwardTraceCacheResult = {
+    paths: Ray[][];
+    changedComponents: OpticalComponent[];
+};
+
+function componentBoundsSnapshot(component: OpticalComponent): BoundsSnapshot {
+    component.updateMatrices();
+    const min = component.bounds.min;
+    const max = component.bounds.max;
+    const center = new Vector3(
+        (min.x + max.x) * 0.5,
+        (min.y + max.y) * 0.5,
+        (min.z + max.z) * 0.5,
+    ).applyMatrix4(component.localToWorld);
+    const sx = max.x - min.x;
+    const sy = max.y - min.y;
+    const sz = max.z - min.z;
+    return {
+        id: component.id,
+        version: component.version,
+        center,
+        radius: 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz) + 0.25,
+    };
+}
+
+function componentBoundsById(components: OpticalComponent[]): Map<string, BoundsSnapshot> {
+    const bounds = new Map<string, BoundsSnapshot>();
+    for (const component of components) {
+        if (component.isGhost) continue;
+        bounds.set(component.id, componentBoundsSnapshot(component));
+    }
+    return bounds;
+}
+
+function sourceRayKey(ray: Ray, index: number): string {
+    const round = (value: number) => Math.round(value * 1e6) / 1e6;
+    return [
+        index,
+        ray.sourceId ?? '',
+        ray.isMainRay ? 1 : 0,
+        round(ray.origin.x),
+        round(ray.origin.y),
+        round(ray.origin.z),
+        round(ray.direction.x),
+        round(ray.direction.y),
+        round(ray.direction.z),
+        round(ray.wavelength),
+        round(ray.intensity),
+    ].join(':');
+}
+
+function sourceGroupKey(ray: Ray, fallbackKey: string): string {
+    return ray.sourceId ?? fallbackKey;
+}
+
+function sameSourceKeys(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+}
+
+function sameComponentIds(ids: Set<string>, components: OpticalComponent[]): boolean {
+    let count = 0;
+    for (const component of components) {
+        if (component.isGhost) continue;
+        count++;
+        if (!ids.has(component.id)) return false;
+    }
+    return ids.size === count;
+}
+
+function sourceBelongsToChangedComponent(ray: Ray, changedIds: Set<string>): boolean {
+    const sourceId = ray.sourceId;
+    if (!sourceId) return false;
+    if (changedIds.has(sourceId)) return true;
+    for (const id of changedIds) {
+        if (sourceId.startsWith(`${id}_`)) return true;
+    }
+    return false;
+}
+
+function raySegmentTouchesBounds(ray: Ray, bounds: BoundsSnapshot): boolean {
+    const toCenter = bounds.center.clone().sub(ray.origin);
+    const dir = ray.direction.clone().normalize();
+    const projected = toCenter.dot(dir);
+    if (projected < -bounds.radius) return false;
+
+    const maxT = ray.interactionDistance;
+    if (maxT !== undefined && projected > maxT + bounds.radius) return false;
+
+    const closestT = maxT === undefined
+        ? Math.max(0, projected)
+        : Math.max(0, Math.min(maxT, projected));
+    const closest = ray.origin.clone().addScaledVector(dir, closestT);
+    return closest.distanceToSquared(bounds.center) <= bounds.radius * bounds.radius;
+}
+
+function pathAffectedByChangedComponents(
+    path: Ray[],
+    changedIds: Set<string>,
+    oldBounds: Map<string, BoundsSnapshot>,
+    newBounds: Map<string, BoundsSnapshot>,
+): boolean {
+    if (path.length === 0) return false;
+    if (sourceBelongsToChangedComponent(path[0], changedIds)) return true;
+
+    for (const ray of path) {
+        if (ray.interactionComponentId && changedIds.has(ray.interactionComponentId)) return true;
+
+        for (const id of changedIds) {
+            const current = newBounds.get(id);
+            if (current && raySegmentTouchesBounds(ray, current)) return true;
+
+            const previous = oldBounds.get(id);
+            if (previous && raySegmentTouchesBounds(ray, previous)) return true;
+        }
+    }
+
+    return false;
+}
+
+function pathsReachAnyComponent(paths: Ray[][], componentIds: Set<string>): boolean {
+    if (componentIds.size === 0) return false;
+    for (const path of paths) {
+        for (const ray of path) {
+            if (ray.interactionComponentId && componentIds.has(ray.interactionComponentId)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function traceSourceBundles(solver: Solver1, sourceRays: Ray[], sourceKeys: string[]): Map<string, Ray[][]> {
+    const pathsBySourceKey = new Map<string, Ray[][]>();
+    const keyBySourceRay = new Map<Ray, string>();
+    for (let i = 0; i < sourceRays.length; i++) {
+        keyBySourceRay.set(sourceRays[i], sourceKeys[i]);
+        pathsBySourceKey.set(sourceKeys[i], []);
+    }
+
+    for (const path of solver.trace(sourceRays)) {
+        const key = keyBySourceRay.get(path[0]);
+        if (!key) continue;
+        pathsBySourceKey.get(key)!.push(path);
+    }
+    return pathsBySourceKey;
+}
+
+function flattenSourceBundles(sourceKeys: string[], pathsBySourceKey: Map<string, Ray[][]>): Ray[][] {
+    const paths: Ray[][] = [];
+    for (const key of sourceKeys) {
+        const bundle = pathsBySourceKey.get(key);
+        if (bundle) paths.push(...bundle);
+    }
+    return paths;
+}
+
+export function traceForwardWithDependencyCache(
+    solver: Solver1,
+    sourceRays: Ray[],
+    components: OpticalComponent[],
+    cacheRef: React.MutableRefObject<ForwardTraceCache | null>,
+): ForwardTraceCacheResult {
+    const sourceKeys = sourceRays.map(sourceRayKey);
+    const nextBounds = componentBoundsById(components);
+    const nextComponentIds = new Set(nextBounds.keys());
+    const cache = cacheRef.current;
+
+    const fullTrace = (
+        reportedChangedComponents = components.filter(component => !component.isGhost),
+    ) => {
+        const pathsBySourceKey = traceSourceBundles(solver, sourceRays, sourceKeys);
+        cacheRef.current = {
+            componentIds: nextComponentIds,
+            componentBounds: nextBounds,
+            sourceKeys,
+            pathsBySourceKey,
+        };
+        return {
+            paths: flattenSourceBundles(sourceKeys, pathsBySourceKey),
+            changedComponents: reportedChangedComponents,
+        };
+    };
+
+    if (!cache) return fullTrace();
+    if (!sameSourceKeys(cache.sourceKeys, sourceKeys)) return fullTrace();
+    if (!sameComponentIds(cache.componentIds, components)) return fullTrace();
+
+    const changedIds = new Set<string>();
+    for (const [id, bounds] of nextBounds) {
+        const previous = cache.componentBounds.get(id);
+        if (!previous || previous.version !== bounds.version) changedIds.add(id);
+    }
+
+    if (changedIds.size === 0) {
+        solver.trace(sourceRays);
+        return {
+            paths: flattenSourceBundles(sourceKeys, cache.pathsBySourceKey),
+            changedComponents: [],
+        };
+    }
+
+    const changedComponents = components.filter(component => changedIds.has(component.id));
+    const affectedSourceKeys = new Set<string>();
+    for (const key of sourceKeys) {
+        const bundle = cache.pathsBySourceKey.get(key);
+        if (!bundle) {
+            affectedSourceKeys.add(key);
+            continue;
+        }
+        if (bundle.some(path => pathAffectedByChangedComponents(path, changedIds, cache.componentBounds, nextBounds))) {
+            affectedSourceKeys.add(key);
+        }
+    }
+
+    if (affectedSourceKeys.size > 0) {
+        const affectedSourceGroups = new Set<string>();
+        for (let i = 0; i < sourceKeys.length; i++) {
+            const key = sourceKeys[i];
+            if (affectedSourceKeys.has(key)) {
+                affectedSourceGroups.add(sourceGroupKey(sourceRays[i], key));
+            }
+        }
+        for (let i = 0; i < sourceKeys.length; i++) {
+            const key = sourceKeys[i];
+            if (affectedSourceGroups.has(sourceGroupKey(sourceRays[i], key))) {
+                affectedSourceKeys.add(key);
+            }
+        }
+    }
+
+    if (affectedSourceKeys.size === 0) {
+        cacheRef.current = {
+            componentIds: nextComponentIds,
+            componentBounds: nextBounds,
+            sourceKeys,
+            pathsBySourceKey: cache.pathsBySourceKey,
+        };
+        solver.trace(sourceRays);
+        return {
+            paths: flattenSourceBundles(sourceKeys, cache.pathsBySourceKey),
+            changedComponents,
+        };
+    }
+
+    if (affectedSourceKeys.size > Math.ceil(sourceKeys.length * 0.85)) {
+        return fullTrace(changedComponents);
+    }
+
+    const pathsBySourceKey = new Map(cache.pathsBySourceKey);
+    const affectedSourceRays: Ray[] = [];
+    const affectedSourceKeyList: string[] = [];
+    for (let i = 0; i < sourceRays.length; i++) {
+        const key = sourceKeys[i];
+        if (!affectedSourceKeys.has(key)) continue;
+        affectedSourceRays.push(sourceRays[i]);
+        affectedSourceKeyList.push(key);
+    }
+    const retracedBundles = traceSourceBundles(solver, affectedSourceRays, affectedSourceKeyList);
+    for (const [key, bundle] of retracedBundles) {
+        pathsBySourceKey.set(key, bundle);
+    }
+
+    cacheRef.current = {
+        componentIds: nextComponentIds,
+        componentBounds: nextBounds,
+        sourceKeys,
+        pathsBySourceKey,
+    };
+
+    solver.trace(sourceRays);
+
+    return {
+        paths: flattenSourceBundles(sourceKeys, pathsBySourceKey),
+        changedComponents,
+    };
+}
+
 function trapBeamHasPower(beamSegments: GaussianBeamSegment[][]): boolean {
     return beamSegments.some(branch => branch.some(segment =>
         segment.coherenceMode === Coherence.Coherent && segment.power > 1e-9
@@ -141,6 +482,15 @@ import { useHaptic } from './useHaptic';
 
 type PMTRasterChannel = Pick<AnimationChannel, 'targetId' | 'property' | 'from' | 'to'>;
 type PMTRasterPlan = { pmt: PMT; xCh: PMTRasterChannel; yCh: PMTRasterChannel };
+type PendingForwardTrace = {
+    sceneText: string;
+    forwardRayCount: number;
+    sourceRayLimit: number;
+    applyPaths: boolean;
+    applyBeamSegments: boolean;
+    includeBeamSegments?: boolean;
+    returnPaths?: boolean;
+};
 
 function resolvePMTRasterChannels(
     components: OpticalComponent[],
@@ -233,6 +583,10 @@ export const OpticalTable: React.FC = () => {
     animStateRef.current.speed = animSpeed;
     const componentsRef = useRef(components);
     componentsRef.current = components;
+    const isDraggingRef = useRef(isDragging);
+    isDraggingRef.current = isDragging;
+    const solver2EnabledRef = useRef(rayConfig.solver2Enabled);
+    solver2EnabledRef.current = rayConfig.solver2Enabled;
 
     // Animation counter — increments force React re-render for fingerprint
     const [animTick, setAnimTick] = useState(0);
@@ -272,6 +626,21 @@ export const OpticalTable: React.FC = () => {
         const now = performance.now();
         let anyMoved = syncManagedTrapBeads(currentComponents);
         const trapBeamSegs = trapBeamSegsRef.current;
+
+        if (isDraggingRef.current) {
+            for (const sample of currentComponents) {
+                if (sample instanceof Sample) sample.pauseColloidDiffusion();
+            }
+            for (const bead of currentComponents) {
+                if (bead instanceof TrappedBead) bead.pauseIntegrator();
+            }
+            if (anyMoved && now - lastTrapRedrawMsRef.current > 33) {
+                lastTrapRedrawMsRef.current = now;
+                setAnimTickRef.current(t => t + 1);
+            }
+            return;
+        }
+
         const sampleTrapZones = colloidTrapZonesBySample(currentComponents, trapBeamSegs);
 
         for (const sample of currentComponents) {
@@ -311,22 +680,162 @@ export const OpticalTable: React.FC = () => {
     const solverPathsRef = useRef<Ray[][]>([]);
     const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
     const solver3PathsRef = useRef<Ray[][]>([]);
+    const forwardTraceCacheRef = useRef<ForwardTraceCache | null>(null);
+    const solver1WorkerRef = useRef<Worker | null>(null);
+    const solver1WorkerBusyRef = useRef(false);
+    const solver1WorkerPendingRef = useRef<PendingForwardTrace | null>(null);
+    const solver1WorkerTimerRef = useRef<number | null>(null);
+    const solver1WorkerJobIdRef = useRef(0);
+    const solver1WorkerJobsRef = useRef<Map<number, PendingForwardTrace>>(new Map());
     const lastOpticsFingerprintRef = useRef<string>('');
     const clampedForwardRayCount = Math.max(MIN_FORWARD_RAY_COUNT, Math.min(MAX_FORWARD_RAY_COUNT, rayConfig.rayCount));
     const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
+    const tracedForwardRayCount = clampedForwardRayCount;
+
+    const pumpSolver1Worker = () => {
+        if (solver1WorkerBusyRef.current) return;
+        const pending = solver1WorkerPendingRef.current;
+        if (!pending) return;
+
+        let worker = solver1WorkerRef.current;
+        if (!worker) {
+            worker = new Worker(new URL('../physics/solver1Worker.ts', import.meta.url), { type: 'module' });
+            worker.onmessage = (event: MessageEvent<Solver1WorkerResponse>) => {
+                const msg = event.data;
+                solver1WorkerBusyRef.current = false;
+                const job = solver1WorkerJobsRef.current.get(msg.jobId);
+                solver1WorkerJobsRef.current.delete(msg.jobId);
+                if (msg.jobId !== solver1WorkerJobIdRef.current) {
+                    pumpSolver1Worker();
+                    return;
+                }
+                if (!job) {
+                    pumpSolver1Worker();
+                    return;
+                }
+                if ((job.applyPaths || job.applyBeamSegments) && solver1WorkerPendingRef.current) {
+                    pumpSolver1Worker();
+                    return;
+                }
+                if (job.applyPaths && !isDraggingRef.current) {
+                    solver1WorkerPendingRef.current = null;
+                    pumpSolver1Worker();
+                    return;
+                }
+                if (msg.type === 'forward-done') {
+                    if (job.applyPaths && msg.paths) {
+                        const calculatedPaths = msg.paths.map(rehydratePath);
+                        setRays(calculatedPaths);
+                        setForwardRays(calculatedPaths);
+                        solverPathsRef.current = calculatedPaths;
+                    }
+                    if (job.applyBeamSegments && msg.beamSegments) {
+                        const nextBeamSegs = rehydrateBeamSegments(msg.beamSegments);
+                        trapBeamSegsRef.current = nextBeamSegs;
+                        if (solver2EnabledRef.current) {
+                            setBeamSegments(nextBeamSegs);
+                            beamSegsRef.current = nextBeamSegs;
+                        } else {
+                            setBeamSegments([]);
+                            beamSegsRef.current = [];
+                        }
+                    }
+                } else {
+                    console.warn('Solver 1 worker error:', msg.message);
+                }
+                pumpSolver1Worker();
+            };
+            solver1WorkerRef.current = worker;
+        }
+
+        solver1WorkerPendingRef.current = null;
+        solver1WorkerBusyRef.current = true;
+        const jobId = solver1WorkerJobIdRef.current + 1;
+        solver1WorkerJobIdRef.current = jobId;
+        const request: Solver1WorkerRequest = {
+            type: 'trace-forward',
+            jobId,
+            sceneText: pending.sceneText,
+            forwardRayCount: pending.forwardRayCount,
+            sourceRayLimit: pending.sourceRayLimit,
+            includeBeamSegments: pending.includeBeamSegments,
+            returnPaths: pending.returnPaths,
+        };
+        solver1WorkerJobsRef.current.set(jobId, pending);
+        worker.postMessage(request);
+    };
+
+    const scheduleSolver1WorkerTrace = (pending: PendingForwardTrace) => {
+        solver1WorkerPendingRef.current = pending;
+        if (solver1WorkerTimerRef.current !== null) return;
+        solver1WorkerTimerRef.current = window.setTimeout(() => {
+            solver1WorkerTimerRef.current = null;
+            pumpSolver1Worker();
+        }, 33);
+    };
+
+    useEffect(() => () => {
+        if (solver1WorkerTimerRef.current !== null) {
+            window.clearTimeout(solver1WorkerTimerRef.current);
+            solver1WorkerTimerRef.current = null;
+        }
+        solver1WorkerRef.current?.terminate();
+        solver1WorkerRef.current = null;
+        solver1WorkerBusyRef.current = false;
+        solver1WorkerPendingRef.current = null;
+        solver1WorkerJobsRef.current.clear();
+        solver1WorkerJobIdRef.current++;
+    }, []);
 
     const traceCenterBeamSegments = () => {
         syncManagedTrapBeads(components);
-        const solver1 = new Solver1(components);
-        // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
-        // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
-        const sourceRays = createSourceRays(components, Math.max(8, Math.min(clampedForwardRayCount, 16)), 'full');
-        return solver1.traceWithBeamSegments(sourceRays).beamSegments;
+        return traceStableTableOverlay(
+            components,
+            () => {
+                const solver1 = new Solver1(components);
+                // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
+                // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
+                const sourceRays = stablePreviewSourceRays(
+                    createSourceRays(components, clampedForwardRayCount, 'full'),
+                    Math.max(8, Math.min(tracedForwardRayCount, 16)),
+                );
+                return solver1.traceWithBeamSegments(sourceRays).beamSegments;
+            },
+        );
     };
 
     useEffect(() => {
         if (!components) return;
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
+
+        if (!isDragging) {
+            solver1WorkerPendingRef.current = null;
+            if (solver1WorkerTimerRef.current !== null) {
+                window.clearTimeout(solver1WorkerTimerRef.current);
+                solver1WorkerTimerRef.current = null;
+            }
+        }
+
+        if (isDragging) {
+            syncManagedTrapBeads(components);
+            const makeForwardSourceRays = () => createSourceRays(components, clampedForwardRayCount, 'full');
+            // Correctness during drag is more important than a clever partial
+            // update. A cached/preview trace can mix sparse bead-scatter rays
+            // with stale families and show physically impossible beam paths.
+            const calculatedPaths = traceStableTableOverlay(
+                components,
+                () => {
+                    const solver = new Solver1(components);
+                    return solver.trace(makeForwardSourceRays());
+                },
+            );
+            traceLiveForwardSideEffects(components, makeForwardSourceRays);
+            setRays(calculatedPaths);
+            setForwardRays(calculatedPaths);
+            solverPathsRef.current = calculatedPaths;
+            return;
+        }
+
         syncManagedTrapBeads(components);
         const sceneChanged = lastOpticsFingerprintRef.current !== opticsFingerprint;
         lastOpticsFingerprintRef.current = opticsFingerprint;
@@ -337,15 +846,39 @@ export const OpticalTable: React.FC = () => {
             card.hits = [];
         }
 
-        const solver = new Solver1(components);
-        const sourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
-
-        const calculatedPaths = solver.trace(sourceRays);
+        // Correctness first: full traces avoid stale/new ray-family mixing from
+        // the dependency cache, which was especially visible when dragging
+        // blockers around optical-trap and tutorial scenes.
+        forwardTraceCacheRef.current = null;
+        let solver: Solver1 | null = null;
+        const makeForwardSourceRays = () => {
+            const fullSourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
+            return tracedForwardRayCount < clampedForwardRayCount
+                ? stablePreviewSourceRays(fullSourceRays, tracedForwardRayCount)
+                : fullSourceRays;
+        };
+        const calculatedPaths = traceStableTableOverlay(components, () => {
+            solver = new Solver1(components);
+            return solver.trace(makeForwardSourceRays());
+        }).slice();
+        traceLiveForwardSideEffects(components, makeForwardSourceRays);
+        const absorberOnlyChange = false;
 
         // Post-trace: detect beam splits via angle histogram population analysis.
         // Only needed when E&M solver is enabled — the branching path logic
         // relies on marginal rays to detect population splits.
-        if (rayConfig.solver2Enabled) {
+        if (rayConfig.solver2Enabled && !isDragging) {
+            const syntheticMainOptics = new Set(
+                components
+                    .filter((component): component is PrismLens => component instanceof PrismLens)
+                    .map(component => component.name),
+            );
+            const pathHasSyntheticMainOpticExit = (path: Ray[]) => path.some(ray => {
+                const label = ray.exitSurfaceId;
+                if (!label) return false;
+                const componentName = label.split(':')[0];
+                return syntheticMainOptics.has(componentName);
+            });
             const surviving = calculatedPaths.filter(p => {
                 if (p.length < 2) return false;
                 const last = p[p.length - 1];
@@ -357,7 +890,9 @@ export const OpticalTable: React.FC = () => {
             const allSplitCandidates: SplitEntry[] = [];
             for (const p of surviving) {
                 for (let i = p.length - 1; i >= 0; i--) {
-                    if (p[i].exitSurfaceId) {
+                    const label = p[i].exitSurfaceId;
+                    const componentName = label?.split(':')[0] ?? '';
+                    if (label && syntheticMainOptics.has(componentName)) {
                         allSplitCandidates.push({
                             path: p,
                             exitRay: p[i],
@@ -490,6 +1025,7 @@ export const OpticalTable: React.FC = () => {
                 // no interactionDistance (it went to infinity, not stopped by an object)
                 const boundaryPaths = calculatedPaths.filter(p => {
                     if (p.length < 1) return false;
+                    if (!pathHasSyntheticMainOpticExit(p)) return false;
                     const last = p[p.length - 1];
                     return last.intensity > 0 && last.interactionDistance === undefined;
                 });
@@ -584,19 +1120,46 @@ export const OpticalTable: React.FC = () => {
         setForwardRays(calculatedPaths);
         solverPathsRef.current = calculatedPaths;
 
+        if (isDragging) {
+            return;
+        }
+
         let beamSegs: GaussianBeamSegment[][] = [];
         const trappedBeads = components.filter(c => c instanceof TrappedBead) as TrappedBead[];
-        if (rayConfig.solver2Enabled || trappedBeads.length > 0) {
+        const trappedBeadIds = new Set(trappedBeads.map(bead => bead.id));
+        if (absorberOnlyChange && trappedBeads.length > 0) {
+            if (!pathsReachAnyComponent(calculatedPaths, trappedBeadIds)) {
+                trapBeamSegsRef.current = [];
+                if (rayConfig.solver2Enabled) {
+                    setBeamSegments([]);
+                    beamSegsRef.current = [];
+                }
+            } else {
+                scheduleSolver1WorkerTrace({
+                    sceneText: serializeScene(components),
+                    forwardRayCount: clampedForwardRayCount,
+                    sourceRayLimit: clampedForwardRayCount,
+                    applyPaths: false,
+                    applyBeamSegments: true,
+                    includeBeamSegments: true,
+                    returnPaths: false,
+                });
+            }
+        } else if (rayConfig.solver2Enabled || trappedBeads.length > 0) {
             try {
-                beamSegs = solver.buildBeamSegments(calculatedPaths);
+                beamSegs = (solver ?? new Solver1(components)).buildBeamSegments(calculatedPaths);
             } catch (e) {
                 console.warn('Solver 2 error:', e);
             }
+            trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
+            const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
+            setBeamSegments(visibleBeamSegs);
+            beamSegsRef.current = visibleBeamSegs;
+        } else {
+            trapBeamSegsRef.current = [];
+            setBeamSegments([]);
+            beamSegsRef.current = [];
         }
-        trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
-        const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
-        setBeamSegments(visibleBeamSegs);
-        beamSegsRef.current = visibleBeamSegs;
 
         if (sceneChanged) {
             let hasCamera = false;
@@ -645,7 +1208,7 @@ export const OpticalTable: React.FC = () => {
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [opticsFingerprint, rayConfig]);
+    }, [isDragging, opticsFingerprint, rayConfig]);
 
     // ─── Effect 1b: Solver 3 — backward trace from ALL detectors, run in a
     // worker pool.  Each worker runs an independent infinite-progressive

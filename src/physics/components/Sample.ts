@@ -212,6 +212,10 @@ export class Sample extends OpticalComponent {
         return movedSq > 1e-12;
     }
 
+    pauseColloidDiffusion(): void {
+        this._lastColloidStepTimeMs = null;
+    }
+
     configureColloidFlowCell(options: {
         count?: number;
         radius?: number;
@@ -398,7 +402,7 @@ export class Sample extends OpticalComponent {
         const localDir = this._volumeLocalDir.copy(worldRay.direction).transformDirection(this.worldToLocal).normalize();
 
         // Analytical AABB slab intersection — no triangle mesh, no edge artifacts.
-        const box = Sample.BOUNDS;
+        const box = this.getVolumeBoundsLocal();
         let tMin = -Infinity, tMax = Infinity;
 
         // X slab

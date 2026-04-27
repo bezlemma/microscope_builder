@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 
 /**
  * QPD (Quadrant Photodiode) — a four-quadrant position-sensitive detector.
@@ -160,13 +160,12 @@ export class QPD extends OpticalComponent {
         }
 
         return {
-            rays: [{
-                ...ray,
+            rays: [childRay(ray, {
                 origin: hit.point.clone().addScaledVector(ray.direction, 6.2),
                 direction: ray.direction.clone(),
                 intensity: ray.intensity * leaked,
                 opticalPathLength: ray.opticalPathLength + hit.t + 6.2,
-            }],
+            })],
         };
     }
 }

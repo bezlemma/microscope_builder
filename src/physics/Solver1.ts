@@ -1,12 +1,15 @@
 import { Vector3 } from 'three';
 import { Ray, InteractionResult } from './types';
 import { OpticalComponent } from './Component';
+import { Card } from './components/Card';
 import { Laser } from './components/Laser';
 import { Lamp } from './components/Lamp';
+import { QPD } from './components/QPD';
 import { PointSourceBase } from './components/PointSourceBase';
 import { ConeSource3D } from './components/ConeSource3D';
 import { WedgeSource2D } from './components/WedgeSource2D';
 import { StructuredSource } from './components/StructuredSource';
+import { TrappedBead } from './components/TrappedBead';
 import type { GaussianBeamSegment } from './Solver2';
 
 /** A component counts as an emitter when forward rays hitting it should be
@@ -28,6 +31,44 @@ interface BeamletDraft extends GaussianBeamSegment {
 export interface ForwardTraceResult {
     paths: Ray[][];
     beamSegments: GaussianBeamSegment[][];
+}
+
+function raySphereNearT(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    cx: number, cy: number, cz: number,
+    radius: number,
+): number | null {
+    const toCx = cx - ox;
+    const toCy = cy - oy;
+    const toCz = cz - oz;
+    const along = toCx * dx + toCy * dy + toCz * dz;
+    if (along < -radius) return null;
+    const dist2 = toCx * toCx + toCy * toCy + toCz * toCz - along * along;
+    const radius2 = radius * radius;
+    if (dist2 > radius2) return null;
+    const halfChord = Math.sqrt(Math.max(0, radius2 - dist2));
+    const tFar = along + halfChord;
+    if (tFar <= 0.001) return null;
+    return Math.max(0, along - halfChord);
+}
+
+function writeComponentBroadPhaseBounds(component: OpticalComponent, out: Float64Array, offset: number): void {
+    component.updateMatrices();
+    const min = component.bounds.min;
+    const max = component.bounds.max;
+    const center = new Vector3(
+        (min.x + max.x) * 0.5,
+        (min.y + max.y) * 0.5,
+        (min.z + max.z) * 0.5,
+    ).applyMatrix4(component.localToWorld);
+    const sx = max.x - min.x;
+    const sy = max.y - min.y;
+    const sz = max.z - min.z;
+    out[offset] = center.x;
+    out[offset + 1] = center.y;
+    out[offset + 2] = center.z;
+    out[offset + 3] = 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz);
 }
 
 function initialQ(waistRadius: number, wavelengthMm: number): { re: number; im: number } {
@@ -53,17 +94,30 @@ function createLegacyQPair(
     return { qStart, qEnd };
 }
 
+function lampSpectralWavelengths(lamp: Lamp): number[] {
+    const wavelengths = lamp.spectralWavelengths.filter(wavelength =>
+        Number.isFinite(wavelength) && wavelength > 0
+    );
+    return wavelengths.length > 0 ? wavelengths : [550];
+}
+
 export class Solver1 {
     maxDepth: number = 32;
     scene: OpticalComponent[];
     private emitters: Set<OpticalComponent>;
+    private broadPhaseBounds: Float64Array;
 
     constructor(scene: OpticalComponent[]) {
         this.scene = scene.filter(c => !c.isGhost);
         this.emitters = new Set(this.scene.filter(isEmitter));
+        this.broadPhaseBounds = new Float64Array(this.scene.length * 4);
+        for (let i = 0; i < this.scene.length; i++) {
+            writeComponentBroadPhaseBounds(this.scene[i], this.broadPhaseBounds, i * 4);
+        }
     }
 
     trace(sources: Ray[]): Ray[][] {
+        this.resetTraceAccumulators();
         const allPaths: Ray[][] = [];
 
         for (const sourceRay of sources) {
@@ -84,6 +138,14 @@ export class Solver1 {
         }
 
         return allPaths;
+    }
+
+    private resetTraceAccumulators(): void {
+        for (const component of this.scene) {
+            if (component instanceof Card) component.resetHits();
+            else if (component instanceof QPD) component.resetAccumulator();
+            else if (component instanceof TrappedBead) component.resetAccumulator();
+        }
     }
 
     traceWithBeamSegments(sources: Ray[]): ForwardTraceResult {
@@ -164,7 +226,19 @@ export class Solver1 {
         let nearestHit = null;
         let nearestComponent = null;
 
-        for (const component of this.scene) {
+        for (let i = 0; i < this.scene.length; i++) {
+            const component = this.scene[i];
+            const offset = i * 4;
+            const boundT = raySphereNearT(
+                currentRay.origin.x, currentRay.origin.y, currentRay.origin.z,
+                currentRay.direction.x, currentRay.direction.y, currentRay.direction.z,
+                this.broadPhaseBounds[offset],
+                this.broadPhaseBounds[offset + 1],
+                this.broadPhaseBounds[offset + 2],
+                this.broadPhaseBounds[offset + 3],
+            );
+            if (boundT === null || boundT > nearestT) continue;
+
             const hit = component.chkIntersection(currentRay, nearestT);
 
             if (hit && hit.t < nearestT && hit.t > 0.001) {
@@ -243,8 +317,10 @@ export class Solver1 {
             }
 
             if (component instanceof Lamp) {
-                for (const wavelengthNm of component.spectralWavelengths) {
-                    targets.set(`${component.id}_${wavelengthNm}nm`, component.additiveOpacity);
+                const spectralWavelengths = lampSpectralWavelengths(component);
+                const spectralCount = spectralWavelengths.length;
+                for (const wavelengthNm of spectralWavelengths) {
+                    targets.set(`${component.id}_${wavelengthNm}nm`, component.power / spectralCount);
                 }
             }
         }
@@ -269,7 +345,7 @@ export class Solver1 {
 
             if (component instanceof Lamp) {
                 radii.set(component.id, component.beamRadius);
-                for (const wavelengthNm of component.spectralWavelengths) {
+                for (const wavelengthNm of lampSpectralWavelengths(component)) {
                     radii.set(`${component.id}_${wavelengthNm}nm`, component.beamRadius);
                 }
             }
@@ -355,6 +431,8 @@ export class Solver1 {
                     traversed += length;
                 }
             }
+
+            if (ray.suppressVisualization) break;
 
             const segmentLength = this.resolveAirSegmentLength(path, i);
             if (segmentLength < 1e-6) continue;

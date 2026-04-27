@@ -987,8 +987,6 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
 
-    if (!component || !component.rotation || !component.position) return null;
-
     const aperture = component.apertureRadius || 10;
     const thickness = component.thickness || 2;
 
@@ -1086,8 +1084,6 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
 export const AsphericLensVisualizer = ({ component }: { component: AsphericLens }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
-
-    if (!component || !component.rotation || !component.position) return null;
 
     const aperture = component.apertureRadius || 10;
     const thickness = component.thickness || 2;
@@ -1245,8 +1241,6 @@ export const IdealLensVisualizer = ({ component }: { component: IdealLens }) => 
 };
 
 export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
-    if (!component || !component.rotation || !component.position) return null;
-
     const geometry = useMemo(() => {
         const segsY = 24;
         const segsX = 2;
@@ -1391,7 +1385,6 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
 };
 
 export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-    if (!component || !component.rotation || !component.position) return null;
     const geometry = useMemo(() => component.buildDisplayGeometry(), [component.version]);
 
     return (
@@ -1418,7 +1411,6 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
 // ─── Legacy optical-table rendering helpers ──────────────────────────
 
 export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolygonOptic }) => {
-    if (!component || !component.rotation || !component.position) return null;
     const [blend] = useAtom(cameraBlendAtom);
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
@@ -1700,8 +1692,6 @@ const DoubletOutline: React.FC<{
 export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDoublet }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
-
-    if (!component || !component.rotation || !component.position) return null;
 
     const [blend] = useAtom(cameraBlendAtom);
 
@@ -2092,6 +2082,35 @@ export const AODVisualizer: React.FC<{ component: AOD }> = ({ component }) => {
  */
 export const GhostVisualizer = ({ component }: { component: OpticalComponent }) => {
     const GHOST_COLOR = '#007fff';
+
+    // Guess an aperture radius from the component; fall back to 12.7 mm.
+    const anyComp = component as any;
+    const radius =
+        typeof anyComp.diameter === 'number' ? anyComp.diameter / 2 :
+        typeof anyComp.apertureRadius === 'number' ? anyComp.apertureRadius :
+        typeof anyComp.radius === 'number' ? anyComp.radius :
+        12.7;
+
+    // Build a ring of points in the component's local XY plane (the mirror/lens aperture plane).
+    const ringPoints = useMemo(() => {
+        const pts: [number, number, number][] = [];
+        const N = 64;
+        for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            pts.push([Math.cos(a) * radius, Math.sin(a) * radius, 0]);
+        }
+        return pts;
+    }, [radius]);
+
+    // Small cross at the center to show the exact target point.
+    const crossPoints: Array<[number, number, number][]> = useMemo(() => {
+        const h = radius * 0.25;
+        return [
+            [[-h, 0, 0], [h, 0, 0]],
+            [[0, -h, 0], [0, h, 0]],
+        ];
+    }, [radius]);
+
     if (component instanceof Camera) {
         const width = Camera.BODY_WIDTH;
         const height = Camera.BODY_HEIGHT;
@@ -2146,34 +2165,6 @@ export const GhostVisualizer = ({ component }: { component: OpticalComponent }) 
             </group>
         );
     }
-
-    // Guess an aperture radius from the component; fall back to 12.7 mm.
-    const anyComp = component as any;
-    const radius =
-        typeof anyComp.diameter === 'number' ? anyComp.diameter / 2 :
-        typeof anyComp.apertureRadius === 'number' ? anyComp.apertureRadius :
-        typeof anyComp.radius === 'number' ? anyComp.radius :
-        12.7;
-
-    // Build a ring of points in the component's local XY plane (the mirror/lens aperture plane).
-    const ringPoints = useMemo(() => {
-        const pts: [number, number, number][] = [];
-        const N = 64;
-        for (let i = 0; i <= N; i++) {
-            const a = (i / N) * Math.PI * 2;
-            pts.push([Math.cos(a) * radius, Math.sin(a) * radius, 0]);
-        }
-        return pts;
-    }, [radius]);
-
-    // Small cross at the center to show the exact target point.
-    const crossPoints: Array<[number, number, number][]> = useMemo(() => {
-        const h = radius * 0.25;
-        return [
-            [[-h, 0, 0], [h, 0, 0]],
-            [[0, -h, 0], [0, h, 0]],
-        ];
-    }, [radius]);
 
     return (
         <group

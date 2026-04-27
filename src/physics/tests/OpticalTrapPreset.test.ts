@@ -13,6 +13,8 @@ import { Camera } from '../components/Camera';
 import { Lamp } from '../components/Lamp';
 import { Aperture } from '../components/Aperture';
 import { Blocker } from '../components/Blocker';
+import { traceStableTableOverlay } from '../tableTrace';
+import type { Ray } from '../types';
 
 function findComponent<T>(scene: unknown[], ctor: new (...args: any[]) => T): T {
     const component = scene.find(c => c instanceof ctor);
@@ -36,6 +38,56 @@ function traceTrap(offset: [number, number, number]) {
     const result = solver.traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
     bead.accumulateGradientTrapForce(result.beamSegments);
     return { scene, bead, paths: result.paths, beamSegments: result.beamSegments };
+}
+
+function componentName(scene: unknown[], id: string | undefined): string | null {
+    if (!id) return null;
+    return (scene.find(c => (c as { id?: string }).id === id) as { name?: string } | undefined)?.name ?? null;
+}
+
+function visibleInteractionSequence(scene: unknown[], path: Ray[]): string[] {
+    const names: string[] = [];
+    for (const ray of path) {
+        if (ray.suppressVisualization) break;
+        const name = componentName(scene, ray.interactionComponentId);
+        if (name) names.push(name);
+    }
+    return names;
+}
+
+function visiblePointSignature(path: Ray[]): string {
+    const points: string[] = [];
+    const pushPoint = (p: Vector3) => points.push(`${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)}`);
+    for (const ray of path) {
+        if (ray.entryPoint) pushPoint(ray.entryPoint);
+        if (ray.internalPath) {
+            for (const p of ray.internalPath) pushPoint(p);
+        }
+        pushPoint(ray.origin);
+        if (ray.suppressVisualization) break;
+    }
+    return points.join('|');
+}
+
+function visibleNonDumpGeometry(scene: unknown[], paths: Ray[][], dumpName: string): string[] {
+    return paths
+        .filter(path => !visibleInteractionSequence(scene, path).includes(dumpName))
+        .map(path => visiblePointSignature(path))
+        .sort();
+}
+
+function visibleHitCount(scene: unknown[], paths: Ray[][], name: string): number {
+    let count = 0;
+    for (const path of paths) {
+        for (const ray of path) {
+            if (ray.suppressVisualization) break;
+            if (componentName(scene, ray.interactionComponentId) === name) {
+                count++;
+                break;
+            }
+        }
+    }
+    return count;
 }
 
 describe('Optical Trap preset', () => {
@@ -156,6 +208,7 @@ describe('Optical Trap preset', () => {
         const paths = solver.trace(createSourceRays(scene, 72, 'full'));
 
         const escaping = paths.filter(path => {
+            if (path.some(ray => ray.suppressVisualization)) return false;
             if (path[0]?.sourceId !== laser.id) return false;
             const last = path[path.length - 1];
             if (!last || last.interactionComponentId || last.terminationPoint) return false;
@@ -164,6 +217,245 @@ describe('Optical Trap preset', () => {
         });
 
         expect(escaping).toHaveLength(0);
+    });
+
+    test('suppresses microscopic bead surface glints from the table ray overlay', () => {
+        const scene = createOpticalTrapScene();
+        const laser = findComponent(scene, Laser);
+        const bead = findComponent(scene, TrappedBead);
+        const solver = new Solver1(scene);
+        const paths = solver.trace(createSourceRays(scene, 72, 'full'));
+
+        const hiddenBeadBranches = paths.filter(path =>
+            path[0]?.sourceId === laser.id && path.some(ray => ray.suppressVisualization),
+        );
+
+        expect(hiddenBeadBranches.length).toBeGreaterThan(0);
+        for (const path of hiddenBeadBranches) {
+            const beadChildIndex = path.findIndex((_, index) =>
+                index > 0 && path[index - 1]?.interactionComponentId === bead.id,
+            );
+            expect(beadChildIndex).toBeGreaterThan(0);
+            expect(path[beadChildIndex]!.suppressVisualization).toBe(true);
+        }
+    });
+
+    test('visible trap beam keeps a central post-bead branch while hiding off-axis bead fan rays', () => {
+        const scene = createOpticalTrapScene();
+        const laser = findComponent(scene, Laser);
+        const bead = findComponent(scene, TrappedBead);
+        const solver = new Solver1(scene);
+        const paths = solver.trace(createSourceRays(scene, 72, 'full'));
+
+        const visibleMainAfterBead = paths.some(path => {
+            if (path[0]?.sourceId !== laser.id || !path[0]?.isMainRay) return false;
+            const beadIndex = path.findIndex(ray => ray.interactionComponentId === bead.id);
+            if (beadIndex < 0) return false;
+            return path.slice(beadIndex + 1).some(ray => !ray.suppressVisualization);
+        });
+
+        const hiddenOffAxisAfterBead = paths.some(path => {
+            if (path[0]?.sourceId !== laser.id || path[0]?.isMainRay) return false;
+            const beadIndex = path.findIndex(ray => ray.interactionComponentId === bead.id);
+            if (beadIndex < 0) return false;
+            return path.slice(beadIndex + 1).some(ray => ray.suppressVisualization);
+        });
+
+        expect(visibleMainAfterBead).toBe(true);
+        expect(hiddenOffAxisAfterBead).toBe(true);
+    });
+
+    test('off-axis bead branches suppress open tails without hiding collected dump rays', () => {
+        const scene = createOpticalTrapScene();
+        const laser = findComponent(scene, Laser);
+        const bead = findComponent(scene, TrappedBead);
+        const solver = new Solver1(scene);
+        const paths = solver.trace(createSourceRays(scene, 144, 'full'));
+
+        expect(visibleHitCount(scene, paths, 'DM2 Transmitted IR Dump')).toBeGreaterThan(20);
+
+        const suppressedOpenTailBranches = paths.filter(path => {
+            if (path[0]?.sourceId !== laser.id || path[0]?.isMainRay) return false;
+            if (!path.some(ray => ray.interactionComponentId === bead.id)) return false;
+            return path.some(ray => ray.suppressOpenTail);
+        });
+
+        expect(suppressedOpenTailBranches.length).toBeGreaterThan(0);
+    });
+
+    test('tiny drag of the transmitted IR dump keeps the collected beam visibly hitting it', () => {
+        const scene = createOpticalTrapScene();
+        const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
+        expect(dump).toBeDefined();
+
+        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const beforeHits = visibleHitCount(scene, beforePaths, dump!.name);
+
+        dump!.position.y += 0.2;
+        dump!.version++;
+
+        const afterPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterHits = visibleHitCount(scene, afterPaths, dump!.name);
+
+        expect(beforeHits).toBeGreaterThan(20);
+        expect(afterHits).toBeGreaterThan(20);
+        expect(Math.abs(afterHits - beforeHits)).toBeLessThanOrEqual(
+            Math.max(2, Math.ceil(beforeHits * 0.1)),
+        );
+    });
+
+    test('tiny drag of the transmitted IR dump does not change upstream visible beam geometry', () => {
+        const scene = createOpticalTrapScene();
+        const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
+        expect(dump).toBeDefined();
+
+        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 72, 'full'));
+        const before = visibleNonDumpGeometry(scene, beforePaths, dump!.name);
+
+        dump!.position.y += 0.2;
+        dump!.version++;
+
+        const afterPaths = new Solver1(scene).trace(createSourceRays(scene, 72, 'full'));
+        const after = visibleNonDumpGeometry(scene, afterPaths, dump!.name);
+
+        expect(after).toEqual(before);
+    });
+
+    test('moving an off-beam transmitted IR dump laterally does not change visible beam geometry', () => {
+        const scene = createOpticalTrapScene();
+        const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
+        expect(dump).toBeDefined();
+
+        dump!.position.y += 45;
+        dump!.version++;
+
+        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        expect(visibleHitCount(scene, beforePaths, dump!.name)).toBe(0);
+        const before = visibleNonDumpGeometry(scene, beforePaths, dump!.name);
+
+        dump!.position.x -= 20;
+        dump!.version++;
+        const afterLeftPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterLeft = visibleNonDumpGeometry(scene, afterLeftPaths, dump!.name);
+
+        dump!.position.x += 40;
+        dump!.version++;
+        const afterRightPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterRight = visibleNonDumpGeometry(scene, afterRightPaths, dump!.name);
+
+        expect(visibleHitCount(scene, afterLeftPaths, dump!.name)).toBe(0);
+        expect(visibleHitCount(scene, afterRightPaths, dump!.name)).toBe(0);
+        expect(afterLeft).toEqual(before);
+        expect(afterRight).toEqual(before);
+    });
+
+    test('drag pause prevents stochastic specimen motion from catching up on release', () => {
+        const scene = createOpticalTrapScene();
+        const sample = scene.find((c): c is Sample => c instanceof Sample && c.name === 'Trap Flow Cell');
+        const bead = findComponent(scene, TrappedBead);
+        expect(sample).toBeDefined();
+
+        sample!.stepColloidDiffusion(0);
+        bead.applyForceStep(0);
+
+        const colloidBefore = sample!.colloidSpheres.map(s => s.center.clone());
+        const beadBefore = bead.specimenOffset.clone();
+
+        sample!.pauseColloidDiffusion();
+        bead.pauseIntegrator();
+        sample!.stepColloidDiffusion(10_000);
+        bead.applyForceStep(10_000);
+
+        for (let i = 0; i < colloidBefore.length; i++) {
+            expect(sample!.colloidSpheres[i]!.center.distanceToSquared(colloidBefore[i]!)).toBe(0);
+        }
+        expect(bead.specimenOffset.distanceToSquared(beadBefore)).toBe(0);
+    });
+
+    test('stable table trace ignores dynamic bead offsets when an off-beam dump moves', () => {
+        const scene = createOpticalTrapScene();
+        const bead = findComponent(scene, TrappedBead);
+        const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
+        expect(dump).toBeDefined();
+
+        dump!.position.y += 45;
+        dump!.version++;
+        bead.specimenOffset.set(0.004, -0.003, 0.001);
+
+        const trace = () => traceStableTableOverlay(
+            scene,
+            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+        );
+
+        const beforePaths = trace();
+        expect(visibleHitCount(scene, beforePaths, dump!.name)).toBe(0);
+        const before = visibleNonDumpGeometry(scene, beforePaths, dump!.name);
+        expect(bead.specimenOffset.x).toBeCloseTo(0.004, 12);
+
+        bead.specimenOffset.set(-0.006, 0.002, -0.001);
+        dump!.position.x += 30;
+        dump!.version++;
+
+        const afterPaths = trace();
+        const after = visibleNonDumpGeometry(scene, afterPaths, dump!.name);
+        expect(visibleHitCount(scene, afterPaths, dump!.name)).toBe(0);
+        expect(after).toEqual(before);
+        expect(bead.specimenOffset.x).toBeCloseTo(-0.006, 12);
+    });
+
+    test('stable table trace preserves live detector and bead accumulator state', () => {
+        const scene = createOpticalTrapScene();
+        const bead = findComponent(scene, TrappedBead);
+        const qpd = findComponent(scene, QPD);
+        bead.specimenOffset.set(0.004, -0.003, 0.001);
+        bead.forceAccumulator.set(1, 2, 3);
+        bead.hitsThisFrame = 4;
+        qpd.quadrants = [1, 2, 3, 4];
+        qpd.quadrantHits = [5, 6, 7, 8];
+        qpd.totalHits = 26;
+
+        traceStableTableOverlay(
+            scene,
+            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+        );
+
+        expect(bead.specimenOffset.toArray()).toEqual([0.004, -0.003, 0.001]);
+        expect(bead.forceAccumulator.toArray()).toEqual([1, 2, 3]);
+        expect(bead.hitsThisFrame).toBe(4);
+        expect(qpd.quadrants).toEqual([1, 2, 3, 4]);
+        expect(qpd.quadrantHits).toEqual([5, 6, 7, 8]);
+        expect(qpd.totalHits).toBe(26);
+    });
+
+    test('forward traces reset QPD accumulators instead of accumulating history', () => {
+        const scene = createOpticalTrapScene();
+        const qpd = findComponent(scene, QPD);
+
+        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const firstHits = qpd.totalHits;
+        const firstSignal = qpd.signalSum;
+
+        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+
+        expect(firstHits).toBeGreaterThan(0);
+        expect(qpd.totalHits).toBe(firstHits);
+        expect(qpd.signalSum).toBeCloseTo(firstSignal, 12);
+    });
+
+    test('live trace after stable overlay restores displaced bead ray momentum', () => {
+        const scene = createOpticalTrapScene();
+        const bead = findComponent(scene, TrappedBead);
+        bead.specimenOffset.set(0, 0, 0.005);
+
+        traceStableTableOverlay(
+            scene,
+            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+        );
+        expect(bead.forceAccumulator.length()).toBe(0);
+
+        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+
+        expect(bead.forceAccumulator.length()).toBeGreaterThan(0);
     });
 
     test('keeps the trapped bead inside the flow cell bounds', () => {

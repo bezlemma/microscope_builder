@@ -80,6 +80,14 @@ export class TrappedBead extends OpticalComponent {
     rayMomentumScale: number;
     /** Multiplier for the physical bead-surface Fresnel reflection. */
     surfaceReflectionScale: number;
+    /** Whether microscopic bead surface reflections should be drawn as table
+     *  rays. Momentum still includes the Fresnel term either way. */
+    showSurfaceReflectionRays: boolean;
+    /** Whether escaped refracted post-bead rays should draw open table tails.
+     *  Component-to-component segments are still visible so dumps and QPDs
+     *  show the collected return beam, but uncollected bead scatter does not
+     *  turn into long bench-wide lines. */
+    showOutgoingRayVisualization: boolean;
     /** Scale for the beam-envelope gradient force accumulated from Solver 2
      *  Gaussian segments. */
     gradientForceScale: number;
@@ -136,6 +144,8 @@ export class TrappedBead extends OpticalComponent {
                                      // override
         this.rayMomentumScale = 0.02;
         this.surfaceReflectionScale = 1;
+        this.showSurfaceReflectionRays = false;
+        this.showOutgoingRayVisualization = false;
         this.gradientForceScale = 0.08;
         this.trapCaptureRadius = 0.02;
         this.trapAxialCaptureRange = 0.006;
@@ -314,6 +324,7 @@ export class TrappedBead extends OpticalComponent {
                 direction: reflectedEntryWorld,
                 intensity: ray.intensity * fresnelR,
                 opticalPathLength: ray.opticalPathLength + hit.t * this.iorMedium,
+                suppressVisualization: !this.showSurfaceReflectionRays,
             }));
         }
         outRays.push(childRay(ray, {
@@ -329,6 +340,7 @@ export class TrappedBead extends OpticalComponent {
             // chord nicely if it wants to (currently unused but cheap).
             entryPoint: hit.point.clone(),
             terminationPoint: exitedNormally ? undefined : exitWorld.clone(),
+            suppressOpenTail: !this.showOutgoingRayVisualization && ray.isMainRay !== true,
         }));
         return {
             rays: outRays,
@@ -560,6 +572,11 @@ export class TrappedBead extends OpticalComponent {
     resetAccumulator(): void {
         this.forceAccumulator.set(0, 0, 0);
         this.hitsThisFrame = 0;
+    }
+
+    pauseIntegrator(): void {
+        this.lastStepTimeMs = null;
+        this.resetAccumulator();
     }
 
     private limitOpticalStep(step: Vector3): void {

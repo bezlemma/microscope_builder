@@ -75,7 +75,7 @@ describe('Tutorial preset flow', () => {
         camera.sensorResX = 4;
         camera.sensorResY = 4;
         camera.sensorNA = ghost!.sensorNA;
-        camera.samplesPerPixel = 1;
+        camera.samplesPerPixel = 4;
         camera.setPosition(ghost!.position.x, ghost!.position.y, ghost!.position.z);
         camera.panAngle = ghost!.panAngle;
         camera.tiltAngle = ghost!.tiltAngle;
@@ -88,7 +88,7 @@ describe('Tutorial preset flow', () => {
         const solver1 = new Solver1(scene);
         const trace = solver1.traceWithBeamSegments(createSourceRays(scene, 24, 'center'));
         const solver3 = new Solver3(scene, trace.beamSegments);
-        const result = solver3.render(camera, 8);
+        const result = solver3.render(camera, 16);
 
         expect(result.paths.length).toBeGreaterThan(0);
         expect(result.emissionImage.length).toBe(16);

@@ -151,6 +151,8 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof Lamp) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
+        lines.push(`sourcePointCount = ${fmt(comp.sourcePointCount)}`);
+        lines.push(`emitterRadius = ${fmt(comp.emitterRadius)}`);
         lines.push(`spectralWavelengths = ${comp.spectralWavelengths.map(w => fmt(w)).join(', ')}`);
     } else if (comp instanceof PointSource2D || comp instanceof PointSource3D) {
         writeSourceProps(comp, lines);
@@ -420,6 +422,7 @@ function writeSpectralProfile(sp: SpectralProfile, lines: string[], prefix: stri
 // ════════════════════════════════════════════════════════════
 
 interface PropMap { [key: string]: string }
+const MAX_LAMP_SOURCE_POINTS = 32;
 
 export function deserializeScene(text: string): OpticalComponent[] {
     const components: OpticalComponent[] = [];
@@ -509,6 +512,20 @@ function num(props: PropMap, key: string, fallback: number): number {
     if (props[key] === undefined) return fallback;
     const v = parseFloat(props[key]);
     return isNaN(v) ? fallback : v;
+}
+
+function finiteNum(props: PropMap, key: string, fallback: number): number {
+    const value = num(props, key, fallback);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function parseLampSpectralWavelengths(value: string | undefined): number[] | null {
+    if (value === undefined) return null;
+    const wavelengths = value
+        .split(',')
+        .map(s => parseFloat(s.trim()))
+        .filter(wavelength => Number.isFinite(wavelength) && wavelength > 0);
+    return wavelengths.length > 0 ? wavelengths : null;
 }
 
 function str(props: PropMap, key: string, fallback: string): string {
@@ -661,11 +678,15 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
         }
         case 'Lamp': {
             const c = new Lamp(str(props, 'name', 'Lamp'));
-            c.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 3));  // backward compat
-            c.power = num(props, 'power', 1);
-            if (props['spectralWavelengths']) {
-                c.spectralWavelengths = props['spectralWavelengths'].split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-            }
+            c.beamRadius = Math.max(0, finiteNum(props, 'beamRadius', finiteNum(props, 'beamWaist', 3)));  // backward compat
+            c.power = Math.max(0, finiteNum(props, 'power', 1));
+            c.sourcePointCount = Math.min(
+                MAX_LAMP_SOURCE_POINTS,
+                Math.max(1, Math.round(finiteNum(props, 'sourcePointCount', c.sourcePointCount))),
+            );
+            c.emitterRadius = Math.max(0, finiteNum(props, 'emitterRadius', c.emitterRadius));
+            c.spectralWavelengths = parseLampSpectralWavelengths(props['spectralWavelengths'])
+                ?? c.spectralWavelengths;
             return c;
         }
         case 'PointSource2D': {

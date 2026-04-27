@@ -58,6 +58,15 @@ export interface Ray {
     // Used to group rays by source in population analysis, preventing
     // cross-laser contamination in split detection and fallback white lines.
     sourceId?: string;
+
+    // Display-only suppression for physically traced branches that are not
+    // useful as table-overlay rays, such as microscopic bead surface glints.
+    suppressVisualization?: boolean;
+    // Display-only suppression for the infinite extension of a traced branch.
+    // The finite component-to-component segments remain visible, but if the
+    // branch escapes without another interaction the table overlay does not
+    // draw a long tail across the bench.
+    suppressOpenTail?: boolean;
 }
 
 export interface HitRecord {
@@ -100,6 +109,7 @@ export function childRay(parent: Ray, overrides: Partial<Ray>): Ray {
         interactionDistance: undefined,
         interactionComponentId: undefined,
         exitSurfaceId: undefined,
+        suppressVisualization: undefined,
         // Apply caller's overrides last — these win
         ...overrides
     };

@@ -3,6 +3,7 @@ import { Vector3 } from 'three';
 import { Annotation } from '../../physics/components/Annotation';
 import { Aperture } from '../../physics/components/Aperture';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
+import { Lamp } from '../../physics/components/Lamp';
 import { Objective } from '../../physics/components/Objective';
 import { PointSource2D } from '../../physics/components/PointSource2D';
 import { QPD } from '../../physics/components/QPD';
@@ -100,6 +101,52 @@ describe('UBZ registered components', () => {
             { index: 4, coefficient: 0.12 },
             { index: 11, coefficient: -0.03 },
         ]);
+    });
+
+    test('round-trips lamp extended source settings', () => {
+        const lamp = new Lamp('Extended lamp');
+        lamp.power = 4;
+        lamp.beamRadius = 5;
+        lamp.sourcePointCount = 7;
+        lamp.emitterRadius = 1.25;
+        lamp.spectralWavelengths = [450, 550, 650];
+
+        const scene = deserializeScene(serializeScene([lamp]));
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(Lamp);
+
+        const loaded = scene[0] as Lamp;
+        expect(loaded.power).toBeCloseTo(4, 6);
+        expect(loaded.beamRadius).toBeCloseTo(5, 6);
+        expect(loaded.sourcePointCount).toBe(7);
+        expect(loaded.emitterRadius).toBeCloseTo(1.25, 6);
+        expect(loaded.spectralWavelengths).toEqual([450, 550, 650]);
+    });
+
+    test('sanitizes non-finite lamp emission settings on load', () => {
+        const scene = deserializeScene([
+            '[Lamp]',
+            'name = Bad lamp',
+            'beamRadius = Infinity',
+            'power = Infinity',
+            'sourcePointCount = Infinity',
+            'emitterRadius = Infinity',
+            'spectralWavelengths = Infinity, NaN, -10, 550',
+        ].join('\n'));
+
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(Lamp);
+
+        const loaded = scene[0] as Lamp;
+        expect(Number.isFinite(loaded.beamRadius)).toBe(true);
+        expect(Number.isFinite(loaded.power)).toBe(true);
+        expect(Number.isFinite(loaded.sourcePointCount)).toBe(true);
+        expect(Number.isFinite(loaded.emitterRadius)).toBe(true);
+        expect(loaded.beamRadius).toBeCloseTo(3, 6);
+        expect(loaded.power).toBeCloseTo(1, 6);
+        expect(loaded.sourcePointCount).toBe(1);
+        expect(loaded.emitterRadius).toBeCloseTo(0, 6);
+        expect(loaded.spectralWavelengths).toEqual([550]);
     });
 
     test('round-trips trapped bead confinement and clamps stale offsets', () => {
