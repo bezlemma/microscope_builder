@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import { useAtom } from 'jotai';
 import { Vector3, Euler } from 'three';
-import { Sample } from '../physics/components/Sample';
+import { defaultColloidColor, Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Camera as OpticCamera } from '../physics/components/Camera';
 import { TrappedBead } from '../physics/components/TrappedBead';
@@ -52,6 +52,11 @@ interface FlowCellRender {
 }
 
 const MICKEY_COLORS = ['#ffd0aa', '#3a2a22', '#3a2a22'];
+function colloidColor(index: number, fallback?: string): string {
+    return fallback && fallback !== '#007fff'
+        ? fallback
+        : defaultColloidColor(index);
+}
 
 const MiniView: React.FC<MiniViewProps> = ({
     label,
@@ -207,8 +212,8 @@ const TrapCloseupViewer: React.FC<{
     specimenSpheres: RenderSphere[];
     trapBeads: RenderSphere[];
 }> = ({ sample, size, flowCell, specimenSpheres, trapBeads }) => {
-    const historyRef = useRef<Vector3[]>([]);
-    const primary = useMemo(() => {
+    const historyRef = useRef<Map<string, Vector3[]>>(new Map());
+    const trapFocus = useMemo(() => {
         sample.updateMatrices();
         let best: (RenderSphere & { local: Vector3 }) | null = null;
         let bestDistanceSq = Infinity;
@@ -224,27 +229,15 @@ const TrapCloseupViewer: React.FC<{
     }, [sample, sample.version, trapBeads]);
 
     useEffect(() => {
-        historyRef.current = [];
-    }, [sample.id, primary?.id]);
-
-    useEffect(() => {
-        if (!primary) return;
-        const p = primary.local.clone();
-        const h = historyRef.current;
-        const last = h[h.length - 1];
-        if (!last || last.distanceToSquared(p) > 1e-12 || h.length < 2) {
-            h.push(p);
-            if (h.length > 160) h.splice(0, h.length - 160);
-        }
-    }, [primary?.local.x, primary?.local.y, primary?.local.z]);
+        historyRef.current.clear();
+    }, [sample.id]);
 
     const gutter = 2;
     const sideHeight = Math.max(36, Math.min(72, Math.round(size * 0.28)));
     const xyHeight = Math.max(1, size - sideHeight - gutter);
-    const gradientId = `trap-closeup-blue-${sample.id}`;
-    const halfSpan = 0.03; // 60 um full window around the trap focus.
+    const halfSpan = 0.06; // 120 um full window around the trap focus.
     const halfDepth = Math.max(0.006, flowCell?.depth ?? 0.08) / 2;
-    const zSpan = Math.max(0.05, halfDepth * 1.25);
+    const zSpan = Math.max(0.1, halfDepth * 1.25);
     const cx = size / 2;
     const cy = xyHeight / 2;
     const toX = (x: number) => cx + (x / halfSpan) * (size / 2);
@@ -253,21 +246,55 @@ const TrapCloseupViewer: React.FC<{
     const toSideY = (z: number) => sideHeight / 2 - (z / zSpan) * (sideHeight / 2);
     const inXY = (p: Vector3, margin = 0) =>
         Math.abs(p.x) <= halfSpan + margin && Math.abs(p.y) <= halfSpan + margin;
+    const inSide = (p: Vector3, margin = 0) =>
+        Math.abs(p.x) <= halfSpan + margin && Math.abs(p.z) <= zSpan + margin;
     const visiblePassive = specimenSpheres.filter(s => inXY(s.c, s.r));
-    const beadPx = primary ? Math.max(4, primary.r / halfSpan * (size / 2)) : 0;
-    const glowPx = primary ? Math.max(beadPx + 3, Math.min(beadPx + 7, beadPx * 1.35)) : 0;
-    const trailXY = historyRef.current
-        .filter(p => inXY(p, primary?.r ?? 0))
-        .map(p => `${toX(p.x).toFixed(1)},${toY(p.y).toFixed(1)}`)
-        .join(' ');
-    const trailSide = historyRef.current
-        .filter(p => Math.abs(p.x) <= halfSpan + (primary?.r ?? 0) && Math.abs(p.z) <= zSpan)
-        .map(p => `${toSideX(p.x).toFixed(1)},${toSideY(p.z).toFixed(1)}`)
-        .join(' ');
-    const capturePx = primary?.trapCaptureRadius
-        ? Math.max(4, primary.trapCaptureRadius / halfSpan * (size / 2))
-        : Math.max(18, beadPx * 2.4);
-    const axialCapture = primary?.trapAxialCaptureRange ?? 0;
+    const visibleSide = specimenSpheres.filter(s => inSide(s.c, s.r));
+
+    useEffect(() => {
+        const liveIds = new Set<string>();
+        specimenSpheres.forEach((sphere, index) => {
+            const id = sphere.id ?? `colloid-${index}`;
+            liveIds.add(id);
+            if (!inXY(sphere.c, sphere.r) && !inSide(sphere.c, sphere.r)) return;
+            let history = historyRef.current.get(id);
+            if (!history) {
+                history = [];
+                historyRef.current.set(id, history);
+            }
+            const p = sphere.c.clone();
+            const last = history[history.length - 1];
+            if (!last || last.distanceToSquared(p) > 1e-12 || history.length < 2) {
+                history.push(p);
+                if (history.length > 160) history.splice(0, history.length - 160);
+            }
+        });
+        for (const id of historyRef.current.keys()) {
+            if (!liveIds.has(id)) historyRef.current.delete(id);
+        }
+    }, [specimenSpheres, halfSpan, zSpan]);
+
+    const trails = specimenSpheres.map((sphere, index) => {
+        const id = sphere.id ?? `colloid-${index}`;
+        const history = historyRef.current.get(id) ?? [];
+        return {
+            id,
+            color: sphere.glowColor ?? sphere.color,
+            xy: history
+                .filter(p => inXY(p, sphere.r))
+                .map(p => `${toX(p.x).toFixed(1)},${toY(p.y).toFixed(1)}`)
+                .join(' '),
+            side: history
+                .filter(p => inSide(p, sphere.r))
+                .map(p => `${toSideX(p.x).toFixed(1)},${toSideY(p.z).toFixed(1)}`)
+                .join(' '),
+        };
+    });
+
+    const capturePx = trapFocus?.trapCaptureRadius
+        ? Math.max(4, trapFocus.trapCaptureRadius / halfSpan * (size / 2))
+        : Math.max(18, Math.min(size, xyHeight) * 0.16);
+    const axialCapture = trapFocus?.trapAxialCaptureRange ?? 0;
     const scaleBarMm = 0.02;
     const scaleBarPx = scaleBarMm / halfSpan * (size / 2);
 
@@ -287,34 +314,23 @@ const TrapCloseupViewer: React.FC<{
             }}
         >
             <svg width={size} height={xyHeight} viewBox={`0 0 ${size} ${xyHeight}`} style={{ background: '#171c22' }}>
-                <defs>
-                    <radialGradient id={gradientId} cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor={BLUE} stopOpacity="0.32" />
-                        <stop offset="100%" stopColor={BLUE} stopOpacity="0" />
-                    </radialGradient>
-                </defs>
                 <circle cx={cx} cy={cy} r={capturePx} fill="none" stroke={BLUE} strokeOpacity="0.26" strokeWidth="1.25" strokeDasharray="4 4" />
                 <line x1={cx - 8} y1={cy} x2={cx + 8} y2={cy} stroke={BLUE} strokeOpacity="0.42" strokeWidth="1" />
                 <line x1={cx} y1={cy - 8} x2={cx} y2={cy + 8} stroke={BLUE} strokeOpacity="0.42" strokeWidth="1" />
-                {trailXY.length > 0 && (
-                    <polyline points={trailXY} fill="none" stroke={BLUE} strokeOpacity="0.42" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-                )}
+                {trails.map(trail => trail.xy.length > 0 && (
+                    <polyline key={`xy-trail-${trail.id}`} points={trail.xy} fill="none" stroke={trail.color} strokeOpacity="0.48" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" />
+                ))}
                 {visiblePassive.map((s, i) => {
                     const r = Math.max(2, s.r / halfSpan * (size / 2));
+                    const color = s.glowColor ?? s.color;
                     return (
-                        <g key={i}>
-                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r + 2} fill={BLUE} opacity="0.12" />
-                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r} fill="#dcecff" opacity={s.opacity ?? 0.8} />
+                        <g key={s.id ?? i}>
+                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r + 2} fill={color} opacity="0.16" />
+                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r} fill={s.color} opacity={s.opacity ?? 0.8} />
+                            <circle cx={toX(s.c.x)} cy={toY(s.c.y)} r={r} fill="none" stroke={color} strokeOpacity="0.72" strokeWidth="0.8" />
                         </g>
                     );
                 })}
-                {primary && (
-                    <g>
-                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={glowPx} fill={`url(#${gradientId})`} />
-                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={beadPx} fill="#dcecff" opacity="0.92" />
-                        <circle cx={toX(primary.local.x)} cy={toY(primary.local.y)} r={beadPx} fill="none" stroke={BLUE} strokeOpacity="0.75" strokeWidth="1" />
-                    </g>
-                )}
                 <line x1={size - scaleBarPx - 12} y1={xyHeight - 14} x2={size - 12} y2={xyHeight - 14} stroke="#c7d3df" strokeOpacity="0.85" strokeWidth="2" />
                 <text x={size - 12} y={xyHeight - 18} textAnchor="end" fill="#c7d3df" opacity="0.85" fontSize="9">20 um</text>
                 <text x="6" y="13" fill="#9aaab8" fontSize="9" fontWeight="700">Trap XY</text>
@@ -330,15 +346,19 @@ const TrapCloseupViewer: React.FC<{
                 )}
                 <line x1="0" y1={toSideY(0)} x2={size} y2={toSideY(0)} stroke={BLUE} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 4" />
                 <line x1={cx} y1="0" x2={cx} y2={sideHeight} stroke={BLUE} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 4" />
-                {trailSide.length > 0 && (
-                    <polyline points={trailSide} fill="none" stroke={BLUE} strokeOpacity="0.38" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
-                )}
-                {primary && (
-                    <g>
-                        <circle cx={toSideX(primary.local.x)} cy={toSideY(primary.local.z)} r={Math.max(2, beadPx * 0.55)} fill={BLUE} opacity="0.16" />
-                        <circle cx={toSideX(primary.local.x)} cy={toSideY(primary.local.z)} r={Math.max(1.5, beadPx * 0.35)} fill="#dcecff" opacity="0.9" />
-                    </g>
-                )}
+                {trails.map(trail => trail.side.length > 0 && (
+                    <polyline key={`side-trail-${trail.id}`} points={trail.side} fill="none" stroke={trail.color} strokeOpacity="0.42" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                ))}
+                {visibleSide.map((s, i) => {
+                    const r = Math.max(1.5, s.r / halfSpan * (size / 2) * 0.55);
+                    const color = s.glowColor ?? s.color;
+                    return (
+                        <g key={s.id ?? i}>
+                            <circle cx={toSideX(s.c.x)} cy={toSideY(s.c.z)} r={r + 1.5} fill={color} opacity="0.15" />
+                            <circle cx={toSideX(s.c.x)} cy={toSideY(s.c.z)} r={r} fill={s.color} opacity={s.opacity ?? 0.85} />
+                        </g>
+                    );
+                })}
                 <text x="6" y="13" fill="#9aaab8" fontSize="9" fontWeight="700">Axial gap</text>
             </svg>
         </div>
@@ -385,16 +405,20 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
 
     const specimenSpheres = useMemo<RenderSphere[]>(() => {
         if (sample instanceof Sample && sample.specimenKind === 'colloids') {
-            return sample.colloidSpheres.map(colloid => ({
-                c: colloid.center.clone(),
-                r: colloid.radius,
-                color: '#dcecff',
-                opacity: 0.9,
-                emissive: colloid.glowColor ?? sample.colloidGlowColor,
-                emissiveIntensity: 0.75,
-                glowRadius: Math.max(0.006, colloid.radius * 2.5),
-                glowColor: colloid.glowColor ?? sample.colloidGlowColor,
-            }));
+            return sample.colloidSpheres.map((colloid, index) => {
+                const color = colloidColor(index, colloid.glowColor);
+                return {
+                    id: `colloid-${index}`,
+                    c: colloid.center.clone(),
+                    r: colloid.radius,
+                    color,
+                    opacity: 0.9,
+                    emissive: color,
+                    emissiveIntensity: 0.75,
+                    glowRadius: Math.max(0.006, colloid.radius * 2.5),
+                    glowColor: color,
+                };
+            });
         }
 
         const scale = 2 / 3;

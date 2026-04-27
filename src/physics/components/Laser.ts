@@ -7,6 +7,7 @@ export class Laser extends OpticalComponent {
     wavelength: number = 532; // nm (default green)
     beamRadius: number = 2;   // mm (1/e² beam half-width)
     power: number = 1.0;      // Watts (optical output power)
+    isOn: boolean = true;     // User-facing emission toggle; preserves configured power.
 
     private static readonly HOUSING = new Box3(
         new Vector3(-19, -20, -68),
@@ -43,4 +44,3 @@ export class Laser extends OpticalComponent {
         return { rays: [] }; 
     }
 }
-

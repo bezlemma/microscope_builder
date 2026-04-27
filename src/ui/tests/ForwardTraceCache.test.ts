@@ -1,10 +1,17 @@
 import { describe, expect, test } from 'bun:test';
+import { Vector3 } from 'three';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
 import { Solver1 } from '../../physics/Solver1';
 import { createSourceRays, stablePreviewSourceRays } from '../../physics/SourceRayFactory';
 import { Blocker } from '../../physics/components/Blocker';
+import { Laser } from '../../physics/components/Laser';
 import { QPD } from '../../physics/components/QPD';
+import { Sample } from '../../physics/components/Sample';
+import { TrappedBead } from '../../physics/components/TrappedBead';
+import { Coherence } from '../../physics/types';
+import type { GaussianBeamSegment } from '../../physics/Solver2';
 import {
+    colloidTrapZonesBySample,
     createDragPreviewSourceRays,
     DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS,
     traceForwardWithDependencyCache,
@@ -80,5 +87,73 @@ describe('forward trace dependency cache', () => {
         traceForwardWithDependencyCache(new Solver1(scene), sourceRays, scene, cacheRef);
         expect(qpd!.totalHits).toBe(directHits);
         expect(qpd!.signalSum).toBeCloseTo(directSignal, 12);
+    });
+
+    test('colloid trap zones require powered beam segments reaching the bead', () => {
+        const scene = createOpticalTrapScene();
+        const sample = scene.find((component): component is Sample =>
+            component instanceof Sample && component.name === 'Trap Flow Cell',
+        );
+        const laser = scene.find((component): component is Laser => component instanceof Laser);
+        expect(sample).toBeDefined();
+        expect(laser).toBeDefined();
+
+        const poweredResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        expect(colloidTrapZonesBySample(scene, poweredResult.beamSegments).get(sample!.id)?.length).toBeGreaterThan(0);
+
+        laser!.isOn = false;
+        laser!.version++;
+        const darkResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        expect(colloidTrapZonesBySample(scene, darkResult.beamSegments).get(sample!.id)).toBeUndefined();
+    });
+
+    test('colloid trap zones require a local 3D intensity maximum', () => {
+        const sample = new Sample('Synthetic flow cell').configureColloidFlowCell({ count: 0 });
+        const bead = new TrappedBead(0.005, 1.59, 1.33, 'Synthetic trap bead');
+        bead.parentSampleId = sample.id;
+        bead.gradientForceScale = 1e6;
+        const passThroughSegment: GaussianBeamSegment = {
+            start: new Vector3(0, 0, -1),
+            end: new Vector3(0, 0, 1),
+            direction: new Vector3(0, 0, 1),
+            wavelength: 780e-9,
+            power: 120,
+            sourceId: 'synthetic',
+            bundleKey: `synthetic|air|0|${bead.id}`,
+            qx_start: { re: 0, im: 1 },
+            qx_end: { re: 0, im: 1 },
+            qy_start: { re: 0, im: 1 },
+            qy_end: { re: 0, im: 1 },
+            footprintStart: 0.05,
+            footprintEnd: 0.05,
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            opticalPathLength: 0,
+            refractiveIndex: 1,
+            coherenceMode: Coherence.Coherent,
+        };
+
+        expect(colloidTrapZonesBySample([sample, bead], [[passThroughSegment]]).get(sample.id)).toBeUndefined();
+    });
+
+    test('colloid trap zone strength tracks delivered trap power', () => {
+        const scene = createOpticalTrapScene();
+        const sample = scene.find((component): component is Sample =>
+            component instanceof Sample && component.name === 'Trap Flow Cell',
+        );
+        const laser = scene.find((component): component is Laser => component instanceof Laser);
+        expect(sample).toBeDefined();
+        expect(laser).toBeDefined();
+
+        const strongResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const strongZone = colloidTrapZonesBySample(scene, strongResult.beamSegments).get(sample!.id)?.[0];
+        expect(strongZone?.stiffnessPerSecond).toBeGreaterThan(10);
+
+        laser!.power *= 0.5;
+        laser!.version++;
+        const weakResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const weakZone = colloidTrapZonesBySample(scene, weakResult.beamSegments).get(sample!.id)?.[0];
+        expect(weakZone?.stiffnessPerSecond).toBeGreaterThan(1);
+        expect(weakZone!.stiffnessPerSecond!).toBeLessThan(strongZone!.stiffnessPerSecond! * 0.6);
+        expect(weakZone!.stiffnessPerSecond!).toBeGreaterThan(strongZone!.stiffnessPerSecond! * 0.4);
     });
 });

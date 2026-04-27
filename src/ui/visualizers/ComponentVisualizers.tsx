@@ -17,7 +17,7 @@ import { AsphericLens } from '../../physics/components/AsphericLens';
 import { Laser } from '../../physics/components/Laser';
 import { Blocker } from '../../physics/components/Blocker';
 import { Card } from '../../physics/components/Card';
-import { Sample } from '../../physics/components/Sample';
+import { defaultColloidColor, Sample } from '../../physics/components/Sample';
 import { Objective } from '../../physics/components/Objective';
 import { ObjectiveCasing } from '../../physics/components/ObjectiveCasing';
 import { IdealLens } from '../../physics/components/IdealLens';
@@ -353,18 +353,23 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
                 </mesh>
                 <group position={[component.specimenOffset.x, component.specimenOffset.y, component.specimenOffset.z]} rotation={[component.specimenRotation.x, component.specimenRotation.y, component.specimenRotation.z]}>
-                    {component.colloidSpheres.map((colloid, index) => (
-                        <group key={index} position={[colloid.center.x, colloid.center.y, colloid.center.z]}>
-                            <mesh renderOrder={2}>
-                                <sphereGeometry args={[glowR, 24, 12]} />
-                                <meshBasicMaterial color={colloid.glowColor ?? component.colloidGlowColor} transparent opacity={0.2} depthWrite={false} />
-                            </mesh>
-                            <mesh>
-                                <sphereGeometry args={[Math.max(colloid.radius, 0.004), 16, 10]} />
-                                <meshStandardMaterial color="#dcecff" emissive={colloid.glowColor ?? component.colloidGlowColor} emissiveIntensity={0.5} roughness={0.2} />
-                            </mesh>
-                        </group>
-                    ))}
+                    {component.colloidSpheres.map((colloid, index) => {
+                        const color = colloid.glowColor && colloid.glowColor !== '#007fff'
+                            ? colloid.glowColor
+                            : defaultColloidColor(index);
+                        return (
+                            <group key={index} position={[colloid.center.x, colloid.center.y, colloid.center.z]}>
+                                <mesh renderOrder={2}>
+                                    <sphereGeometry args={[glowR, 24, 12]} />
+                                    <meshBasicMaterial color={color} transparent opacity={0.2} depthWrite={false} />
+                                </mesh>
+                                <mesh>
+                                    <sphereGeometry args={[Math.max(colloid.radius, 0.004), 16, 10]} />
+                                    <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} roughness={0.2} />
+                                </mesh>
+                            </group>
+                        );
+                    })}
                 </group>
             </group>
         );
@@ -1163,8 +1168,22 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
 };
 
 export const SourceVisualizer = ({ component }: { component: OpticalComponent }) => {
-    const isLaser = component instanceof Laser || component.constructor.name === 'Laser';
-    const beamColor = isLaser ? wavelengthToCSS((component as Laser).wavelength) : "#222";
+    const [components, setComponents] = useAtom(componentsAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
+    const laser = component instanceof Laser ? component : null;
+    const isLaser = laser !== null;
+    const beamColor = laser ? wavelengthToCSS(laser.wavelength) : "#222";
+    const stopButtonEvent = useCallback((e: any) => {
+        e.stopPropagation();
+    }, []);
+    const toggleLaser = useCallback((e: any) => {
+        e.stopPropagation();
+        if (!laser) return;
+        pushUndo();
+        laser.isOn = !laser.isOn;
+        laser.version++;
+        setComponents([...components]);
+    }, [components, laser, pushUndo, setComponents]);
 
     return (
         <group
@@ -1179,8 +1198,35 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
             {isLaser && (
                 <mesh position={[0, 20.1, -40]} rotation={[-Math.PI / 2, 0, 0]}>
                     <planeGeometry args={[20, 38]} />
-                    <meshBasicMaterial color={beamColor} />
+                    <meshBasicMaterial color={laser.isOn ? beamColor : '#111'} />
                 </mesh>
+            )}
+            {laser && (
+                <group
+                    position={[0, 20.8, -40]}
+                    onPointerDown={stopButtonEvent}
+                    onPointerUp={toggleLaser}
+                    onClick={stopButtonEvent}
+                >
+                    <mesh>
+                        <cylinderGeometry args={[5.2, 5.2, 1.4, 32]} />
+                        <meshStandardMaterial
+                            color="#6f767d"
+                            emissive="#15181b"
+                            emissiveIntensity={0.18}
+                            roughness={0.32}
+                            metalness={0.15}
+                        />
+                    </mesh>
+                    <mesh position={[0, 0.76, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                        <torusGeometry args={[2.1, 0.32, 8, 28]} />
+                        <meshBasicMaterial color="#e2e6ea" />
+                    </mesh>
+                    <mesh position={[0, 0.78, -1.2]} rotation={[Math.PI / 2, 0, 0]}>
+                        <boxGeometry args={[0.6, 2.1, 0.2]} />
+                        <meshBasicMaterial color="#e2e6ea" />
+                    </mesh>
+                </group>
             )}
             <mesh position={[0, 0, 2]} rotation={[-Math.PI / 2, 0, 0]}>
                 <cylinderGeometry args={[10, 5, 2, 16]} />

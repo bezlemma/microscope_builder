@@ -107,10 +107,10 @@ export function createOpticalTrapScene(): OpticalComponent[] {
     const sampleAnchor = { x: hole(C.H, 6).x, y: hole(C.H, 6).y, z: 0 };
 
     const flowCell = new Sample('Trap Flow Cell').configureColloidFlowCell({
-        count: 320,
+        count: 640,
         radius: 0.0025,
         width: 8,
-        height: 8,
+        height: 4,
         depth: 0.0075,
         glassThickness: 0.17,
         fillMediumIndex: 1.33,
@@ -118,6 +118,9 @@ export function createOpticalTrapScene(): OpticalComponent[] {
         viscosity: 0.001,
         diffusionScale: 24,
     });
+    if (flowCell.colloidSpheres[0]) {
+        flowCell.colloidSpheres[0].center.set(0, 0, 0);
+    }
     flowCell.setPosition(sampleAnchor.x, sampleAnchor.y, sampleAnchor.z);
     flowCell.pointAlong(1, 0, 0);
     scene.push(flowCell);

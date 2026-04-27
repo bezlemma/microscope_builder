@@ -295,15 +295,20 @@ export class OpticMesh {
         const internalBouncePoints: import('three').Vector3[] = []; // World-space TIR bounce points
 
         let lastHitNormal: Vector3 | null = null; // Track last known surface normal for fallback
+        const traceInterior = (origin: Vector3, direction: Vector3): MeshHit[] => {
+            if (allowInternalReflection) return this.intersectRayAll(origin, direction);
+            const hit = this.intersectRay(origin, direction);
+            return hit ? [hit] : [];
+        };
 
         for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
-            let hits = this.intersectRayAll(currentOrigin, currentDir);
+            let hits = traceInterior(currentOrigin, currentDir);
 
             // Mesh gap recovery: if no hits, try small origin perturbation
             if (hits.length === 0) {
                 // Try nudging the origin backward (closer to the surface we just bounced from)
                 const retryOrigin = currentOrigin.clone().add(currentDir.clone().multiplyScalar(-0.02));
-                hits = this.intersectRayAll(retryOrigin, currentDir);
+                hits = traceInterior(retryOrigin, currentDir);
                 if (hits.length > 0) {
                     // Only accept hits that are ahead of our original position
                     hits = hits.filter(h => h.t > 0.03);
@@ -386,7 +391,7 @@ export class OpticMesh {
                     // Try small perpendicular nudge to escape axis singularity
                     const perturbed = currentOrigin.clone();
                     perturbed.x += 0.005;  // Nudge in local u (radial for LatheGeometry)
-                    hits = this.intersectRayAll(perturbed, currentDir);
+                    hits = traceInterior(perturbed, currentDir);
                     if (hits.length > 0) {
                         // Found it — use this hit as the exit surface
                         const hit = hits[0];

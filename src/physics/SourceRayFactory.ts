@@ -279,6 +279,8 @@ export function createSourceRays(
     // ── Lasers ──
     const laserComps = components.filter(c => c instanceof Laser) as Laser[];
     for (const laser of laserComps) {
+        if (!laser.isOn) continue;
+
         const origin = laser.position.clone();
         const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
         origin.add(direction.clone().multiplyScalar(3));

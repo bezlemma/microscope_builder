@@ -139,9 +139,10 @@ describe('Optical Trap preset', () => {
 
         expect(flowCell).toBeDefined();
         expect(flowCell!.specimenKind).toBe('colloids');
-        expect(flowCell!.colloidSpheres).toHaveLength(320);
+        expect(flowCell!.colloidSpheres).toHaveLength(640);
+        expect(flowCell!.colloidSpheres[0]!.center.length()).toBeCloseTo(0, 12);
         expect(flowCell!.flowCellWidth).toBeCloseTo(8, 6);
-        expect(flowCell!.flowCellHeight).toBeCloseTo(8, 6);
+        expect(flowCell!.flowCellHeight).toBeCloseTo(4, 6);
         expect(flowCell!.flowCellDepth).toBeCloseTo(0.0075, 6);
         expect(bead.diameter).toBeLessThanOrEqual(0.01);
         expect(bead.isSubComponent).toBe(true);

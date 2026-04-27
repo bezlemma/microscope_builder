@@ -148,6 +148,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`wavelength = ${fmt(comp.wavelength)}`);
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
+        lines.push(`isOn = ${comp.isOn ? 'true' : 'false'}`);
     } else if (comp instanceof Lamp) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
@@ -519,6 +520,14 @@ function finiteNum(props: PropMap, key: string, fallback: number): number {
     return Number.isFinite(value) ? value : fallback;
 }
 
+function bool(props: PropMap, key: string, fallback: boolean): boolean {
+    const value = props[key]?.trim().toLowerCase();
+    if (value === undefined) return fallback;
+    if (['true', '1', 'yes', 'on'].includes(value)) return true;
+    if (['false', '0', 'no', 'off'].includes(value)) return false;
+    return fallback;
+}
+
 function parseLampSpectralWavelengths(value: string | undefined): number[] | null {
     if (value === undefined) return null;
     const wavelengths = value
@@ -674,6 +683,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c.wavelength = num(props, 'wavelength', 532);
             c.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 2));  // backward compat
             c.power = num(props, 'power', 1);
+            c.isOn = bool(props, 'isOn', c.isOn);
             return c;
         }
         case 'Lamp': {
@@ -1168,7 +1178,7 @@ export async function downloadUbz(components: OpticalComponent[], filename: stri
     window.setTimeout(() => {
         URL.revokeObjectURL(url);
         a.remove();
-    }, 0);
+    }, 1000);
 }
 
 /** Open file picker and load a .ubz file, returns parsed components */
@@ -1178,28 +1188,57 @@ export function openUbzFilePicker(): Promise<OpticalComponent[]> {
         input.type = 'file';
         input.accept = '.ubz';
         input.style.display = 'none';
-        const cleanup = () => input.remove();
+        let settled = false;
+        let fallbackTimer: number | null = null;
+
+        const cleanup = () => {
+            if (fallbackTimer !== null) {
+                window.clearTimeout(fallbackTimer);
+                fallbackTimer = null;
+            }
+            window.removeEventListener('focus', handleWindowFocus);
+            input.remove();
+        };
+        const rejectNoSelection = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(new Error('No file selected'));
+        };
+        const handleWindowFocus = () => {
+            if (settled || input.files?.length) return;
+            fallbackTimer = window.setTimeout(() => {
+                if (!settled && !input.files?.length) {
+                    rejectNoSelection();
+                }
+            }, 500);
+        };
         input.onchange = async () => {
             try {
                 const file = input.files?.[0];
                 if (!file) {
-                    reject(new Error('No file selected'));
+                    rejectNoSelection();
                     return;
                 }
                 const text = await file.text();
                 const components = deserializeScene(text);
+                settled = true;
                 resolve(components);
             } catch (e) {
+                settled = true;
                 reject(e);
             } finally {
                 cleanup();
             }
         };
         input.oncancel = () => {
-            cleanup();
-            reject(new Error('No file selected'));
+            rejectNoSelection();
         };
         document.body.appendChild(input);
+        // Safari/WebKit versions have not consistently emitted `cancel` for
+        // file inputs. When the chooser returns focus without a file, reject so
+        // the caller does not wait forever.
+        window.addEventListener('focus', handleWindowFocus);
         input.click();
     });
 }

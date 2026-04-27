@@ -38,7 +38,7 @@ import { PrismLens } from '../physics/components/PrismLens';
 import { RayVisualizer } from './RayVisualizer';
 
 import { BundleWaveVisualizer } from './BundleWaveVisualizer';
-import { GaussianBeamSegment, segmentBeamRadii } from '../physics/Solver2';
+import { GaussianBeamSegment, Solver2, segmentBeamRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../physics/tableTrace';
@@ -454,27 +454,138 @@ export function traceForwardWithDependencyCache(
     };
 }
 
-function trapBeamHasPower(beamSegments: GaussianBeamSegment[][]): boolean {
-    return beamSegments.some(branch => branch.some(segment =>
-        segment.coherenceMode === Coherence.Coherent && segment.power > 1e-9
-    ));
+const PASSIVE_TRAP_RATE_PER_FIELD_DROP = 0.15;
+const PASSIVE_TRAP_MIN_RELATIVE_CURVATURE = 1e-4;
+const PASSIVE_TRAP_MIN_STIFFNESS_PER_SECOND = 0.5;
+const PASSIVE_TRAP_MAX_STIFFNESS_PER_SECOND = 80;
+const REFERENCE_COLLOID_TRAP_RESPONSE = trapMaterialResponse(0.0025, 1.59, 1.33);
+
+function incidentTrapBranchesForBead(
+    beamSegments: GaussianBeamSegment[][],
+    beadId: string,
+): GaussianBeamSegment[][] {
+    const branches: GaussianBeamSegment[][] = [];
+
+    for (const branch of beamSegments) {
+        const first = branch[0];
+        if (!first || first.coherenceMode !== Coherence.Coherent || first.power <= 1e-12) continue;
+
+        const incidentBranch: GaussianBeamSegment[] = [];
+        let touchesBead = false;
+        for (const segment of branch) {
+            const key = segment.bundleKey ?? '';
+            const touchesThisBead = key.includes(beadId);
+            if (touchesThisBead && key.includes('|glass|')) break;
+            incidentBranch.push(segment);
+            if (touchesThisBead) {
+                touchesBead = true;
+                break;
+            }
+        }
+        if (touchesBead && incidentBranch.length > 0) branches.push(incidentBranch);
+    }
+
+    return branches;
 }
 
-function colloidTrapZonesBySample(
+function trapMaterialResponse(radius: number, iorBead: number, iorMedium: number): number {
+    const relativeIndex = iorBead / Math.max(1e-6, iorMedium);
+    const relativeIndexSq = relativeIndex * relativeIndex;
+    const indexTerm = (relativeIndexSq - 1) / (relativeIndexSq + 2);
+    const volume = (4 * Math.PI * radius * radius * radius) / 3;
+    return Math.max(0, indexTerm) * volume;
+}
+
+function estimatePassiveColloidTrapZone(
+    bead: TrappedBead,
+    parentSample: Sample,
+    beamSegments: GaussianBeamSegment[][],
+): ColloidTrapZone | null {
+    const trapBranches = incidentTrapBranchesForBead(beamSegments, bead.id);
+    if (trapBranches.length === 0) return null;
+
+    const materialResponse = trapMaterialResponse(bead.radius, bead.iorBead, bead.iorMedium);
+    if (materialResponse <= 0 || REFERENCE_COLLOID_TRAP_RESPONSE <= 0) return null;
+
+    bead.updateMatrices();
+    parentSample.updateMatrices();
+
+    const centerLocal = new Vector3(0, 0, 0);
+    const centerWorld = centerLocal.clone().applyMatrix4(bead.localToWorld);
+    const centerInSample = centerWorld.clone().applyMatrix4(parentSample.worldToLocal);
+    const probe = Math.max(bead.radius * 2, Math.min(bead.trapCaptureRadius * 0.25, 0.01), 0.0025);
+
+    const intensityAtLocal = (localOffset: Vector3): number => {
+        const worldPoint = localOffset.clone().applyMatrix4(bead.localToWorld);
+        let total = 0;
+        for (const branch of trapBranches) {
+            total += Solver2.queryIntensity(worldPoint.x, worldPoint.y, worldPoint.z, branch)?.intensity ?? 0;
+        }
+        return total;
+    };
+
+    const centerIntensity = intensityAtLocal(centerLocal);
+    if (centerIntensity <= 1e-12) return null;
+
+    const sampleAxis = (axis: 'x' | 'y' | 'z') => {
+        const positive = new Vector3();
+        const negative = new Vector3();
+        positive[axis] = probe;
+        negative[axis] = -probe;
+        return {
+            plus: intensityAtLocal(positive),
+            minus: intensityAtLocal(negative),
+        };
+    };
+    const x = sampleAxis('x');
+    const y = sampleAxis('y');
+    const z = sampleAxis('z');
+    const neighbors = [x.plus, x.minus, y.plus, y.minus, z.plus, z.minus];
+    if (neighbors.some(value => value > centerIntensity * (1 + 1e-6))) return null;
+
+    const curvatureX = (2 * centerIntensity - x.plus - x.minus) / (probe * probe);
+    const curvatureY = (2 * centerIntensity - y.plus - y.minus) / (probe * probe);
+    const curvatureZ = (2 * centerIntensity - z.plus - z.minus) / (probe * probe);
+    const weakestCurvature = Math.min(curvatureX, curvatureY, curvatureZ);
+    if (weakestCurvature <= 0) return null;
+
+    const relativeCurvature = weakestCurvature * probe * probe / centerIntensity;
+    if (relativeCurvature < PASSIVE_TRAP_MIN_RELATIVE_CURVATURE) return null;
+
+    const materialScale = materialResponse / REFERENCE_COLLOID_TRAP_RESPONSE;
+    const gradientScale = Math.max(0, bead.gradientForceScale) / 1e6;
+    const fieldDrop = weakestCurvature * probe * probe;
+    const stiffnessPerSecond = Math.min(
+        PASSIVE_TRAP_MAX_STIFFNESS_PER_SECOND,
+        fieldDrop * PASSIVE_TRAP_RATE_PER_FIELD_DROP * materialScale * gradientScale,
+    );
+    if (stiffnessPerSecond < PASSIVE_TRAP_MIN_STIFFNESS_PER_SECOND) return null;
+
+    return {
+        center: centerInSample,
+        lateralRadius: bead.trapCaptureRadius,
+        axialRange: bead.trapAxialCaptureRange,
+        stiffnessPerSecond,
+    };
+}
+
+export function colloidTrapZonesBySample(
     components: OpticalComponent[],
     beamSegments: GaussianBeamSegment[][],
 ): Map<string, ColloidTrapZone[]> {
     const zones = new Map<string, ColloidTrapZone[]>();
-    if (!trapBeamHasPower(beamSegments)) return zones;
+    const samplesById = new Map<string, Sample>();
+    for (const component of components) {
+        if (component instanceof Sample) samplesById.set(component.id, component);
+    }
 
     for (const component of components) {
         if (!(component instanceof TrappedBead) || !component.parentSampleId) continue;
-        const zone: ColloidTrapZone = {
-            center: new Vector3(0, 0, 0),
-            lateralRadius: component.trapCaptureRadius,
-            axialRange: component.trapAxialCaptureRange,
-            stiffnessPerSecond: 14,
-        };
+        const parentSample = samplesById.get(component.parentSampleId);
+        if (!parentSample) continue;
+        const zone = estimatePassiveColloidTrapZone(component, parentSample, beamSegments);
+        if (!zone) continue;
+
         const sampleZones = zones.get(component.parentSampleId) ?? [];
         sampleZones.push(zone);
         zones.set(component.parentSampleId, sampleZones);

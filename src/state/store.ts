@@ -4,6 +4,8 @@ import { serializeScene, deserializeScene } from './ubzSerializer';
 import { PropertyAnimator, type AnimationChannel } from '../physics/PropertyAnimator';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { Sample } from '../physics/components/Sample';
+import { SampleChamber } from '../physics/components/SampleChamber';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
@@ -202,10 +204,9 @@ export const loadPresetAtom = atom(
             // OpenSPIM, bead capture inside the flow cell for Optical Trap.
             if (shouldPinSampleView) {
                 for (const comp of result.scene) {
-                    const isSampleLike =
-                        comp.constructor.name === 'Sample'
-                        || comp.constructor.name === 'SampleChamber';
-                    if (isSampleLike) pinned.add(comp.id);
+                    if (comp instanceof Sample || comp instanceof SampleChamber) {
+                        pinned.add(comp.id);
+                    }
                 }
             }
             set(pinnedViewersAtom, pinned);

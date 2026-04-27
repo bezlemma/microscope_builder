@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ConeSource3D } from '../components/ConeSource3D';
 import { Lamp } from '../components/Lamp';
+import { Laser } from '../components/Laser';
 import { PointSource2D } from '../components/PointSource2D';
 import { PointSource3D } from '../components/PointSource3D';
 import { StructuredSource } from '../components/StructuredSource';
@@ -34,6 +35,15 @@ describe('SourceRayFactory', () => {
         const rays = createSourceRays([source], 4, 'full');
         expect(rays.length).toBeGreaterThan(0);
         expect(rays.reduce((sum, ray) => sum + ray.intensity, 0)).toBe(0);
+    });
+
+    test('off laser emits no source rays while preserving configured power', () => {
+        const laser = new Laser('Toggle laser');
+        laser.power = 7;
+        laser.isOn = false;
+
+        expect(createSourceRays([laser], 8, 'full')).toHaveLength(0);
+        expect(laser.power).toBe(7);
     });
 
     test('conserves lamp power across wavelengths and ray counts', () => {

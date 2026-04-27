@@ -4,6 +4,7 @@ import { Annotation } from '../../physics/components/Annotation';
 import { Aperture } from '../../physics/components/Aperture';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { Lamp } from '../../physics/components/Lamp';
+import { Laser } from '../../physics/components/Laser';
 import { Objective } from '../../physics/components/Objective';
 import { PointSource2D } from '../../physics/components/PointSource2D';
 import { QPD } from '../../physics/components/QPD';
@@ -14,6 +15,22 @@ import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
 import { deserializeScene, serializeScene } from '../ubzSerializer';
 
 describe('UBZ registered components', () => {
+    test('round-trips laser emission toggle without losing configured power', () => {
+        const laser = new Laser('Switchable laser');
+        laser.wavelength = 780;
+        laser.beamRadius = 0.75;
+        laser.power = 120;
+        laser.isOn = false;
+
+        const scene = deserializeScene(serializeScene([laser]));
+        expect(scene[0]).toBeInstanceOf(Laser);
+        const loadedLaser = scene[0] as Laser;
+        expect(loadedLaser.wavelength).toBeCloseTo(780, 6);
+        expect(loadedLaser.beamRadius).toBeCloseTo(0.75, 6);
+        expect(loadedLaser.power).toBeCloseTo(120, 6);
+        expect(loadedLaser.isOn).toBe(false);
+    });
+
     test('round-trips point, cone, wedge, structured source, and annotation fields', () => {
         const point = new PointSource2D('Point fan');
         point.wavelength = 460;

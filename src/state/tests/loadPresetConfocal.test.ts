@@ -8,12 +8,27 @@ import {
     loadPresetAtom,
     PresetName,
     pushUndoAtom,
+    pinnedViewersAtom,
     rayConfigAtom,
     scanAccumTriggerAtom,
     undoAtom,
 } from '../store';
 import { PMT } from '../../physics/components/PMT';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
+import { Sample } from '../../physics/components/Sample';
+import { SampleChamber } from '../../physics/components/SampleChamber';
+
+function withConstructorName<T extends Function>(ctor: T, name: string, run: () => void): void {
+    const original = Object.getOwnPropertyDescriptor(ctor, 'name');
+    Object.defineProperty(ctor, 'name', { value: name, configurable: true });
+    try {
+        run();
+    } finally {
+        if (original) {
+            Object.defineProperty(ctor, 'name', original);
+        }
+    }
+}
 
 describe('Confocal preset loading', () => {
     test('preset loads write hash preset URLs', () => {
@@ -78,6 +93,30 @@ describe('Confocal preset loading', () => {
         expect(rayConfig.rayCount).toBe(500);
         expect(rayConfig.minRayOpacity).toBe(0);
         expect(rayConfig.maxRayOpacity).toBeCloseTo(0.4, 6);
+    });
+
+    test('sample zoom viewers auto-pin in minified builds', () => {
+        withConstructorName(Sample, 'a', () => {
+            withConstructorName(SampleChamber, 'b', () => {
+                const store = createStore();
+
+                store.set(loadPresetAtom, PresetName.OpticalTrap);
+                const trapSamples = store.get(componentsAtom).filter(
+                    (component): component is Sample | SampleChamber =>
+                        component instanceof Sample || component instanceof SampleChamber,
+                );
+                expect(trapSamples.length).toBeGreaterThan(0);
+                expect(trapSamples.every(sample => store.get(pinnedViewersAtom).has(sample.id))).toBe(true);
+
+                store.set(loadPresetAtom, PresetName.OpenSPIM);
+                const lightSheetSamples = store.get(componentsAtom).filter(
+                    (component): component is Sample | SampleChamber =>
+                        component instanceof Sample || component instanceof SampleChamber,
+                );
+                expect(lightSheetSamples.length).toBeGreaterThan(0);
+                expect(lightSheetSamples.every(sample => store.get(pinnedViewersAtom).has(sample.id))).toBe(true);
+            });
+        });
     });
 
     test('undo restores scene animation channels', () => {

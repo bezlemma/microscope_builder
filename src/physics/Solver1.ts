@@ -28,6 +28,11 @@ interface BeamletDraft extends GaussianBeamSegment {
     fallbackRadius: number;
 }
 
+interface BroadPhaseCandidate {
+    index: number;
+    nearT: number;
+}
+
 export interface ForwardTraceResult {
     paths: Ray[][];
     beamSegments: GaussianBeamSegment[][];
@@ -106,6 +111,7 @@ export class Solver1 {
     scene: OpticalComponent[];
     private emitters: Set<OpticalComponent>;
     private broadPhaseBounds: Float64Array;
+    private broadPhaseCandidates: BroadPhaseCandidate[] = [];
 
     constructor(scene: OpticalComponent[]) {
         this.scene = scene.filter(c => !c.isGhost);
@@ -114,6 +120,29 @@ export class Solver1 {
         for (let i = 0; i < this.scene.length; i++) {
             writeComponentBroadPhaseBounds(this.scene[i], this.broadPhaseBounds, i * 4);
         }
+    }
+
+    private collectBroadPhaseCandidates(ray: Ray): BroadPhaseCandidate[] {
+        const candidates = this.broadPhaseCandidates;
+        candidates.length = 0;
+
+        for (let i = 0; i < this.scene.length; i++) {
+            const offset = i * 4;
+            const nearT = raySphereNearT(
+                ray.origin.x, ray.origin.y, ray.origin.z,
+                ray.direction.x, ray.direction.y, ray.direction.z,
+                this.broadPhaseBounds[offset],
+                this.broadPhaseBounds[offset + 1],
+                this.broadPhaseBounds[offset + 2],
+                this.broadPhaseBounds[offset + 3],
+            );
+            if (nearT !== null) {
+                candidates.push({ index: i, nearT });
+            }
+        }
+
+        candidates.sort((a, b) => a.nearT - b.nearT || a.index - b.index);
+        return candidates;
     }
 
     trace(sources: Ray[]): Ray[][] {
@@ -226,25 +255,23 @@ export class Solver1 {
         let nearestHit = null;
         let nearestComponent = null;
 
-        for (let i = 0; i < this.scene.length; i++) {
-            const component = this.scene[i];
-            const offset = i * 4;
-            const boundT = raySphereNearT(
-                currentRay.origin.x, currentRay.origin.y, currentRay.origin.z,
-                currentRay.direction.x, currentRay.direction.y, currentRay.direction.z,
-                this.broadPhaseBounds[offset],
-                this.broadPhaseBounds[offset + 1],
-                this.broadPhaseBounds[offset + 2],
-                this.broadPhaseBounds[offset + 3],
-            );
-            if (boundT === null || boundT > nearestT) continue;
+        const candidates = this.collectBroadPhaseCandidates(currentRay);
+        let nearestIndex = Infinity;
+        for (const candidate of candidates) {
+            if (candidate.nearT > nearestT) break;
 
+            const component = this.scene[candidate.index];
             const hit = component.chkIntersection(currentRay, nearestT);
 
-            if (hit && hit.t < nearestT && hit.t > 0.001) {
+            if (
+                hit
+                && hit.t > 0.001
+                && (hit.t < nearestT || (hit.t === nearestT && candidate.index < nearestIndex))
+            ) {
                 nearestT = hit.t;
                 nearestHit = hit;
                 nearestComponent = component;
+                nearestIndex = candidate.index;
             }
         }
 

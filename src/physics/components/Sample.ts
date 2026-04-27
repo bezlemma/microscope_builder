@@ -19,6 +19,25 @@ export interface ColloidTrapZone {
     stiffnessPerSecond?: number;
 }
 
+export const COLLOID_DISPLAY_COLORS = [
+    '#5ac8ff',
+    '#ff6b8a',
+    '#ffd166',
+    '#7ee081',
+    '#b084f5',
+    '#ff9f43',
+    '#4dd4ac',
+    '#f78bd8',
+    '#9ad0ff',
+    '#f6e27f',
+    '#78e6f2',
+    '#c3f584',
+];
+
+export function defaultColloidColor(index: number): string {
+    return COLLOID_DISPLAY_COLORS[index % COLLOID_DISPLAY_COLORS.length]!;
+}
+
 /**
  * Sample — Mickey Mouse, roughly 1mm in diameter similar to my normal samples.
  *
@@ -126,10 +145,10 @@ export class Sample extends OpticalComponent {
             [2.75, 0.55, -0.008],
         ];
         if (count <= seed.length && width <= 4 && height <= 3 && depth >= 0.04) {
-            return seed.slice(0, count).map(([x, y, z]) => ({
+            return seed.slice(0, count).map(([x, y, z], index) => ({
                 center: new Vector3(x, y, z),
                 radius,
-                glowColor: '#007fff',
+                glowColor: defaultColloidColor(index),
             }));
         }
 
@@ -148,7 +167,7 @@ export class Sample extends OpticalComponent {
             return {
                 center: new Vector3(x, y, z),
                 radius,
-                glowColor: '#007fff',
+                glowColor: defaultColloidColor(i),
             };
         });
     }
