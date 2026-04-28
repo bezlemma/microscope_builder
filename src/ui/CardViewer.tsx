@@ -1,9 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useAtom } from 'jotai';
 import { Card, BeamProfile } from '../physics/components/Card';
+import { cardImageTickAtom } from '../state/store';
+import type { Ray } from '../physics/types';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
 type DisplayMapping = 'linear' | 'gamma' | 'log';
+
+type DirectCardHit = { localPoint: { x: number; y: number }; ray: Ray };
+type DetectorViewport = { extentMm: number; centerU: number; centerV: number };
+type DirectHitBounds = {
+    minU: number;
+    maxU: number;
+    minV: number;
+    maxV: number;
+    centerU: number;
+    centerV: number;
+    spanU: number;
+    spanV: number;
+    avgFootprint: number;
+};
 
 // ─── Wavelength → Color helpers ─────────────────────────────────────
 
@@ -52,19 +69,6 @@ function wavelengthRGB(wavelengthMeters: number): [number, number, number] {
     ];
 }
 
-/**
- * Complementary color of the wavelength, for max contrast against Gaussian glow.
- */
-function complementaryCSS(wavelengthMeters: number): string {
-    const [r, g, b] = wavelengthRGB(wavelengthMeters);
-    const cr = 255 - r;
-    const cg = 255 - g;
-    const cb = 255 - b;
-    const maxC = Math.max(cr, cg, cb, 1);
-    const boost = Math.max(1, 180 / maxC);
-    return `rgb(${Math.min(255, Math.round(cr * boost))},${Math.min(255, Math.round(cg * boost))},${Math.min(255, Math.round(cb * boost))})`;
-}
-
 // ─── Display mapping ───────────────────────────────────────────────
 
 function mapDisplayValue(normalized: number, mapping: DisplayMapping): number {
@@ -75,22 +79,266 @@ function mapDisplayValue(normalized: number, mapping: DisplayMapping): number {
     return Math.log10(1 + safe * 2047) / Math.log10(2048);
 }
 
-function nextDisplayMapping(current: DisplayMapping): DisplayMapping {
-    if (current === 'linear') return 'gamma';
-    if (current === 'gamma') return 'log';
-    return 'linear';
+function directCardHits(card: Card): DirectCardHit[] {
+    return card.hits.filter(hit =>
+        hit.ray.intensity > 0
+        && !hit.ray.isBackward
+        && !hit.ray.sourceId?.startsWith('solver3_')
+    );
 }
 
-function displayMappingLabel(mapping: DisplayMapping): string {
-    if (mapping === 'linear') return 'LIN';
-    if (mapping === 'gamma') return 'GAM';
-    return 'LOG';
+function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
+    if (hits.length === 0) return [];
+
+    const byWavelength = new Map<number, DirectCardHit[]>();
+    for (const hit of hits) {
+        const key = Math.round(hit.ray.wavelength * 1e12);
+        const group = byWavelength.get(key);
+        if (group) group.push(hit);
+        else byWavelength.set(key, [hit]);
+    }
+
+    const profiles: BeamProfile[] = [];
+    for (const group of byWavelength.values()) {
+        let totalPower = 0;
+        let meanU = 0;
+        let meanV = 0;
+        let meanPhase = 0;
+        let polXre = 0, polXim = 0, polYre = 0, polYim = 0;
+        const avgDir = group[0].ray.direction.clone();
+
+        for (let i = 0; i < group.length; i++) {
+            const { localPoint, ray } = group[i];
+            const weight = Math.max(ray.intensity, 1e-12);
+            totalPower += weight;
+            meanU += localPoint.x * weight;
+            meanV += localPoint.y * weight;
+            meanPhase += (ray.opticalPathLength ?? 0) * weight;
+            polXre += ray.polarization.x.re * weight;
+            polXim += ray.polarization.x.im * weight;
+            polYre += ray.polarization.y.re * weight;
+            polYim += ray.polarization.y.im * weight;
+            if (i > 0) avgDir.add(ray.direction);
+        }
+
+        if (totalPower <= 0) continue;
+        meanU /= totalPower;
+        meanV /= totalPower;
+        meanPhase /= totalPower;
+
+        let varU = 0;
+        let varV = 0;
+        for (const { localPoint, ray } of group) {
+            const weight = Math.max(ray.intensity, 1e-12);
+            varU += (localPoint.x - meanU) ** 2 * weight;
+            varV += (localPoint.y - meanV) ** 2 * weight;
+        }
+
+        avgDir.normalize();
+        const footprint = group.reduce((sum, hit) => sum + (hit.ray.footprintRadius ?? 0), 0) / group.length;
+        const wx = Math.max(Math.sqrt(varU / totalPower), footprint, 0.05);
+        const wy = Math.max(Math.sqrt(varV / totalPower), footprint, 0.05);
+        const polMag = Math.sqrt(polXre ** 2 + polXim ** 2 + polYre ** 2 + polYim ** 2) || 1;
+
+        profiles.push({
+            wx,
+            wy,
+            wavelength: group[0].ray.wavelength,
+            power: totalPower,
+            polarization: {
+                x: { re: polXre / polMag, im: polXim / polMag },
+                y: { re: polYre / polMag, im: polYim / polMag },
+            },
+            phase: meanPhase,
+            centerU: meanU,
+            centerV: meanV,
+            tiltU: avgDir.x,
+            tiltV: avgDir.y,
+        });
+    }
+
+    return profiles;
 }
 
-function displayMappingTitle(mapping: DisplayMapping): string {
-    if (mapping === 'linear') return 'Switch to gamma intensity view';
-    if (mapping === 'gamma') return 'Switch to log intensity view';
-    return 'Switch to linear intensity view';
+function computeDirectHitBounds(hits: DirectCardHit[]): DirectHitBounds | null {
+    if (hits.length === 0) return null;
+
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    let footprintSum = 0;
+    let footprintCount = 0;
+
+    for (const hit of hits) {
+        const u = hit.localPoint.x;
+        const v = hit.localPoint.y;
+        if (!Number.isFinite(u) || !Number.isFinite(v)) continue;
+        minU = Math.min(minU, u);
+        maxU = Math.max(maxU, u);
+        minV = Math.min(minV, v);
+        maxV = Math.max(maxV, v);
+
+        const footprint = hit.ray.footprintRadius ?? 0;
+        if (Number.isFinite(footprint) && footprint > 0) {
+            footprintSum += footprint;
+            footprintCount++;
+        }
+    }
+
+    if (!Number.isFinite(minU) || !Number.isFinite(minV)) return null;
+    const spanU = Math.max(0, maxU - minU);
+    const spanV = Math.max(0, maxV - minV);
+
+    return {
+        minU,
+        maxU,
+        minV,
+        maxV,
+        centerU: (minU + maxU) / 2,
+        centerV: (minV + maxV) / 2,
+        spanU,
+        spanV,
+        avgFootprint: footprintCount > 0 ? footprintSum / footprintCount : 0,
+    };
+}
+
+function detectorViewport(card: Card, directHits: DirectCardHit[]): DetectorViewport {
+    const fullExtent = Math.max(card.width, card.height);
+    const bounds = computeDirectHitBounds(directHits);
+    if (!bounds) return { extentMm: fullExtent, centerU: 0, centerV: 0 };
+
+    const span = Math.max(bounds.spanU, bounds.spanV);
+    const beamletSupport = Math.max(bounds.avgFootprint * 7, 0.05);
+    const extent = Math.max(span + beamletSupport, bounds.avgFootprint * 10, 0.25);
+    return {
+        extentMm: Math.min(fullExtent, Math.max(0.05, extent)),
+        centerU: bounds.centerU,
+        centerV: bounds.centerV,
+    };
+}
+
+function niceScaleLengthMm(extentMm: number): number {
+    const target = Math.max(extentMm * 0.28, 1e-6);
+    const power = 10 ** Math.floor(Math.log10(target));
+    const normalized = target / power;
+    const step = normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1;
+    return step * power;
+}
+
+function formatScaleLength(mm: number): string {
+    if (mm >= 1) return `${mm.toFixed(mm >= 10 ? 0 : 1)} mm`;
+    return `${Math.round(mm * 1000)} um`;
+}
+
+function drawDetectorScaleBar(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    viewExtentMm: number,
+) {
+    ctx.save();
+    const scaleLength = niceScaleLengthMm(viewExtentMm);
+    const scalePx = Math.max(24, (scaleLength / viewExtentMm) * width);
+    const x1 = width - scalePx - 18;
+    const y = height - 18;
+    ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x1 + scalePx, y);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(formatScaleLength(scaleLength), width - 18, y - 6);
+
+    ctx.restore();
+}
+
+function drawDirectHits(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    hits: DirectCardHit[],
+    viewport: DetectorViewport,
+    mapping: DisplayMapping,
+) {
+    const rgb = new Float32Array(width * height * 3);
+    const viewExtentMm = viewport.extentMm;
+    const scaleX = viewExtentMm / width;
+    const scaleY = viewExtentMm / height;
+
+    const maxDrawnHits = 6000;
+    const stride = Math.max(1, Math.ceil(hits.length / maxDrawnHits));
+    const pixelSizeMm = Math.min(scaleX, scaleY);
+    const deposit = (px: number, py: number, r: number, g: number, b: number, power: number, beamletRadiusMm: number) => {
+        const radiusPx = Math.max(1.25, beamletRadiusMm * 3 / pixelSizeMm);
+        const radius = Math.ceil(Math.min(96, radiusPx));
+        const minX = Math.max(0, Math.floor(px - radius));
+        const maxX = Math.min(width - 1, Math.ceil(px + radius));
+        const minY = Math.max(0, Math.floor(py - radius));
+        const maxY = Math.min(height - 1, Math.ceil(py + radius));
+        const radiusMm2 = Math.max(beamletRadiusMm * beamletRadiusMm, pixelSizeMm * pixelSizeMm);
+        let weightSum = 0;
+
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                const dxMm = (x + 0.5 - px) * scaleX;
+                const dyMm = (y + 0.5 - py) * scaleY;
+                const q = (dxMm * dxMm + dyMm * dyMm) / radiusMm2;
+                const weight = Math.exp(-2 * q);
+                if (weight < 1e-5) continue;
+                weightSum += weight;
+            }
+        }
+        if (weightSum <= 0) return;
+
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                const dxMm = (x + 0.5 - px) * scaleX;
+                const dyMm = (y + 0.5 - py) * scaleY;
+                const q = (dxMm * dxMm + dyMm * dyMm) / radiusMm2;
+                const gaussian = Math.exp(-2 * q);
+                if (gaussian < 1e-5) continue;
+                const weight = power * gaussian / weightSum;
+                const idx = (y * width + x) * 3;
+                rgb[idx] += r * weight;
+                rgb[idx + 1] += g * weight;
+                rgb[idx + 2] += b * weight;
+            }
+        }
+    };
+
+    for (let hitIndex = 0; hitIndex < hits.length; hitIndex += stride) {
+        const { localPoint, ray } = hits[hitIndex];
+        const cx = width / 2 + (localPoint.x - viewport.centerU) / scaleX;
+        const cy = height / 2 + (localPoint.y - viewport.centerV) / scaleY;
+        if (cx < -1 || cx > width || cy < -1 || cy > height) continue;
+
+        const [r, g, b] = wavelengthRGB(ray.wavelength);
+        const power = Math.max(ray.intensity * stride, 0);
+        const footprintRadius = Number.isFinite(ray.footprintRadius) ? Math.max(ray.footprintRadius, 0) : 0;
+        const beamletRadiusMm = Math.max(footprintRadius, pixelSizeMm * 0.75);
+        deposit(cx, cy, r, g, b, power, beamletRadiusMm);
+    }
+
+    const imageData = ctx.createImageData(width, height);
+    const data = imageData.data;
+    let maxValue = 0;
+    for (let i = 0; i < rgb.length; i++) {
+        maxValue = Math.max(maxValue, rgb[i]);
+    }
+    const norm = maxValue > 0 ? 1 / maxValue : 1;
+    for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
+        data[j] = Math.round(mapDisplayValue(rgb[i] * norm, mapping) * 255);
+        data[j + 1] = Math.round(mapDisplayValue(rgb[i + 1] * norm, mapping) * 255);
+        data[j + 2] = Math.round(mapDisplayValue(rgb[i + 2] * norm, mapping) * 255);
+        data[j + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    drawDetectorScaleBar(ctx, width, height, viewExtentMm);
 }
 
 // ─── Power formatting ──────────────────────────────────────────────
@@ -104,292 +352,6 @@ function fmtPower(watts: number): string {
     return `${watts.toExponential(2)} W`;
 }
 
-// ─── Multi-beam drawing with coherent interference ──────────────────
-
-/**
- * Draw multiple beam profiles with coherent interference.
- * Same-wavelength beams interfere (fringes), different-wavelength beams add incoherently.
- * Tilt-based spatial fringes: beams at different angles create spatially varying
- * interference patterns across the card.
- *
- * The display mapping is applied after normalizing intensities to [0,1].
- */
-function drawMultiBeam(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    profiles: BeamProfile[],
-    viewExtentMm: number,
-    time: number,
-    mapping: DisplayMapping
-) {
-    const imageData = ctx.createImageData(width, height);
-    const data = imageData.data;
-    const scaleX = viewExtentMm / width;
-    const scaleY = viewExtentMm / height;
-
-    // Group profiles by wavelength for coherent interference
-    const wavelengthGroups = new Map<number, BeamProfile[]>();
-    for (const p of profiles) {
-        // Round wavelength to avoid floating-point key mismatches
-        const key = Math.round(p.wavelength * 1e12);
-        if (!wavelengthGroups.has(key)) wavelengthGroups.set(key, []);
-        wavelengthGroups.get(key)!.push(p);
-    }
-
-    // Animation phase (for polarization ellipse overlay only, NOT for interference)
-    const omega = time * 3.5;
-
-    // Detect broadband white light: 3+ distinct wavelength groups -> render as white
-    const isBroadband = wavelengthGroups.size >= 3;
-
-    // Normalize brightness: scale so the brightest beam's peak reaches full RGB
-    let maxPower = 0;
-    for (const p of profiles) maxPower = Math.max(maxPower, p.power);
-    const powerScale = maxPower > 0 ? 1.0 / maxPower : 1.0;
-
-    for (let py = 0; py < height; py++) {
-        for (let px = 0; px < width; px++) {
-            const x = (px - width / 2) * scaleX;
-            const y = (py - height / 2) * scaleY;
-
-            let totalR = 0, totalG = 0, totalB = 0;
-
-            for (const [, group] of wavelengthGroups) {
-                const [R, G, B] = isBroadband ? [255, 255, 255] : wavelengthRGB(group[0].wavelength);
-
-                if (group.length === 1) {
-                    // Single beam -- no interference, just Gaussian
-                    const p = group[0];
-                    const dx = x - (p.centerU ?? 0);
-                    const dy = y - (p.centerV ?? 0);
-                    const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
-                    if (gauss < 0.001) continue;
-                    const rawIntensity = Math.sqrt(gauss) * p.power * powerScale;
-                    const mapped = mapDisplayValue(rawIntensity, mapping);
-                    totalR += R * mapped;
-                    totalG += G * mapped;
-                    totalB += B * mapped;
-                } else {
-                    // Multiple coherent beams -- sum E-fields then compute intensity
-                    // Use REAL wavenumber k = 2pi/lambda for physically correct interference
-                    // omega cancels in |E|^2 = |sum Ei|^2, so we omit it from pixel shading
-                    const wavelengthMm = group[0].wavelength * 1e3; // SI meters -> mm
-                    const k_real = (2 * Math.PI) / wavelengthMm;
-
-                    let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
-
-                    for (const p of group) {
-                        const dx = x - (p.centerU ?? 0);
-                        const dy = y - (p.centerV ?? 0);
-                        const gauss = Math.exp(-2 * (dx * dx / (p.wx * p.wx) + dy * dy / (p.wy * p.wy)));
-                        if (gauss < 0.0001) continue;
-                        const amp = Math.sqrt(Math.sqrt(gauss) * p.power * powerScale);
-
-                        // Phase: real OPL-based phase + spatial tilt phase
-                        // tiltU/V create spatial fringes when beams arrive at different angles
-                        const tiltPhase = k_real * ((p.tiltU ?? 0) * x + (p.tiltV ?? 0) * y);
-                        const phi = k_real * p.phase + tiltPhase;
-
-                        // Jones vector contribution
-                        const Jx = p.polarization.x;
-                        const Jy = p.polarization.y;
-                        const cosPhi = Math.cos(phi);
-                        const sinPhi = Math.sin(phi);
-
-                        exRe += amp * (Jx.re * cosPhi - Jx.im * sinPhi);
-                        exIm += amp * (Jx.re * sinPhi + Jx.im * cosPhi);
-                        eyRe += amp * (Jy.re * cosPhi - Jy.im * sinPhi);
-                        eyIm += amp * (Jy.re * sinPhi + Jy.im * cosPhi);
-                    }
-
-                    const intensity = exRe * exRe + exIm * exIm + eyRe * eyRe + eyIm * eyIm;
-                    if (intensity < 0.001) continue;
-                    const rawBright = Math.sqrt(intensity);
-                    const mapped = mapDisplayValue(rawBright, mapping);
-                    totalR += R * mapped;
-                    totalG += G * mapped;
-                    totalB += B * mapped;
-                }
-            }
-
-            const idx = (py * width + px) * 4;
-            data[idx] = Math.min(255, Math.round(totalR));
-            data[idx + 1] = Math.min(255, Math.round(totalG));
-            data[idx + 2] = Math.min(255, Math.round(totalB));
-            data[idx + 3] = 255;
-        }
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    // === Overlays: draw per-beam 1/e^2 rings and polarization for primary beam ===
-    const primary = profiles[0];
-    const beamCxPx = width / 2 + (primary.centerU ?? 0) / scaleX;
-    const beamCyPx = height / 2 + (primary.centerV ?? 0) / scaleY;
-
-    // Draw 1/e^2 rings for each beam
-    for (const p of profiles) {
-        const cx = width / 2 + (p.centerU ?? 0) / scaleX;
-        const cy = height / 2 + (p.centerV ?? 0) / scaleY;
-        const rxPx = p.wx / scaleX;
-        const ryPx = p.wy / scaleY;
-
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    // Beam width labels for primary
-    const rxPx = primary.wx / scaleX;
-    const ryPx = primary.wy / scaleY;
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${(primary.wx * 2).toFixed(2)} mm`, beamCxPx + rxPx + 3, beamCyPx + 3);
-    if (Math.abs(primary.wx - primary.wy) > 0.001 * primary.wx) {
-        ctx.textAlign = 'center';
-        ctx.fillText(`${(primary.wy * 2).toFixed(2)} mm`, beamCxPx, beamCyPx - ryPx - 4);
-    }
-    ctx.textAlign = 'start';
-
-    // Subtle crosshair at card center
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
-    ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    // === Polarization overlay for EACH beam ===
-    for (const prof of profiles) {
-        const pCx = width / 2 + (prof.centerU ?? 0) / scaleX;
-        const pCy = height / 2 + (prof.centerV ?? 0) / scaleY;
-        const pRxPx = prof.wx / scaleX;
-        const pRyPx = prof.wy / scaleY;
-
-        const Jx = prof.polarization.x;
-        const Jy = prof.polarization.y;
-        const ampX = Math.sqrt(Jx.re * Jx.re + Jx.im * Jx.im);
-        const ampY = Math.sqrt(Jy.re * Jy.re + Jy.im * Jy.im);
-        const phiX = Math.atan2(Jx.im, Jx.re);
-        const phiY = Math.atan2(Jy.im, Jy.re);
-
-        const maxAmp = Math.max(ampX, ampY, 0.001);
-        const arrowScale = Math.min(pRxPx, pRyPx) * 1.0;
-
-        const exNow = (ampX / maxAmp) * Math.cos(omega + phiX);
-        const eyNow = (ampY / maxAmp) * Math.cos(omega + phiY);
-
-        const compColor = complementaryCSS(prof.wavelength);
-
-        // Polarization ellipse trace
-        ctx.strokeStyle = compColor;
-        ctx.globalAlpha = 0.3;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        for (let i = 0; i <= 120; i++) {
-            const t = (i / 120) * Math.PI * 2;
-            const ex = (ampX / maxAmp) * Math.cos(t + phiX) * arrowScale;
-            const ey = (ampY / maxAmp) * Math.cos(t + phiY) * arrowScale;
-            const ppx = pCx + ex;
-            const ppy = pCy - ey;
-            if (i === 0) ctx.moveTo(ppx, ppy);
-            else ctx.lineTo(ppx, ppy);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.globalAlpha = 1.0;
-
-        // Ex arrow
-        const exLen = exNow * arrowScale;
-        drawArrow(ctx, pCx, pCy, pCx + exLen, pCy,
-            'rgba(100, 180, 255, 0.7)', 1.5);
-
-        // Ey arrow
-        const eyLen = eyNow * arrowScale;
-        drawArrow(ctx, pCx, pCy, pCx, pCy - eyLen,
-            'rgba(255, 130, 100, 0.7)', 1.5);
-
-        // Resultant E-field vector
-        const resTipX = pCx + exNow * arrowScale;
-        const resTipY = pCy - eyNow * arrowScale;
-        drawArrow(ctx, pCx, pCy, resTipX, resTipY, compColor, 2.5);
-
-        // Bright dot at resultant tip
-        ctx.fillStyle = compColor;
-        ctx.shadowColor = compColor;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(resTipX, resTipY, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        // Trailing glow
-        ctx.globalAlpha = 0.15;
-        for (let k = 1; k <= 30; k++) {
-            const tt = omega - k * 0.12;
-            const tx = (ampX / maxAmp) * Math.cos(tt + phiX) * arrowScale;
-            const ty = (ampY / maxAmp) * Math.cos(tt + phiY) * arrowScale;
-            ctx.fillStyle = compColor;
-            ctx.beginPath();
-            ctx.arc(pCx + tx, pCy - ty, Math.max(0.5, 2.5 - k * 0.06), 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.globalAlpha = 1.0;
-
-        // Component labels
-        ctx.font = '8px sans-serif';
-        ctx.fillStyle = 'rgba(100, 180, 255, 0.5)';
-        ctx.textAlign = 'center';
-        ctx.fillText('Ex', pCx + arrowScale + 10, pCy + 3);
-        ctx.fillStyle = 'rgba(255, 130, 100, 0.5)';
-        ctx.fillText('Ey', pCx + 5, pCy - arrowScale - 5);
-        ctx.textAlign = 'start';
-    }
-}
-
-// ─── Arrow drawing utility ──────────────────────────────────────────
-
-function drawArrow(
-    ctx: CanvasRenderingContext2D,
-    x1: number, y1: number,
-    x2: number, y2: number,
-    color: string,
-    lineWidth: number
-) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1) return;
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-
-    const headLen = Math.min(6, len * 0.3);
-    const angle = Math.atan2(dy, dx);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(
-        x2 - headLen * Math.cos(angle - Math.PI / 6),
-        y2 - headLen * Math.sin(angle - Math.PI / 6)
-    );
-    ctx.lineTo(
-        x2 - headLen * Math.cos(angle + Math.PI / 6),
-        y2 - headLen * Math.sin(angle + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fill();
-}
-
 // ─── Beam moment computation from Gaussian profiles ────────────────
 
 interface BeamMomentSummary {
@@ -397,6 +359,19 @@ interface BeamMomentSummary {
     groupCount: number;
     majorDiameter: number;   // 1/e^2 major (mm)
     minorDiameter: number;   // 1/e^2 minor (mm)
+}
+
+interface InterferenceSummary {
+    wavelengthNm: number;
+    deltaOplMm: number;
+    phaseDeg: number;
+    visibility: number;
+    balance: number;
+    overlap: number;
+    polarizationOverlap: number;
+    coherentPower: number;
+    incoherentPower: number;
+    state: 'bright' | 'dark' | 'mid';
 }
 
 function computeBeamMoments(profiles: BeamProfile[]): BeamMomentSummary | null {
@@ -485,52 +460,123 @@ function computeBeamMoments(profiles: BeamProfile[]): BeamMomentSummary | null {
     };
 }
 
-// ─── Control button style ──────────────────────────────────────────
+function wrapPi(value: number): number {
+    let wrapped = value % (Math.PI * 2);
+    if (wrapped > Math.PI) wrapped -= Math.PI * 2;
+    if (wrapped < -Math.PI) wrapped += Math.PI * 2;
+    return wrapped;
+}
 
-const controlButtonStyle: React.CSSProperties = {
-    background: '#171717',
-    border: '1px solid #333',
-    borderRadius: '4px',
-    color: '#ddd',
-    cursor: 'pointer',
-    fontSize: '10px',
-    fontFamily: 'monospace',
-    lineHeight: 1,
-    padding: '3px 5px',
-};
+function jonesInnerProduct(
+    a: BeamProfile['polarization'],
+    b: BeamProfile['polarization'],
+): { re: number; im: number; amp: number; phase: number } {
+    const axRe = a.x.re, axIm = a.x.im;
+    const ayRe = a.y.re, ayIm = a.y.im;
+    const bxRe = b.x.re, bxIm = b.x.im;
+    const byRe = b.y.re, byIm = b.y.im;
+    const re = axRe * bxRe + axIm * bxIm + ayRe * byRe + ayIm * byIm;
+    const im = axRe * bxIm - axIm * bxRe + ayRe * byIm - ayIm * byRe;
+    const aNorm = Math.sqrt(axRe * axRe + axIm * axIm + ayRe * ayRe + ayIm * ayIm);
+    const bNorm = Math.sqrt(bxRe * bxRe + bxIm * bxIm + byRe * byRe + byIm * byIm);
+    const denom = Math.max(1e-15, aNorm * bNorm);
+    return {
+        re,
+        im,
+        amp: Math.min(1, Math.hypot(re, im) / denom),
+        phase: Math.atan2(im, re),
+    };
+}
+
+function computeInterferenceSummary(profiles: BeamProfile[]): InterferenceSummary | null {
+    const groups = new Map<number, BeamProfile[]>();
+    for (const profile of profiles) {
+        if (profile.power <= 1e-12) continue;
+        const key = Math.round(profile.wavelength * 1e12);
+        const group = groups.get(key);
+        if (group) group.push(profile);
+        else groups.set(key, [profile]);
+    }
+
+    let bestGroup: BeamProfile[] | null = null;
+    let bestPower = 0;
+    for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        const power = group.reduce((sum, profile) => sum + profile.power, 0);
+        if (power > bestPower) {
+            bestPower = power;
+            bestGroup = group;
+        }
+    }
+    if (!bestGroup) return null;
+
+    const [a, b] = [...bestGroup].sort((left, right) => right.power - left.power);
+    if (!a || !b) return null;
+
+    const incoherentPower = a.power + b.power;
+    if (incoherentPower <= 1e-12) return null;
+
+    const meanWx = Math.max(1e-6, (a.wx + b.wx) / 2);
+    const meanWy = Math.max(1e-6, (a.wy + b.wy) / 2);
+    const du = (a.centerU ?? 0) - (b.centerU ?? 0);
+    const dv = (a.centerV ?? 0) - (b.centerV ?? 0);
+    const spatialOverlap = Math.exp(-0.5 * ((du * du) / (meanWx * meanWx) + (dv * dv) / (meanWy * meanWy)));
+    const dTilt = Math.hypot((a.tiltU ?? 0) - (b.tiltU ?? 0), (a.tiltV ?? 0) - (b.tiltV ?? 0));
+    const tiltOverlap = Math.exp(-0.5 * (dTilt / 0.08) ** 2);
+    const overlap = Math.max(0, Math.min(1, spatialOverlap * tiltOverlap));
+    const pol = jonesInnerProduct(a.polarization, b.polarization);
+    const balance = 2 * Math.sqrt(a.power * b.power) / incoherentPower;
+    const visibility = Math.max(0, Math.min(1, balance * overlap * pol.amp));
+    const wavelengthMm = a.wavelength * 1e3;
+    const deltaOplMm = b.phase - a.phase;
+    const phaseRad = wrapPi((2 * Math.PI / wavelengthMm) * deltaOplMm + pol.phase);
+    const coherentPower = Math.max(0, incoherentPower * (1 + visibility * Math.cos(phaseRad)));
+    const phaseDeg = phaseRad * 180 / Math.PI;
+    const state: InterferenceSummary['state'] =
+        visibility < 0.15
+            ? 'mid'
+            : Math.cos(phaseRad) > 0.5
+                ? 'bright'
+                : Math.cos(phaseRad) < -0.5
+                    ? 'dark'
+                    : 'mid';
+
+    return {
+        wavelengthNm: Math.round(a.wavelength * 1e9),
+        deltaOplMm,
+        phaseDeg,
+        visibility,
+        balance,
+        overlap,
+        polarizationOverlap: pol.amp,
+        coherentPower,
+        incoherentPower,
+        state,
+    };
+}
+
+function fmtLength(deltaMm: number): string {
+    const abs = Math.abs(deltaMm);
+    if (abs >= 1) return `${deltaMm.toFixed(3)} mm`;
+    if (abs >= 1e-3) return `${(deltaMm * 1e3).toFixed(2)} um`;
+    return `${(deltaMm * 1e6).toFixed(0)} nm`;
+}
 
 // ─── Main CardViewer Component ──────────────────────────────────────
 
-export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?: number }> = ({ card, compact, autoFitNonce }) => {
+export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?: number }> = ({ card, compact }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const animFrameRef = useRef<number>(0);
-    const profiles = card.beamProfiles;
-    const hasBeams = profiles.length > 0;
+    const [cardImageTick] = useAtom(cardImageTickAtom);
+    const directHits = useMemo(() => directCardHits(card), [card, cardImageTick]);
+    const fallbackProfiles = useMemo(() => beamProfilesFromDirectHits(directHits), [directHits]);
+    const profiles = card.beamProfiles.length > 0 ? card.beamProfiles : fallbackProfiles;
+    const hasBeams = profiles.length > 0 || directHits.length > 0;
 
-    const canvasSize = compact ? 80 : 220;
-
-    // Display mapping state
-    const [mapping, setMapping] = useState<DisplayMapping>('linear');
-
-    // View extent (mm): auto-sized to card by default; the user can click the
-    // "Fit" button in the parent wrapper to recompute from current beam data
-    // (bumps `autoFitNonce`).
-    const [viewExtentMm, setViewExtentMm] = useState<number>(() => Math.max(card.width, card.height));
-    useEffect(() => {
-        if (autoFitNonce === undefined) return;
-        if (!hasBeams) {
-            setViewExtentMm(Math.max(card.width, card.height));
-            return;
-        }
-        let maxExtent = 0;
-        for (const p of profiles) {
-            const cu = Math.abs(p.centerU) + 3 * Math.max(p.wx, 1e-6);
-            const cv = Math.abs(p.centerV) + 3 * Math.max(p.wy, 1e-6);
-            const e = 2 * Math.max(cu, cv);
-            if (e > maxExtent) maxExtent = e;
-        }
-        if (maxExtent > 0) setViewExtentMm(Math.max(maxExtent, 0.05));
-    }, [autoFitNonce, hasBeams, profiles, card.width, card.height]);
+    const canvasSize = compact ? 96 : 260;
+    const viewport = useMemo(
+        () => detectorViewport(card, directHits),
+        [card, card.width, card.height, directHits],
+    );
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -545,30 +591,24 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
             ctx.fillStyle = '#444';
             ctx.font = '11px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('No E&M data', canvas.width / 2, canvas.height / 2 - 6);
+            ctx.fillText('No beam on card', canvas.width / 2, canvas.height / 2 - 6);
             ctx.fillStyle = '#333';
             ctx.font = '9px sans-serif';
-            ctx.fillText('(enable E&M solver)', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText('(move detector into beam)', canvas.width / 2, canvas.height / 2 + 10);
             ctx.textAlign = 'start';
             return;
         }
 
-        const viewExtent = viewExtentMm;
-        let running = true;
-
-        const animate = () => {
-            if (!running) return;
-            const t = performance.now() / 1000;
-            drawMultiBeam(ctx, canvas.width, canvas.height, profiles, viewExtent, t, mapping);
-            animFrameRef.current = requestAnimationFrame(animate);
-        };
-        animate();
-
-        return () => {
-            running = false;
-            cancelAnimationFrame(animFrameRef.current);
-        };
-    }, [profiles, hasBeams, card.width, card.height, canvasSize, mapping, viewExtentMm]);
+        drawDirectHits(ctx, canvas.width, canvas.height, directHits, viewport, 'linear');
+    }, [
+        directHits,
+        hasBeams,
+        card.width,
+        card.height,
+        canvasSize,
+        viewport,
+        cardImageTick,
+    ]);
 
     const primary = hasBeams ? profiles[0] : null;
     const beamStr = primary
@@ -586,9 +626,15 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
 
     // Beam moment summary
     const beamMoments = hasBeams ? computeBeamMoments(profiles) : null;
+    const interference = hasBeams ? computeInterferenceSummary(profiles) : null;
 
-    const labelStyle: React.CSSProperties = { color: '#777', fontSize: '10px' };
-    const valueStyle: React.CSSProperties = { color: '#ddd', fontSize: '11px', fontFamily: 'monospace' };
+    const labelStyle: React.CSSProperties = { color: '#858585', fontSize: '11px' };
+    const valueStyle: React.CSSProperties = { color: '#e0e0e0', fontSize: '12px', fontFamily: 'monospace' };
+    const interferenceColor = interference?.state === 'bright'
+        ? '#7ee081'
+        : interference?.state === 'dark'
+            ? '#8ab4ff'
+            : '#ffd166';
 
     return (
         <div style={{ marginTop: '4px' }}>
@@ -602,38 +648,19 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                         borderRadius: '4px',
                         display: 'block',
                         backgroundColor: '#000',
+                        imageRendering: 'pixelated',
                     }}
                 />
 
-                {/* Control buttons row -- hidden in compact mode */}
                 {!compact && (
                     <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
+                        color: '#777',
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
                         marginTop: '6px',
-                        padding: '4px 0 0 0',
-                        flexWrap: 'wrap',
+                        textAlign: 'right',
                     }}>
-                        <button
-                            onClick={() => setMapping(m => nextDisplayMapping(m))}
-                            title={displayMappingTitle(mapping)}
-                            style={controlButtonStyle}
-                        >
-                            {displayMappingLabel(mapping)}
-                        </button>
-                        <button
-                            onClick={() => {
-                                // Fit: reset mapping to linear (the "full card" default view).
-                                // The view extent is always card.width/height, so this just
-                                // resets the display mapping to show the full dynamic range.
-                                setMapping('linear');
-                            }}
-                            title="Reset view to show all beams (linear mapping)"
-                            style={controlButtonStyle}
-                        >
-                            Fit
-                        </button>
+                        {formatScaleLength(viewport.extentMm)} view
                     </div>
                 )}
             </div>
@@ -664,7 +691,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                                         <span style={{
                                             ...valueStyle,
                                             color: wavelengthToCSS(wlM),
-                                            fontSize: '10px'
+                                            fontSize: '11px'
                                         }}>
                                             {'\u25CF'} {wlNm} nm
                                         </span>
@@ -687,6 +714,58 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                         </div>
                     ) : (
                         <div style={valueStyle}>--</div>
+                    )}
+
+                    {/* Coherent interference summary */}
+                    {interference && (
+                        <div style={{
+                            marginTop: '6px',
+                            paddingTop: '4px',
+                            borderTop: '1px solid #282828'
+                        }}>
+                            <div style={labelStyle}>Interferometer</div>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 1fr',
+                                gap: '2px 12px',
+                                marginTop: '2px'
+                            }}>
+                                <div>
+                                    <div style={labelStyle}>State</div>
+                                    <div style={{ ...valueStyle, color: interferenceColor, fontWeight: 700 }}>
+                                        {interference.state}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Contrast</div>
+                                    <div style={valueStyle}>{(interference.visibility * 100).toFixed(0)}%</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>ΔL</div>
+                                    <div style={valueStyle}>{fmtLength(interference.deltaOplMm)}</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Δφ @ {interference.wavelengthNm} nm</div>
+                                    <div style={valueStyle}>{interference.phaseDeg.toFixed(0)}°</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Overlap</div>
+                                    <div style={valueStyle}>{(interference.overlap * 100).toFixed(0)}%</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Balance</div>
+                                    <div style={valueStyle}>{(interference.balance * 100).toFixed(0)}%</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Pol Match</div>
+                                    <div style={valueStyle}>{(interference.polarizationOverlap * 100).toFixed(0)}%</div>
+                                </div>
+                                <div>
+                                    <div style={labelStyle}>Coherent I</div>
+                                    <div style={valueStyle}>{fmtPower(interference.coherentPower)}</div>
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     {/* Beam moment summary */}

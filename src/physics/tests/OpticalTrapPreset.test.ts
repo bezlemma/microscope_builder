@@ -414,6 +414,13 @@ describe('Optical Trap preset', () => {
         qpd.quadrants = [1, 2, 3, 4];
         qpd.quadrantHits = [5, 6, 7, 8];
         qpd.totalHits = 26;
+        qpd.gapPower = 0.25;
+        qpd.blockedPower = 0.5;
+        qpd.blockedHits = 2;
+        qpd.momentX = 1.2;
+        qpd.momentY = -0.8;
+        qpd.momentXX = 0.4;
+        qpd.momentYY = 0.6;
 
         traceStableTableOverlay(
             scene,
@@ -426,6 +433,13 @@ describe('Optical Trap preset', () => {
         expect(qpd.quadrants).toEqual([1, 2, 3, 4]);
         expect(qpd.quadrantHits).toEqual([5, 6, 7, 8]);
         expect(qpd.totalHits).toBe(26);
+        expect(qpd.gapPower).toBe(0.25);
+        expect(qpd.blockedPower).toBe(0.5);
+        expect(qpd.blockedHits).toBe(2);
+        expect(qpd.momentX).toBe(1.2);
+        expect(qpd.momentY).toBe(-0.8);
+        expect(qpd.momentXX).toBe(0.4);
+        expect(qpd.momentYY).toBe(0.6);
     });
 
     test('forward traces reset QPD accumulators instead of accumulating history', () => {

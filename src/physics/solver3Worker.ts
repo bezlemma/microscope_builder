@@ -162,6 +162,7 @@ export interface SerializedRay {
     footprintRadius: number;
     coherenceMode: number;
     sourceId?: string;
+    sourceKind?: Ray['sourceKind'];
     isMainRay?: boolean;
     polarization?: Ray['polarization'];
     // Visualisation metadata that the RayVisualizer needs:
@@ -189,6 +190,7 @@ function serializeRay(ray: Ray): SerializedRay {
         footprintRadius: ray.footprintRadius,
         coherenceMode: ray.coherenceMode,
         sourceId: ray.sourceId,
+        sourceKind: ray.sourceKind,
         isMainRay: ray.isMainRay,
         polarization: ray.polarization,
         interactionDistance: ray.interactionDistance,

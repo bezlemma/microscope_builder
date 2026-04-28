@@ -14,14 +14,14 @@ import { Box3, Vector3 } from 'three';
 export class StructuredSource extends OpticalComponent {
     /** Emission wavelength in nanometers. */
     wavelength: number = 532;
-    /** Beam-waist-equivalent used for beamlet footprint (mm). */
-    beamRadius: number = 0.25;
+    /** Pattern radius over which the structured rays are emitted (mm). */
+    beamRadius: number = 5;
     /** Total optical power emitted (watts). */
     power: number = 1;
-    /** Aperture diameter over which the pattern is rasterized (mm). */
+    /** Legacy aperture diameter retained for old scene files (mm). */
     diameter: number = 10;
     /** The character rasterized into the pattern. */
-    asciiChar: string = '☀';
+    asciiChar: string = 'A';
 
     private static readonly HOUSING = new Box3(
         new Vector3(-6, -6, -3),

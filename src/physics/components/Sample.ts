@@ -411,17 +411,12 @@ export class Sample extends OpticalComponent {
         };
     }
 
-    /**
-     * Get the near and far planes of the sample volume for a world ray.
-     * Used by Solver 3 strictly to evaluate the internal E&M field integral.
-     */
-    getVolumeIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
+    private intersectLocalBox(worldRay: Ray, box: Box3): { tNear: number, tFar: number } | null {
         this.updateMatrices();
         const localOrigin = this._volumeLocalOrigin.copy(worldRay.origin).applyMatrix4(this.worldToLocal);
         const localDir = this._volumeLocalDir.copy(worldRay.direction).transformDirection(this.worldToLocal).normalize();
 
         // Analytical AABB slab intersection — no triangle mesh, no edge artifacts.
-        const box = this.getVolumeBoundsLocal();
         let tMin = -Infinity, tMax = Infinity;
 
         // X slab
@@ -461,6 +456,23 @@ export class Sample extends OpticalComponent {
         }
 
         return { tNear: Math.max(0, tMin), tFar: Math.max(0, tMax) };
+    }
+
+    /**
+     * Get the near and far planes of the sample volume for a world ray.
+     * Used by Solver 3 strictly to evaluate the internal E&M field integral.
+     */
+    getVolumeIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
+        return this.intersectLocalBox(worldRay, this.getVolumeBoundsLocal());
+    }
+
+    /**
+     * Get the broader proxy that Sample.intersect uses for tracing. This is
+     * intentionally separate from getVolumeIntersection(), which may be much
+     * tighter than the clickable/traceable holder shell.
+     */
+    getInteractionIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
+        return this.intersectLocalBox(worldRay, Sample.BOUNDS);
     }
 
     /**

@@ -565,10 +565,13 @@ export class Solver3Kernel {
                     fluorescenceRadiance += fluorescenceSum * throughput;
                 }
 
-                const bounds = sample.getVolumeIntersection(currentRay);
-                const jumpT = bounds
-                    ? bounds.tFar + 0.01
-                    : (midT > 0 ? midT + 20 : nearestT + 30);
+                const volumeBounds = sample.getVolumeIntersection(currentRay);
+                const interactionBounds = sample.getInteractionIntersection(currentRay);
+                const jumpT = interactionBounds
+                    ? Math.max(interactionBounds.tFar, volumeBounds?.tFar ?? 0, nearestT) + 0.01
+                    : (volumeBounds
+                        ? Math.max(volumeBounds.tFar, nearestT) + 0.01
+                        : (midT > 0 ? midT + 20 : nearestT + 30));
                 const nextRay = childRay(currentRay, {
                     origin: currentRay.origin.clone().add(currentRay.direction.clone().multiplyScalar(jumpT)),
                     direction: currentRay.direction.clone(),

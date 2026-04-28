@@ -2,10 +2,13 @@ import { atom } from 'jotai';
 import { OpticalComponent } from '../physics/Component';
 import { serializeScene, deserializeScene } from './ubzSerializer';
 import { PropertyAnimator, type AnimationChannel } from '../physics/PropertyAnimator';
+import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { QPD } from '../physics/components/QPD';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
+import type { GaussianBeamSegment } from '../physics/Solver2';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
@@ -110,8 +113,14 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.Brightfield, () => ({ scene: createBrightfieldScene() })],
     [PresetName.LensZoo, () => ({ scene: createLensZooScene() })],
     [PresetName.PrismDebug, () => ({ scene: createPrismDebugScene() })],
-    [PresetName.PolarizationZoo, () => ({ scene: createPolarizationZooScene() })],
-    [PresetName.MZInterferometer, () => ({ scene: createMZInterferometerScene() })],
+    [PresetName.PolarizationZoo, () => ({
+        scene: createPolarizationZooScene(),
+        rayConfig: { solver2Enabled: true, viewerMode: 'wave' },
+    })],
+    [PresetName.MZInterferometer, () => ({
+        scene: createMZInterferometerScene(),
+        rayConfig: { solver2Enabled: true, viewerMode: 'wave' },
+    })],
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
@@ -186,19 +195,26 @@ export const loadPresetAtom = atom(
             set(animationSpeedAtom, result.animationSpeed);
         }
 
-        // Phone-friendly defaults: every detector in the preset (Cameras and
-        // scan-configured PMTs) starts with its viewer pinned so the image
+        // Phone-friendly defaults: every detector in the preset (Cameras,
+        // scan-configured PMTs, and QPDs) starts with its viewer pinned so the image
         // panel is visible immediately. We also kick off the Solver-3
         // backward-trace so the user sees a first image without having to
         // press Render.
+        const cards = presetName === PresetName.MZInterferometer
+            ? result.scene.filter((c): c is Card => c instanceof Card)
+            : [];
         const cameras = result.scene.filter((c): c is Camera => c instanceof Camera && !c.isGhost);
         const pmts = result.scene.filter((c): c is PMT => c instanceof PMT && (c as PMT).hasValidAxes());
-        const hasDetector = cameras.length > 0 || pmts.length > 0;
+        const qpds = result.scene.filter((c): c is QPD => c instanceof QPD);
+        const hasImageDetector = cameras.length > 0 || pmts.length > 0;
+        const hasDetector = hasImageDetector || qpds.length > 0 || cards.length > 0;
         const shouldPinSampleView = presetName === PresetName.OpenSPIM || presetName === PresetName.OpticalTrap;
         if (hasDetector || shouldPinSampleView) {
             const pinned = new Set(get(pinnedViewersAtom));
+            for (const card of cards) pinned.add(card.id);
             for (const cam of cameras) pinned.add(cam.id);
             for (const pmt of pmts) pinned.add(pmt.id);
+            for (const qpd of qpds) pinned.add(qpd.id);
             // OpenSPIM and Optical Trap both need the local sample view to
             // make the core interaction legible: light-sheet placement for
             // OpenSPIM, bead capture inside the flow cell for Optical Trap.
@@ -212,7 +228,7 @@ export const loadPresetAtom = atom(
             set(pinnedViewersAtom, pinned);
             // Bumping the trigger atom causes OpticalTable's Solver-3 effect to
             // run. It reads `components` at render time and will see the new scene.
-            if (hasDetector) {
+            if (hasImageDetector) {
                 set(solver3RenderTriggerAtom, get(solver3RenderTriggerAtom) + 1);
             }
         }
@@ -281,6 +297,11 @@ export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
 // (e.g. SampleZoomViewer) read from this so they don't have to re-trace.
 export const forwardRaysAtom = atom<import('../physics/types').Ray[][]>([]);
 
+// Trap beam segments are published even when the global Solver-2 wave overlay
+// is hidden, so the optical-trap sample viewer can show diagnostics using the
+// same cached field that drives bead/colloid dynamics.
+export const trapBeamSegmentsAtom = atom<GaussianBeamSegment[][]>([]);
+
 // 7. Solver 3 render trigger — incrementing this value triggers a Solver 3 render
 export const solver3RenderTriggerAtom = atom<number>(0);
 
@@ -294,6 +315,11 @@ export const drawnRayCountsAtom = atom<{ forward: number; reverse: number }>({ f
 // emission/excitation image. Lets CameraViewer re-render on each progressive
 // round without having to watch the mutated Camera instance directly.
 export const cameraImageTickAtom = atom<number>(0);
+
+// 8.7. Card image tick — bumped when Card detector hit/profile data changes.
+// Cards are mutated by the forward tracer, so their viewers need the same
+// explicit invalidation path cameras use.
+export const cardImageTickAtom = atom<number>(0);
 
 export const startTutorialStage2Atom = atom(
     null,

@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
 import { Solver3 } from "../Solver3";
+import { Solver1 } from "../Solver1";
 import { GaussianBeamSegment, initialQ } from "../Solver2";
 import { Camera } from "../components/Camera";
 import { Sample } from "../components/Sample";
+import { createSourceRays } from "../SourceRayFactory";
+import { createCameraKernelSnapshot } from "../sceneSnapshot";
 import { Coherence, Ray } from "../types";
+import { createBrightfieldScene } from "../../presets/brightfield";
 
 // ─── Helper: create a GaussianBeamSegment along a direction ────────
 function makeSeg(
@@ -190,5 +194,34 @@ describe("Solver 3: Backward Ray Direction", () => {
         expect(result.path[1].origin.distanceTo(sample.position)).toBeLessThanOrEqual(15);
         expect(result.path[1].origin.y).toBeGreaterThanOrEqual(-15);
         expect(result.path[1].origin.y).toBeLessThanOrEqual(15);
+    });
+
+    test("brightfield reverse rays escape the sample proxy after crossing the specimen volume", () => {
+        const scene = createBrightfieldScene();
+        const sample = scene.find(c => c instanceof Sample) as Sample;
+        const camera = scene.find(c => c instanceof Camera) as Camera;
+
+        sample.absorption = 0;
+
+        const sourceRays = createSourceRays(scene, 32, 'full');
+        const { beamSegments } = new Solver1(scene).traceWithBeamSegments(sourceRays);
+        const cameraSnapshot = createCameraKernelSnapshot(camera);
+        const backwardRay: Ray = {
+            origin: cameraSnapshot.position.clone(),
+            direction: cameraSnapshot.forward.clone(),
+            wavelength: 550e-9,
+            intensity: 1,
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            opticalPathLength: 0,
+            footprintRadius: 0.1,
+            coherenceMode: Coherence.Incoherent,
+            isBackward: true,
+            sourceId: 'brightfield_center_regression',
+        };
+
+        const result = new Solver3(scene, beamSegments).traceBackward(backwardRay, sample, camera);
+
+        expect(result.absorbed).toBe(false);
+        expect(result.radiance).toBeGreaterThan(0);
     });
 });

@@ -321,6 +321,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
     } else if (comp instanceof Card) {
         lines.push(`width = ${fmt(comp.width)}`);
         lines.push(`height = ${fmt(comp.height)}`);
+        lines.push(`opaque = ${comp.opaque ? 'true' : 'false'}`);
     } else if (comp instanceof GalvoScanHead) {
         lines.push(`diameter = ${fmt(comp.diameter)}`);
         lines.push(`thickness = ${fmt(comp.thickness)}`);
@@ -656,7 +657,7 @@ function parseFaceROC(props: PropMap): number[] | null {
 
 function applySourceProps(source: SourceLike, props: PropMap) {
     source.wavelength = num(props, 'wavelength', 532);
-    source.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 0.25));
+    source.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', source.beamRadius));
     source.power = num(props, 'power', 1);
 }
 
@@ -728,6 +729,9 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             const c = new StructuredSource(str(props, 'name', 'Structured Source'));
             applySourceProps(c, props);
             c.diameter = num(props, 'diameter', c.diameter);
+            if (props['beamRadius'] === undefined && props['beamWaist'] === undefined && props['diameter'] !== undefined) {
+                c.beamRadius = Math.max(c.diameter / 2, 0.05);
+            }
             c.asciiChar = unescapeTextValue(str(props, 'asciiChar', c.asciiChar));
             return c;
         }
@@ -989,11 +993,13 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             );
         }
         case 'Card': {
-            return new Card(
+            const c = new Card(
                 num(props, 'width', 20),
                 num(props, 'height', 20),
                 str(props, 'name', 'Card')
             );
+            c.opaque = bool(props, 'opaque', c.opaque);
+            return c;
         }
         case 'PMT': {
             const c = new PMT(

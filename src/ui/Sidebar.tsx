@@ -753,6 +753,11 @@ export const Sidebar: React.FC = () => {
                         onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
                     >
                         <PresetButton
+                            label="Blank"
+                            active={activePreset === PresetName.Blank}
+                            onClick={() => handlePresetClick(PresetName.Blank)}
+                        />
+                        <PresetButton
                             label="Tutorial"
                             active={activePreset === PresetName.Tutorial}
                             onClick={() => handlePresetClick(PresetName.Tutorial)}

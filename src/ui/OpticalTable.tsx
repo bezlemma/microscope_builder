@@ -18,13 +18,15 @@ import {
     activeZLevelAtom,
     drawnRayCountsAtom,
     cameraImageTickAtom,
+    cardImageTickAtom,
     isDraggingAtom,
     forwardRaysAtom,
+    trapBeamSegmentsAtom,
 } from '../state/store';
 import type { AnimationChannel } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
 
-import { Coherence, Ray } from '../physics/types';
+import { Ray } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
 import { Solver1 } from '../physics/Solver1';
 import { Card } from '../physics/components/Card';
@@ -34,11 +36,12 @@ import { PMT } from '../physics/components/PMT';
 import { QPD } from '../physics/components/QPD';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { PrismLens } from '../physics/components/PrismLens';
+import { estimatePassiveColloidTrapZone } from '../physics/trapDiagnostics';
 
 import { RayVisualizer } from './RayVisualizer';
 
 import { BundleWaveVisualizer } from './BundleWaveVisualizer';
-import { GaussianBeamSegment, Solver2, segmentBeamRadii } from '../physics/Solver2';
+import { GaussianBeamSegment, segmentBeamEnvelopeRadii } from '../physics/Solver2';
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../physics/tableTrace';
@@ -68,6 +71,7 @@ function rehydratePath(path: SerializedPath): Ray[] {
         footprintRadius: r.footprintRadius,
         coherenceMode: r.coherenceMode,
         sourceId: r.sourceId,
+        sourceKind: r.sourceKind,
         isMainRay: r.isMainRay,
         polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
         interactionDistance: r.interactionDistance,
@@ -100,6 +104,8 @@ function rehydrateBeamSegments(branches: SerializedBeamSegment[][]): GaussianBea
         qy_end: segment.qy_end,
         footprintStart: segment.footprintStart,
         footprintEnd: segment.footprintEnd,
+        beamRadiusStart: segment.beamRadiusStart,
+        beamRadiusEnd: segment.beamRadiusEnd,
         polarization: segment.polarization,
         opticalPathLength: segment.opticalPathLength,
         refractiveIndex: segment.refractiveIndex,
@@ -454,121 +460,6 @@ export function traceForwardWithDependencyCache(
     };
 }
 
-const PASSIVE_TRAP_RATE_PER_FIELD_DROP = 0.15;
-const PASSIVE_TRAP_MIN_RELATIVE_CURVATURE = 1e-4;
-const PASSIVE_TRAP_MIN_STIFFNESS_PER_SECOND = 0.5;
-const PASSIVE_TRAP_MAX_STIFFNESS_PER_SECOND = 80;
-const REFERENCE_COLLOID_TRAP_RESPONSE = trapMaterialResponse(0.0025, 1.59, 1.33);
-
-function incidentTrapBranchesForBead(
-    beamSegments: GaussianBeamSegment[][],
-    beadId: string,
-): GaussianBeamSegment[][] {
-    const branches: GaussianBeamSegment[][] = [];
-
-    for (const branch of beamSegments) {
-        const first = branch[0];
-        if (!first || first.coherenceMode !== Coherence.Coherent || first.power <= 1e-12) continue;
-
-        const incidentBranch: GaussianBeamSegment[] = [];
-        let touchesBead = false;
-        for (const segment of branch) {
-            const key = segment.bundleKey ?? '';
-            const touchesThisBead = key.includes(beadId);
-            if (touchesThisBead && key.includes('|glass|')) break;
-            incidentBranch.push(segment);
-            if (touchesThisBead) {
-                touchesBead = true;
-                break;
-            }
-        }
-        if (touchesBead && incidentBranch.length > 0) branches.push(incidentBranch);
-    }
-
-    return branches;
-}
-
-function trapMaterialResponse(radius: number, iorBead: number, iorMedium: number): number {
-    const relativeIndex = iorBead / Math.max(1e-6, iorMedium);
-    const relativeIndexSq = relativeIndex * relativeIndex;
-    const indexTerm = (relativeIndexSq - 1) / (relativeIndexSq + 2);
-    const volume = (4 * Math.PI * radius * radius * radius) / 3;
-    return Math.max(0, indexTerm) * volume;
-}
-
-function estimatePassiveColloidTrapZone(
-    bead: TrappedBead,
-    parentSample: Sample,
-    beamSegments: GaussianBeamSegment[][],
-): ColloidTrapZone | null {
-    const trapBranches = incidentTrapBranchesForBead(beamSegments, bead.id);
-    if (trapBranches.length === 0) return null;
-
-    const materialResponse = trapMaterialResponse(bead.radius, bead.iorBead, bead.iorMedium);
-    if (materialResponse <= 0 || REFERENCE_COLLOID_TRAP_RESPONSE <= 0) return null;
-
-    bead.updateMatrices();
-    parentSample.updateMatrices();
-
-    const centerLocal = new Vector3(0, 0, 0);
-    const centerWorld = centerLocal.clone().applyMatrix4(bead.localToWorld);
-    const centerInSample = centerWorld.clone().applyMatrix4(parentSample.worldToLocal);
-    const probe = Math.max(bead.radius * 2, Math.min(bead.trapCaptureRadius * 0.25, 0.01), 0.0025);
-
-    const intensityAtLocal = (localOffset: Vector3): number => {
-        const worldPoint = localOffset.clone().applyMatrix4(bead.localToWorld);
-        let total = 0;
-        for (const branch of trapBranches) {
-            total += Solver2.queryIntensity(worldPoint.x, worldPoint.y, worldPoint.z, branch)?.intensity ?? 0;
-        }
-        return total;
-    };
-
-    const centerIntensity = intensityAtLocal(centerLocal);
-    if (centerIntensity <= 1e-12) return null;
-
-    const sampleAxis = (axis: 'x' | 'y' | 'z') => {
-        const positive = new Vector3();
-        const negative = new Vector3();
-        positive[axis] = probe;
-        negative[axis] = -probe;
-        return {
-            plus: intensityAtLocal(positive),
-            minus: intensityAtLocal(negative),
-        };
-    };
-    const x = sampleAxis('x');
-    const y = sampleAxis('y');
-    const z = sampleAxis('z');
-    const neighbors = [x.plus, x.minus, y.plus, y.minus, z.plus, z.minus];
-    if (neighbors.some(value => value > centerIntensity * (1 + 1e-6))) return null;
-
-    const curvatureX = (2 * centerIntensity - x.plus - x.minus) / (probe * probe);
-    const curvatureY = (2 * centerIntensity - y.plus - y.minus) / (probe * probe);
-    const curvatureZ = (2 * centerIntensity - z.plus - z.minus) / (probe * probe);
-    const weakestCurvature = Math.min(curvatureX, curvatureY, curvatureZ);
-    if (weakestCurvature <= 0) return null;
-
-    const relativeCurvature = weakestCurvature * probe * probe / centerIntensity;
-    if (relativeCurvature < PASSIVE_TRAP_MIN_RELATIVE_CURVATURE) return null;
-
-    const materialScale = materialResponse / REFERENCE_COLLOID_TRAP_RESPONSE;
-    const gradientScale = Math.max(0, bead.gradientForceScale) / 1e6;
-    const fieldDrop = weakestCurvature * probe * probe;
-    const stiffnessPerSecond = Math.min(
-        PASSIVE_TRAP_MAX_STIFFNESS_PER_SECOND,
-        fieldDrop * PASSIVE_TRAP_RATE_PER_FIELD_DROP * materialScale * gradientScale,
-    );
-    if (stiffnessPerSecond < PASSIVE_TRAP_MIN_STIFFNESS_PER_SECOND) return null;
-
-    return {
-        center: centerInSample,
-        lateralRadius: bead.trapCaptureRadius,
-        axialRange: bead.trapAxialCaptureRange,
-        stiffnessPerSecond,
-    };
-}
-
 export function colloidTrapZonesBySample(
     components: OpticalComponent[],
     beamSegments: GaussianBeamSegment[][],
@@ -674,6 +565,8 @@ export const OpticalTable: React.FC = () => {
     const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isDragging] = useAtom(isDraggingAtom);
     const [, setForwardRays] = useAtom(forwardRaysAtom);
+    const [, setTrapBeamSegments] = useAtom(trapBeamSegmentsAtom);
+    const [, setCardImageTick] = useAtom(cardImageTickAtom);
     const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
     // Actually we need the value for the guard
     const [solver3Rendering] = useAtom(solver3RenderingAtom);
@@ -854,6 +747,7 @@ export const OpticalTable: React.FC = () => {
                     if (job.applyBeamSegments && msg.beamSegments) {
                         const nextBeamSegs = rehydrateBeamSegments(msg.beamSegments);
                         trapBeamSegsRef.current = nextBeamSegs;
+                        setTrapBeamSegments(nextBeamSegs);
                         if (solver2EnabledRef.current) {
                             setBeamSegments(nextBeamSegs);
                             beamSegsRef.current = nextBeamSegs;
@@ -944,13 +838,28 @@ export const OpticalTable: React.FC = () => {
             // Correctness during drag is more important than a clever partial
             // update. A cached/preview trace can mix sparse bead-scatter rays
             // with stale families and show physically impossible beam paths.
+            let dragSolver: Solver1 | null = null;
             const calculatedPaths = traceStableTableOverlay(
                 components,
                 () => {
-                    const solver = new Solver1(components);
-                    return solver.trace(makeForwardSourceRays());
+                    dragSolver = new Solver1(components);
+                    return dragSolver.trace(makeForwardSourceRays());
                 },
             );
+            if (rayConfig.solver2Enabled) {
+                try {
+                    const previewBeamSegs = (dragSolver ?? new Solver1(components)).buildBeamSegments(calculatedPaths);
+                    setBeamSegments(previewBeamSegs);
+                    beamSegsRef.current = previewBeamSegs;
+                } catch (e) {
+                    console.warn('Solver 2 drag preview error:', e);
+                    setBeamSegments([]);
+                    beamSegsRef.current = [];
+                }
+            } else {
+                setBeamSegments([]);
+                beamSegsRef.current = [];
+            }
             // Drag traces are visual previews only. Live QPD/bead force
             // side effects are recomputed from the full ray set on release.
             setRays(calculatedPaths);
@@ -1253,6 +1162,7 @@ export const OpticalTable: React.FC = () => {
         if (absorberOnlyChange && trappedBeads.length > 0) {
             if (!pathsReachAnyComponent(calculatedPaths, trappedBeadIds)) {
                 trapBeamSegsRef.current = [];
+                setTrapBeamSegments([]);
                 if (rayConfig.solver2Enabled) {
                     setBeamSegments([]);
                     beamSegsRef.current = [];
@@ -1275,11 +1185,13 @@ export const OpticalTable: React.FC = () => {
                 console.warn('Solver 2 error:', e);
             }
             trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
+            setTrapBeamSegments(trappedBeads.length > 0 ? beamSegs : []);
             const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
             setBeamSegments(visibleBeamSegs);
             beamSegsRef.current = visibleBeamSegs;
         } else {
             trapBeamSegsRef.current = [];
+            setTrapBeamSegments([]);
             setBeamSegments([]);
             beamSegsRef.current = [];
         }
@@ -1990,7 +1902,7 @@ export const OpticalTable: React.FC = () => {
         if (!components) return;
 
         const beamSegs = beamSegsRef.current;
-        const solverPaths = solverPathsRef.current;
+        const solverPaths = rays.length > 0 ? rays : solverPathsRef.current;
         const s3Paths = solver3PathsRef.current;
 
         // Combine forward and reverse ray paths for card intersection
@@ -2026,6 +1938,17 @@ export const OpticalTable: React.FC = () => {
                     if (Math.abs(hitPt.x) <= card.width / 2 && Math.abs(hitPt.y) <= card.height / 2) {
                         hitRays.push({ ray, hitLocalPoint: hitPt, t });
                     }
+                }
+            }
+
+            if (hitRays.length === 0 && card.hits.length > 0) {
+                for (const hit of card.hits) {
+                    if (hit.ray.isBackward || hit.ray.sourceId?.startsWith('solver3_')) continue;
+                    hitRays.push({
+                        ray: hit.ray,
+                        hitLocalPoint: hit.localPoint.clone(),
+                        t: 0,
+                    });
                 }
             }
 
@@ -2075,7 +1998,7 @@ export const OpticalTable: React.FC = () => {
                     continue;
                 }
 
-                const { wx: beamWx, wy: beamWy } = segmentBeamRadii(bestSeg, bestZ);
+                const { wx: beamWx, wy: beamWy } = segmentBeamEnvelopeRadii(bestSeg, bestZ);
 
 
                 const beamDir = bestSeg.direction.clone().normalize();
@@ -2177,11 +2100,12 @@ export const OpticalTable: React.FC = () => {
                 // Normalize polarization vector
                 const polMag = Math.sqrt(polXre**2 + polXim**2 + polYre**2 + polYim**2) || 1;
 
-                // Average throughput of backward rays × fluorescence emission power
+                // Average throughput of backward rays × fluorescence emission power,
+                // or direct intercepted ray power for ordinary forward detector cards.
                 let avgThroughput = 0;
                 for (const { ray } of fallbackHits) avgThroughput += (ray.intensity ?? 0);
                 avgThroughput /= n;
-                const power = emissionPower > 0 ? emissionPower * avgThroughput : 0.001;
+                const power = emissionPower > 0 ? emissionPower * avgThroughput : Math.max(avgThroughput, 1e-9);
 
                 card.beamProfiles.push({
                     wx, wy,
@@ -2199,8 +2123,9 @@ export const OpticalTable: React.FC = () => {
                 });
             }
         }
+        setCardImageTick(tick => tick + 1);
 
-    }, [components, rayConfig, solver3Paths]);
+    }, [components, rayConfig, solver3Paths, rays, setCardImageTick]);
 
     return (
         <group>

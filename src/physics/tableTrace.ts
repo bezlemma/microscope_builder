@@ -15,6 +15,13 @@ type QpdTraceState = {
     quadrants: [number, number, number, number];
     quadrantHits: [number, number, number, number];
     totalHits: number;
+    gapPower: number;
+    blockedPower: number;
+    blockedHits: number;
+    momentX: number;
+    momentY: number;
+    momentXX: number;
+    momentYY: number;
 };
 
 export function resetTrapBeadAccumulators(components: OpticalComponent[]): void {
@@ -41,6 +48,13 @@ export function traceStableTableOverlay<T>(components: OpticalComponent[], trace
                 quadrants: component.quadrants.slice() as [number, number, number, number],
                 quadrantHits: component.quadrantHits.slice() as [number, number, number, number],
                 totalHits: component.totalHits,
+                gapPower: component.gapPower,
+                blockedPower: component.blockedPower,
+                blockedHits: component.blockedHits,
+                momentX: component.momentX,
+                momentY: component.momentY,
+                momentXX: component.momentXX,
+                momentYY: component.momentYY,
             });
         }
     }
@@ -58,6 +72,13 @@ export function traceStableTableOverlay<T>(components: OpticalComponent[], trace
             state.qpd.quadrants = state.quadrants.slice() as [number, number, number, number];
             state.qpd.quadrantHits = state.quadrantHits.slice() as [number, number, number, number];
             state.qpd.totalHits = state.totalHits;
+            state.qpd.gapPower = state.gapPower;
+            state.qpd.blockedPower = state.blockedPower;
+            state.qpd.blockedHits = state.blockedHits;
+            state.qpd.momentX = state.momentX;
+            state.qpd.momentY = state.momentY;
+            state.qpd.momentXX = state.momentXX;
+            state.qpd.momentYY = state.momentYY;
         }
     }
 }

@@ -58,6 +58,7 @@ export interface Ray {
     // Used to group rays by source in population analysis, preventing
     // cross-laser contamination in split detection and fallback white lines.
     sourceId?: string;
+    sourceKind?: 'laser' | 'lamp' | 'point2d' | 'point3d' | 'cone' | 'wedge' | 'structured' | 'pmtPreview';
 
     // Display-only suppression for physically traced branches that are not
     // useful as table-overlay rays, such as microscopic bead surface glints.

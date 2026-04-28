@@ -72,6 +72,7 @@ import { SpectrumChart } from './SpectrumChart';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { PMTViewer } from './PMTViewer';
+import { QPDViewer } from './QPDViewer';
 import { LensProfileEditor, supportsLensProfileEditor } from './LensProfileEditor';
 import { getComponentCapabilities } from './componentPresentation';
 
@@ -79,7 +80,6 @@ import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../phys
 import { snapToRingBoundary } from '../physics/SourceRayFactory';
 import { ZLevelBar } from './ZLevelBar';
 import { findMaxUnclippedScanHalfAngleDeg, measureChiefRayForScan } from '../physics/confocalScanDiagnostics';
-import { resolutionFromPixelPitch } from '../physics/cardFieldSynthesis';
 
 function clampValue(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -844,8 +844,6 @@ export const Inspector: React.FC = () => {
     const [localWidth, setLocalWidth] = useState<string>('0');
     const [localHeight, setLocalHeight] = useState<string>('0');
     const [localOpaque, setLocalOpaque] = useState<boolean>(false);
-    const [localCardDx, setLocalCardDx] = useState<string>('');
-    const [localCardDy, setLocalCardDy] = useState<string>('');
 
 
     const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
@@ -1082,12 +1080,10 @@ export const Inspector: React.FC = () => {
 
 
                 if (selectedComponent instanceof Card) {
-                    const c = selectedComponent as any;
-                    if (c.width != null) setLocalWidth(String(c.width));
-                    if (c.height != null) setLocalHeight(String(c.height));
+                    const c = selectedComponent;
+                    setLocalWidth(String(c.width));
+                    setLocalHeight(String(c.height));
                     setLocalOpaque(Boolean(c.opaque));
-                    setLocalCardDx(c.fieldPixelPitchOverrideX != null ? String(c.fieldPixelPitchOverrideX) : '');
-                    setLocalCardDy(c.fieldPixelPitchOverrideY != null ? String(c.fieldPixelPitchOverrideY) : '');
                 }
                 if (selectedComponent instanceof Mirror) {
                     setLocalMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
@@ -1428,7 +1424,7 @@ export const Inspector: React.FC = () => {
         if (!selectedComponent) return;
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Card) {
-                (c as any).opaque = val;
+                c.opaque = val;
                 c.version++;
                 return c;
             }
@@ -1442,24 +1438,6 @@ export const Inspector: React.FC = () => {
             commitFn();
             (e.target as HTMLInputElement).blur();
         }
-    };
-
-    const commitCardPixelPitch = (axis: 'x' | 'y', valueStr: string) => {
-        if (!(selectedComponent instanceof Card)) return;
-        const trimmed = valueStr.trim();
-        // Empty input clears the override (stored as 0 per Card's definition).
-        const parsed = trimmed === '' ? 0 : parseFloat(trimmed);
-        if (trimmed !== '' && (!Number.isFinite(parsed) || parsed <= 0)) return;
-
-        const newComponents = components.map(c => {
-            if (c.id === selection[0] && c instanceof Card) {
-                if (axis === 'x') c.fieldPixelPitchOverrideX = parsed;
-                else c.fieldPixelPitchOverrideY = parsed;
-                c.version++;
-            }
-            return c;
-        });
-        setComponents([...newComponents]);
     };
 
     const [localName, setLocalName] = useState(selectedComponent?.name ?? '');
@@ -1507,36 +1485,6 @@ export const Inspector: React.FC = () => {
             return null;
         }
     }, [components, selectedComponent]);
-
-    const cardFieldGridSummary = (() => {
-        if (!(selectedComponent instanceof Card)) return null;
-        const card = selectedComponent;
-        if (card.fieldData) {
-            return {
-                resX: card.fieldData.resX,
-                resY: card.fieldData.resY,
-                dx: card.fieldData.extentWidth / Math.max(card.fieldData.resX, 1),
-                dy: card.fieldData.extentHeight / Math.max(card.fieldData.resY, 1),
-                mode: (card.fieldPixelPitchOverrideX || card.fieldPixelPitchOverrideY) ? 'Manual' : 'Auto',
-            };
-        }
-
-        const pitchX = card.fieldPixelPitchOverrideX || null;
-        const pitchY = card.fieldPixelPitchOverrideY || null;
-        if (!pitchX && !pitchY) return null;
-
-        // When only one axis has an override, use that pitch on the other axis
-        // too so resolutionFromPixelPitch can compute a full grid.
-        const effectivePitch = pitchX ?? pitchY ?? 0;
-        const res = resolutionFromPixelPitch(card.width, card.height, effectivePitch);
-        return {
-            resX: res.resX,
-            resY: res.resY,
-            dx: res.resX > 0 ? card.width / res.resX : null,
-            dy: res.resY > 0 ? card.height / res.resY : null,
-            mode: 'Manual',
-        };
-    })();
 
     // If a cone is selected, render the rod properties panel instead of
     // the component properties panel. The solver panel stays visible so the
@@ -1732,6 +1680,7 @@ export const Inspector: React.FC = () => {
             if (c.id === selection[0] && c instanceof StructuredSource) {
                 c.wavelength = localWavelength;
                 c.beamRadius = radius;
+                c.diameter = radius * 2;
                 if (!isNaN(power) && power > 0) c.power = power;
                 if (localAsciiChar.length > 0) c.asciiChar = localAsciiChar.charAt(0);
                 c.version++;
@@ -2102,42 +2051,6 @@ export const Inspector: React.FC = () => {
                             <label htmlFor={`card-opaque-${selectedComponent.id}`} style={{ fontSize: '11px', color: '#ccc', cursor: 'pointer', userSelect: 'none' }}>
                                 Opaque (Stop Light)
                             </label>
-                        </div>
-                        <div style={{ gridColumn: '1 / -1', marginTop: 4, padding: '8px', background: '#181818', border: '1px solid #333', borderRadius: 4 }}>
-                            <div style={{ fontSize: '11px', color: '#aaa', marginBottom: 6 }}>Wave Grid</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <label style={{ fontSize: '11px', color: '#888', marginBottom: 4 }}>Target dx (mm)</label>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        placeholder="auto"
-                                        value={localCardDx}
-                                        onChange={(e) => setLocalCardDx(e.target.value)}
-                                        onBlur={() => commitCardPixelPitch('x', localCardDx)}
-                                        onKeyDown={(e) => handleKeyDown(e, () => commitCardPixelPitch('x', localCardDx))}
-                                        style={inputStyle}
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <label style={{ fontSize: '11px', color: '#888', marginBottom: 4 }}>Target dy (mm)</label>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        placeholder="auto"
-                                        value={localCardDy}
-                                        onChange={(e) => setLocalCardDy(e.target.value)}
-                                        onBlur={() => commitCardPixelPitch('y', localCardDy)}
-                                        onKeyDown={(e) => handleKeyDown(e, () => commitCardPixelPitch('y', localCardDy))}
-                                        style={inputStyle}
-                                    />
-                                </div>
-                            </div>
-                            <div style={{ marginTop: 8, fontSize: '10px', color: '#777', lineHeight: 1.5 }}>
-                                <div>Mode: {cardFieldGridSummary?.mode ?? 'Auto'}</div>
-                                <div>Grid: {cardFieldGridSummary ? `${cardFieldGridSummary.resX || '—'} × ${cardFieldGridSummary.resY || '—'} px` : '—'}</div>
-                                <div>Actual dx/dy: {cardFieldGridSummary && cardFieldGridSummary.dx != null && cardFieldGridSummary.dy != null ? `${cardFieldGridSummary.dx.toFixed(4)} × ${cardFieldGridSummary.dy.toFixed(4)} mm` : '—'}</div>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -4314,8 +4227,6 @@ export const Inspector: React.FC = () => {
 
                 {isQPD && (() => {
                     const qpd = selectedComponent as QPD;
-                    const sum = qpd.signalSum;
-                    const hasSignal = sum > 1e-15;
                     return (
                         <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                             <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>QPD Settings</label>
@@ -4329,47 +4240,31 @@ export const Inspector: React.FC = () => {
                                 min={0.5}
                                 max={25}
                             />
-
-                            {/* Quadrant readout */}
-                            <div style={{ marginTop: 10, padding: 8, background: '#1a1a1a', borderRadius: 4, border: '1px solid #333' }}>
-                                <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>Quadrant Signals</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: '11px', fontFamily: 'monospace' }}>
-                                    <div style={{ textAlign: 'center', color: '#4ecdc4', padding: 4, background: '#222', borderRadius: 2 }}>
-                                        A: {qpd.quadrants[0].toFixed(4)}
-                                    </div>
-                                    <div style={{ textAlign: 'center', color: '#45b7aa', padding: 4, background: '#222', borderRadius: 2 }}>
-                                        B: {qpd.quadrants[1].toFixed(4)}
-                                    </div>
-                                    <div style={{ textAlign: 'center', color: '#3ea99d', padding: 4, background: '#222', borderRadius: 2 }}>
-                                        C: {qpd.quadrants[2].toFixed(4)}
-                                    </div>
-                                    <div style={{ textAlign: 'center', color: '#378f85', padding: 4, background: '#222', borderRadius: 2 }}>
-                                        D: {qpd.quadrants[3].toFixed(4)}
-                                    </div>
-                                </div>
-                                <div style={{ marginTop: 6, fontSize: '11px', fontFamily: 'monospace', color: '#ccc' }}>
-                                    <div>Sum: {sum.toFixed(4)}</div>
-                                    <div>X: {hasSignal ? qpd.signalX.toFixed(4) : '—'}</div>
-                                    <div>Y: {hasSignal ? qpd.signalY.toFixed(4) : '—'}</div>
-                                </div>
-                                {hasSignal && (
-                                    <div style={{ marginTop: 6, position: 'relative', width: 80, height: 80, margin: '6px auto 0', background: '#111', borderRadius: 4, border: '1px solid #333' }}>
-                                        {/* Cross hair at beam position */}
-                                        <div style={{
-                                            position: 'absolute',
-                                            left: `${50 + qpd.signalX * 45}%`,
-                                            top: `${50 - qpd.signalY * 45}%`,
-                                            width: 6, height: 6,
-                                            borderRadius: '50%',
-                                            background: '#ff4444',
-                                            transform: 'translate(-50%, -50%)',
-                                        }} />
-                                        {/* Center cross */}
-                                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#333' }} />
-                                        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: '#333' }} />
-                                    </div>
-                                )}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 4 }}>
+                                <span style={{ fontSize: '11px', color: '#aaa' }}>QPD Readout</span>
+                                <button
+                                    onClick={() => {
+                                        const next = new Set(pinnedIds);
+                                        if (pinnedIds.has(qpd.id)) next.delete(qpd.id);
+                                        else next.add(qpd.id);
+                                        setPinnedIds(next);
+                                    }}
+                                    title={pinnedIds.has(qpd.id) ? 'Unpin viewer' : 'Pin viewer'}
+                                    style={{
+                                        background: pinnedIds.has(qpd.id) ? '#333' : 'none',
+                                        border: pinnedIds.has(qpd.id) ? '1px solid #555' : '1px solid #444',
+                                        borderRadius: '3px',
+                                        color: pinnedIds.has(qpd.id) ? '#fff' : '#888',
+                                        cursor: 'pointer',
+                                        fontSize: '11px',
+                                        padding: '1px 5px',
+                                        lineHeight: 1.2,
+                                    }}
+                                >
+                                    📌
+                                </button>
                             </div>
+                            <QPDViewer qpd={qpd} />
                         </div>
                     );
                 })()}

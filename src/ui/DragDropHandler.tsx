@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, pushUndoAtom, activeZLevelAtom, railPlacementAtom } from '../state/store';
+import { componentsAtom, pushUndoAtom, activeZLevelAtom, railPlacementAtom, pinnedViewersAtom } from '../state/store';
 import { Vector3, Raycaster, Plane, Vector2 } from 'three';
 import { applyDefaultPlacementOrientation, createComponentForType } from './componentFactory';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
+import { QPD } from '../physics/components/QPD';
 import { useHaptic } from './useHaptic';
 
 export const DragDropHandler: React.FC = () => {
@@ -13,6 +14,7 @@ export const DragDropHandler: React.FC = () => {
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [activeZ] = useAtom(activeZLevelAtom);
     const [, setRailPlacement] = useAtom(railPlacementAtom);
+    const [, setPinnedViewers] = useAtom(pinnedViewersAtom);
     const haptic = useHaptic();
 
     useEffect(() => {
@@ -60,6 +62,13 @@ export const DragDropHandler: React.FC = () => {
                     ? [newComp, ...newComp.getManagedSubcomponents()]
                     : [newComp];
                 setComponents(prev => [...prev, ...inserted]);
+                if (newComp instanceof QPD) {
+                    setPinnedViewers(prev => {
+                        const next = new Set(prev);
+                        next.add(newComp.id);
+                        return next;
+                    });
+                }
             }
         };
 
@@ -71,7 +80,7 @@ export const DragDropHandler: React.FC = () => {
             targetEl.removeEventListener('dragover', handleDragOver);
             targetEl.removeEventListener('drop', handleDrop);
         };
-    }, [camera, gl, setComponents, pushUndo, activeZ, setRailPlacement, haptic]);
+    }, [camera, gl, setComponents, pushUndo, activeZ, setRailPlacement, setPinnedViewers, haptic]);
 
     return null;
 };

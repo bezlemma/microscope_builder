@@ -233,6 +233,60 @@ canvas {
   pointer-events: none;
 }
 
+.mz-callout {
+  border-color: rgba(126, 251, 98, 0.42);
+}
+
+.mz-fine-panel {
+  min-width: 76px;
+  padding: 6px;
+  border: 1px solid rgba(126, 251, 98, 0.42);
+  border-radius: 8px;
+  background: rgba(16, 22, 28, 0.88);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(9px);
+  font-family: var(--ui-font);
+  color: #eaf6ff;
+  user-select: none;
+}
+
+.mz-fine-title {
+  margin-bottom: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mz-fine-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.mz-fine-button {
+  width: 30px;
+  height: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: #3b424a;
+  color: #f4f8fb;
+  font-family: var(--ui-font);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mz-fine-button:hover {
+  background: #4a525c;
+}
+
+.mz-fine-button:active {
+  transform: translateY(1px);
+}
+
 .tutorial-sidebar-callout {
   position: fixed;
   z-index: 31;

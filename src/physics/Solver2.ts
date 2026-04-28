@@ -69,6 +69,10 @@ export interface GaussianBeamSegment {
     // Beamlet footprint estimate [mm] at the segment start/end.
     footprintStart?: number;
     footprintEnd?: number;
+    // Whole-beam envelope estimate [mm] at the segment start/end. This is
+    // distinct from footprintStart/End, which describe one sampled beamlet.
+    beamRadiusStart?: number;
+    beamRadiusEnd?: number;
 
     polarization: JonesVector;
     opticalPathLength: number;
@@ -253,6 +257,24 @@ export function segmentBeamRadii(
     }
 
     return legacySegmentBeamRadii(segment, clampedDistance);
+}
+
+export function segmentBeamEnvelopeRadii(
+    segment: GaussianBeamSegment,
+    distanceAlong: number
+): { wx: number; wy: number } {
+    const segLength = getSegmentLength(segment);
+    const clampedDistance = clamp(distanceAlong, 0, segLength);
+
+    if (segment.beamRadiusStart !== undefined || segment.beamRadiusEnd !== undefined) {
+        const start = Math.max(segment.beamRadiusStart ?? segment.beamRadiusEnd ?? 0.05, 0.05);
+        const end = Math.max(segment.beamRadiusEnd ?? segment.beamRadiusStart ?? start, 0.05);
+        const frac = segLength > 1e-9 ? clampedDistance / segLength : 0;
+        const radius = start + (end - start) * frac;
+        return { wx: radius, wy: radius };
+    }
+
+    return segmentBeamRadii(segment, clampedDistance);
 }
 
 export function segmentBeamRadiiAtFraction(

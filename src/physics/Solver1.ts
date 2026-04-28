@@ -26,6 +26,7 @@ function isEmitter(c: OpticalComponent): boolean {
 interface BeamletDraft extends GaussianBeamSegment {
     bundleKey: string;
     fallbackRadius: number;
+    sourceRadius?: number;
 }
 
 interface BroadPhaseCandidate {
@@ -230,7 +231,7 @@ export class Solver1 {
         this.estimateBeamletFootprints(allDrafts);
 
         return draftBranches.map(branch =>
-            branch.map(({ fallbackRadius: _fallbackRadius, ...segment }) => segment)
+            branch.map(({ fallbackRadius: _fallbackRadius, sourceRadius: _sourceRadius, ...segment }) => segment)
         );
     }
 
@@ -301,6 +302,7 @@ export class Solver1 {
             nextRay.interactionComponentId = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
+            nextRay.sourceKind = currentRay.sourceKind;
 
             currentPath.push(nextRay);
             this.traceRecursive(nextRay, currentPath, depth + 1, allPaths);
@@ -316,6 +318,7 @@ export class Solver1 {
 
             nextRay.isMainRay = (currentRay.isMainRay === true);
             nextRay.sourceId = currentRay.sourceId;
+            nextRay.sourceKind = currentRay.sourceKind;
 
             if (nextRay.intensity < 1e-6) {
                 currentPath.push(nextRay);
@@ -395,6 +398,9 @@ export class Solver1 {
             if (power < 1e-6) continue;
 
             const fallbackRadius = Math.max(ray.footprintRadius || sourceRadius || 0.05, 0.05);
+            const sourceEnvelopeRadius = sourceRadius !== undefined && Number.isFinite(sourceRadius)
+                ? Math.max(sourceRadius, fallbackRadius)
+                : undefined;
 
             if (ray.entryPoint) {
                 const internalPoints: Vector3[] = [ray.entryPoint.clone()];
@@ -450,6 +456,7 @@ export class Solver1 {
                         sourceId: sourceKey,
                         bundleKey: `${sourceKey}|glass|${i}|${glassId}|${ip}`,
                         fallbackRadius,
+                        sourceRadius: sourceEnvelopeRadius,
                     });
 
                     if (glassAbsorption > 0) {
@@ -489,6 +496,7 @@ export class Solver1 {
                 sourceId: sourceKey,
                 bundleKey: `${sourceKey}|air|${i}|${ray.interactionComponentId ?? ray.exitSurfaceId ?? 'exit'}`,
                 fallbackRadius,
+                sourceRadius: sourceEnvelopeRadius,
             });
         }
 
@@ -524,6 +532,8 @@ export class Solver1 {
             for (const draft of group) {
                 draft.footprintStart = this.estimateLocalRadius(draft, group, 'start');
                 draft.footprintEnd = this.estimateLocalRadius(draft, group, 'end');
+                draft.beamRadiusStart = this.estimateEnvelopeRadius(draft, group, 'start');
+                draft.beamRadiusEnd = this.estimateEnvelopeRadius(draft, group, 'end');
             }
         }
     }
@@ -553,6 +563,38 @@ export class Solver1 {
         }
 
         return Math.max(nearest * 0.5, 0.05);
+    }
+
+    private estimateEnvelopeRadius(
+        target: BeamletDraft,
+        cohort: BeamletDraft[],
+        endpoint: 'start' | 'end'
+    ): number {
+        const points: Vector3[] = [];
+        for (const other of cohort) {
+            const dirDot = Math.abs(target.direction.dot(other.direction));
+            if (dirDot < 0.5) continue;
+            points.push(endpoint === 'start' ? other.start : other.end);
+        }
+
+        if (points.length < 2) {
+            return Math.max(target.sourceRadius ?? target.fallbackRadius, 0.05);
+        }
+
+        const center = new Vector3();
+        for (const point of points) center.add(point);
+        center.multiplyScalar(1 / points.length);
+
+        let maxRadius = 0;
+        let rmsRadius2 = 0;
+        for (const point of points) {
+            const radius = point.distanceTo(center);
+            maxRadius = Math.max(maxRadius, radius);
+            rmsRadius2 += radius * radius;
+        }
+        const rmsRadius = Math.sqrt(rmsRadius2 / points.length);
+
+        return Math.max(maxRadius, rmsRadius * 1.7, 0.05);
     }
 
     private findComponentAt(point: Vector3): OpticalComponent | null {

@@ -47,6 +47,8 @@ export interface SerializedBeamSegment {
     qy_end: GaussianBeamSegment['qy_end'];
     footprintStart?: number;
     footprintEnd?: number;
+    beamRadiusStart?: number;
+    beamRadiusEnd?: number;
     polarization: GaussianBeamSegment['polarization'];
     opticalPathLength: number;
     refractiveIndex: number;
@@ -63,6 +65,7 @@ function serializeRay(ray: Ray): SerializedRay {
         footprintRadius: ray.footprintRadius,
         coherenceMode: ray.coherenceMode,
         sourceId: ray.sourceId,
+        sourceKind: ray.sourceKind,
         isMainRay: ray.isMainRay,
         polarization: ray.polarization,
         interactionDistance: ray.interactionDistance,
@@ -99,6 +102,8 @@ function serializeBeamSegment(segment: GaussianBeamSegment): SerializedBeamSegme
         qy_end: segment.qy_end,
         footprintStart: segment.footprintStart,
         footprintEnd: segment.footprintEnd,
+        beamRadiusStart: segment.beamRadiusStart,
+        beamRadiusEnd: segment.beamRadiusEnd,
         polarization: segment.polarization,
         opticalPathLength: segment.opticalPathLength,
         refractiveIndex: segment.refractiveIndex,

@@ -464,7 +464,6 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     }, [components, cameraImageTick, sample.version, trapViewerTick]);
 
     const showTrapCloseup = sample instanceof Sample && sample.specimenKind === 'colloids' && trapBeads.length > 0;
-
     const focus = sample.position;
 
     // Forward + reverse ray segments in world coords.  No AABB pre-cull — the

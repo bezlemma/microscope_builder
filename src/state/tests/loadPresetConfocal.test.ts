@@ -15,8 +15,10 @@ import {
 } from '../store';
 import { PMT } from '../../physics/components/PMT';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
+import { Card } from '../../physics/components/Card';
 import { Sample } from '../../physics/components/Sample';
 import { SampleChamber } from '../../physics/components/SampleChamber';
+import { QPD } from '../../physics/components/QPD';
 
 function withConstructorName<T extends Function>(ctor: T, name: string, run: () => void): void {
     const original = Object.getOwnPropertyDescriptor(ctor, 'name');
@@ -31,6 +33,14 @@ function withConstructorName<T extends Function>(ctor: T, name: string, run: () 
 }
 
 describe('Confocal preset loading', () => {
+    test('blank debug preset starts empty', () => {
+        const store = createStore();
+
+        store.set(loadPresetAtom, PresetName.Blank);
+
+        expect(store.get(componentsAtom)).toHaveLength(0);
+    });
+
     test('preset loads write hash preset URLs', () => {
         const previousWindow = (globalThis as any).window;
         let replacedUrl = '';
@@ -95,6 +105,22 @@ describe('Confocal preset loading', () => {
         expect(rayConfig.maxRayOpacity).toBeCloseTo(0.4, 6);
     });
 
+    test('interferometer and polarization demos open in wave view', () => {
+        const store = createStore();
+
+        store.set(loadPresetAtom, PresetName.MZInterferometer);
+        expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
+        expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
+        const mzCards = store.get(componentsAtom).filter((component): component is Card => component instanceof Card);
+        expect(mzCards.length).toBeGreaterThan(0);
+        expect(mzCards.every(card => store.get(pinnedViewersAtom).has(card.id))).toBe(true);
+        expect(mzCards.every(card => card.opaque)).toBe(true);
+
+        store.set(loadPresetAtom, PresetName.PolarizationZoo);
+        expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
+        expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
+    });
+
     test('sample zoom viewers auto-pin in minified builds', () => {
         withConstructorName(Sample, 'a', () => {
             withConstructorName(SampleChamber, 'b', () => {
@@ -107,6 +133,9 @@ describe('Confocal preset loading', () => {
                 );
                 expect(trapSamples.length).toBeGreaterThan(0);
                 expect(trapSamples.every(sample => store.get(pinnedViewersAtom).has(sample.id))).toBe(true);
+                const trapQpds = store.get(componentsAtom).filter((component): component is QPD => component instanceof QPD);
+                expect(trapQpds.length).toBeGreaterThan(0);
+                expect(trapQpds.every(qpd => store.get(pinnedViewersAtom).has(qpd.id))).toBe(true);
 
                 store.set(loadPresetAtom, PresetName.OpenSPIM);
                 const lightSheetSamples = store.get(componentsAtom).filter(

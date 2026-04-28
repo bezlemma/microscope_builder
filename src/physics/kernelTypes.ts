@@ -51,6 +51,7 @@ export interface KernelSampleComponent extends KernelTraceComponent {
     computeChordLength(worldRay: Ray): { chordLength: number; midT: number };
     computeChordSegments(worldRay: Ray): { tStart: number; tEnd: number }[];
     getVolumeIntersection(worldRay: Ray): { tNear: number; tFar: number } | null;
+    getInteractionIntersection(worldRay: Ray): { tNear: number; tFar: number } | null;
 }
 
 export interface TraceSceneSnapshot {

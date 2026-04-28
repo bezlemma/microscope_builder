@@ -12,11 +12,13 @@ import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom } from '../stat
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
+import { QPD } from '../physics/components/QPD';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { CardViewer } from './CardViewer';
 import { CameraViewer } from './CameraViewer';
 import { PMTViewer } from './PMTViewer';
+import { QPDViewer } from './QPDViewer';
 import { SampleZoomViewer } from './SampleZoomViewer';
 import { OpticalComponent } from '../physics/Component';
 import { useIsMobile } from './useIsMobile';
@@ -61,6 +63,7 @@ export const ViewerPanels: React.FC = () => {
             c instanceof Card
             || c instanceof Camera
             || (c instanceof PMT && (c as PMT).hasValidAxes())
+            || c instanceof QPD
             || c instanceof Sample
             || c instanceof SampleChamber
         );
@@ -164,11 +167,16 @@ export const ViewerPanels: React.FC = () => {
 
                     {/* Viewer content (hidden when minimized) */}
                     {!minimizedIds.has(comp.id) && comp instanceof Card && (
-                        <CardViewer card={comp} compact />
+                        <CardViewer card={comp} />
                     )}
                     {minimizedIds.has(comp.id) && comp instanceof Card && (comp as Card).beamProfiles.length > 0 && (
                         <div style={{ fontSize: '9px', color: '#777', fontFamily: 'monospace', marginTop: '2px' }}>
                             {fmtPowerCompact((comp as Card).beamProfiles.reduce((sum, p) => sum + p.power, 0))}
+                        </div>
+                    )}
+                    {minimizedIds.has(comp.id) && comp instanceof QPD && (
+                        <div style={{ fontSize: '9px', color: '#777', fontFamily: 'monospace', marginTop: '2px' }}>
+                            {fmtPowerCompact((comp as QPD).signalSum)}
                         </div>
                     )}
                     {!minimizedIds.has(comp.id) && comp instanceof Camera && (
@@ -177,6 +185,9 @@ export const ViewerPanels: React.FC = () => {
                             isRendering={isRendering}
                             isMobile={isMobile}
                         />
+                    )}
+                    {!minimizedIds.has(comp.id) && comp instanceof QPD && (
+                        <QPDViewer qpd={comp} />
                     )}
                     {!minimizedIds.has(comp.id) && (comp instanceof Sample || comp instanceof SampleChamber) && (
                         <SampleZoomViewer sample={comp as Sample | SampleChamber} size={isMobile ? 160 : 240} />

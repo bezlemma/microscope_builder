@@ -114,6 +114,7 @@ export function createTraceSceneSnapshot(scene: OpticalComponent[]): TraceSceneS
                 computeChordLength: (worldRay) => component.computeChordLength(worldRay),
                 computeChordSegments: (worldRay) => component.computeChordSegments(worldRay),
                 getVolumeIntersection: (worldRay) => component.getVolumeIntersection(worldRay),
+                getInteractionIntersection: (worldRay) => component.getInteractionIntersection(worldRay),
             };
         }
     }

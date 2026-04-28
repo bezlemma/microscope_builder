@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { Annotation } from '../../physics/components/Annotation';
 import { Aperture } from '../../physics/components/Aperture';
+import { Card } from '../../physics/components/Card';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { Lamp } from '../../physics/components/Lamp';
 import { Laser } from '../../physics/components/Laser';
@@ -29,6 +30,20 @@ describe('UBZ registered components', () => {
         expect(loadedLaser.beamRadius).toBeCloseTo(0.75, 6);
         expect(loadedLaser.power).toBeCloseTo(120, 6);
         expect(loadedLaser.isOn).toBe(false);
+    });
+
+    test('round-trips card detector opacity', () => {
+        const card = new Card(12, 8, 'Detector card');
+        card.opaque = true;
+
+        const scene = deserializeScene(serializeScene([card]));
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(Card);
+
+        const loaded = scene[0] as Card;
+        expect(loaded.width).toBeCloseTo(12, 6);
+        expect(loaded.height).toBeCloseTo(8, 6);
+        expect(loaded.opaque).toBe(true);
     });
 
     test('round-trips point, cone, wedge, structured source, and annotation fields', () => {

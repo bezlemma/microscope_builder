@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { Vector3 } from 'three';
 import { ConeSource3D } from '../components/ConeSource3D';
 import { Lamp } from '../components/Lamp';
 import { Laser } from '../components/Laser';
@@ -7,11 +8,59 @@ import { PointSource3D } from '../components/PointSource3D';
 import { StructuredSource } from '../components/StructuredSource';
 import { WedgeSource2D } from '../components/WedgeSource2D';
 import { Solver1 } from '../Solver1';
+import { segmentBeamEnvelopeRadii } from '../Solver2';
 import { createSourceRays } from '../SourceRayFactory';
+import { Coherence, Ray } from '../types';
 
 function totalIntensityFor(component: { id: string }, rayCount: number): number {
     return createSourceRays([component as any], rayCount, 'full')
         .reduce((sum, ray) => sum + ray.intensity, 0);
+}
+
+function reconstructedIrradiance(rays: Ray[], sample: Vector3): number {
+    return rays.reduce((sum, ray) => {
+        const footprint = Math.max(ray.footprintRadius ?? 0, 1e-9);
+        const offset = sample.clone().sub(ray.origin);
+        const longitudinal = offset.dot(ray.direction);
+        offset.addScaledVector(ray.direction, -longitudinal);
+        const q = offset.lengthSq() / (footprint * footprint);
+        return sum + ray.intensity * Math.exp(-2 * q) * 2 / (Math.PI * footprint * footprint);
+    }, 0);
+}
+
+function radialGaussianProfileError(rayCount: number): number {
+    const laser = new Laser('Gaussian laser');
+    laser.power = 1;
+    laser.beamRadius = 2;
+
+    const rays = createSourceRays([laser], rayCount, 'full');
+    const center = rays[0].origin.clone();
+    const direction = rays[0].direction.clone().normalize();
+    const upSeed = Math.abs(direction.dot(new Vector3(0, 1, 0))) > 0.9
+        ? new Vector3(0, 0, 1)
+        : new Vector3(0, 1, 0);
+    const right = new Vector3().crossVectors(direction, upSeed).normalize();
+    const up = new Vector3().crossVectors(right, direction).normalize();
+    const peak = 2 * laser.power / (Math.PI * laser.beamRadius * laser.beamRadius);
+    const radii = [0, 0.25, 0.5, 0.75, 1, 1.25].map(fraction => fraction * laser.beamRadius);
+    const angularSamples = 48;
+    let squaredError = 0;
+    let samples = 0;
+
+    for (const radius of radii) {
+        const expected = Math.exp(-2 * radius * radius / (laser.beamRadius * laser.beamRadius));
+        for (let i = 0; i < angularSamples; i++) {
+            const angle = 2 * Math.PI * i / angularSamples;
+            const sample = center.clone()
+                .addScaledVector(right, Math.cos(angle) * radius)
+                .addScaledVector(up, Math.sin(angle) * radius);
+            const actual = reconstructedIrradiance(rays, sample) / peak;
+            squaredError += (actual - expected) ** 2;
+            samples++;
+        }
+    }
+
+    return Math.sqrt(squaredError / samples);
 }
 
 describe('SourceRayFactory', () => {
@@ -44,6 +93,49 @@ describe('SourceRayFactory', () => {
 
         expect(createSourceRays([laser], 8, 'full')).toHaveLength(0);
         expect(laser.power).toBe(7);
+    });
+
+    test('Solver2 segments keep whole laser envelope separate from beamlet footprints', () => {
+        const laser = new Laser('Wide laser');
+        laser.beamRadius = 2;
+        laser.pointAlong(1, 0, 0);
+
+        const rays = createSourceRays([laser], 32, 'full');
+        const segments = new Solver1([laser]).traceWithBeamSegments(rays).beamSegments
+            .map(branch => branch[0])
+            .filter(segment => segment !== undefined);
+
+        expect(segments.length).toBeGreaterThan(0);
+        const firstSegment = segments[0];
+        expect(firstSegment).toBeDefined();
+        if (!firstSegment) throw new Error('Expected at least one beam segment');
+        const envelope = segmentBeamEnvelopeRadii(firstSegment, 0);
+        expect(envelope.wx).toBeGreaterThan(1.7);
+        expect(envelope.wx).toBeLessThan(2.2);
+        expect(firstSegment.footprintStart ?? 0).toBeGreaterThan(0);
+        expect(firstSegment.footprintStart ?? 0).toBeLessThan(0.8);
+    });
+
+    test('laser beamlets reconstruct and converge to the configured Gaussian irradiance', () => {
+        const coarseError = radialGaussianProfileError(32);
+        const fineError = radialGaussianProfileError(512);
+
+        expect(fineError).toBeLessThan(coarseError);
+        expect(fineError).toBeLessThan(0.08);
+    });
+
+    test('laser Gaussian beamlets conserve power with equal normalized kernels', () => {
+        const laser = new Laser('Power laser');
+        laser.power = 3;
+        laser.beamRadius = 2;
+
+        const rays = createSourceRays([laser], 128, 'full');
+        const powers = rays.map(ray => ray.intensity);
+
+        expect(powers.reduce((sum, power) => sum + power, 0)).toBeCloseTo(3, 6);
+        expect(Math.min(...powers)).toBeCloseTo(Math.max(...powers), 12);
+        expect(rays[0].footprintRadius).toBeGreaterThan(0.6);
+        expect(rays[0].footprintRadius).toBeLessThan(laser.beamRadius);
     });
 
     test('conserves lamp power across wavelengths and ray counts', () => {
@@ -99,7 +191,7 @@ describe('SourceRayFactory', () => {
     test('structured source preview rays are deterministic when oversampled', () => {
         const source = new StructuredSource('Pattern source');
         source.asciiChar = 'M';
-        source.diameter = 8;
+        source.beamRadius = 4;
 
         const first = createSourceRays([source], 256, 'full');
         const second = createSourceRays([source], 256, 'full');
@@ -113,5 +205,35 @@ describe('SourceRayFactory', () => {
             expect(second[i].direction.y).toBeCloseTo(first[i].direction.y, 12);
             expect(second[i].direction.z).toBeCloseTo(first[i].direction.z, 12);
         }
+    });
+
+    test('structured source beam radius controls emitted pattern size', () => {
+        const source = new StructuredSource('Pattern source');
+        source.asciiChar = 'M';
+
+        source.beamRadius = 2;
+        const small = createSourceRays([source], 256, 'full');
+        const smallExtent = Math.max(...small.map(ray => ray.origin.distanceTo(source.position)));
+
+        source.beamRadius = 6;
+        const large = createSourceRays([source], 256, 'full');
+        const largeExtent = Math.max(...large.map(ray => ray.origin.distanceTo(source.position)));
+
+        expect(smallExtent).toBeGreaterThan(1);
+        expect(smallExtent).toBeLessThanOrEqual(2.01);
+        expect(largeExtent).toBeGreaterThan(smallExtent * 2.5);
+        expect(largeExtent).toBeLessThanOrEqual(6.01);
+    });
+
+    test('structured source emits a coherent laser-derived pattern without changing total power', () => {
+        const source = new StructuredSource('Pattern source');
+        source.asciiChar = 'A';
+        source.power = 0.75;
+
+        const rays = createSourceRays([source], 256, 'full');
+
+        expect(rays.length).toBeGreaterThan(0);
+        expect(rays.every(ray => ray.coherenceMode === Coherence.Coherent)).toBe(true);
+        expect(rays.reduce((sum, ray) => sum + ray.intensity, 0)).toBeCloseTo(0.75, 6);
     });
 });
