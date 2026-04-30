@@ -30,4 +30,17 @@ describe('Sample volume intersection', () => {
         expect(hit).not.toBeNull();
         expect(hit!.tFar - hit!.tNear).toBeCloseTo(0.0075, 6);
     });
+
+    test('merges overlapping Mickey specimen chord segments', () => {
+        const sample = new Sample('Overlapping Mickey');
+        const ray: Ray = {
+            ...rayThroughSample(),
+            origin: new Vector3(-0.222, 0.139, -10),
+        };
+
+        const segments = sample.computeChordSegments(ray);
+
+        expect(segments).toHaveLength(1);
+        expect(segments[0].tEnd).toBeGreaterThan(segments[0].tStart);
+    });
 });

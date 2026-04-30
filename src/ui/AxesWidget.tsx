@@ -104,10 +104,10 @@ export const AxesWidget: React.FC = () => {
     return (
         <div style={{
             position: 'fixed',
-            bottom: 16,
-            right: 60,
-            width: 100,
-            height: 100,
+            bottom: 12,
+            right: 8,
+            width: 112,
+            height: 150,
             zIndex: 10,
             pointerEvents: 'none',
         }}>

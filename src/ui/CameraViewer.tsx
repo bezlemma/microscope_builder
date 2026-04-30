@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom } from 'jotai';
 import { Camera } from '../physics/components/Camera';
-import { scanAccumProgressAtom, cameraImageTickAtom } from '../state/store';
+import { animationPlayingAtom, scanAccumProgressAtom, cameraImageTickAtom } from '../state/store';
 
 // ─── Display Types ──────────────────────────────────────────────────
 
@@ -23,6 +23,12 @@ interface DisplayStats {
     autoMin: number;
     autoMax: number;
     pixels: Float32Array | null;
+}
+
+interface PaintScratch {
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    imageData: ImageData | null;
 }
 
 function nextDisplayMapping(mapping: DisplayMapping): DisplayMapping {
@@ -124,6 +130,7 @@ function paintImage(
     blackPoint: number,
     whitePoint: number,
     mapping: DisplayMapping,
+    scratch: PaintScratch,
 ): boolean {
     if (!pixels || pixels.length === 0) {
         ctx.fillStyle = '#111';
@@ -136,7 +143,11 @@ function paintImage(
     }
 
     // Render at native resolution, then upscale with nearest-neighbor
-    const imageData = ctx.createImageData(resX, resY);
+    let imageData = scratch.imageData;
+    if (!imageData || imageData.width !== resX || imageData.height !== resY) {
+        imageData = scratch.ctx.createImageData(resX, resY);
+        scratch.imageData = imageData;
+    }
     const denom = Math.max(whitePoint - blackPoint, 1e-12);
 
     for (let py = 0; py < resY; py++) {
@@ -157,14 +168,11 @@ function paintImage(
 
     // Draw to an offscreen canvas at native res, then scale up
     ctx.clearRect(0, 0, displayWidth, displayHeight);
-    const bitmapCanvas = document.createElement('canvas');
-    bitmapCanvas.width = resX;
-    bitmapCanvas.height = resY;
-    const bitmapCtx = bitmapCanvas.getContext('2d');
-    if (!bitmapCtx) return false;
-    bitmapCtx.putImageData(imageData, 0, 0);
+    if (scratch.canvas.width !== resX) scratch.canvas.width = resX;
+    if (scratch.canvas.height !== resY) scratch.canvas.height = resY;
+    scratch.ctx.putImageData(imageData, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(bitmapCanvas, 0, 0, displayWidth, displayHeight);
+    ctx.drawImage(scratch.canvas, 0, 0, displayWidth, displayHeight);
     return true;
 }
 
@@ -251,8 +259,10 @@ interface CameraViewerProps {
 
 export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering, onRefresh: _onRefresh, isMobile }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const paintScratchRef = useRef<PaintScratch | null>(null);
     const [hasImage, setHasImage] = useState(false);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
+    const [animPlaying] = useAtom(animationPlayingAtom);
     // Subscribe so the viewer repaints each time a progressive round writes
     // a new image into `camera.solver3Image` (the Camera instance itself is
     // mutated — React can't observe that directly).
@@ -275,6 +285,55 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
     const displayHeight = Math.round(displayWidth * (camera.sensorResY / camera.sensorResX));
 
     const hasScanFrames = camera.scanFrames && camera.scanFrameCount > 0;
+    const currentFrameTimeMs = hasScanFrames
+        ? camera.scanFrameTimesMs?.[Math.min(frameIndex, camera.scanFrameCount - 1)]
+        : undefined;
+    const timelineTimeLabel = currentFrameTimeMs !== undefined
+        ? `${(currentFrameTimeMs / 1000).toFixed(3)} s`
+        : `${frameIndex + 1}/${camera.scanFrameCount}`;
+
+    const playbackStartRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!hasScanFrames || !animPlaying || projection !== 'none' || camera.scanCycleMs <= 0) {
+            playbackStartRef.current = null;
+            return;
+        }
+
+        let rafId = 0;
+        const frameTimes = camera.scanFrameTimesMs ?? [];
+        const cycleMs = Math.max(1, camera.scanCycleMs);
+
+        const tick = (now: number) => {
+            if (playbackStartRef.current === null) {
+                const currentFrameTime = frameTimes[Math.min(frameIndex, camera.scanFrameCount - 1)] ?? 0;
+                playbackStartRef.current = now - currentFrameTime;
+            }
+            const t = (now - playbackStartRef.current) % cycleMs;
+            let nextFrame = 0;
+            if (frameTimes.length >= camera.scanFrameCount) {
+                for (let i = 0; i < camera.scanFrameCount; i++) {
+                    if (frameTimes[i] <= t) nextFrame = i;
+                    else break;
+                }
+            } else {
+                nextFrame = Math.min(camera.scanFrameCount - 1, Math.floor((t / cycleMs) * camera.scanFrameCount));
+            }
+            setFrameIndex(prev => prev === nextFrame ? prev : nextFrame);
+            rafId = window.requestAnimationFrame(tick);
+        };
+
+        rafId = window.requestAnimationFrame(tick);
+        return () => window.cancelAnimationFrame(rafId);
+    }, [
+        animPlaying,
+        camera.scanCycleMs,
+        camera.scanFrameCount,
+        camera.scanFrameTimesMs,
+        frameIndex,
+        hasScanFrames,
+        projection,
+    ]);
 
     // ── Resolve which raw images to use (scan projection or single-shot) ──
 
@@ -348,6 +407,14 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+        let scratch = paintScratchRef.current;
+        if (!scratch) {
+            const scratchCanvas = document.createElement('canvas');
+            const scratchCtx = scratchCanvas.getContext('2d');
+            if (!scratchCtx) return;
+            scratch = { canvas: scratchCanvas, ctx: scratchCtx, imageData: null };
+            paintScratchRef.current = scratch;
+        }
 
         const painted = paintImage(
             ctx,
@@ -359,6 +426,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
             Math.min(blackLevel, whiteLevel - 1e-12),
             Math.max(whiteLevel, blackLevel + 1e-12),
             mapping,
+            scratch,
         );
         setHasImage(painted);
     }, [
@@ -579,9 +647,9 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                         fontSize: '9px',
                         color: '#888',
                         fontFamily: 'monospace',
-                        minWidth: '28px',
+                        minWidth: '58px',
                     }}>
-                        {frameIndex + 1}/{camera.scanFrameCount}
+                        {timelineTimeLabel}
                     </span>
                     <input
                         type="range"

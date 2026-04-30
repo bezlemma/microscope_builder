@@ -106,6 +106,8 @@ export interface CameraDoneMsg {
     type: 'camera-done';
     jobId: number;
     cameraId: string;
+    resX: number;
+    resY: number;
     emissionImage: Float32Array;
     excitationImage: Float32Array;
     sampleCountsImage: Uint32Array;
@@ -146,6 +148,11 @@ export interface ErrorMsg {
 }
 
 export type WorkerToMain = ProgressMsg | CameraDoneMsg | PMTDoneMsg | PMTRasterDoneMsg | CompleteMsg | ErrorMsg;
+
+const MIN_CONVERGENCE_ROUNDS = 8;
+const STABLE_CONVERGENCE_ROUNDS = 3;
+const CONVERGENCE_RELATIVE_EPSILON = 0.003;
+const CONVERGENCE_ABSOLUTE_EPSILON = 1e-10;
 
 /**
  * Rays are structured-cloneable once we strip Three.js Vector3 prototypes.
@@ -221,22 +228,12 @@ function post(msg: WorkerToMain, transfer: Transferable[] = []) {
     (self as unknown as Worker).postMessage(msg, transfer);
 }
 
-function canUseSharedArrayBuffer(): boolean {
-    return typeof SharedArrayBuffer !== 'undefined'
-        && typeof crossOriginIsolated !== 'undefined'
-        && crossOriginIsolated;
-}
-
 function makeFloat32Buffer(length: number): Float32Array {
-    return canUseSharedArrayBuffer()
-        ? new Float32Array(new SharedArrayBuffer(length * Float32Array.BYTES_PER_ELEMENT))
-        : new Float32Array(length);
+    return new Float32Array(length);
 }
 
 function makeUint32Buffer(length: number): Uint32Array {
-    return canUseSharedArrayBuffer()
-        ? new Uint32Array(new SharedArrayBuffer(length * Uint32Array.BYTES_PER_ELEMENT))
-        : new Uint32Array(length);
+    return new Uint32Array(length);
 }
 
 function transferIfOwned(...arrays: Array<Float32Array | Uint32Array>): Transferable[] {
@@ -249,6 +246,45 @@ function transferIfOwned(...arrays: Array<Float32Array | Uint32Array>): Transfer
 
 function yieldToEventLoop(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function updateAccumulatorConvergence(
+    acc: {
+        pixels: number;
+        emission: Float32Array;
+        excitation: Float32Array;
+        count: Uint32Array;
+        lastMeanEmission: Float32Array;
+        lastMeanExcitation: Float32Array;
+        stableRounds: number;
+    },
+    round: number,
+): boolean {
+    let deltaSum = 0;
+    let signalSum = 0;
+    for (let i = 0; i < acc.pixels; i++) {
+        const count = acc.count[i] > 0 ? acc.count[i] : 1;
+        const em = acc.emission[i] / count;
+        const ex = acc.excitation[i] / count;
+        const prevEm = acc.lastMeanEmission[i];
+        const prevEx = acc.lastMeanExcitation[i];
+        deltaSum += Math.abs(em - prevEm) + Math.abs(ex - prevEx);
+        signalSum += Math.abs(em) + Math.abs(ex) + Math.abs(prevEm) + Math.abs(prevEx);
+        acc.lastMeanEmission[i] = em;
+        acc.lastMeanExcitation[i] = ex;
+    }
+
+    if (round + 1 < MIN_CONVERGENCE_ROUNDS) {
+        acc.stableRounds = 0;
+        return false;
+    }
+
+    const relativeDelta = deltaSum / Math.max(signalSum * 0.5, CONVERGENCE_ABSOLUTE_EPSILON);
+    const absoluteDelta = deltaSum / Math.max(1, acc.pixels);
+    const stable = relativeDelta < CONVERGENCE_RELATIVE_EPSILON
+        || absoluteDelta < CONVERGENCE_ABSOLUTE_EPSILON;
+    acc.stableRounds = stable ? acc.stableRounds + 1 : 0;
+    return acc.stableRounds >= STABLE_CONVERGENCE_ROUNDS;
 }
 
 async function runPMTScan(
@@ -307,12 +343,6 @@ async function runPMTRasterJob(req: PMTRasterRequest): Promise<void> {
             return;
         }
 
-        const solver1 = new Solver1(components);
-        const sourceRays = createSourceRays(
-            components,
-            Math.max(8, Math.min(req.forwardRayCount, 16)),
-            'full',
-        ).filter(ray => !ray.sourceId?.startsWith('pmt_preview_'));
         const byId = new Map<string, typeof components[number]>();
         for (const c of components) byId.set(c.id, c);
 
@@ -334,8 +364,6 @@ async function runPMTRasterJob(req: PMTRasterRequest): Promise<void> {
             const sampleCountsImage = makeUint32Buffer(pixels);
             const paths: SerializedPath[] = [];
             const maxVisPaths = Math.max(0, req.reversePathCount);
-            const pmtSnapshot = createPMTKernelSnapshot(pmt);
-            pmtSnapshot.samplesPerPixel = Math.max(1, plan.samplesPerPixel | 0);
             let pixelsTraced = 0;
 
             for (let yIdx = 0; yIdx < plan.resY; yIdx++) {
@@ -354,9 +382,16 @@ async function runPMTRasterJob(req: PMTRasterRequest): Promise<void> {
 
                     const idx = yIdx * plan.resX + xIdx;
                     try {
-                        const beamSegs = solver1.traceWithBeamSegments(sourceRays).beamSegments;
-                        const solver3 = new Solver3Kernel(createTraceSceneSnapshot(components), { branches: beamSegs });
+                        const sourceRays = createSourceRays(
+                            components,
+                            Math.max(8, Math.min(req.forwardRayCount, 16)),
+                            'full',
+                        ).filter(ray => !ray.sourceId?.startsWith('pmt_preview_'));
+                        const beamSegs = new Solver1(components).traceWithBeamSegments(sourceRays).beamSegments;
+                        const pmtSnapshot = createPMTKernelSnapshot(pmt);
+                        pmtSnapshot.samplesPerPixel = Math.max(1, plan.samplesPerPixel | 0);
                         pmtSnapshot.sampleOffset = req.passIndex * pmtSnapshot.samplesPerPixel;
+                        const solver3 = new Solver3Kernel(createTraceSceneSnapshot(components), { branches: beamSegs });
                         const { radiance, excitation, bestPath } = solver3.renderPMTPixel(pmtSnapshot);
                         emissionImage[idx] = radiance * pmtSnapshot.samplesPerPixel;
                         excitationImage[idx] = excitation * pmtSnapshot.samplesPerPixel;
@@ -478,18 +513,20 @@ async function runJob(req: RenderRequest) {
         const solver3 = new Solver3(components, beamSegs);
         let raysTraced = 0;
 
-        // ── Progressive accumulation: runs FOREVER (until cancelled).  Each
-        // round traces ~8 samples/pixel (the kernel's per-round cap) and the
-        // running per-pixel average is posted so quality keeps climbing while
-        // the user can still interact.  We emit `complete` once after round 1
-        // (and after any PMTs) so the UI loading overlay clears; subsequent
-        // camera-done messages silently refine the image.
+        // ── Progressive accumulation: each pass is immediately published as
+        // a new running average.  The worker stops once the average has
+        // stabilized; difficult scenes are allowed to keep refining rather
+        // than being cut off by a fixed pass count.
         const accumulators = cameras.map(cam => ({
             pixels: cam.sensorResX * cam.sensorResY,
             emission: new Float32Array(cam.sensorResX * cam.sensorResY),
             excitation: new Float32Array(cam.sensorResX * cam.sensorResY),
             count: new Uint32Array(cam.sensorResX * cam.sensorResY),
             sampling: createProgressiveSamplingState(cam.sensorResX * cam.sensorResY),
+            lastMeanEmission: new Float32Array(cam.sensorResX * cam.sensorResY),
+            lastMeanExcitation: new Float32Array(cam.sensorResX * cam.sensorResY),
+            stableRounds: 0,
+            converged: false,
         }));
 
         let firstRoundDone = false;
@@ -504,7 +541,7 @@ async function runJob(req: RenderRequest) {
                 const cam = cameras[ci];
                 const acc = accumulators[ci];
                 const activeMask = prepareProgressiveActiveMask(acc.sampling, round);
-                const gen = solver3.renderGenerator(cam, 32, req.workerId, req.workerCount, activeMask);
+                const gen = solver3.renderGenerator(cam, req.previewMode ? 8 : 32, req.workerId, req.workerCount, activeMask);
                 let genResult = gen.next();
                 let lastReport = 0;
                 while (!genResult.done) {
@@ -513,8 +550,8 @@ async function runJob(req: RenderRequest) {
                     // Progress reported to the UI tracks the first-pass render
                     // only — the loading overlay hides the instant the first
                     // preview lands.  Later rounds silently refine.
-                    const reported = round === 0 ? frac : 1;
-                    if (reported - lastReport > 0.02 || frac >= 0.999) {
+                    if (round === 0 && (frac - lastReport > 0.02 || frac >= 0.999)) {
+                        const reported = frac;
                         post({ type: 'progress', jobId: req.jobId, cameraIndex: ci, fraction: reported });
                         lastReport = reported;
                         await yieldToEventLoop();
@@ -559,6 +596,8 @@ async function runJob(req: RenderRequest) {
                         type: 'camera-done',
                         jobId: req.jobId,
                         cameraId: cam.id,
+                        resX: result.resX,
+                        resY: result.resY,
                         emissionImage: emAvg,
                         excitationImage: exAvg,
                         sampleCountsImage: cntSnap,
@@ -566,6 +605,8 @@ async function runJob(req: RenderRequest) {
                     },
                     transferIfOwned(emAvg, exAvg, cntSnap),
                 );
+
+                acc.converged = updateAccumulatorConvergence(acc, round);
             }
 
             firstRoundDone = true;
@@ -580,6 +621,11 @@ async function runJob(req: RenderRequest) {
             if (firstRoundDone && pmtDone && !completePosted) {
                 post({ type: 'complete', jobId: req.jobId, raysTraced });
                 completePosted = true;
+            }
+
+            const allCamerasConverged = accumulators.every(acc => acc.converged);
+            if (allCamerasConverged && pmtDone) {
+                return;
             }
 
             // Yield to event loop between rounds so 'cancel' messages land

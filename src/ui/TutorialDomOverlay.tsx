@@ -9,29 +9,58 @@ interface CalloutLayout {
     top: number;
     width: number;
     arrowTop: number;
+    anchor: 'menu' | 'drawer';
 }
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
-function findSidebarAnchor(): DOMRect | null {
+function findSidebarAnchor(isMobile: boolean): { rect: DOMRect; anchor: CalloutLayout['anchor'] } | null {
+    if (isMobile) {
+        const mobileMenu = document.querySelector('[data-mobile-sidebar-toggle="true"]') as HTMLElement | null;
+        const mobileMenuRect = mobileMenu?.getBoundingClientRect();
+        if (mobileMenuRect && mobileMenuRect.width > 0 && mobileMenuRect.height > 0) {
+            return { rect: mobileMenuRect, anchor: 'menu' };
+        }
+    }
+
     const openDetectors = document.querySelector('[data-component-group-root="Detectors"][data-open="true"]');
     const cameraItem = openDetectors?.querySelector('[data-component-type="camera"]') as HTMLElement | null;
     const detectorsGroup = document.querySelector('[data-component-group="Detectors"]') as HTMLElement | null;
     const anchor = cameraItem ?? detectorsGroup;
-    return anchor?.getBoundingClientRect() ?? null;
+    const rect = anchor?.getBoundingClientRect() ?? null;
+    return rect ? { rect, anchor: 'drawer' } : null;
 }
 
 function computeLayout(isMobile: boolean): CalloutLayout {
     const viewportW = window.innerWidth || 1024;
     const viewportH = window.innerHeight || 768;
-    const anchorRect = findSidebarAnchor();
-    const fallbackTargetY = isMobile ? 76 : 112;
+    const anchor = findSidebarAnchor(isMobile);
+    const anchorRect = anchor?.rect ?? null;
+    const fallbackTargetY = isMobile ? 30 : 112;
+    const fallbackTargetRight = isMobile ? 50 : 0;
     const targetY = anchorRect ? anchorRect.top + anchorRect.height / 2 : fallbackTargetY;
-    const targetRight = anchorRect ? anchorRect.right : 0;
-    const width = isMobile ? Math.min(250, viewportW - 36) : Math.min(340, Math.max(240, viewportW - targetRight - 56));
-    const left = isMobile ? 18 : clamp(targetRight + 36, 12, Math.max(12, viewportW - width - 12));
+    const targetRight = anchorRect ? anchorRect.right : fallbackTargetRight;
+    const anchorKind = anchor?.anchor ?? 'menu';
+    if (isMobile && anchorKind === 'menu') {
+        const left = clamp(targetRight + 18, 12, Math.max(12, viewportW - 172));
+        const width = Math.min(250, Math.max(160, viewportW - left - 12));
+        return {
+            left,
+            top: clamp((anchorRect?.bottom ?? 50) + 34, 82, Math.max(82, viewportH - 150)),
+            width,
+            arrowTop: 16,
+            anchor: 'menu',
+        };
+    }
+
+    const width = isMobile
+        ? Math.min(250, Math.max(160, viewportW - targetRight - 32))
+        : Math.min(340, Math.max(240, viewportW - targetRight - 56));
+    const left = isMobile
+        ? clamp(targetRight + 18, 12, Math.max(12, viewportW - width - 12))
+        : clamp(targetRight + 36, 12, Math.max(12, viewportW - width - 12));
     const top = isMobile
         ? clamp(targetY - 40, 12, Math.max(12, viewportH - 150))
         : clamp(targetY - 42, 12, Math.max(12, viewportH - 150));
@@ -41,6 +70,7 @@ function computeLayout(isMobile: boolean): CalloutLayout {
         top,
         width,
         arrowTop: clamp(targetY - top, 16, 112),
+        anchor: anchorKind,
     };
 }
 
@@ -84,7 +114,7 @@ export const TutorialDomOverlay: React.FC = () => {
 
     return (
         <div
-            className="tutorial-sidebar-callout"
+            className={`tutorial-sidebar-callout ${layout?.anchor === 'menu' ? 'menu-anchor' : ''}`}
             style={layout ? {
                 left: `${layout.left}px`,
                 top: `${layout.top}px`,
@@ -96,7 +126,9 @@ export const TutorialDomOverlay: React.FC = () => {
             </div>
             <div className="tutorial-callout-body">
                 {isMobile
-                    ? 'Open the parts drawer. Drag Camera onto the table, then move and rotate it onto the target.'
+                    ? layout?.anchor === 'menu'
+                        ? 'Tap the menu to open the parts drawer, then drag Camera from Detectors onto the table.'
+                        : 'Drag Camera from Detectors onto the table, then move and rotate it onto the target.'
                     : 'Open Detectors, drag Camera onto the table, then move and rotate it onto the target.'}
             </div>
             <div

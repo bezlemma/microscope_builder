@@ -44,7 +44,7 @@ export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
     const [forwardRays] = useAtom(forwardRaysAtom);
     const [components] = useAtom(componentsAtom);
     const [trapBeamSegments] = useAtom(trapBeamSegmentsAtom);
-    const size = compact ? 140 : 220;
+    const size = compact ? 128 : 220;
     const status = statusForQPD(qpd);
     const maxQuadrant = Math.max(...qpd.quadrants, 1e-15);
     const traceCount = forwardRays.length;
@@ -58,17 +58,35 @@ export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
     const spotY = size / 2 - qpd.signalY * size * 0.38;
     const beamR = Math.max(3, Math.min(size * 0.42, (qpd.fillRatio || 0) * size * 0.42));
     const quadrantOpacity = (power: number) => 0.12 + 0.72 * Math.sqrt(Math.max(0, power) / maxQuadrant);
-    const labelStyle: React.CSSProperties = { color: '#8391a1', fontSize: 10 };
-    const valueStyle: React.CSSProperties = { color: '#dcecff', fontSize: 11, fontFamily: 'monospace' };
+    const labelStyle: React.CSSProperties = { color: '#8391a1', fontSize: compact ? 9 : 10 };
+    const valueStyle: React.CSSProperties = { color: '#dcecff', fontSize: compact ? 10 : 11, fontFamily: 'monospace' };
     const rowStyle: React.CSSProperties = {
         display: 'flex',
         justifyContent: 'space-between',
-        gap: 10,
+        gap: compact ? 6 : 10,
         lineHeight: 1.35,
     };
+    const containerStyle: React.CSSProperties = compact
+        ? {
+            width: '100%',
+            maxWidth: 330,
+            color: '#dcecff',
+            fontFamily: 'sans-serif',
+            marginTop: 4,
+            display: 'grid',
+            gridTemplateColumns: `repeat(auto-fit, minmax(${size}px, 1fr))`,
+            gap: 8,
+            alignItems: 'start',
+        }
+        : {
+            width: size,
+            color: '#dcecff',
+            fontFamily: 'sans-serif',
+            marginTop: 4,
+        };
 
     return (
-        <div style={{ width: size, color: '#dcecff', fontFamily: 'sans-serif', marginTop: 4 }}>
+        <div style={containerStyle}>
             <svg
                 width={size}
                 height={size}
@@ -101,11 +119,12 @@ export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
             </svg>
 
             <div style={{
-                marginTop: 8,
-                padding: '7px 8px',
+                marginTop: compact ? 0 : 8,
+                padding: compact ? '6px 7px' : '7px 8px',
                 background: '#111',
                 border: '1px solid #282828',
                 borderRadius: 4,
+                minWidth: 0,
             }}>
                 <div style={{ ...rowStyle, marginBottom: 4 }}>
                     <span style={labelStyle}>Status</span>

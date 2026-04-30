@@ -7,7 +7,7 @@
 import React, { useMemo, useState, useRef, useCallback, useContext, createContext } from 'react';
 import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry } from 'three';
 import { useAtom } from 'jotai';
-import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom } from '../../state/store';
+import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom, uiLockedAtom } from '../../state/store';
 import { Text, Edges, Line } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { OpticalComponent } from '../../physics/Component';
@@ -1988,6 +1988,7 @@ const RailEndpointHandle: React.FC<{
 
 export const RailVisualizer: React.FC<{ component: Rail }> = ({ component }) => {
     const outlineColor = useContext(OutlineColorContext);
+    const [uiLocked] = useAtom(uiLockedAtom);
 
     const { midPos, angle, len } = useMemo(() => {
         const a = component.holeA;
@@ -2009,6 +2010,14 @@ export const RailVisualizer: React.FC<{ component: Rail }> = ({ component }) => 
     const grooveWidth = w * 0.35;
     const grooveDepth = h * 0.2;
     const handleZ = Rail.TABLE_Z + h + 0.5;
+    const tickMarks = useMemo(() => {
+        const maxMm = Math.floor(len);
+        return Array.from({ length: maxMm + 1 }, (_, mm) => ({
+            mm,
+            x: -len / 2 + mm,
+            major: mm % 5 === 0,
+        }));
+    }, [len]);
 
     return (
         <group>
@@ -2024,8 +2033,41 @@ export const RailVisualizer: React.FC<{ component: Rail }> = ({ component }) => 
                 <boxGeometry args={[len - 1, grooveWidth, grooveDepth]} />
                 <meshStandardMaterial color="#333" metalness={0.7} roughness={0.3} />
             </mesh>
-            <RailEndpointHandle rail={component} endpoint="A" position={[component.holeA.x, component.holeA.y, handleZ]} />
-            <RailEndpointHandle rail={component} endpoint="B" position={[component.holeB.x, component.holeB.y, handleZ]} />
+            <group position={[midPos.x, midPos.y, midPos.z]} rotation={[0, 0, angle]}>
+                {tickMarks.map(({ mm, x, major }) => {
+                    const tickLength = major ? w - 2 : w * 0.36;
+                    return (
+                        <mesh
+                            key={`tick-${mm}`}
+                            position={[x, w / 2 - tickLength / 2 - 0.6, h / 2 + 0.045]}
+                        >
+                            <boxGeometry args={[0.16, tickLength, 0.045]} />
+                            <meshBasicMaterial color="#fff" toneMapped={false} />
+                        </mesh>
+                    );
+                })}
+                {tickMarks.filter(tick => tick.major).map(({ mm, x }) => (
+                    <Text
+                        key={`label-${mm}`}
+                        position={[x, -w / 2 + 2.2, h / 2 + 0.09]}
+                        fontSize={2.2}
+                        color="#fff"
+                        anchorX="center"
+                        anchorY="middle"
+                        outlineWidth={0.04}
+                        outlineColor="#000"
+                        font={undefined}
+                    >
+                        {mm}
+                    </Text>
+                ))}
+            </group>
+            {!uiLocked && (
+                <>
+                    <RailEndpointHandle rail={component} endpoint="A" position={[component.holeA.x, component.holeA.y, handleZ]} />
+                    <RailEndpointHandle rail={component} endpoint="B" position={[component.holeB.x, component.holeB.y, handleZ]} />
+                </>
+            )}
         </group>
     );
 };

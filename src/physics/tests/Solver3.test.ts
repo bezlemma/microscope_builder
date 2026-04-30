@@ -5,6 +5,7 @@ import { Solver1 } from "../Solver1";
 import { GaussianBeamSegment, initialQ } from "../Solver2";
 import { Camera } from "../components/Camera";
 import { Sample } from "../components/Sample";
+import { Laser } from "../components/Laser";
 import { createSourceRays } from "../SourceRayFactory";
 import { createCameraKernelSnapshot } from "../sceneSnapshot";
 import { Coherence, Ray } from "../types";
@@ -223,5 +224,61 @@ describe("Solver 3: Backward Ray Direction", () => {
 
         expect(result.absorbed).toBe(false);
         expect(result.radiance).toBeGreaterThan(0);
+    });
+
+    test("sample hits use the matching sample snapshot in multi-sample scenes", () => {
+        const camera = new Camera(1, 1, "Test Camera");
+        camera.setPosition(0, 12, 0);
+        camera.setRotation(Math.PI / 2, 0, 0);
+
+        const absorbingSample = new Sample("Absorbing sample");
+        absorbingSample.setPosition(0, 0, 0);
+        absorbingSample.absorption = 0;
+        absorbingSample.fluorescenceEfficiency = 0;
+
+        const offAxisSample = new Sample("Off-axis sample");
+        offAxisSample.setPosition(20, 0, 0);
+        offAxisSample.absorption = 0;
+        offAxisSample.fluorescenceEfficiency = 0;
+
+        const laser = new Laser("Backlight");
+        laser.setPosition(0, -30, 0);
+        laser.pointAlong(0, 1, 0);
+
+        const beamSeg = makeSeg(
+            new Vector3(0, -35, 0),
+            new Vector3(0, 15, 0),
+            new Vector3(0, 1, 0),
+            {
+                wavelength: 532e-9,
+                sourceId: laser.id,
+                footprintStart: 5,
+                footprintEnd: 5,
+            }
+        );
+        const ray: Ray = {
+            origin: camera.position.clone(),
+            direction: new Vector3(0, -1, 0),
+            wavelength: 532e-9,
+            intensity: 1,
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            opticalPathLength: 0,
+            footprintRadius: 0.1,
+            coherenceMode: Coherence.Incoherent,
+            isBackward: true,
+            sourceId: "multi_sample_regression",
+        };
+        const scene = [camera, absorbingSample, offAxisSample, laser];
+        const clearRadiance = new Solver3(scene, [[beamSeg]]).traceBackward(ray, absorbingSample, camera).radiance;
+
+        absorbingSample.absorption = 12;
+        const absorbedRadiance = new Solver3(scene, [[beamSeg]]).traceBackward(
+            { ...ray, origin: ray.origin.clone(), direction: ray.direction.clone() },
+            absorbingSample,
+            camera,
+        ).radiance;
+
+        expect(clearRadiance).toBeGreaterThan(0);
+        expect(absorbedRadiance).toBeLessThan(clearRadiance * 0.1);
     });
 });

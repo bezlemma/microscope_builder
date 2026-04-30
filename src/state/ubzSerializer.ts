@@ -521,6 +521,11 @@ function finiteNum(props: PropMap, key: string, fallback: number): number {
     return Number.isFinite(value) ? value : fallback;
 }
 
+function intRange(props: PropMap, key: string, fallback: number, min: number, max: number): number {
+    const value = Math.round(finiteNum(props, key, fallback));
+    return Math.max(min, Math.min(max, value));
+}
+
 function bool(props: PropMap, key: string, fallback: boolean): boolean {
     const value = props[key]?.trim().toLowerCase();
     if (value === undefined) return fallback;
@@ -542,7 +547,13 @@ function str(props: PropMap, key: string, fallback: string): string {
     return props[key] ?? fallback;
 }
 
-function parseSpectralProfile(props: PropMap, prefix: string = 'spectral'): SpectralProfile {
+function parseSpectralProfile(props: PropMap, prefix: string = 'spectral'): SpectralProfile | null {
+    if (!Object.prototype.hasOwnProperty.call(props, `${prefix}.preset`) &&
+        !Object.prototype.hasOwnProperty.call(props, `${prefix}.cutoffNm`) &&
+        !Object.prototype.hasOwnProperty.call(props, `${prefix}.edgeSteepness`) &&
+        !Object.prototype.hasOwnProperty.call(props, `${prefix}.bands`)) {
+        return null;
+    }
     const preset = str(props, `${prefix}.preset`, 'longpass') as ProfilePreset;
     const cutoffNm = num(props, `${prefix}.cutoffNm`, 500);
     const edgeSteepness = num(props, `${prefix}.edgeSteepness`, 15);
@@ -832,7 +843,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             return new DichroicMirror(
                 num(props, 'diameter', 25),
                 num(props, 'thickness', 2),
-                parseSpectralProfile(props),
+                parseSpectralProfile(props) ?? new SpectralProfile('longpass', 500),
                 str(props, 'name', 'Dichroic')
             );
         }
@@ -840,7 +851,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             return new Filter(
                 num(props, 'diameter', 25),
                 num(props, 'thickness', 3),
-                parseSpectralProfile(props),
+                parseSpectralProfile(props) ?? new SpectralProfile('longpass', 500),
                 str(props, 'name', 'Filter')
             );
         }
@@ -850,16 +861,16 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 num(props, 'height', 13),
                 str(props, 'name', 'Camera')
             );
-            c.sensorResX = num(props, 'sensorResX', 64);
-            c.sensorResY = num(props, 'sensorResY', 64);
+            c.sensorResX = intRange(props, 'sensorResX', 64, 1, 2048);
+            c.sensorResY = intRange(props, 'sensorResY', 64, 1, 2048);
             c.sensorNA = num(props, 'sensorNA', 0);
             c.samplesPerPixel = num(props, 'samplesPerPixel', 4);
             return c;
         }
         case 'Sample': {
             const c = new Sample(str(props, 'name', 'Sample'));
-            c.excitationSpectrum = parseSpectralProfile(props, 'excitation');
-            c.emissionSpectrum = parseSpectralProfile(props, 'emission');
+            c.excitationSpectrum = parseSpectralProfile(props, 'excitation') ?? c.excitationSpectrum;
+            c.emissionSpectrum = parseSpectralProfile(props, 'emission') ?? c.emissionSpectrum;
             c.fluorescenceEfficiency = num(props, 'fluorescenceEfficiency', 1e-4);
             c.absorption = num(props, 'absorption', 3.0);
             if (props['specimenRotation']) {

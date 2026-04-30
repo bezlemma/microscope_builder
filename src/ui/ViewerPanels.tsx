@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, uiLockedAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
@@ -35,6 +35,7 @@ export const ViewerPanels: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(solver3RenderingAtom);
+    const [uiLocked] = useAtom(uiLockedAtom);
     const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
 
     // On mobile, start with auxiliary viewers minimized so the screen isn't
@@ -66,14 +67,15 @@ export const ViewerPanels: React.FC = () => {
             || c instanceof QPD
             || c instanceof Sample
             || c instanceof SampleChamber
-        );
+        )
+        .filter(c => !(isMobile && c instanceof QPD));
 
     if (pinnedComponents.length === 0) return null;
 
     // Reserve space for the Sidebar on the left so pinned viewers don't slide
     // behind it. On mobile the sidebar is an overlay (transformed off-screen
     // when closed), so we can hug the left edge there.
-    const sidebarWidth = isMobile ? 0 : 250;
+    const sidebarWidth = isMobile || uiLocked ? 0 : 250;
     return (
         <div style={{
             position: 'fixed',
@@ -102,7 +104,7 @@ export const ViewerPanels: React.FC = () => {
                         borderRadius: '6px',
                         padding: isMobile && comp instanceof Camera ? '0' : '6px',
                         fontFamily: 'sans-serif',
-                        pointerEvents: 'auto',
+                        pointerEvents: uiLocked ? 'none' : 'auto',
                         // Don't clip Camera content on mobile — the inner viewer
                         // is laid out at 256px display width plus its controls;
                         // the previous 12vh cap chopped the image in half on

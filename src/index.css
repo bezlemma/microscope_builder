@@ -122,6 +122,11 @@ canvas {
   50% { transform: translateX(-8px); }
 }
 
+@keyframes tutorial-menu-arrow-nudge {
+  0%, 100% { transform: rotate(60deg) translateX(0); }
+  50% { transform: rotate(60deg) translateX(-6px); }
+}
+
 .tutorial-hud {
   position: fixed;
   inset: 0;
@@ -331,6 +336,14 @@ canvas {
 .tutorial-sidebar-arrow::after {
   transform: rotate(-38deg);
   transform-origin: left center;
+}
+
+.tutorial-sidebar-callout.menu-anchor .tutorial-sidebar-arrow {
+  left: -38px;
+  top: -54px;
+  width: 66px;
+  transform-origin: left center;
+  animation: tutorial-menu-arrow-nudge 1.15s ease-in-out infinite;
 }
 
 @media (max-width: 720px) {

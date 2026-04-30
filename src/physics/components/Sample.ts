@@ -519,8 +519,19 @@ export class Sample extends OpticalComponent {
             }
         }
 
-        // Merge overlapping segments if necessary (simple version: just return all)
-        return segments;
+        if (segments.length <= 1) return segments;
+
+        segments.sort((a, b) => a.tStart - b.tStart);
+        const merged: { tStart: number; tEnd: number }[] = [];
+        for (const seg of segments) {
+            const last = merged[merged.length - 1];
+            if (!last || seg.tStart > last.tEnd) {
+                merged.push({ ...seg });
+            } else {
+                last.tEnd = Math.max(last.tEnd, seg.tEnd);
+            }
+        }
+        return merged;
     }
 
     /** Legacy helper for absorption (sum of segments) */

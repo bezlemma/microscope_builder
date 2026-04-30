@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Lock, Ruler, Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useHaptic } from './useHaptic';
 import { useAtom } from 'jotai';
@@ -15,6 +15,7 @@ import {
     animatorAtom,
     animationPlayingAtom,
     animationSpeedAtom,
+    scanAccumTriggerAtom,
     scanAccumProgressAtom,
     solverDiagnosticsAtom,
     selectedRodAtom,
@@ -24,7 +25,10 @@ import {
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
     drawnRayCountsAtom,
+    uiLockedAtom,
+    measurementAtom,
 } from '../state/store';
+import type { RayConfig, Measurement, MeasurementDrawMode, MeasurementPlaneMode, MeasurementPoint } from '../state/store';
 import { RodPropertiesPanel } from './RodPropertiesPanel';
 import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
 import { Vector3 } from 'three';
@@ -78,7 +82,6 @@ import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
 import { snapToRingBoundary } from '../physics/SourceRayFactory';
-import { ZLevelBar } from './ZLevelBar';
 import { findMaxUnclippedScanHalfAngleDeg, measureChiefRayForScan } from '../physics/confocalScanDiagnostics';
 
 function clampValue(value: number, min: number, max: number): number {
@@ -115,6 +118,273 @@ function stickyForwardRodCount(value: number): number {
     const threshold = nice >= 24 ? 2 : 1;
     return Math.abs(clamped - nice) <= threshold ? nice : clamped;
 }
+
+function formatMeasurementMm(value: number): string {
+    const abs = Math.abs(value);
+    if (abs >= 100) return value.toFixed(0);
+    if (abs >= 10) return value.toFixed(1);
+    return value.toFixed(2);
+}
+
+function formatSignedMeasurementMm(value: number): string {
+    return `${value >= 0 ? '+' : '-'}${formatMeasurementMm(Math.abs(value))}`;
+}
+
+function measurementSegmentStats(a: MeasurementPoint, b: MeasurementPoint) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = b.z - a.z;
+    return {
+        dx,
+        dy,
+        dz,
+        length: Math.hypot(dx, dy, dz),
+        xy: Math.hypot(dx, dy),
+        xz: Math.hypot(dx, dz),
+        yz: Math.hypot(dy, dz),
+    };
+}
+
+function distanceForPlane(stats: ReturnType<typeof measurementSegmentStats>, planeMode: MeasurementPlaneMode): number {
+    switch (planeMode) {
+        case 'xy': return stats.xy;
+        case 'xz': return stats.xz;
+        case 'yz': return stats.yz;
+        default: return stats.length;
+    }
+}
+
+function planeModeLabel(planeMode: MeasurementPlaneMode): string {
+    switch (planeMode) {
+        case 'xy': return 'XY';
+        case 'xz': return 'XZ';
+        case 'yz': return 'YZ';
+        default: return '3D';
+    }
+}
+
+function measurementAngleDeg(a: MeasurementPoint, b: MeasurementPoint, c: MeasurementPoint, planeMode: MeasurementPlaneMode): number | null {
+    const ba = new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
+    const bc = new Vector3(c.x - b.x, c.y - b.y, c.z - b.z);
+    if (planeMode === 'xy') {
+        ba.z = 0;
+        bc.z = 0;
+    } else if (planeMode === 'xz') {
+        ba.y = 0;
+        bc.y = 0;
+    } else if (planeMode === 'yz') {
+        ba.x = 0;
+        bc.x = 0;
+    }
+    if (ba.lengthSq() < 1e-10 || bc.lengthSq() < 1e-10) return null;
+    const angle = Math.acos(Math.max(-1, Math.min(1, ba.normalize().dot(bc.normalize()))));
+    return angle * 180 / Math.PI;
+}
+
+const CoordinateInput: React.FC<{
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+}> = ({ label, value, onChange }) => {
+    const [text, setText] = React.useState(formatMeasurementMm(value));
+    const [focused, setFocused] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!focused) setText(formatMeasurementMm(value));
+    }, [focused, value]);
+
+    return (
+        <label style={{ display: 'grid', gridTemplateColumns: '12px 1fr', alignItems: 'center', gap: 3 }}>
+            <span style={{ color: '#88a8bf', fontSize: 9 }}>{label}</span>
+            <input
+                type="number"
+                step="0.1"
+                value={text}
+                onFocus={() => setFocused(true)}
+                onChange={(event) => {
+                    const next = event.target.value;
+                    setText(next);
+                    const parsed = Number(next);
+                    if (Number.isFinite(parsed)) onChange(parsed);
+                }}
+                onBlur={() => {
+                    setFocused(false);
+                    const parsed = Number(text);
+                    setText(Number.isFinite(parsed) ? formatMeasurementMm(parsed) : formatMeasurementMm(value));
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        (event.currentTarget as HTMLInputElement).blur();
+                    }
+                }}
+                style={{
+                    width: '100%',
+                    minWidth: 0,
+                    boxSizing: 'border-box',
+                    background: 'rgba(0, 12, 24, 0.75)',
+                    color: '#d9efff',
+                    border: '1px solid rgba(0, 127, 255, 0.35)',
+                    borderRadius: 3,
+                    padding: '1px 3px',
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    fontVariantNumeric: 'tabular-nums',
+                }}
+            />
+        </label>
+    );
+};
+
+const MeasurementReadout: React.FC<{
+    measurement: Measurement;
+    index: number;
+    planeMode: MeasurementPlaneMode;
+    showProjected: boolean;
+    onDelete: () => void;
+    onPointChange: (pointIndex: number, point: MeasurementPoint) => void;
+}> = ({ measurement, index, planeMode, showProjected, onDelete, onPointChange }) => {
+    const [a, b, c] = measurement.points;
+    const ab = a && b ? measurementSegmentStats(a, b) : null;
+    const bc = b && c ? measurementSegmentStats(b, c) : null;
+    const angle = a && b && c ? measurementAngleDeg(a, b, c, planeMode) : null;
+    const planeLabel = planeModeLabel(planeMode);
+    const pointLabels = ['A', 'B', 'C'];
+
+    const metricStyle: React.CSSProperties = {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 8,
+        color: '#cfe8ff',
+        fontVariantNumeric: 'tabular-nums',
+    };
+
+    return (
+        <div style={{
+            marginTop: 6,
+            marginBottom: 8,
+            padding: '7px 8px',
+            border: '1px solid rgba(0, 127, 255, 0.45)',
+            borderRadius: 6,
+            background: 'rgba(0, 45, 85, 0.35)',
+            color: '#d9efff',
+            fontSize: 10,
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, color: '#9bd0ff' }}>
+                <span>{`M${index + 1}`}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>{planeLabel}</span>
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        title="Delete selected measurement"
+                        style={{
+                            width: 18,
+                            height: 18,
+                            background: 'rgba(0, 20, 38, 0.6)',
+                            border: '1px solid rgba(0, 127, 255, 0.55)',
+                            borderRadius: 4,
+                            color: '#9bd0ff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                        }}
+                    >
+                        <Trash2 size={11} />
+                    </button>
+                </div>
+            </div>
+            {ab && (
+                <>
+                    <div style={metricStyle}><span>{`${planeLabel} A to B`}</span><span>{formatMeasurementMm(distanceForPlane(ab, planeMode))} mm</span></div>
+                    <div style={metricStyle}><span>dx / dy / dz</span><span>{`${formatSignedMeasurementMm(ab.dx)} / ${formatSignedMeasurementMm(ab.dy)} / ${formatSignedMeasurementMm(ab.dz)}`}</span></div>
+                    {showProjected && (
+                        <div style={metricStyle}><span>XY / XZ / YZ</span><span>{`${formatMeasurementMm(ab.xy)} / ${formatMeasurementMm(ab.xz)} / ${formatMeasurementMm(ab.yz)}`}</span></div>
+                    )}
+                </>
+            )}
+            {bc && (
+                <div style={metricStyle}><span>{`${planeLabel} B to C`}</span><span>{`${formatMeasurementMm(distanceForPlane(bc, planeMode))} mm`}</span></div>
+            )}
+            {angle !== null && (
+                <div style={metricStyle}><span>{`${planeLabel} angle at B`}</span><span>{`${angle.toFixed(1)}°`}</span></div>
+            )}
+            <div style={{ marginTop: 6, display: 'grid', gap: 4 }}>
+                {measurement.points.map((point, pointIndex) => (
+                    <div
+                        key={pointIndex}
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '14px 1fr 1fr 1fr',
+                            alignItems: 'center',
+                            gap: 4,
+                        }}
+                    >
+                        <span style={{ color: '#9bd0ff', fontWeight: 600 }}>{pointLabels[pointIndex]}</span>
+                        <CoordinateInput
+                            label="x"
+                            value={point.x}
+                            onChange={(value) => onPointChange(pointIndex, { ...point, x: value })}
+                        />
+                        <CoordinateInput
+                            label="y"
+                            value={point.y}
+                            onChange={(value) => onPointChange(pointIndex, { ...point, y: value })}
+                        />
+                        <CoordinateInput
+                            label="z"
+                            value={point.z}
+                            onChange={(value) => onPointChange(pointIndex, { ...point, z: value })}
+                        />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const MeasurementControls: React.FC<{
+    active: boolean;
+    drawMode: MeasurementDrawMode;
+    planeMode: MeasurementPlaneMode;
+    showProjected: boolean;
+    onDrawModeChange: (mode: MeasurementDrawMode) => void;
+    onPlaneModeChange: (mode: MeasurementPlaneMode) => void;
+    onShowProjectedChange: (enabled: boolean) => void;
+}> = ({ active, drawMode, planeMode, showProjected, onDrawModeChange, onPlaneModeChange, onShowProjectedChange }) => {
+    if (!active) return null;
+
+    const buttonStyle = (selected: boolean): React.CSSProperties => ({
+        flex: 1,
+        minWidth: 0,
+        padding: '3px 4px',
+        background: selected ? 'rgba(0, 127, 255, 0.25)' : 'rgba(20, 20, 20, 0.75)',
+        border: `1px solid ${selected ? 'rgba(0, 127, 255, 0.7)' : '#444'}`,
+        borderRadius: 4,
+        color: selected ? '#d7ecff' : '#aaa',
+        cursor: 'pointer',
+        fontSize: 10,
+        fontFamily: 'var(--ui-font)',
+    });
+
+    return (
+        <div style={{ margin: '4px 0 8px', display: 'grid', gap: 4, fontSize: 10 }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+                <button type="button" onClick={() => onDrawModeChange('line')} style={buttonStyle(drawMode === 'line')}>Line</button>
+                <button type="button" onClick={() => onDrawModeChange('angle')} style={buttonStyle(drawMode === 'angle')}>Angle</button>
+                <button type="button" onClick={() => onShowProjectedChange(!showProjected)} style={buttonStyle(showProjected)}>Proj</button>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+                {(['free', 'xy', 'xz', 'yz'] as MeasurementPlaneMode[]).map(mode => (
+                    <button key={mode} type="button" onClick={() => onPlaneModeChange(mode)} style={buttonStyle(planeMode === mode)}>
+                        {planeModeLabel(mode)}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 function opacityToPercent(value: number): number {
     return Math.round(clampValue(value, 0, 1) * 100);
@@ -185,7 +455,7 @@ const CardViewerWithPin: React.FC<{
 const SolverPanel: React.FC<{
     rayConfig: any;
     setrayConfig: (v: any) => void;
-    setVisualizationMode: (mode: 'rods' | 'wave') => void;
+    setVisualizationMode: (mode: RayConfig['viewerMode']) => void;
     isRendering: boolean;
     setImageFormationTrigger: (fn: (prev: number) => number) => void;
     animator: PropertyAnimator;
@@ -197,12 +467,30 @@ const SolverPanel: React.FC<{
     const isVisible = !isMobile || mobileOpen;
     const hasChannels = animator.channels.length > 0;
     const [components] = useAtom(componentsAtom);
+    const [, setSelection] = useAtom(selectionAtom);
+    const [, setUiLocked] = useAtom(uiLockedAtom);
+    const [measurement, setMeasurement] = useAtom(measurementAtom);
+    const measurements = Array.isArray(measurement.measurements) ? measurement.measurements : [];
+    const measurementDrawMode = measurement.drawMode ?? 'line';
+    const measurementPlaneMode = measurement.planeMode ?? 'free';
+    const measurementShowProjected = measurement.showProjected ?? true;
+    const selectedMeasurementIndex = measurement.selectedId
+        ? measurements.findIndex(current => current.id === measurement.selectedId)
+        : -1;
+    const selectedMeasurement = selectedMeasurementIndex >= 0 ? measurements[selectedMeasurementIndex] : null;
+    const [scanConfig, setScanConfig] = useAtom(scanAccumTriggerAtom);
     const [scanProgress] = useAtom(scanAccumProgressAtom);
     const [solverDiag] = useAtom(solverDiagnosticsAtom);
     const [drawnRayCounts] = useAtom(drawnRayCountsAtom);
+    const hasCamera = components.some(component => component instanceof Camera);
+    const [timelineSteps, setTimelineSteps] = React.useState(String(scanConfig.steps));
     const opacityTrackRef = React.useRef<HTMLDivElement | null>(null);
     const [activeOpacityHandle, setActiveOpacityHandle] = React.useState<'min' | 'max' | null>(null);
     // newVisualStyleAtom removed — new style is always on
+
+    React.useEffect(() => {
+        setTimelineSteps(String(scanConfig.steps));
+    }, [scanConfig.steps]);
 
     React.useEffect(() => {
         if (!activeOpacityHandle) return;
@@ -338,6 +626,64 @@ const SolverPanel: React.FC<{
                     <span style={{ fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>
                         Ray Display
                     </span>
+                    <button
+                        type="button"
+                        onClick={() => setMeasurement(state => ({
+                            ...state,
+                            active: !state.active,
+                            selectedId: state.active ? null : state.selectedId,
+                            measurements: Array.isArray(state.measurements) ? state.measurements : [],
+                        }))}
+                        title={measurement.active ? 'Stop measuring' : 'Start a new measurement'}
+                        style={{
+                            width: '22px',
+                            height: '22px',
+                            background: measurement.active ? '#062545' : '#222',
+                            border: `1px solid ${measurement.active ? '#007fff' : '#555'}`,
+                            borderRadius: '4px',
+                            color: measurement.active ? '#74b9ff' : '#aaa',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            marginRight: 6,
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <Ruler size={13} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSelection([]);
+                            setMeasurement(state => ({
+                                ...state,
+                                active: false,
+                                selectedId: null,
+                                measurements: Array.isArray(state.measurements) ? state.measurements : [],
+                            }));
+                            setUiLocked(true);
+                        }}
+                        title="Lock editing UI"
+                        style={{
+                            width: '22px',
+                            height: '22px',
+                            background: '#222',
+                            border: '1px solid #555',
+                            borderRadius: '4px',
+                            color: '#aaa',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            marginRight: hasChannels ? 6 : 0,
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <Lock size={13} />
+                    </button>
                     {hasChannels && (
                         <button
                             onClick={() => {
@@ -368,6 +714,49 @@ const SolverPanel: React.FC<{
                         </button>
                     )}
                 </div>
+
+                    <MeasurementControls
+                        active={measurement.active || Boolean(selectedMeasurement)}
+                        drawMode={measurementDrawMode}
+                        planeMode={measurementPlaneMode}
+                        showProjected={measurementShowProjected}
+                        onDrawModeChange={(drawMode: MeasurementDrawMode) => setMeasurement(state => ({ ...state, drawMode }))}
+                        onPlaneModeChange={(planeMode: MeasurementPlaneMode) => setMeasurement(state => ({ ...state, planeMode }))}
+                        onShowProjectedChange={(showProjected: boolean) => setMeasurement(state => ({ ...state, showProjected }))}
+                    />
+
+                    {selectedMeasurement && (
+                        <MeasurementReadout
+                            measurement={selectedMeasurement}
+                            index={selectedMeasurementIndex}
+                            planeMode={measurementPlaneMode}
+                            showProjected={measurementShowProjected}
+                            onDelete={() => setMeasurement(state => ({
+                                ...state,
+                                active: state.active,
+                                ...(() => {
+                                    const measurements = Array.isArray(state.measurements) ? state.measurements : [];
+                                    const selectedIndex = measurements.findIndex(current => current.id === selectedMeasurement.id);
+                                    const nextMeasurements = measurements.filter(current => current.id !== selectedMeasurement.id);
+                                    const nextSelected = nextMeasurements[Math.min(Math.max(selectedIndex, 0), nextMeasurements.length - 1)]?.id ?? null;
+                                    return { selectedId: nextSelected, measurements: nextMeasurements };
+                                })(),
+                            }))}
+                            onPointChange={(pointIndex, point) => setMeasurement(state => ({
+                                ...state,
+                                active: state.active,
+                                selectedId: selectedMeasurement.id,
+                                measurements: Array.isArray(state.measurements)
+                                    ? state.measurements.map(current => current.id === selectedMeasurement.id
+                                        ? {
+                                            ...current,
+                                            points: current.points.map((existing, index) => index === pointIndex ? point : existing),
+                                        }
+                                        : current)
+                                    : [],
+                            }))}
+                        />
+                    )}
 
                     <div style={{ marginTop: 4 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -437,17 +826,19 @@ const SolverPanel: React.FC<{
                         was redundant.  reversePathCount is locked to 1 in
                         DEFAULT_RAY_CONFIG. */}
 
-                    <div style={{ display: 'flex', gap: '6px', marginTop: 8 }}>
-                        {(['rods', 'wave'] as const).map(mode => {
+                    <div style={{ display: 'flex', gap: '6px', marginTop: 8, flexWrap: 'wrap' }}>
+                        {(['rods', 'wave', 'planes'] as const).map(mode => {
                             const active = rayConfig.viewerMode === mode;
-                            const label = mode === 'rods' ? 'Ray View' : 'Wave View';
+                            const label = mode === 'rods' ? 'Ray View' : mode === 'wave' ? 'Wave View' : 'Optical Plane View';
                             return (
                                 <button
                                     key={mode}
                                     onClick={() => setVisualizationMode(mode)}
                                     title={mode === 'rods'
                                         ? 'Draw individual traced rays'
-                                        : 'Draw grouped bundles with a representative wave'}
+                                        : mode === 'wave'
+                                            ? 'Draw grouped bundles with a representative wave'
+                                            : 'Draw local sensor, focal, pupil, and stop plane landmarks'}
                                     style={{
                                         padding: '2px 8px',
                                         background: active ? '#24415c' : '#1a1a1a',
@@ -590,6 +981,66 @@ const SolverPanel: React.FC<{
                             </div>
                         )}
                     </div>
+
+                    {hasChannels && hasCamera && (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 54px 64px',
+                            gap: '6px',
+                            alignItems: 'center',
+                            marginTop: 8,
+                        }}>
+                            <span style={{ fontSize: '10px', color: '#888' }}>Timeline</span>
+                            <input
+                                type="number"
+                                min={2}
+                                max={128}
+                                step={1}
+                                value={timelineSteps}
+                                onChange={e => setTimelineSteps(e.target.value)}
+                                onBlur={() => {
+                                    const steps = clampValue(parseInt(timelineSteps, 10) || scanConfig.steps, 2, 128);
+                                    setTimelineSteps(String(steps));
+                                    setScanConfig(config => ({ steps, trigger: config.trigger }));
+                                }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                }}
+                                style={{
+                                    width: '54px',
+                                    background: '#111',
+                                    color: '#ddd',
+                                    border: '1px solid #444',
+                                    borderRadius: '3px',
+                                    padding: '1px 4px',
+                                    fontSize: '10px',
+                                }}
+                                title="Timeline frames"
+                            />
+                            <button
+                                type="button"
+                                disabled={isRendering}
+                                onClick={() => {
+                                    const steps = clampValue(parseInt(timelineSteps, 10) || scanConfig.steps, 2, 128);
+                                    setTimelineSteps(String(steps));
+                                    setScanConfig(config => ({ steps, trigger: config.trigger + 1 }));
+                                }}
+                                style={{
+                                    padding: '3px 7px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #3a6a8a',
+                                    background: isRendering ? '#222' : '#1a2a3a',
+                                    color: isRendering ? '#666' : '#74b9ff',
+                                    cursor: isRendering ? 'default' : 'pointer',
+                                    fontSize: '10px',
+                                    fontWeight: 600,
+                                }}
+                                title="Render animation timeline"
+                            >
+                                Render
+                            </button>
+                        </div>
+                    )}
 
             </div>
         </>
@@ -1505,7 +1956,6 @@ export const Inspector: React.FC = () => {
         return (
             <>
                 {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
-                <ZLevelBar />
                 <RodPropertiesPanel
                     rod={rod}
                     path={path}
@@ -1527,7 +1977,6 @@ export const Inspector: React.FC = () => {
         return (
             <>
                 <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />
-                <ZLevelBar />
             </>
         );
     }
@@ -1766,8 +2215,6 @@ export const Inspector: React.FC = () => {
     return (
         <>
         {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
-        <ZLevelBar />
-
         {isMobile && (
             <button
                 onClick={() => setMobilePropsOpen(!mobilePropsOpen)}
@@ -4227,44 +4674,68 @@ export const Inspector: React.FC = () => {
 
                 {isQPD && (() => {
                     const qpd = selectedComponent as QPD;
+                    const qpdPanelStyle: React.CSSProperties = isMobile
+                        ? {
+                            gridColumn: '1 / -1',
+                            marginTop: 0,
+                            borderTop: '1px solid #444',
+                            paddingTop: 10,
+                        }
+                        : { marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 };
+                    const qpdContentStyle: React.CSSProperties | undefined = isMobile
+                        ? {
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                            gap: '10px 14px',
+                            alignItems: 'start',
+                        }
+                        : undefined;
                     return (
-                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>QPD Settings</label>
-                            <ScrubInput
-                                label="Active Diameter"
-                                suffix="mm"
-                                value={localQPDDiameter}
-                                onChange={setLocalQPDDiameter}
-                                onCommit={() => commitQPDParams()}
-                                speed={0.5}
-                                min={0.5}
-                                max={25}
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 4 }}>
-                                <span style={{ fontSize: '11px', color: '#aaa' }}>QPD Readout</span>
-                                <button
-                                    onClick={() => {
-                                        const next = new Set(pinnedIds);
-                                        if (pinnedIds.has(qpd.id)) next.delete(qpd.id);
-                                        else next.add(qpd.id);
-                                        setPinnedIds(next);
-                                    }}
-                                    title={pinnedIds.has(qpd.id) ? 'Unpin viewer' : 'Pin viewer'}
-                                    style={{
-                                        background: pinnedIds.has(qpd.id) ? '#333' : 'none',
-                                        border: pinnedIds.has(qpd.id) ? '1px solid #555' : '1px solid #444',
-                                        borderRadius: '3px',
-                                        color: pinnedIds.has(qpd.id) ? '#fff' : '#888',
-                                        cursor: 'pointer',
-                                        fontSize: '11px',
-                                        padding: '1px 5px',
-                                        lineHeight: 1.2,
-                                    }}
-                                >
-                                    📌
-                                </button>
+                        <div style={qpdPanelStyle}>
+                            <div style={qpdContentStyle}>
+                                <div style={{ minWidth: 0 }}>
+                                    <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>QPD Settings</label>
+                                    <ScrubInput
+                                        label="Active Diameter"
+                                        suffix="mm"
+                                        value={localQPDDiameter}
+                                        onChange={setLocalQPDDiameter}
+                                        onCommit={() => commitQPDParams()}
+                                        speed={0.5}
+                                        min={0.5}
+                                        max={25}
+                                    />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: isMobile ? 0 : 10, marginBottom: 4 }}>
+                                        <span style={{ fontSize: '11px', color: '#aaa' }}>QPD Readout</span>
+                                        {!isMobile && (
+                                            <button
+                                                onClick={() => {
+                                                    const next = new Set(pinnedIds);
+                                                    if (pinnedIds.has(qpd.id)) next.delete(qpd.id);
+                                                    else next.add(qpd.id);
+                                                    setPinnedIds(next);
+                                                }}
+                                                title={pinnedIds.has(qpd.id) ? 'Unpin viewer' : 'Pin viewer'}
+                                                style={{
+                                                    background: pinnedIds.has(qpd.id) ? '#333' : 'none',
+                                                    border: pinnedIds.has(qpd.id) ? '1px solid #555' : '1px solid #444',
+                                                    borderRadius: '3px',
+                                                    color: pinnedIds.has(qpd.id) ? '#fff' : '#888',
+                                                    cursor: 'pointer',
+                                                    fontSize: '11px',
+                                                    padding: '1px 5px',
+                                                    lineHeight: 1.2,
+                                                }}
+                                            >
+                                                📌
+                                            </button>
+                                        )}
+                                    </div>
+                                    <QPDViewer qpd={qpd} compact={isMobile} />
+                                </div>
                             </div>
-                            <QPDViewer qpd={qpd} />
                         </div>
                     );
                 })()}
@@ -5778,7 +6249,7 @@ export const Inspector: React.FC = () => {
                                 value={localCameraResX}
                                 onChange={setLocalCameraResX}
                                 onCommit={(v: string) => {
-                                    const val = Math.max(1, Math.round(parseFloat(v)));
+                                    const val = Math.min(2048, Math.max(1, Math.round(parseFloat(v))));
                                     if (!Number.isFinite(val)) return;
                                     updateSelectedCamera(camera => { camera.sensorResX = val; });
                                 }}
@@ -5792,7 +6263,7 @@ export const Inspector: React.FC = () => {
                                 value={localCameraResY}
                                 onChange={setLocalCameraResY}
                                 onCommit={(v: string) => {
-                                    const val = Math.max(1, Math.round(parseFloat(v)));
+                                    const val = Math.min(2048, Math.max(1, Math.round(parseFloat(v))));
                                     if (!Number.isFinite(val)) return;
                                     updateSelectedCamera(camera => { camera.sensorResY = val; });
                                 }}

@@ -96,14 +96,14 @@ function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponen
 
 export function createTraceSceneSnapshot(scene: OpticalComponent[]): TraceSceneSnapshot {
     const components: KernelTraceComponent[] = [];
-    let sampleSnapshot: KernelSampleComponent | undefined;
+    const samples: KernelSampleComponent[] = [];
 
     for (const component of scene) {
         const base = baseComponentSnapshot(component);
         components.push(base);
 
         if (component instanceof Sample) {
-            sampleSnapshot = {
+            const sampleSnapshot: KernelSampleComponent = {
                 ...base,
                 kind: 'sample',
                 fluorescenceEfficiency: component.fluorescenceEfficiency,
@@ -116,10 +116,11 @@ export function createTraceSceneSnapshot(scene: OpticalComponent[]): TraceSceneS
                 getVolumeIntersection: (worldRay) => component.getVolumeIntersection(worldRay),
                 getInteractionIntersection: (worldRay) => component.getInteractionIntersection(worldRay),
             };
+            samples.push(sampleSnapshot);
         }
     }
 
-    return { components, sample: sampleSnapshot };
+    return { components, samples, sample: samples[0] };
 }
 
 export function createBeamFieldSnapshot(beamSegments: GaussianBeamSegment[][]): BeamFieldSnapshot {

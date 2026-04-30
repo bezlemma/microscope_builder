@@ -71,11 +71,12 @@ import { ControlsHelp } from './ui/ControlsHelp'
 import { ZLevelBar } from './ui/ZLevelBar'
 import { RailPlacementOverlay } from './ui/RailPlacementOverlay'
 import { AltSnapIndicator } from './ui/AltSnapIndicator'
-import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom } from './state/store';
+import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom, uiLockedAtom } from './state/store';
 import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
 import { PresetTooltip } from './ui/PresetTooltip';
 import { TutorialDomOverlay } from './ui/TutorialDomOverlay';
+import { MeasureOverlay } from './ui/MeasureOverlay';
 
 // ── Canvas Error Boundary ──────────────────────────────────
 class CanvasErrorBoundary extends React.Component<
@@ -154,10 +155,42 @@ function presetFromHash(): PresetName | undefined {
   return matchPresetSlug(decodeURIComponent(rawHash));
 }
 
+const LockOverlay: React.FC = () => {
+  const [, setUiLocked] = useAtom(uiLockedAtom);
+  return (
+    <button
+      type="button"
+      onClick={() => setUiLocked(false)}
+      title="Unlock editing UI"
+      style={{
+        position: 'fixed',
+        top: 20,
+        right: 20,
+        zIndex: 30,
+        width: 42,
+        height: 42,
+        borderRadius: 8,
+        border: '1px solid #666',
+        background: 'rgba(20, 20, 20, 0.95)',
+        color: '#64ffda',
+        cursor: 'pointer',
+        fontSize: 18,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
+      }}
+    >
+      🔓
+    </button>
+  );
+};
+
 function App() {
   const [, loadPreset] = useAtom(loadPresetAtom);
   const [, loadScene] = useAtom(loadSceneAtom);
   const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
+  const [uiLocked] = useAtom(uiLockedAtom);
 
   // iOS Safari reports `100vh` as the full screen height, not the visible
   // viewport after the URL / toolbar chrome is applied. R3F uses the measured
@@ -233,18 +266,18 @@ function App() {
 
     return (
       <div style={{ width: '100vw', height: 'var(--app-height, 100dvh)', display: 'flex' }}>
-        <Sidebar />
+        {!uiLocked && <Sidebar />}
         <div style={{ 
           flex: 1, 
           position: 'relative', 
           background: 'radial-gradient(circle at center, #0a0e17 0%, #000000 100%)' 
         }}>
   
-          <PresetTooltip />
-          <TutorialDomOverlay />
+          {!uiLocked && <PresetTooltip />}
+          {!uiLocked && <TutorialDomOverlay />}
 
           {/* Advanced mobile toolbar layered on top */}
-          <MobileActionBar />
+          {!uiLocked && <MobileActionBar />}
   
           <CanvasErrorBoundary>
           {/* Top-Down Engineering View - Orthographic, Z-up per PhysicsPlan.md */}
@@ -264,14 +297,15 @@ function App() {
             </Environment>
 
             <EditorControls />
-            <GlobalRotation />
-            <DragDropHandler />
-            <RailPlacementOverlay />
+            {!uiLocked && <GlobalRotation />}
+            {!uiLocked && <DragDropHandler />}
+            {!uiLocked && <RailPlacementOverlay />}
+            {!uiLocked && <MeasureOverlay />}
             <AxesCameraPublisher />
 
             {/* Visuals */}
             <InfiniteTable />
-            <AltSnapIndicator />
+            {!uiLocked && <AltSnapIndicator />}
             <OpticalTable />
 
             <EffectComposer>
@@ -280,11 +314,12 @@ function App() {
           </Canvas>
         </CanvasErrorBoundary>
 
-        <AxesWidget />
-        <Inspector />
+        {!uiLocked && <AxesWidget />}
+        {!uiLocked && <Inspector />}
+        {uiLocked && <LockOverlay />}
         <ViewerPanels />
-        <ZLevelBar />
-        <ControlsHelp />
+        {!uiLocked && <ZLevelBar />}
+        {!uiLocked && <ControlsHelp />}
       </div>
     </div>
   )

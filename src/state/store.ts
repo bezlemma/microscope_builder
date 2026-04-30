@@ -32,7 +32,7 @@ export interface RayConfig {
     reversePathCount: number; // Backward paths retained for rod/wave visualization
     showFootprint: boolean;
     solver2Enabled: boolean; // Beamlet/bundle data toggle
-    viewerMode: 'rods' | 'wave';
+    viewerMode: 'rods' | 'wave' | 'planes';
     minRayOpacity: number; // Minimum opacity for the dimmest visible rays (0..1)
     maxRayOpacity: number; // Maximum opacity for the brightest rays (0..1)
 }
@@ -161,6 +161,7 @@ export const loadPresetAtom = atom(
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(undoStackAtom, []); // Clear undo history on preset load
         set(activeZLevelAtom, 0); // Reset Z-level
+        set(measurementAtom, { active: false, selectedId: null, measurements: [] });
 
         const factory = presetFactories.get(presetName);
         if (!factory) return;
@@ -277,7 +278,7 @@ export const setVisualizationModeAtom = atom(
         const current = get(rayConfigAtom);
         set(rayConfigAtom, {
             ...current,
-            solver2Enabled: mode === 'wave' ? true : current.solver2Enabled,
+            solver2Enabled: mode === 'wave' ? true : (mode === 'planes' ? false : current.solver2Enabled),
             viewerMode: mode,
         });
     }
@@ -332,6 +333,7 @@ export const startTutorialStage2Atom = atom(
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(undoStackAtom, []);
         set(activeZLevelAtom, 0);
+        set(measurementAtom, { active: false, selectedId: null, measurements: [] });
 
         const animator = get(animatorAtom);
         animator.clearAll();
@@ -369,6 +371,8 @@ export const loadSceneAtom = atom(
         set(solver3RenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(activeZLevelAtom, 0);
+        set(measurementAtom, { active: false, selectedId: null, measurements: [] });
+        set(resetViewSignalAtom, signal => signal + 1);
         // The scene is now whatever the user just loaded — no preset matches it,
         // and any pasted Share-link hash that brought us here is now consumed.
         // Wipe the address bar so the user isn't stuck looking at the old URL.
@@ -466,6 +470,38 @@ export const scanAccumProgressAtom = atom<number>(0);  // 0..1 progress
 // ════════════════════════════════════════════════════════════
 export const activeZLevelAtom = atom<number>(0);
 
+// Presentation/edit lock: hide editing UI and disable component mutation while
+// leaving camera navigation active.
+export const uiLockedAtom = atom<boolean>(false);
+
+export type MeasurementPoint = { x: number; y: number; z: number };
+export type MeasurementDrawMode = 'line' | 'angle';
+export type MeasurementPlaneMode = 'free' | 'xy' | 'xz' | 'yz';
+export interface Measurement {
+    id: string;
+    points: MeasurementPoint[];
+}
+export interface MeasurementZoomTarget {
+    id: string;
+    points: MeasurementPoint[];
+}
+export interface MeasurementState {
+    active: boolean;
+    selectedId: string | null;
+    measurements: Measurement[];
+    drawMode?: MeasurementDrawMode;
+    planeMode?: MeasurementPlaneMode;
+    showProjected?: boolean;
+}
+export const measurementAtom = atom<MeasurementState>({
+    active: false,
+    selectedId: null,
+    measurements: [],
+    drawMode: 'line',
+    planeMode: 'free',
+    showProjected: true,
+});
+
 // ════════════════════════════════════════════════════════════
 //  14. VIEW CONTROL SIGNALS
 // ════════════════════════════════════════════════════════════
@@ -473,6 +509,8 @@ export const activeZLevelAtom = atom<number>(0);
 export const resetViewSignalAtom = atom<number>(0);
 /** Set to a component ID to trigger zoom-to-component. Null clears. */
 export const zoomToComponentAtom = atom<string | null>(null);
+/** Set to measurement points to center the camera on that measurement. Null clears. */
+export const zoomToMeasurementAtom = atom<MeasurementZoomTarget | null>(null);
 
 // ════════════════════════════════════════════════════════════
 //  15. CAMERA MODE — Ortho / Perspective switching

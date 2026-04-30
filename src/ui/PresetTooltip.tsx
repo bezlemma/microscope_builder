@@ -66,10 +66,12 @@ export const PresetTooltip: React.FC = () => {
         <div
             style={{
                 position: 'absolute',
-                top: isMobile ? 58 : 12,
-                left: isMobile ? 58 : 12,
+                top: isMobile ? undefined : 12,
+                bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 12px)' : undefined,
+                left: isMobile ? undefined : 12,
+                right: isMobile ? 12 : undefined,
                 zIndex: 12,
-                maxWidth: isMobile ? 'calc(100vw - 80px)' : 330,
+                maxWidth: isMobile ? 'min(360px, calc(100vw - 24px))' : 330,
                 padding: '10px 10px 10px 12px',
                 border: '1px solid rgba(100, 255, 218, 0.28)',
                 borderRadius: 6,

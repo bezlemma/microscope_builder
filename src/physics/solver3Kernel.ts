@@ -1,5 +1,5 @@
 import { Matrix4, Vector3 } from 'three';
-import { BeamFieldSnapshot, CameraKernelSnapshot, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
+import { BeamFieldSnapshot, CameraKernelSnapshot, KernelSampleComponent, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
 import { HitRecord, Ray, Coherence, childRay } from './types';
 import { Solver2 } from './Solver2';
 import { type FirstHitHintCandidate, type PackedFirstHitHints, unpackFirstHitHintCandidates } from './solver3FirstHitHints';
@@ -117,12 +117,14 @@ export class Solver3Kernel {
     private maxDepth: number = 20;
     private accelerator: TraceSceneAccelerator;
     private packedInteractor?: PackedInteractionBackend;
+    private samplesById: Map<string, KernelSampleComponent>;
 
     constructor(traceScene: TraceSceneSnapshot, beamField: BeamFieldSnapshot, packedInteractor?: PackedInteractionBackend) {
         this.traceScene = traceScene;
         this.beamField = beamField;
         this.accelerator = new TraceSceneAccelerator(traceScene.components);
         this.packedInteractor = packedInteractor;
+        this.samplesById = new Map((traceScene.samples ?? []).map(sample => [sample.id, sample]));
     }
 
     render(camera: CameraKernelSnapshot, maxVisPaths: number = 32): Solver3Result {
@@ -278,13 +280,12 @@ export class Solver3Kernel {
 
     renderPMTPixel(pmt: PMTKernelSnapshot): PMTPixelResult {
         this.packedInteractor?.prepareScene();
-        const sample = this.traceScene.sample;
         const activeWavelengths = new Set<number>();
-        const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
-            ? sample.getEmissionWavelength() * 1e-9
-            : null;
-        if (sampleEmissionWl) {
-            activeWavelengths.add(sampleEmissionWl);
+        const fluorescentSamples = (this.traceScene.samples ?? []).filter(sample => sample.fluorescenceEfficiency > 0);
+        if (fluorescentSamples.length > 0) {
+            for (const sample of fluorescentSamples) {
+                activeWavelengths.add(sample.getEmissionWavelength() * 1e-9);
+            }
         } else {
             const hasLamp = this.traceScene.components.some(component => component.kind === 'lamp');
             if (hasLamp) activeWavelengths.add(550e-9);
@@ -380,6 +381,11 @@ export class Solver3Kernel {
         };
     }
 
+    private sampleForComponent(component: TraceSceneSnapshot['components'][number]): KernelSampleComponent | undefined {
+        if (component.kind !== 'sample') return undefined;
+        return this.samplesById.get(component.id) ?? this.traceScene.sample;
+    }
+
     traceBackward(
         startRay: Ray,
         originatorId?: string,
@@ -393,7 +399,7 @@ export class Solver3Kernel {
         let fluorescenceRadiance = 0;
         let excitationAtSample = 0;
         let absorbed = false;
-        const sample = this.traceScene.sample;
+        const primarySample = this.traceScene.sample;
 
         for (let depth = 0; depth < this.maxDepth; depth++) {
             let nearestT = Infinity;
@@ -493,12 +499,13 @@ export class Solver3Kernel {
                 return {
                     radiance: backgroundIntensity * throughput + fluorescenceRadiance,
                     excitation: excitationAtSample,
-                    path: visualPathAtSample ?? (sample ? truncatePathAtSample(path, sample.position) : path),
+                    path: visualPathAtSample ?? (primarySample ? truncatePathAtSample(path, primarySample.position) : path),
                     absorbed: false,
                 };
             }
 
-            if (nearestComponent.kind === 'sample' && sample) {
+            const sample = this.sampleForComponent(nearestComponent);
+            if (sample) {
                 const chordSegments = sample.computeChordSegments(currentRay);
                 let chordLength = 0;
                 let weightedT = 0;
@@ -639,17 +646,17 @@ export class Solver3Kernel {
         // Reverse-ray visualization preference: the drawn path should end at
         // the sample, never continue past it through the condenser / aperture
         // / laser on the far side. See `truncatePathAtSample` for details.
-        const visualPath = visualPathAtSample ?? (sample ? truncatePathAtSample(path, sample.position) : path);
+        const visualPath = visualPathAtSample ?? (primarySample ? truncatePathAtSample(path, primarySample.position) : path);
         return { radiance: fluorescenceRadiance, excitation: excitationAtSample, path: visualPath, absorbed };
     }
 
     private getActiveWavelengths(): number[] {
         const activeWavelengths = new Set<number>();
-        const sample = this.traceScene.sample;
-        const sampleEmissionWl = (sample && sample.fluorescenceEfficiency > 0)
-            ? sample.getEmissionWavelength() * 1e-9
-            : null;
-        if (sampleEmissionWl) activeWavelengths.add(sampleEmissionWl);
+        for (const sample of this.traceScene.samples ?? []) {
+            if (sample.fluorescenceEfficiency > 0) {
+                activeWavelengths.add(sample.getEmissionWavelength() * 1e-9);
+            }
+        }
         for (const branch of this.beamField.branches) {
             if (branch.length > 0) activeWavelengths.add(branch[0].wavelength);
         }

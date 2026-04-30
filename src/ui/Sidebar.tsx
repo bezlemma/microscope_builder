@@ -10,10 +10,11 @@ import {
     ArrowRight,
     Redo2,
     X,
+    Ruler,
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom } from '../state/store';
+import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom } from '../state/store';
 import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
@@ -304,13 +305,16 @@ export const Sidebar: React.FC = () => {
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [components] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
-    const [_selection, _setSelection] = useAtom(selectionAtom);
-    const [, _zoomTo] = useAtom(zoomToComponentAtom);
-    const [openGroup, setOpenGroup] = useState<string | null>('Lenses');
+    const [selection, setSelection] = useAtom(selectionAtom);
+    const [, setZoomTo] = useAtom(zoomToComponentAtom);
+    const [measurement, setMeasurement] = useAtom(measurementAtom);
+    const [, setZoomToMeasurement] = useAtom(zoomToMeasurementAtom);
+    const [openGroup, setOpenGroup] = useState<string | null>(null);
+    const [sceneOpen, setSceneOpen] = useState(false);
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
     const [shareLabel, setShareLabel] = useState('Share');
     const _isLandscape = useIsLandscape();
-    void _selection; void _setSelection; void _zoomTo; void _isLandscape;
+    void _isLandscape;
 
 
 
@@ -325,6 +329,37 @@ export const Sidebar: React.FC = () => {
     // Auto-close sidebar on mobile after selecting a preset
     const handlePresetClick = (preset: PresetName) => {
         loadPreset(preset);
+        if (isMobile) setMobileOpen(false);
+    };
+
+    const sceneComponents = components.filter(component => !component.isGhost && !component.isSubComponent);
+    const measurements = Array.isArray(measurement.measurements) ? measurement.measurements : [];
+    const sceneRowCount = sceneComponents.length + measurements.length;
+
+    const handleSceneComponentClick = (componentId: string) => {
+        setSelection([componentId]);
+        setMeasurement(state => ({
+            ...state,
+            active: false,
+            selectedId: null,
+            measurements: Array.isArray(state.measurements) ? state.measurements : [],
+        }));
+        setZoomTo(componentId);
+        if (isMobile) setMobileOpen(false);
+    };
+
+    const handleSceneMeasurementClick = (measurementId: string) => {
+        const selectedMeasurement = measurements.find(current => current.id === measurementId);
+        setSelection([]);
+        setMeasurement(state => ({
+            ...state,
+            active: false,
+            selectedId: measurementId,
+            measurements: Array.isArray(state.measurements) ? state.measurements : [],
+        }));
+        if (selectedMeasurement) {
+            setZoomToMeasurement({ id: selectedMeasurement.id, points: selectedMeasurement.points });
+        }
         if (isMobile) setMobileOpen(false);
     };
 
@@ -428,6 +463,7 @@ export const Sidebar: React.FC = () => {
             {/* Mobile toggle button (visible only when sidebar is collapsed) */}
             {isMobile && !mobileOpen && (
                 <button
+                    data-mobile-sidebar-toggle="true"
                     onClick={() => setMobileOpen(true)}
                     style={{
                         position: 'fixed',
@@ -576,6 +612,163 @@ export const Sidebar: React.FC = () => {
                             />
                         ))}
                     </div>
+
+                    <div style={{
+                        marginBottom: '16px',
+                        paddingTop: '10px',
+                        borderTop: '1px solid #333',
+                    }}>
+                        <div
+                            onClick={() => setSceneOpen(open => !open)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: isMobile ? '5px 6px' : '8px 10px',
+                                cursor: 'pointer',
+                                backgroundColor: sceneOpen ? '#2a2a2a' : 'transparent',
+                                borderRadius: '6px',
+                                transition: 'all 0.15s ease',
+                                userSelect: 'none',
+                            }}
+                            onMouseOver={(e) => {
+                                if (!sceneOpen) e.currentTarget.style.backgroundColor = '#222';
+                            }}
+                            onMouseOut={(e) => {
+                                if (!sceneOpen) e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                        >
+                            <ChevronRight
+                                size={isMobile ? 11 : 14}
+                                style={{
+                                    marginRight: isMobile ? '4px' : '6px',
+                                    color: '#888',
+                                    transition: 'transform 0.2s ease',
+                                    transform: sceneOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                                    flexShrink: 0,
+                                }}
+                            />
+                            <span style={{
+                                fontSize: isMobile ? '10px' : '12px',
+                                fontWeight: 600,
+                                color: sceneOpen ? '#fff' : '#aaa',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                transition: 'color 0.15s ease',
+                            }}>
+                                {`Scene (${sceneRowCount})`}
+                            </span>
+                        </div>
+
+                        <div style={{
+                            overflow: 'hidden',
+                            maxHeight: sceneOpen ? `${Math.max(1, sceneRowCount) * (isMobile ? 30 : 34)}px` : '0px',
+                            transition: 'max-height 0.25s ease',
+                            marginLeft: '4px',
+                            borderLeft: sceneOpen ? '2px solid rgba(0, 127, 255, 0.25)' : '2px solid transparent',
+                        }}>
+                            {sceneRowCount === 0 && (
+                                <div style={{
+                                    padding: isMobile ? '5px 6px 5px 16px' : '6px 12px 6px 24px',
+                                    color: '#666',
+                                    fontSize: isMobile ? '11px' : '12px',
+                                    fontStyle: 'italic',
+                                }}>
+                                    Empty scene
+                                </div>
+                            )}
+                            {sceneComponents.map(component => {
+                                const selected = selection.includes(component.id);
+                                return (
+                                    <button
+                                        key={component.id}
+                                        type="button"
+                                        onClick={() => handleSceneComponentClick(component.id)}
+                                        title="Select and center this component"
+                                        style={{
+                                            width: '100%',
+                                            display: 'block',
+                                            textAlign: 'left',
+                                            padding: isMobile ? '4px 6px 4px 16px' : '6px 12px 6px 24px',
+                                            margin: isMobile ? '1px 0' : '2px 0',
+                                            backgroundColor: selected ? 'rgba(0, 127, 255, 0.18)' : 'transparent',
+                                            border: `1px solid ${selected ? 'rgba(0, 127, 255, 0.55)' : 'transparent'}`,
+                                            borderRadius: '4px',
+                                            color: selected ? '#d7ecff' : '#ccc',
+                                            cursor: 'pointer',
+                                            fontSize: isMobile ? '11px' : '13px',
+                                            fontFamily: 'var(--ui-font)',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            transition: 'all 0.15s ease',
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!selected) {
+                                                e.currentTarget.style.backgroundColor = '#252525';
+                                                e.currentTarget.style.color = '#fff';
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!selected) {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                e.currentTarget.style.color = '#ccc';
+                                            }
+                                        }}
+                                    >
+                                        {component.name}
+                                    </button>
+                                );
+                            })}
+                            {measurements.map((current, index) => {
+                                const selected = measurement.selectedId === current.id;
+                                const pointCount = current.points.length;
+                                return (
+                                    <button
+                                        key={current.id}
+                                        type="button"
+                                        onClick={() => handleSceneMeasurementClick(current.id)}
+                                        title="Select and center this measurement"
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: isMobile ? 5 : 7,
+                                            textAlign: 'left',
+                                            padding: isMobile ? '4px 6px 4px 16px' : '6px 12px 6px 24px',
+                                            margin: isMobile ? '1px 0' : '2px 0',
+                                            backgroundColor: selected ? 'rgba(0, 127, 255, 0.18)' : 'transparent',
+                                            border: `1px solid ${selected ? 'rgba(0, 127, 255, 0.55)' : 'transparent'}`,
+                                            borderRadius: '4px',
+                                            color: selected ? '#d7ecff' : '#ccc',
+                                            cursor: 'pointer',
+                                            fontSize: isMobile ? '11px' : '13px',
+                                            fontFamily: 'var(--ui-font)',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            transition: 'all 0.15s ease',
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!selected) {
+                                                e.currentTarget.style.backgroundColor = '#252525';
+                                                e.currentTarget.style.color = '#fff';
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!selected) {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                e.currentTarget.style.color = '#ccc';
+                                            }
+                                        }}
+                                    >
+                                        <Ruler size={isMobile ? 11 : 13} style={{ color: '#007fff', flexShrink: 0 }} />
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{`M${index + 1}`}</span>
+                                        <span style={{ marginLeft: 'auto', color: selected ? '#8cc9ff' : '#666', fontSize: isMobile ? 10 : 11 }}>{pointCount}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Save / Load / Share buttons — hidden on mobile because file
@@ -584,8 +777,7 @@ export const Sidebar: React.FC = () => {
                  *  without crowding the components/presets the user actually
                  *  came here for.  Desktop users keep all three. */}
                 {!isMobile && (
-                <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
-                    <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Scene</h4>
+                <div style={{ order: 3, paddingTop: '15px', borderTop: '1px solid #333' }}>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
                         <button
                             onClick={() => downloadUbz(components)}
@@ -670,7 +862,7 @@ export const Sidebar: React.FC = () => {
 
 
                 {/* Presets Section — categorized dropdowns */}
-                <div style={{ paddingTop: '15px', borderTop: '1px solid #333' }}>
+                <div style={{ order: 2, paddingTop: '15px', borderTop: '1px solid #333' }}>
                     <h4 style={{ color: '#888', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Presets</h4>
 
                     <PresetCategory

@@ -4,8 +4,9 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera, PerspectiveCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, zoomToMeasurementAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom, uiLockedAtom } from '../state/store';
 import { TrappedBead } from '../physics/components/TrappedBead';
+import { setGizmoOrientCallback } from './AxesWidget';
 
 const PERSP_FOV = 50;
 const WASD_ACCEL = 0.4;
@@ -40,6 +41,7 @@ export const EditorControls: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection] = useAtom(selectionAtom);
     const activePreset = useAtomValue(activePresetAtom);
+    const uiLocked = useAtomValue(uiLockedAtom);
     const [, undo] = useAtom(undoAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [rayConfig] = useAtom(rayConfigAtom);
@@ -50,6 +52,7 @@ export const EditorControls: React.FC = () => {
     const lastBlendRef = useRef(0);
     const resetViewSignal = useAtomValue(resetViewSignalAtom);
     const [zoomToComponent, setZoomToComponent] = useAtom(zoomToComponentAtom);
+    const [zoomToMeasurement, setZoomToMeasurement] = useAtom(zoomToMeasurementAtom);
     const mobileCameraMode = useAtomValue(mobileCameraModeAtom);
     const isDragging = useAtomValue(isDraggingAtom);
 
@@ -157,6 +160,69 @@ export const EditorControls: React.FC = () => {
         setIsOrtho(true);
     }, [size, set, setIsOrtho]);
 
+    // ─── Bottom-right compass: axis click -> real scene camera orientation ───
+    useEffect(() => {
+        const alignToGizmoDirection = (rawDirection: Vector3) => {
+            const controls = controlsRef.current;
+            const ortho = orthoCamRef.current;
+            const persp = perspCamRef.current;
+            if (!controls || !ortho || !persp) return;
+
+            const target = controls.target.clone();
+            const currentCamera = controls.object;
+            const currentDistance = currentCamera.position.distanceTo(target);
+            const fallbackDistance = 600;
+            const distance = Number.isFinite(currentDistance) && currentDistance > 1
+                ? currentDistance
+                : fallbackDistance;
+
+            const direction = rawDirection.clone();
+            if (direction.lengthSq() < 1e-8) return;
+            direction.normalize();
+
+            // OrbitControls is intentionally constrained to stay above the
+            // table. Keep side views just inside that allowed half-space so
+            // controls.update() does not immediately clamp them somewhere else.
+            const minElevation = Math.sin(MIN_POLAR);
+            if (Math.hypot(direction.x, direction.y) < 1e-6) {
+                direction.set(0, -minElevation, Math.cos(MIN_POLAR));
+            } else {
+                direction.z = Math.max(direction.z, minElevation);
+                direction.normalize();
+            }
+
+            const topDown = direction.z > Math.cos(TRANSITION_POLAR);
+            if (topDown) {
+                if (!isOrtho.current) switchToOrtho();
+                const cam = orthoCamRef.current!;
+                cam.position.copy(target).addScaledVector(direction, distance);
+                cam.up.set(0, 0, 1);
+                cam.lookAt(target);
+                cam.updateProjectionMatrix();
+                controls.object = cam;
+                controls.update();
+                isOrtho.current = true;
+                setIsOrtho(true);
+                setCameraBlend(0);
+            } else {
+                if (isOrtho.current) switchToPerspective();
+                const cam = perspCamRef.current!;
+                cam.position.copy(target).addScaledVector(direction, distance);
+                cam.up.set(0, 0, 1);
+                cam.lookAt(target);
+                cam.updateProjectionMatrix();
+                controls.object = cam;
+                controls.update();
+                isOrtho.current = false;
+                setIsOrtho(false);
+                setCameraBlend(1);
+            }
+        };
+
+        setGizmoOrientCallback(alignToGizmoDirection);
+        return () => setGizmoOrientCallback(null);
+    }, [switchToOrtho, switchToPerspective, setCameraBlend, setIsOrtho]);
+
     // ─── Per-frame: detect tilt for ortho↔perspective switching + WASD ───
     useFrame(() => {
         const controls = controlsRef.current;
@@ -255,6 +321,7 @@ export const EditorControls: React.FC = () => {
             if (e.button === 0) leftMouseHeld.current = false;
         };
         const onWheel = (e: WheelEvent) => {
+            if (uiLocked) return;
             if (!leftMouseHeld.current || selection.length === 0 || isDragging || e.shiftKey) return;
             e.preventDefault();
             e.stopPropagation();
@@ -285,7 +352,7 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('mouseup', onMouseUp, true);
             window.removeEventListener('wheel', onWheel, true);
         };
-    }, [selection, components, setComponents, pushUndo, isDragging]);
+    }, [selection, components, setComponents, pushUndo, isDragging, uiLocked]);
 
     // ─── Keyboard shortcuts ───
     useEffect(() => {
@@ -295,11 +362,14 @@ export const EditorControls: React.FC = () => {
             const tag = (el as HTMLElement).tagName;
             return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
         };
+        const wasdKeys = ['w', 'W', 's', 'S', 'a', 'A', 'd', 'D', 'r', 'R', 'f', 'F', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        const navigationKeys = [...wasdKeys, '[', ']'];
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.ctrlKey || e.metaKey) setCtrlHeld(true);
             if (e.shiftKey) setShiftHeld(true);
             if (e.key === 'Escape') setSelection([]);
+            if (uiLocked && !navigationKeys.includes(e.key)) return;
 
             // Ctrl+Z: Undo
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -361,7 +431,6 @@ export const EditorControls: React.FC = () => {
             }
 
             // WASD / RF / Arrows: add to pressed set for continuous movement
-            const wasdKeys = ['w', 'W', 's', 'S', 'a', 'A', 'd', 'D', 'r', 'R', 'f', 'F', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             if (wasdKeys.includes(e.key)) {
                 if (isInputFocused()) return;
                 if (selection.length > 0) return;
@@ -420,7 +489,7 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('keyup', handleKeyUp);
             window.removeEventListener('blur', handleBlur);
         };
-    }, [setSelection, selection, components, setComponents, undo, pushUndo, rayConfig, setBundleDataEnabled, setSolver3Trigger]);
+    }, [setSelection, selection, components, setComponents, undo, pushUndo, rayConfig, setBundleDataEnabled, setSolver3Trigger, uiLocked]);
 
     // ─── Auto-zoom to fit when preset changes or resetViewSignal fires ───
     useEffect(() => {
@@ -517,6 +586,41 @@ export const EditorControls: React.FC = () => {
         controls.update();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [zoomToComponent]);
+
+    // ─── Zoom-to-measurement: center view on one measurement's points ───
+    useEffect(() => {
+        if (!zoomToMeasurement) return;
+        const controls = controlsRef.current;
+        const ortho = orthoCamRef.current;
+        setZoomToMeasurement(null); // clear signal
+        if (!controls || !ortho || zoomToMeasurement.points.length === 0) return;
+
+        if (!isOrtho.current) switchToOrtho();
+
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        for (const point of zoomToMeasurement.points) {
+            minX = Math.min(minX, point.x);
+            maxX = Math.max(maxX, point.x);
+            minY = Math.min(minY, point.y);
+            maxY = Math.max(maxY, point.y);
+        }
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const spanX = Math.max(maxX - minX, 20);
+        const spanY = Math.max(maxY - minY, 20);
+        const padding = 0.8;
+        const zoomX = size.width / (spanX * (1 + padding));
+        const zoomY = size.height / (spanY * (1 + padding));
+
+        ortho.position.set(centerX, centerY - 0.001, ortho.position.z);
+        controls.target.set(centerX, centerY, 0);
+        ortho.zoom = Math.max(0.2, Math.min(Math.min(zoomX, zoomY), 12));
+        ortho.updateProjectionMatrix();
+        controls.update();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [zoomToMeasurement]);
 
     return (
         <OrbitControls

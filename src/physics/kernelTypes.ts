@@ -56,6 +56,8 @@ export interface KernelSampleComponent extends KernelTraceComponent {
 
 export interface TraceSceneSnapshot {
     components: KernelTraceComponent[];
+    samples: KernelSampleComponent[];
+    /** First sample, kept for legacy single-sample callers and visual fallbacks. */
     sample?: KernelSampleComponent;
 }
 

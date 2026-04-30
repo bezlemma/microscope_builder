@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom, uiLockedAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
@@ -14,6 +14,8 @@ interface DraggableProps {
     children: React.ReactNode;
 }
 
+const MIN_INTERACTION_THICKNESS_MM = 5;
+
 export const Draggable: React.FC<DraggableProps> = ({ component, children }) => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
@@ -22,6 +24,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const [isDragging, setIsDragging] = useState(false);
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
     const [mobileSnap] = useAtom(mobileSnapEnabledAtom);
+    const [uiLocked] = useAtom(uiLockedAtom);
     const isMobile = useIsMobile();
     const haptic = useHaptic();
 
@@ -64,6 +67,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     };
 
     const handlePointerDown = (e: any) => {
+        if (uiLocked) return;
         e.stopPropagation();
 
         // Shift+Click: toggle this component in the multi-selection
@@ -108,6 +112,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     };
 
     const handlePointerUp = (e: any) => {
+        if (uiLocked) return;
         e.stopPropagation();
         try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
         setIsDragging(false);
@@ -118,6 +123,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     };
 
     const handlePointerMove = (e: any) => {
+        if (uiLocked) return;
         if (!isDragging) return;
         e.stopPropagation();
 
@@ -335,6 +341,30 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         return 22;
     }, [component.bounds]);
 
+    const interactionHitBox = useMemo(() => {
+        const b = component.bounds;
+        if (!b) return null;
+
+        const size = b.max.clone().sub(b.min);
+        const expandedSize = new Vector3(
+            Math.max(size.x, MIN_INTERACTION_THICKNESS_MM),
+            Math.max(size.y, MIN_INTERACTION_THICKNESS_MM),
+            Math.max(size.z, MIN_INTERACTION_THICKNESS_MM),
+        );
+
+        const needsExpansion =
+            expandedSize.x > size.x + 1e-6 ||
+            expandedSize.y > size.y + 1e-6 ||
+            expandedSize.z > size.z + 1e-6;
+
+        if (!needsExpansion) return null;
+
+        return {
+            center: b.min.clone().add(b.max).multiplyScalar(0.5),
+            size: expandedSize,
+        };
+    }, [component.bounds, component.version]);
+
     if (component.isGhost) {
         return <group>{children}</group>;
     }
@@ -346,6 +376,18 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             onPointerMove={handlePointerMove}
         >
             {children}
+
+            {interactionHitBox && (
+                <group
+                    position={[component.position.x, component.position.y, component.position.z]}
+                    quaternion={component.rotation.clone()}
+                >
+                    <mesh position={[interactionHitBox.center.x, interactionHitBox.center.y, interactionHitBox.center.z]}>
+                        <boxGeometry args={[interactionHitBox.size.x, interactionHitBox.size.y, interactionHitBox.size.z]} />
+                        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+                    </mesh>
+                </group>
+            )}
 
             {/* Mobile-only: invisible disc that catches taps near the
              *  component, so thin mirrors/blockers/lenses don't require

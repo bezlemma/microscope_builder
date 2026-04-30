@@ -3,6 +3,7 @@ import { Vector3 } from 'three';
 import { Annotation } from '../../physics/components/Annotation';
 import { Aperture } from '../../physics/components/Aperture';
 import { Card } from '../../physics/components/Card';
+import { Camera } from '../../physics/components/Camera';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { Lamp } from '../../physics/components/Lamp';
 import { Laser } from '../../physics/components/Laser';
@@ -44,6 +45,34 @@ describe('UBZ registered components', () => {
         expect(loaded.width).toBeCloseTo(12, 6);
         expect(loaded.height).toBeCloseTo(8, 6);
         expect(loaded.opaque).toBe(true);
+    });
+
+    test('clamps camera resolution loaded from text', () => {
+        const scene = deserializeScene(`
+[Camera]
+name = Oversized Camera
+sensorResX = 999999
+sensorResY = -5
+`);
+
+        expect(scene[0]).toBeInstanceOf(Camera);
+        const loaded = scene[0] as Camera;
+        expect(loaded.sensorResX).toBe(2048);
+        expect(loaded.sensorResY).toBe(1);
+    });
+
+    test('preserves sample spectral defaults when fields are absent', () => {
+        const scene = deserializeScene(`
+[Sample]
+name = Legacy Sample
+`);
+
+        expect(scene[0]).toBeInstanceOf(Sample);
+        const loaded = scene[0] as Sample;
+        expect(loaded.excitationSpectrum.preset).toBe('bandpass');
+        expect(loaded.excitationSpectrum.bands[0].center).toBe(488);
+        expect(loaded.emissionSpectrum.preset).toBe('bandpass');
+        expect(loaded.emissionSpectrum.bands[0].center).toBe(520);
     });
 
     test('round-trips point, cone, wedge, structured source, and annotation fields', () => {
