@@ -2318,6 +2318,10 @@ export const OpticalTable: React.FC = () => {
 
     }, [components, rayConfig, solver3Paths, rays, setCardImageTick]);
 
+    const opticalPlaneRayPaths = useMemo(() => (
+        solver3Paths.length > 0 ? [...rays, ...solver3Paths] : rays
+    ), [rays, solver3Paths]);
+
     return (
         <group>
             {/* Beams render at z=0 (default), components at z=2.
@@ -2344,7 +2348,7 @@ export const OpticalTable: React.FC = () => {
                 <BundleWaveVisualizer beamSegments={beamSegments} reversePaths={solver3Paths} />
             )}
             {rayConfig.viewerMode === 'planes' && (
-                <OpticalPlaneVisualizer components={components} />
+                <OpticalPlaneVisualizer components={components} rayPaths={opticalPlaneRayPaths} />
             )}
 
             {!uiLocked && <TutorialOverlay />}
@@ -2363,7 +2367,7 @@ export const OpticalTable: React.FC = () => {
                         const outlineColor = onActiveLevel ? '#000000' : '#888888';
 
                         return (
-                            <group key={c.id}>
+                            <group key={c.id} userData={{ svgExportGroup: c.id, svgExportName: c.name }}>
                                 <OutlineColorContext.Provider value={outlineColor}>
                                     <Draggable component={c}>
                                         {visual}

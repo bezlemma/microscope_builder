@@ -352,7 +352,11 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
                     <boxGeometry args={[frameT, outerH, glassT * 1.5]} />
                     <meshStandardMaterial color="#1b1b1b" roughness={0.6} metalness={0.2} />
                 </mesh>
-                <group position={[component.specimenOffset.x, component.specimenOffset.y, component.specimenOffset.z]} rotation={[component.specimenRotation.x, component.specimenRotation.y, component.specimenRotation.z]}>
+                <group
+                    position={[component.specimenOffset.x, component.specimenOffset.y, component.specimenOffset.z]}
+                    rotation={[component.specimenRotation.x, component.specimenRotation.y, component.specimenRotation.z]}
+                    userData={{ svgExport: 'skip' }}
+                >
                     {component.colloidSpheres.map((colloid, index) => {
                         const color = colloid.glowColor && colloid.glowColor !== '#007fff'
                             ? colloid.glowColor

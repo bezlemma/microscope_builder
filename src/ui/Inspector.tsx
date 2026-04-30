@@ -623,9 +623,7 @@ const SolverPanel: React.FC<{
                     )}
                 {/* Header row — title + play/pause inline */}
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>
-                        Ray Display
-                    </span>
+                    <span style={{ flex: 1 }} />
                     <button
                         type="button"
                         onClick={() => setMeasurement(state => ({

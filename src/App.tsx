@@ -41,7 +41,7 @@ const StarrySky: React.FC = () => {
         return out;
     }, []);
     return (
-        <>
+        <group userData={{ svgExport: 'skip' }}>
             {/* Inner black sphere = night-sky background. BackSide so we see
                 it from inside the cube-cam's capture point. */}
             <mesh scale={100}>
@@ -54,7 +54,7 @@ const StarrySky: React.FC = () => {
                     <meshBasicMaterial color={s.color} />
                 </mesh>
             ))}
-        </>
+        </group>
     );
 };
 import { useAtom } from 'jotai';
@@ -77,6 +77,7 @@ import { MobileActionBar } from './ui/MobileActionBar';
 import { PresetTooltip } from './ui/PresetTooltip';
 import { TutorialDomOverlay } from './ui/TutorialDomOverlay';
 import { MeasureOverlay } from './ui/MeasureOverlay';
+import { SvgSceneExporter } from './ui/SvgSceneExporter';
 
 // ── Canvas Error Boundary ──────────────────────────────────
 class CanvasErrorBoundary extends React.Component<
@@ -297,6 +298,7 @@ function App() {
             </Environment>
 
             <EditorControls />
+            <SvgSceneExporter />
             {!uiLocked && <GlobalRotation />}
             {!uiLocked && <DragDropHandler />}
             {!uiLocked && <RailPlacementOverlay />}

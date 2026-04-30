@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Line, Text } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { useAtom, useSetAtom } from 'jotai';
-import { Camera as ThreeCamera, DoubleSide, Plane, Raycaster, Vector2, Vector3 } from 'three';
+import { Camera as ThreeCamera, DoubleSide, Matrix4, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import { Rail } from '../physics/components/Rail';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { AsphericLens } from '../physics/components/AsphericLens';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { Coherence, type Ray } from '../physics/types';
 import {
     activeZLevelAtom,
@@ -24,6 +25,7 @@ const HANDLE_PICK_RADIUS_PX = 16;
 const LINE_PICK_RADIUS_PX = 10;
 const SNAP_RADIUS_PX = 28;
 const LENS_PROFILE_SNAP_RADIUS_PX = 18;
+const PROJECTED_SURFACE_SNAP_RADIUS_PX = 18;
 const TABLE_HOLE_OFFSET = 12.5;
 const TABLE_HOLE_SPACING = 25;
 
@@ -135,6 +137,52 @@ function projectedDistance(a: Vector3, b: Vector3, mode: MeasurementPlaneMode | 
         case 'yz': return Math.hypot(dy, dz);
         default: return Math.hypot(dx, dy, dz);
     }
+}
+
+function circlePath(radius: number, z: number, segments = 64): Vector3[] {
+    const points: Vector3[] = [];
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        points.push(new Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, z));
+    }
+    return points;
+}
+
+function rectanglePath(width: number, height: number, z: number): Vector3[] {
+    const hx = width / 2;
+    const hy = height / 2;
+    return [
+        new Vector3(-hx, -hy, z),
+        new Vector3(hx, -hy, z),
+        new Vector3(hx, hy, z),
+        new Vector3(-hx, hy, z),
+        new Vector3(-hx, -hy, z),
+    ];
+}
+
+function uniqueSurfaceZs(minZ: number, maxZ: number): number[] {
+    const candidates = [0, minZ, maxZ].filter(z => Number.isFinite(z) && z >= minZ - 1e-6 && z <= maxZ + 1e-6);
+    const unique: number[] = [];
+    for (const z of candidates) {
+        if (!unique.some(existing => Math.abs(existing - z) < 1e-5)) unique.push(z);
+    }
+    return unique;
+}
+
+function curvedMirrorProfile(component: CurvedMirror, zOffset: number): Vector2[] {
+    const radius = component.diameter / 2;
+    const R = component.radiusOfCurvature;
+    const points: Vector2[] = [];
+    for (let i = 0; i <= 64; i++) {
+        const r = (i / 64) * radius;
+        let sag = 0;
+        if (Math.abs(R) < 1e8) {
+            const val = R * R - r * r;
+            sag = val > 0 ? R - Math.sign(R) * Math.sqrt(val) : 0;
+        }
+        points.push(new Vector2(r, zOffset + sag));
+    }
+    return points;
 }
 
 function addMeasurementPoint(state: MeasurementState, point: MeasurementPoint): MeasurementState {
@@ -427,37 +475,79 @@ export const MeasureOverlay: React.FC = () => {
             return pointerToWorld(event, planeZ);
         };
 
-        const findLensProfileSnap = (event: PointerEvent): Vector3 | null => {
+        const findProjectedProfileSnap = (event: PointerEvent): Vector3 | null => {
             const rect = canvas.getBoundingClientRect();
             const pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
             let best: { point: Vector3; distanceSq: number } | null = null;
 
-            const considerProfile = (profile: Vector2[], localToWorld: import('three').Matrix4) => {
+            const considerWorldPath = (path: Vector3[], snapRadiusPx: number) => {
+                for (let i = 1; i < path.length; i++) {
+                    const a = path[i - 1];
+                    const b = path[i];
+                    const aScreen = projectToScreen(a, camera, rect);
+                    const bScreen = projectToScreen(b, camera, rect);
+                    const t = screenClosestT(pointer, aScreen, bScreen);
+                    const closestScreen = {
+                        x: aScreen.x + (bScreen.x - aScreen.x) * t,
+                        y: aScreen.y + (bScreen.y - aScreen.y) * t,
+                    };
+                    const distanceSq = screenDistanceSq(pointer, closestScreen);
+                    if (distanceSq <= snapRadiusPx * snapRadiusPx && (!best || distanceSq < best.distanceSq)) {
+                        best = { point: closestPointOnSegment(a, b, t), distanceSq };
+                    }
+                }
+            };
+
+            const considerLocalPath = (path: Vector3[], localToWorld: Matrix4, snapRadiusPx: number) => {
+                considerWorldPath(path.map(point => point.clone().applyMatrix4(localToWorld)), snapRadiusPx);
+            };
+
+            const considerProfile = (profile: Vector2[], localToWorld: Matrix4) => {
                 const right = profile.map(point => new Vector3(point.x, 0, point.y).applyMatrix4(localToWorld));
                 const left = profile.map(point => new Vector3(-point.x, 0, point.y).applyMatrix4(localToWorld));
-                const paths = [right, left];
-                for (const path of paths) {
-                    for (let i = 1; i < path.length; i++) {
-                        const a = path[i - 1];
-                        const b = path[i];
-                        const aScreen = projectToScreen(a, camera, rect);
-                        const bScreen = projectToScreen(b, camera, rect);
-                        const t = screenClosestT(pointer, aScreen, bScreen);
-                        const closestScreen = {
-                            x: aScreen.x + (bScreen.x - aScreen.x) * t,
-                            y: aScreen.y + (bScreen.y - aScreen.y) * t,
-                        };
-                        const distanceSq = screenDistanceSq(pointer, closestScreen);
-                        if (distanceSq <= LENS_PROFILE_SNAP_RADIUS_PX * LENS_PROFILE_SNAP_RADIUS_PX && (!best || distanceSq < best.distanceSq)) {
-                            best = { point: closestPointOnSegment(a, b, t), distanceSq };
-                        }
+                considerWorldPath(right, LENS_PROFILE_SNAP_RADIUS_PX);
+                considerWorldPath(left, LENS_PROFILE_SNAP_RADIUS_PX);
+            };
+
+            const considerGenericOpticalSurfaces = (component: typeof components[number]) => {
+                const bounds = component.bounds;
+                const min = bounds.min;
+                const max = bounds.max;
+                const zCandidates = uniqueSurfaceZs(min.z, max.z);
+                if (zCandidates.length === 0) return;
+
+                const sized = component as unknown as {
+                    diameter?: number;
+                    housingDiameter?: number;
+                    width?: number;
+                    height?: number;
+                };
+                const apertureRadius = component.getApertureRadius();
+                const circularRadius = Math.max(
+                    Number.isFinite(apertureRadius) ? apertureRadius : 0,
+                    typeof sized.housingDiameter === 'number' ? sized.housingDiameter / 2 : 0,
+                    typeof sized.diameter === 'number' ? sized.diameter / 2 : 0,
+                );
+
+                if (circularRadius > 0.001) {
+                    for (const z of zCandidates) {
+                        considerLocalPath(circlePath(circularRadius, z), component.localToWorld, PROJECTED_SURFACE_SNAP_RADIUS_PX);
+                    }
+                    return;
+                }
+
+                const width = typeof sized.width === 'number' && sized.width > 0 ? sized.width : max.x - min.x;
+                const height = typeof sized.height === 'number' && sized.height > 0 ? sized.height : max.y - min.y;
+                if (width > 0.001 && height > 0.001) {
+                    for (const z of zCandidates) {
+                        considerLocalPath(rectanglePath(width, height, z), component.localToWorld, PROJECTED_SURFACE_SNAP_RADIUS_PX);
                     }
                 }
             };
 
             for (const component of components) {
                 if (component.isGhost) continue;
-                if (!(component instanceof SphericalLens) && !(component instanceof AsphericLens)) continue;
+                if (component instanceof Rail) continue;
                 component.updateMatrices();
                 if (component instanceof SphericalLens) {
                     const { R1, R2 } = component.getRadii();
@@ -465,11 +555,16 @@ export const MeasureOverlay: React.FC = () => {
                         SphericalLens.generateProfile(R1, R2, component.apertureRadius, component.thickness, 64),
                         component.localToWorld,
                     );
-                } else {
+                } else if (component instanceof AsphericLens) {
                     considerProfile(
                         AsphericLens.generateProfile(component.frontSurface, component.backSurface, component.apertureRadius, component.thickness, 64),
                         component.localToWorld,
                     );
+                } else if (component instanceof CurvedMirror) {
+                    considerProfile(curvedMirrorProfile(component, -component.thickness / 2), component.localToWorld);
+                    considerProfile(curvedMirrorProfile(component, component.thickness / 2), component.localToWorld);
+                } else {
+                    considerGenericOpticalSurfaces(component);
                 }
             }
 
@@ -518,8 +613,8 @@ export const MeasureOverlay: React.FC = () => {
 
         const snapToComponent = (event: PointerEvent, fallback: Vector3): Vector3 => {
             if (!event.altKey) return fallback;
-            const lensProfilePoint = findLensProfileSnap(event);
-            if (lensProfilePoint) return lensProfilePoint;
+            const projectedSurfacePoint = findProjectedProfileSnap(event);
+            if (projectedSurfacePoint) return projectedSurfacePoint;
 
             const surfacePoint = pointerToSurface(event);
             if (surfacePoint) return surfacePoint;

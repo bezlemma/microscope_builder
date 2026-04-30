@@ -292,6 +292,108 @@ canvas {
   transform: translateY(1px);
 }
 
+/* ─── Optical Plane Inspector ────────────────────────────── */
+
+.optical-plane-popover {
+  box-sizing: border-box;
+  width: min(260px, calc(100vw - 20px));
+  max-height: min(340px, calc(var(--app-height, 100dvh) - 20px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 8px;
+  background: rgba(11, 16, 22, 0.94);
+  color: #e8eef7;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+  font-family: var(--ui-font);
+  font-size: 11px;
+  line-height: 1.25;
+  user-select: none;
+}
+
+.optical-plane-popover-header {
+  display: grid;
+  grid-template-columns: 10px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 8px 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.optical-plane-popover-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.optical-plane-popover-title {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.optical-plane-popover-subtitle {
+  margin-top: 2px;
+  color: #aeb9c8;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optical-plane-popover-close {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 6px;
+  background: rgba(28, 35, 44, 0.9);
+  color: #d8e0ea;
+  font-family: var(--ui-font);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.optical-plane-popover-close:hover {
+  background: rgba(45, 55, 68, 0.94);
+}
+
+.optical-plane-popover-section {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.optical-plane-popover-section:last-child {
+  border-bottom: 0;
+}
+
+.optical-plane-metric {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+  align-items: baseline;
+  margin: 4px 0;
+}
+
+.optical-plane-metric span {
+  color: #96a4b5;
+}
+
+.optical-plane-metric strong {
+  min-width: 0;
+  color: #f4f8fc;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.optical-plane-empty {
+  margin-top: 6px;
+  color: #96a4b5;
+}
+
 .tutorial-sidebar-callout {
   position: fixed;
   z-index: 31;

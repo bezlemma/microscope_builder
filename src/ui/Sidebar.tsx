@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom } from '../state/store';
+import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom } from '../state/store';
 import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
@@ -309,6 +309,7 @@ export const Sidebar: React.FC = () => {
     const [, setZoomTo] = useAtom(zoomToComponentAtom);
     const [measurement, setMeasurement] = useAtom(measurementAtom);
     const [, setZoomToMeasurement] = useAtom(zoomToMeasurementAtom);
+    const [, requestSvgExport] = useAtom(svgExportRequestAtom);
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const [sceneOpen, setSceneOpen] = useState(false);
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
@@ -855,6 +856,26 @@ export const Sidebar: React.FC = () => {
                             onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
                         >
                             {shareLabel}
+                        </button>
+                        <button
+                            onClick={() => requestSvgExport(count => count + 1)}
+                            title="Export the current camera view as an editable SVG"
+                            style={{
+                                flex: 1,
+                                padding: '8px 0',
+                                background: '#2a2a2a',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#363636'; e.currentTarget.style.borderColor = '#666'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
+                        >
+                            SVG
                         </button>
                     </div>
                 </div>

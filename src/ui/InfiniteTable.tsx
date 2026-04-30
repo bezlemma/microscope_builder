@@ -20,6 +20,7 @@ export const InfiniteTable: React.FC = () => {
       position={[0, 0, -42]} // Shifted down so components at Z=0 are 42mm above table (ORCA height)
       receiveShadow
       onClick={handleClick}
+      userData={{ svgExport: 'skip' }}
     >
       {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
       <planeGeometry args={[size, size]} />

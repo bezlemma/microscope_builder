@@ -511,6 +511,8 @@ export const resetViewSignalAtom = atom<number>(0);
 export const zoomToComponentAtom = atom<string | null>(null);
 /** Set to measurement points to center the camera on that measurement. Null clears. */
 export const zoomToMeasurementAtom = atom<MeasurementZoomTarget | null>(null);
+/** Incrementing asks the active R3F canvas to export the current camera view as SVG. */
+export const svgExportRequestAtom = atom<number>(0);
 
 // ════════════════════════════════════════════════════════════
 //  15. CAMERA MODE — Ortho / Perspective switching
