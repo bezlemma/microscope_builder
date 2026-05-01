@@ -163,14 +163,35 @@ const CONVERGENCE_ABSOLUTE_EPSILON = 1e-10;
 export interface SerializedRay {
     origin: { x: number; y: number; z: number };
     direction: { x: number; y: number; z: number };
+    majorAxis?: { x: number; y: number; z: number };
+    majorLength?: number;
+    tanAlpha?: number;
+    eU?: number;
+    eV?: number;
+    sigmaU?: number;
+    sigmaV?: number;
+    curvatureRadiusU?: number;
+    curvatureRadiusV?: number;
+    packetQ?: Ray['packetQ'];
+    packetStateMode?: Ray['packetStateMode'];
+    transverseProfile?: Ray['transverseProfile'];
+    transverseProfileOrder?: number;
     wavelength: number;
+    bandwidth?: number;
     intensity: number;
+    powerWeight?: number;
+    currentMediumIndex?: number;
     opticalPathLength: number;
+    phase?: number;
     footprintRadius: number;
     coherenceMode: number;
     sourceId?: string;
     sourceKind?: Ray['sourceKind'];
+    packetLaunchRigor?: Ray['packetLaunchRigor'];
+    sourcePosition?: { x: number; y: number; z: number };
+    sourceCellArea?: number;
     isMainRay?: boolean;
+    isBackward?: boolean;
     polarization?: Ray['polarization'];
     // Visualisation metadata that the RayVisualizer needs:
     //   interactionDistance tells how far to draw the last (extension) ray,
@@ -191,14 +212,39 @@ function serializeRay(ray: Ray): SerializedRay {
     return {
         origin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         direction: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
+        majorAxis: ray.majorAxis
+            ? { x: ray.majorAxis.x, y: ray.majorAxis.y, z: ray.majorAxis.z }
+            : undefined,
+        majorLength: ray.majorLength,
+        tanAlpha: ray.tanAlpha,
+        eU: ray.eU,
+        eV: ray.eV,
+        sigmaU: ray.sigmaU,
+        sigmaV: ray.sigmaV,
+        curvatureRadiusU: ray.curvatureRadiusU,
+        curvatureRadiusV: ray.curvatureRadiusV,
+        packetQ: ray.packetQ,
+        packetStateMode: ray.packetStateMode,
+        transverseProfile: ray.transverseProfile,
+        transverseProfileOrder: ray.transverseProfileOrder,
         wavelength: ray.wavelength,
+        bandwidth: ray.bandwidth,
         intensity: ray.intensity,
+        powerWeight: ray.powerWeight,
+        currentMediumIndex: ray.currentMediumIndex,
         opticalPathLength: ray.opticalPathLength,
+        phase: ray.phase,
         footprintRadius: ray.footprintRadius,
         coherenceMode: ray.coherenceMode,
         sourceId: ray.sourceId,
         sourceKind: ray.sourceKind,
+        packetLaunchRigor: ray.packetLaunchRigor,
+        sourcePosition: ray.sourcePosition
+            ? { x: ray.sourcePosition.x, y: ray.sourcePosition.y, z: ray.sourcePosition.z }
+            : undefined,
+        sourceCellArea: ray.sourceCellArea,
         isMainRay: ray.isMainRay,
+        isBackward: ray.isBackward,
         polarization: ray.polarization,
         interactionDistance: ray.interactionDistance,
         interactionComponentId: ray.interactionComponentId,

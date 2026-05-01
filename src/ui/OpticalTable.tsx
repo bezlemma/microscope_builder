@@ -21,8 +21,10 @@ import {
     cardImageTickAtom,
     isDraggingAtom,
     forwardRaysAtom,
+    reverseRaysAtom,
     trapBeamSegmentsAtom,
     uiLockedAtom,
+    OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT,
 } from '../state/store';
 import type { AnimationChannel } from '../physics/PropertyAnimator';
 import { useFrame } from '@react-three/fiber';
@@ -67,14 +69,45 @@ function rehydratePath(path: SerializedPath): Ray[] {
     return path.map(r => ({
         origin: new Vector3(r.origin.x, r.origin.y, r.origin.z),
         direction: new Vector3(r.direction.x, r.direction.y, r.direction.z),
+        majorAxis: r.majorAxis
+            ? new Vector3(r.majorAxis.x, r.majorAxis.y, r.majorAxis.z)
+            : undefined,
+        majorLength: r.majorLength,
+        tanAlpha: r.tanAlpha,
+        eU: r.eU,
+        eV: r.eV,
+        sigmaU: r.sigmaU,
+        sigmaV: r.sigmaV,
+        curvatureRadiusU: r.curvatureRadiusU,
+        curvatureRadiusV: r.curvatureRadiusV,
+        packetQ: r.packetQ
+            ? {
+                uu: { ...r.packetQ.uu },
+                uv: { ...r.packetQ.uv },
+                vv: { ...r.packetQ.vv },
+            }
+            : undefined,
+        packetStateMode: r.packetStateMode,
+        transverseProfile: r.transverseProfile,
+        transverseProfileOrder: r.transverseProfileOrder,
         wavelength: r.wavelength,
+        bandwidth: r.bandwidth,
         intensity: r.intensity,
+        powerWeight: r.powerWeight,
+        currentMediumIndex: r.currentMediumIndex,
         opticalPathLength: r.opticalPathLength,
+        phase: r.phase,
         footprintRadius: r.footprintRadius,
         coherenceMode: r.coherenceMode,
         sourceId: r.sourceId,
         sourceKind: r.sourceKind,
+        packetLaunchRigor: r.packetLaunchRigor,
+        sourcePosition: r.sourcePosition
+            ? new Vector3(r.sourcePosition.x, r.sourcePosition.y, r.sourcePosition.z)
+            : undefined,
+        sourceCellArea: r.sourceCellArea,
         isMainRay: r.isMainRay,
+        isBackward: r.isBackward,
         polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
         interactionDistance: r.interactionDistance,
         interactionComponentId: r.interactionComponentId,
@@ -669,6 +702,7 @@ export const OpticalTable: React.FC = () => {
     const [isDragging] = useAtom(isDraggingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
     const [, setForwardRays] = useAtom(forwardRaysAtom);
+    const [, setReverseRays] = useAtom(reverseRaysAtom);
     const [, setTrapBeamSegments] = useAtom(trapBeamSegmentsAtom);
     const [, setCardImageTick] = useAtom(cardImageTickAtom);
     const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
@@ -686,7 +720,8 @@ export const OpticalTable: React.FC = () => {
     // separately here).
     useEffect(() => {
         setDrawnRayCounts({ forward: rays.length, reverse: solver3Paths.length });
-    }, [rays, solver3Paths, setDrawnRayCounts]);
+        setReverseRays(solver3Paths);
+    }, [rays, solver3Paths, setDrawnRayCounts, setReverseRays]);
 
     // (Sample / SampleChamber zoom-viewer auto-pinning is preset-specific —
     // see loadPresetAtom for OpenSPIM, which is the only preset where the
@@ -853,7 +888,10 @@ export const OpticalTable: React.FC = () => {
     const solver1WorkerJobIdRef = useRef(0);
     const solver1WorkerJobsRef = useRef<Map<number, PendingForwardTrace>>(new Map());
     const lastOpticsFingerprintRef = useRef<string>('');
-    const clampedForwardRayCount = Math.max(MIN_FORWARD_RAY_COUNT, Math.min(MAX_FORWARD_RAY_COUNT, rayConfig.rayCount));
+    const minForwardRayCount = rayConfig.viewerMode === 'planes'
+        ? OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT
+        : MIN_FORWARD_RAY_COUNT;
+    const clampedForwardRayCount = Math.max(minForwardRayCount, Math.min(MAX_FORWARD_RAY_COUNT, rayConfig.rayCount));
     const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
     const tracedForwardRayCount = clampedForwardRayCount;
 
@@ -1519,7 +1557,6 @@ export const OpticalTable: React.FC = () => {
                     const visiblePaths = clipped.length > 0 ? clipped : (camera.solver3Paths ?? []);
                     camera.solver3Paths = visiblePaths;
                     camera.solver3Stale = false;
-                    camera.version++;
                     setCameraImageTick(t => t + 1);
 
                     if (clipped.length > 0) {

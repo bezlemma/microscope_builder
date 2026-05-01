@@ -5,6 +5,7 @@ import {
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 import { childRay } from './types';
 import { cleanVec } from './math_solvers';
+import { applyPacketMediumIndex } from './rayTransport';
 
 // Patch Three.js Mesh prototype with BVH-accelerated raycast
 Mesh.prototype.raycast = acceleratedRaycast;
@@ -256,6 +257,8 @@ export class OpticMesh {
     ): import('./types').InteractionResult {
         const nAirEntry = exteriorIorCallback ? exteriorIorCallback(entryPoint) : 1.0;
         const nGlass = ior;
+        const childInMedium = (overrides: Parameters<typeof childRay>[1], mediumIndex: number) =>
+            applyPacketMediumIndex(childRay(ray, overrides), mediumIndex);
 
         // Clean near-zero floating-point artifacts from geometry normals and
         // transformed directions. LatheGeometry vertices can have x ≈ 1e-20
@@ -278,11 +281,11 @@ export class OpticMesh {
                 .normalize();
             const dirReflWorld = reflected.transformDirection(localToWorld).normalize();
             return {
-                rays: [childRay(ray, {
+                rays: [childInMedium({
                     origin: worldEntryPoint,
                     direction: dirReflWorld,
                     entryPoint: worldEntryPoint
-                })]
+                }, nAirEntry)]
             };
         }
         cleanVec(dirInside);
@@ -340,15 +343,16 @@ export class OpticMesh {
 
                     const dirOutWorld = dirOutLocal.clone().transformDirection(localToWorld).normalize();
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+                    const nAirExit = exteriorIorCallback ? exteriorIorCallback(currentOrigin) : nAirEntry;
 
                     return {
-                        rays: [childRay(ray, {
+                        rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
                             opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
-                        })]
+                        }, nAirExit)]
                     };
                 }
 
@@ -372,15 +376,16 @@ export class OpticMesh {
 
                     const dirOutWorld = dirOutLocal.clone().transformDirection(localToWorld).normalize();
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
+                    const nAirExit = exteriorIorCallback ? exteriorIorCallback(currentOrigin) : nAirEntry;
 
                     return {
-                        rays: [childRay(ray, {
+                        rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
                             opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
-                        })]
+                        }, nAirExit)]
                     };
                 }
 
@@ -404,13 +409,13 @@ export class OpticMesh {
                             const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
                             const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
                             return {
-                                rays: [childRay(ray, {
+                                rays: [childInMedium({
                                     origin: exitPointWorld,
                                     direction: dirOutWorld,
                                     opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                                     entryPoint: worldEntryPoint,
                                     internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
-                                })]
+                                }, nAirExit)]
                             };
                         }
                     }
@@ -421,20 +426,20 @@ export class OpticMesh {
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                     const dirOutWorld = currentDir.clone().transformDirection(localToWorld).normalize();
                     return {
-                        rays: [childRay(ray, {
+                        rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
                             opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
-                        })]
+                        }, nAirEntry)]
                     };
                 }
 
                 // Prism / first bounce: no recovery possible — absorb
                 const terminationWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                 return {
-                    rays: [childRay(ray, {
+                    rays: [childInMedium({
                         origin: terminationWorld,
                         direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                         intensity: 0,
@@ -442,7 +447,7 @@ export class OpticMesh {
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         terminationPoint: terminationWorld
-                    })]
+                    }, nGlass)]
                 };
             }
 
@@ -466,7 +471,7 @@ export class OpticMesh {
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
 
                 return {
-                    rays: [childRay(ray, {
+                    rays: [childInMedium({
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
@@ -474,7 +479,7 @@ export class OpticMesh {
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         exitSurfaceId: (exitSurfaceLabel && hit.faceIndex !== undefined)
                             ? exitSurfaceLabel(hit.faceIndex) : undefined
-                    })]
+                    }, nAirExit)]
                 };
             }
 
@@ -496,12 +501,12 @@ export class OpticMesh {
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
 
                 return {
-                    rays: [childRay(ray, {
+                    rays: [childInMedium({
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                         entryPoint: worldEntryPoint
-                    })]
+                    }, nAirExit)]
                 };
             }
             // Prism: TIR on any face → reflect internally
@@ -521,7 +526,7 @@ export class OpticMesh {
         console.warn('[OpticMesh] BLOCKED: Max bounces exceeded (' + MAX_BOUNCES + ')');
         const lastPtWorld = currentOrigin.clone().applyMatrix4(localToWorld);
         return {
-            rays: [childRay(ray, {
+            rays: [childInMedium({
                 origin: lastPtWorld,
                 direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                 intensity: 0,
@@ -529,7 +534,7 @@ export class OpticMesh {
                 entryPoint: worldEntryPoint,
                 internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                 terminationPoint: lastPtWorld
-            })]
+            }, nGlass)]
         };
     }
 }

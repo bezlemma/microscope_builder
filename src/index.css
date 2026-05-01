@@ -296,9 +296,12 @@ canvas {
 
 .optical-plane-popover {
   box-sizing: border-box;
-  width: min(260px, calc(100vw - 20px));
-  max-height: min(340px, calc(var(--app-height, 100dvh) - 20px));
-  overflow: auto;
+  position: relative;
+  width: min(300px, calc(100vw - 20px));
+  max-height: min(720px, calc(var(--app-height, 100dvh) - 20px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overscroll-behavior: contain;
   border: 1px solid rgba(148, 163, 184, 0.38);
   border-radius: 8px;
@@ -310,6 +313,36 @@ canvas {
   font-size: 11px;
   line-height: 1.25;
   user-select: none;
+}
+
+.optical-plane-popover-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 6px;
+  background: rgba(11, 16, 22, 0.78);
+  color: #d8e0ea;
+  font-family: var(--ui-font);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.optical-plane-popover-close:hover {
+  background: rgba(45, 55, 68, 0.94);
+}
+
+.optical-plane-popover-scroll {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 .optical-plane-popover-header {
@@ -343,23 +376,6 @@ canvas {
   white-space: nowrap;
 }
 
-.optical-plane-popover-close {
-  width: 26px;
-  height: 26px;
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  border-radius: 6px;
-  background: rgba(28, 35, 44, 0.9);
-  color: #d8e0ea;
-  font-family: var(--ui-font);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.optical-plane-popover-close:hover {
-  background: rgba(45, 55, 68, 0.94);
-}
-
 .optical-plane-popover-section {
   padding: 8px 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
@@ -389,9 +405,131 @@ canvas {
   text-align: right;
 }
 
+.optical-plane-metric-warning span,
+.optical-plane-metric-warning strong {
+  color: #ff6b6b;
+}
+
 .optical-plane-empty {
   margin-top: 6px;
   color: #96a4b5;
+}
+
+.optical-plane-psf-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  margin: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  background: #000;
+}
+
+.optical-plane-psf-preview-wrap > img,
+.optical-plane-psf-preview-wrap > .optical-plane-field-scale {
+  width: 100%;
+}
+
+.optical-plane-psf-preview {
+  aspect-ratio: 1 / 1;
+  height: auto;
+  display: block;
+  image-rendering: pixelated;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+.optical-plane-field-scale {
+  padding: 5px 8px 6px;
+  box-sizing: border-box;
+}
+
+.optical-plane-image-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #c9d5e3;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.optical-plane-image-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optical-plane-field-scale-bar {
+  height: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #000000 0%, #007fff 44%, #ff9632 65%, #ffffff 100%);
+}
+
+.optical-plane-field-scale-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  color: #96a4b5;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.optical-plane-axial-grid,
+.optical-plane-curve-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 7px 0;
+}
+
+.optical-plane-axial-grid div,
+.optical-plane-mini-curve {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.optical-plane-axial-grid span,
+.optical-plane-mini-curve span {
+  display: block;
+  padding: 3px 5px 2px;
+  color: #96a4b5;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.optical-plane-axial-grid img {
+  width: 100%;
+  aspect-ratio: 1.45 / 1;
+  display: block;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+.optical-plane-mini-curve svg {
+  width: 100%;
+  height: 42px;
+  display: block;
+}
+
+.optical-plane-mini-curve path {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.34);
+  stroke-width: 1;
+}
+
+.optical-plane-mini-curve polyline {
+  fill: none;
+  stroke: rgb(0, 127, 255);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 .tutorial-sidebar-callout {

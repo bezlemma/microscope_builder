@@ -449,7 +449,7 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
     if (hideAll) return null;
 
     return (
-        <group>
+        <group userData={{ svgExport: 'skip' }}>
             {prepared.regularRays.map(({ key, ...ray }) => (
                 <RayPathLine key={key} {...ray} />
             ))}

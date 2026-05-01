@@ -1,6 +1,7 @@
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay, JonesVector } from '../types';
 import { Vector3 } from 'three';
+import type { TerminalPacketHit } from '../cardFieldSynthesis';
 
 export interface BeamProfile {
     wx: number;           // beam half-width u (mm)
@@ -20,6 +21,7 @@ export class Card extends OpticalComponent {
     height: number;
     opaque: boolean = false;
     hits: { localPoint: Vector3, ray: Ray }[] = [];
+    packetHits: TerminalPacketHit[] = [];
     beamProfiles: BeamProfile[] = [];
     /** Field data from rod-based card field synthesis (null in ray system). */
     fieldData: { resX: number; resY: number; extentWidth: number; extentHeight: number } | null = null;
@@ -64,8 +66,19 @@ export class Card extends OpticalComponent {
     }
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
+        const terminalRay = childRay(ray, {
+            origin: hit.point,
+            opticalPathLength: ray.opticalPathLength + hit.t,
+        });
+
         // Record the hit for visualization
-        this.hits.push({ localPoint: hit.localPoint, ray });
+        this.hits.push({ localPoint: hit.localPoint, ray: terminalRay });
+        this.packetHits.push({
+            localPoint: hit.localPoint,
+            localDirection: hit.localDirection?.clone(),
+            ray: terminalRay,
+            detectorId: this.id,
+        });
 
         // Opaque cards absorb all light
         if (this.opaque) {
@@ -74,10 +87,7 @@ export class Card extends OpticalComponent {
 
         // Pass the ray through unaffected (Viewing card probe)
         return {
-            rays: [childRay(ray, {
-                origin: hit.point,
-                opticalPathLength: ray.opticalPathLength + hit.t,
-            })],
+            rays: [terminalRay],
             passthrough: true
         };
     }
@@ -85,6 +95,7 @@ export class Card extends OpticalComponent {
     // Clear hits before new trace
     resetHits() {
         this.hits = [];
+        this.packetHits = [];
         this.beamProfiles = [];
     }
 }

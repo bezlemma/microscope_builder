@@ -9,8 +9,10 @@ import {
     PresetName,
     pushUndoAtom,
     pinnedViewersAtom,
+    OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT,
     rayConfigAtom,
     scanAccumTriggerAtom,
+    setVisualizationModeAtom,
     undoAtom,
 } from '../store';
 import { PMT } from '../../physics/components/PMT';
@@ -119,6 +121,18 @@ describe('Confocal preset loading', () => {
         store.set(loadPresetAtom, PresetName.PolarizationZoo);
         expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
         expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
+    });
+
+    test('optical plane view raises the displayed ray count minimum', () => {
+        const store = createStore();
+
+        expect(store.get(rayConfigAtom).rayCount).toBeLessThan(OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT);
+
+        store.set(setVisualizationModeAtom, 'planes');
+
+        const rayConfig = store.get(rayConfigAtom);
+        expect(rayConfig.viewerMode).toBe('planes');
+        expect(rayConfig.rayCount).toBe(OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT);
     });
 
     test('sample zoom viewers auto-pin in minified builds', () => {

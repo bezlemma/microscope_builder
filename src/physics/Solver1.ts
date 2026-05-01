@@ -10,7 +10,14 @@ import { ConeSource3D } from './components/ConeSource3D';
 import { WedgeSource2D } from './components/WedgeSource2D';
 import { StructuredSource } from './components/StructuredSource';
 import { TrappedBead } from './components/TrappedBead';
+import { Camera } from './components/Camera';
 import type { GaussianBeamSegment } from './Solver2';
+import { reflectVector } from './math_solvers';
+import {
+    applyParaxialPacketTransformAtHit,
+    applyReflectedPacketFrame,
+    rayPacketQAtDistance,
+} from './rayTransport';
 
 /** A component counts as an emitter when forward rays hitting it should be
  *  absorbed by its housing rather than refracted/reflected. */
@@ -175,6 +182,7 @@ export class Solver1 {
             if (component instanceof Card) component.resetHits();
             else if (component instanceof QPD) component.resetAccumulator();
             else if (component instanceof TrappedBead) component.resetAccumulator();
+            else if (component instanceof Camera) component.resetPacketHits();
         }
     }
 
@@ -204,7 +212,7 @@ export class Solver1 {
             const sourceKey = this.getSourceKey(path, pathIndex);
             sourceWeightSums.set(
                 sourceKey,
-                (sourceWeightSums.get(sourceKey) ?? 0) + Math.max(path[0].intensity, 0)
+                (sourceWeightSums.get(sourceKey) ?? 0) + Math.max(path[0].powerWeight ?? path[0].intensity, 0)
             );
         }
 
@@ -231,7 +239,11 @@ export class Solver1 {
         this.estimateBeamletFootprints(allDrafts);
 
         return draftBranches.map(branch =>
-            branch.map(({ fallbackRadius: _fallbackRadius, sourceRadius: _sourceRadius, ...segment }) => segment)
+            branch.map(({
+                fallbackRadius: _fallbackRadius,
+                sourceRadius: _sourceRadius,
+                ...segment
+            }) => segment)
         );
     }
 
@@ -297,7 +309,12 @@ export class Solver1 {
         }
 
         if (result.passthrough && result.rays.length === 1) {
-            const nextRay = result.rays[0];
+            const nextRay = this.applyPacketComponentConformance(
+                currentRay,
+                result.rays[0],
+                nearestComponent,
+                nearestHit,
+            );
             nextRay.interactionDistance = undefined;
             nextRay.interactionComponentId = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
@@ -311,7 +328,12 @@ export class Solver1 {
         }
 
         for (let i = 0; i < result.rays.length; i++) {
-            const nextRay = result.rays[i];
+            const nextRay = this.applyPacketComponentConformance(
+                currentRay,
+                result.rays[i],
+                nearestComponent,
+                nearestHit,
+            );
 
             nextRay.interactionDistance = undefined;
             nextRay.interactionComponentId = undefined;
@@ -335,6 +357,25 @@ export class Solver1 {
 
     private getSourceKey(path: Ray[], pathIndex: number): string {
         return path[0]?.sourceId ?? `path_${pathIndex}`;
+    }
+
+    private applyPacketComponentConformance(
+        parent: Ray,
+        child: Ray,
+        component: OpticalComponent,
+        hit: NonNullable<ReturnType<OpticalComponent['chkIntersection']>>,
+    ): Ray {
+        let conformed = child;
+
+        const reflected = reflectVector(parent.direction, hit.normal);
+        if (conformed.direction.dot(reflected) > 0.999999) {
+            conformed = applyReflectedPacketFrame(conformed, parent, hit.normal);
+        }
+
+        const profile = component.getParaxialProfile(parent.direction, parent.wavelength);
+        conformed = applyParaxialPacketTransformAtHit(parent, conformed, hit.t, profile.transformX, profile.transformY);
+
+        return conformed;
     }
 
     private resolveSourceTargets(allPaths: Ray[][]): Map<string, number> {
@@ -394,7 +435,7 @@ export class Solver1 {
 
         for (let i = 0; i < path.length; i++) {
             const ray = path[i];
-            let power = ray.intensity * powerScale;
+            let power = (ray.powerWeight ?? ray.intensity) * powerScale;
             if (power < 1e-6) continue;
 
             const fallbackRadius = Math.max(ray.footprintRadius || sourceRadius || 0.05, 0.05);
@@ -472,7 +513,8 @@ export class Solver1 {
             if (segmentLength < 1e-6) continue;
 
             const end = ray.origin.clone().add(ray.direction.clone().multiplyScalar(segmentLength));
-            const qPair = createLegacyQPair(fallbackRadius, ray.wavelength, segmentLength, 1.0);
+            const qStart = rayPacketQAtDistance(ray, 0);
+            const qEnd = rayPacketQAtDistance(ray, segmentLength);
 
             segments.push({
                 start: ray.origin.clone(),
@@ -480,10 +522,10 @@ export class Solver1 {
                 direction: ray.direction.clone(),
                 wavelength: ray.wavelength,
                 power,
-                qx_start: { ...qPair.qStart },
-                qx_end: { ...qPair.qEnd },
-                qy_start: { ...qPair.qStart },
-                qy_end: { ...qPair.qEnd },
+                qx_start: { ...qStart.uu },
+                qx_end: { ...qEnd.uu },
+                qy_start: { ...qStart.vv },
+                qy_end: { ...qEnd.vv },
                 footprintStart: fallbackRadius,
                 footprintEnd: fallbackRadius,
                 polarization: {

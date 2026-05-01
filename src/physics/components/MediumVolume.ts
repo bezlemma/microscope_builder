@@ -4,6 +4,7 @@ import { HitRecord, InteractionResult, Ray, childRay } from '../types';
 import { OpticMesh } from '../OpticMesh';
 import { reflectVector } from '../math_solvers';
 import { cauchyIorFromReference } from '../dispersion';
+import { applyPacketMediumIndex } from '../rayTransport';
 
 /**
  * MediumVolume — a refractive medium volume (water, oil, liquid container).
@@ -211,12 +212,13 @@ export class MediumVolume extends OpticalComponent {
         if (!refractedDir) {
             // Total internal reflection
             const reflectedDirection = reflectVector(ray.direction, hit.normal).normalize();
+            const reflected = childRay(ray, {
+                origin: hit.point.clone().addScaledVector(reflectedDirection, MediumVolume.EXIT_NUDGE_MM),
+                direction: reflectedDirection,
+                opticalPathLength: ray.opticalPathLength + hit.t * n1,
+            });
             return {
-                rays: [childRay(ray, {
-                    origin: hit.point.clone().addScaledVector(reflectedDirection, MediumVolume.EXIT_NUDGE_MM),
-                    direction: reflectedDirection,
-                    opticalPathLength: ray.opticalPathLength + hit.t * n1,
-                })],
+                rays: [applyPacketMediumIndex(reflected, n1)],
             };
         }
 
@@ -230,22 +232,24 @@ export class MediumVolume extends OpticalComponent {
         const dirWorld = refractedDir.clone().transformDirection(this.localToWorld).normalize();
         const opl = ray.opticalPathLength + hit.t * n1;
 
-        const rays = [childRay(ray, {
+        const refracted = childRay(ray, {
             origin: hit.point.clone().addScaledVector(dirWorld, MediumVolume.EXIT_NUDGE_MM),
             direction: dirWorld,
             intensity: ray.intensity * (1 - R),
             opticalPathLength: opl,
-        })];
+        });
+        const rays = [applyPacketMediumIndex(refracted, n2)];
 
         // Add partial Fresnel reflection if significant
         if (R > 0.01) {
             const reflectedDirection = reflectVector(ray.direction, hit.normal).normalize();
-            rays.push(childRay(ray, {
+            const reflected = childRay(ray, {
                 origin: hit.point.clone().addScaledVector(reflectedDirection, MediumVolume.EXIT_NUDGE_MM),
                 direction: reflectedDirection,
                 intensity: ray.intensity * R,
                 opticalPathLength: opl,
-            }));
+            });
+            rays.push(applyPacketMediumIndex(reflected, n1));
         }
 
         return { rays };

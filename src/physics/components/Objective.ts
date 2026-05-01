@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
-import type { PupilFunction } from '../PupilFunction';
+import { evaluateZernikeAberrationWaves, type PupilFunction } from '../PupilFunction';
 
 export type ImmersionMediumKind = 'air' | 'oil' | 'water' | 'silicone' | 'custom';
 
@@ -421,7 +421,14 @@ export class Objective extends OpticalComponent {
 
         const dirInLocal = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
         const hitLocal = hit.localPoint!;
-        const opl = ray.opticalPathLength + hit.t;
+        const pupilWaves = evaluateZernikeAberrationWaves(
+            this.pupil?.aberrations ?? null,
+            hitLocal.x / Math.max(this.pupilRadius || this.apertureRadius, 1e-9),
+            hitLocal.y / Math.max(this.pupilRadius || this.apertureRadius, 1e-9),
+        );
+        const referenceWavelengthMm = (this.pupil?.aberrations?.referenceWavelengthNm ?? ray.wavelength * 1e9) * 1e-6;
+        const pupilOplOffset = pupilWaves * referenceWavelengthMm;
+        const opl = ray.opticalPathLength + hit.t + pupilOplOffset;
         const f = this.focalLength;
 
         // Short-circuit when the hit point is essentially on the optical axis

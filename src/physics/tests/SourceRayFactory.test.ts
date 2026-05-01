@@ -11,6 +11,7 @@ import { Solver1 } from '../Solver1';
 import { segmentBeamEnvelopeRadii } from '../Solver2';
 import { createSourceRays } from '../SourceRayFactory';
 import { Coherence, Ray } from '../types';
+import { coherentLaunchSigmaFromCellArea } from '../coherentPacketLaunch';
 
 function totalIntensityFor(component: { id: string }, rayCount: number): number {
     return createSourceRays([component as any], rayCount, 'full')
@@ -136,6 +137,54 @@ describe('SourceRayFactory', () => {
         expect(Math.min(...powers)).toBeCloseTo(Math.max(...powers), 12);
         expect(rays[0].footprintRadius).toBeGreaterThan(0.6);
         expect(rays[0].footprintRadius).toBeLessThan(laser.beamRadius);
+    });
+
+    test('laser launch carries explicit Gaussian Packet metadata', () => {
+        const laser = new Laser('Packet laser');
+        laser.power = 1.25;
+        laser.beamRadius = 1.5;
+
+        const rays = createSourceRays([laser], 48, 'full');
+        const totalPower = rays.reduce((sum, ray) => sum + (ray.powerWeight ?? 0), 0);
+
+        expect(totalPower).toBeCloseTo(laser.power, 6);
+        expect(rays.length).toBe(49);
+        for (const ray of rays) {
+            expect(ray.packetStateMode).toBe('explicit');
+            expect(ray.packetQ).toBeDefined();
+            expect(ray.sourceCellArea ?? 0).toBeGreaterThan(0);
+            expect(ray.sigmaU ?? 0).toBeCloseTo(coherentLaunchSigmaFromCellArea(ray.sourceCellArea ?? 0), 9);
+            expect(ray.sigmaV ?? 0).toBeCloseTo(coherentLaunchSigmaFromCellArea(ray.sourceCellArea ?? 0), 9);
+            expect(Math.abs(ray.majorAxis?.dot(ray.direction) ?? 1)).toBeLessThan(1e-6);
+        }
+    });
+
+    test('marks Gaussian beam launches as rigorous packet samples', () => {
+        const laser = new Laser('Rigorous laser');
+        const lamp = new Lamp('Rigorous lamp');
+        const structured = new StructuredSource('Rigorous pattern');
+        structured.asciiChar = 'A';
+
+        for (const source of [laser, lamp, structured]) {
+            const rays = createSourceRays([source], 16, 'full');
+            expect(rays.length).toBeGreaterThan(0);
+            expect(rays.every(ray => ray.packetLaunchRigor === 'rigorous')).toBe(true);
+        }
+    });
+
+    test('marks geometric angular sources as packet reconstruction fallbacks', () => {
+        const sources = [
+            new PointSource2D('Fallback point 2D'),
+            new PointSource3D('Fallback point 3D'),
+            new ConeSource3D('Fallback cone'),
+            new WedgeSource2D('Fallback wedge'),
+        ];
+
+        for (const source of sources) {
+            const rays = createSourceRays([source], 8, 'full');
+            expect(rays.length).toBeGreaterThan(0);
+            expect(rays.every(ray => ray.packetLaunchRigor === 'geometricFallback')).toBe(true);
+        }
     });
 
     test('conserves lamp power across wavelengths and ray counts', () => {

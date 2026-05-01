@@ -24,6 +24,7 @@ import {
     MAX_REVERSE_PATH_COUNT,
     MIN_FORWARD_RAY_COUNT,
     MIN_REVERSE_PATH_COUNT,
+    OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT,
     drawnRayCountsAtom,
     uiLockedAtom,
     measurementAtom,
@@ -486,6 +487,10 @@ const SolverPanel: React.FC<{
     const [timelineSteps, setTimelineSteps] = React.useState(String(scanConfig.steps));
     const opacityTrackRef = React.useRef<HTMLDivElement | null>(null);
     const [activeOpacityHandle, setActiveOpacityHandle] = React.useState<'min' | 'max' | null>(null);
+    const forwardRayMin = rayConfig.viewerMode === 'planes'
+        ? OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT
+        : MIN_FORWARD_RAY_COUNT;
+    const displayedForwardRayCount = clampValue(rayConfig.rayCount, forwardRayMin, MAX_FORWARD_RAY_COUNT);
     // newVisualStyleAtom removed — new style is always on
 
     React.useEffect(() => {
@@ -760,7 +765,7 @@ const SolverPanel: React.FC<{
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                             <span style={{ color: '#aaa', fontSize: '10px' }}>Rays per source</span>
                             <span style={{ color: '#777', fontSize: '10px' }}>
-                                {clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT)}
+                                {displayedForwardRayCount}
                             </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -770,14 +775,14 @@ const SolverPanel: React.FC<{
                                 max={String(COUNT_SLIDER_STEPS)}
                                 step="1"
                                 value={countToSliderPosition(
-                                    clampValue(rayConfig.rayCount, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
-                                    MIN_FORWARD_RAY_COUNT,
+                                    displayedForwardRayCount,
+                                    forwardRayMin,
                                     MAX_FORWARD_RAY_COUNT,
                                 )}
                                 onChange={(e) => setrayConfig({
                                     ...rayConfig,
                                     rayCount: stickyForwardRodCount(
-                                        sliderPositionToCount(parseInt(e.target.value), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                        sliderPositionToCount(parseInt(e.target.value), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                     ),
                                 })}
                                 style={{ flex: 1, minWidth: 0 }}
@@ -785,23 +790,23 @@ const SolverPanel: React.FC<{
                             />
                             <input
                                 type="number"
-                                min={MIN_FORWARD_RAY_COUNT}
+                                min={forwardRayMin}
                                 max={MAX_FORWARD_RAY_COUNT}
                                 step={1}
-                                value={rayConfig.rayCount}
+                                value={displayedForwardRayCount}
                                 onChange={(e) => setrayConfig({
                                     ...rayConfig,
-                                    rayCount: parseInt(e.target.value, 10) || rayConfig.rayCount,
+                                    rayCount: clampValue(parseInt(e.target.value, 10) || displayedForwardRayCount, forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                 })}
                                 onBlur={(e) => setrayConfig({
                                     ...rayConfig,
-                                    rayCount: clampValue(parseInt(e.target.value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                    rayCount: clampValue(parseInt(e.target.value || String(forwardRayMin), 10), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                 })}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         setrayConfig({
                                             ...rayConfig,
-                                            rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(MIN_FORWARD_RAY_COUNT), 10), MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT),
+                                            rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(forwardRayMin), 10), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                         });
                                         (e.target as HTMLInputElement).blur();
                                     }

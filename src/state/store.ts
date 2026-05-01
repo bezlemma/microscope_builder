@@ -38,6 +38,7 @@ export interface RayConfig {
 }
 
 export const MIN_FORWARD_RAY_COUNT = 4;
+export const OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT = 100;
 export const MAX_FORWARD_RAY_COUNT = 30000;
 export const MIN_REVERSE_PATH_COUNT = 1;
 export const MAX_REVERSE_PATH_COUNT = 30000;
@@ -247,6 +248,7 @@ export const loadPresetAtom = atom(
 
 // 2. Selection State (supports multi-select via Ctrl+Click)
 export const selectionAtom = atom<string[]>([]);
+export const opticalPlaneInspectorClearSignalAtom = atom<number>(0);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
@@ -276,8 +278,10 @@ export const setVisualizationModeAtom = atom(
     null,
     (get, set, mode: RayConfig['viewerMode']) => {
         const current = get(rayConfigAtom);
+        const minRayCount = mode === 'planes' ? OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT : MIN_FORWARD_RAY_COUNT;
         set(rayConfigAtom, {
             ...current,
+            rayCount: Math.max(current.rayCount, minRayCount),
             solver2Enabled: mode === 'wave' ? true : (mode === 'planes' ? false : current.solver2Enabled),
             viewerMode: mode,
         });
@@ -297,6 +301,8 @@ export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
 // 6a. Forward ray paths — published whenever Solver 1 traces.  Other viewers
 // (e.g. SampleZoomViewer) read from this so they don't have to re-trace.
 export const forwardRaysAtom = atom<import('../physics/types').Ray[][]>([]);
+/** Reverse ray paths from Solver 3, published for SVG export and diagnostics. */
+export const reverseRaysAtom = atom<import('../physics/types').Ray[][]>([]);
 
 // Trap beam segments are published even when the global Solver-2 wave overlay
 // is hidden, so the optical-trap sample viewer can show diagnostics using the

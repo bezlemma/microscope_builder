@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import type { TerminalPacketHit } from '../cardFieldSynthesis';
 
 export class Camera extends OpticalComponent {
     width: number;
@@ -18,6 +19,7 @@ export class Camera extends OpticalComponent {
     forwardImage: Float32Array | null = null;  // Forward excitation signal (Solver 2 beam at sensor)
     solver3Paths: Ray[][] | null = null;
     solver3Stale: boolean = true;
+    packetHits: TerminalPacketHit[] = [];
 
     // Scan accumulation results — per-frame images for scrubbing
     scanFrames: Float32Array[] | null = null;       // Each frame's emission image
@@ -63,6 +65,10 @@ export class Camera extends OpticalComponent {
         this.scanFrameCount = 0;
         this.scanCycleMs = 0;
         this.scanVersionSnapshot = null;
+    }
+
+    resetPacketHits(): void {
+        this.packetHits = [];
     }
 
     // Camera body dimensions (must match CameraVisualizer in ComponentVisualizers.tsx)
@@ -134,7 +140,17 @@ export class Camera extends OpticalComponent {
         };
     }
 
-    interact(_ray: Ray, _hit: HitRecord): InteractionResult {
+    interact(ray: Ray, hit: HitRecord): InteractionResult {
+        const terminalRay = childRay(ray, {
+            origin: hit.point,
+            opticalPathLength: ray.opticalPathLength + hit.t,
+        });
+        this.packetHits.push({
+            localPoint: hit.localPoint,
+            localDirection: hit.localDirection?.clone(),
+            ray: terminalRay,
+            detectorId: this.id,
+        });
         // Absorb
         return { rays: [] };
     }

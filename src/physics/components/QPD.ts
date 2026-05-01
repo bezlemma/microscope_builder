@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, rayPowerWeight } from '../types';
 
 /**
  * QPD (Quadrant Photodiode) — a four-quadrant position-sensitive detector.
@@ -198,7 +198,7 @@ export class QPD extends OpticalComponent {
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         if (hit.isBlocked) {
-            this.blockedPower += Math.max(0, ray.intensity);
+            this.blockedPower += Math.max(0, rayPowerWeight(ray));
             this.blockedHits++;
             return { rays: [] };
         }
@@ -208,7 +208,7 @@ export class QPD extends OpticalComponent {
         const halfGap = this.gapWidth / 2;
 
         if (Math.abs(lp.x) > halfGap && Math.abs(lp.y) > halfGap) {
-            const power = Math.max(0, ray.intensity);
+            const power = Math.max(0, rayPowerWeight(ray));
             const isRight = lp.x > 0;
             const isTop = lp.y > 0;
             let idx: number;
@@ -225,7 +225,7 @@ export class QPD extends OpticalComponent {
             this.momentXX += power * lp.x * lp.x;
             this.momentYY += power * lp.y * lp.y;
         } else {
-            this.gapPower += Math.max(0, ray.intensity);
+            this.gapPower += Math.max(0, rayPowerWeight(ray));
         }
 
         const leaked = Math.max(0, Math.min(1, this.backstopTransmission));
