@@ -12,12 +12,6 @@ import { StructuredSource } from './components/StructuredSource';
 import { TrappedBead } from './components/TrappedBead';
 import { Camera } from './components/Camera';
 import type { GaussianBeamSegment } from './Solver2';
-import { reflectVector } from './math_solvers';
-import {
-    applyParaxialPacketTransformAtHit,
-    applyReflectedPacketFrame,
-    rayPacketQAtDistance,
-} from './rayTransport';
 
 /** A component counts as an emitter when forward rays hitting it should be
  *  absorbed by its housing rather than refracted/reflected. */
@@ -82,29 +76,6 @@ function writeComponentBroadPhaseBounds(component: OpticalComponent, out: Float6
     out[offset + 1] = center.y;
     out[offset + 2] = center.z;
     out[offset + 3] = 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz);
-}
-
-function initialQ(waistRadius: number, wavelengthMm: number): { re: number; im: number } {
-    return { re: 0, im: Math.PI * waistRadius * waistRadius / wavelengthMm };
-}
-
-function propagateFreeSpace(q: { re: number; im: number }, distance: number): { re: number; im: number } {
-    return { re: q.re + distance, im: q.im };
-}
-
-function createLegacyQPair(
-    beamRadiusMm: number,
-    wavelengthSI: number,
-    segmentLength: number,
-    refractiveIndex: number
-): { qStart: { re: number; im: number }; qEnd: { re: number; im: number } } {
-    // In a medium with index n, use λ_medium = λ₀/n in q(0) and propagate with the
-    // physical distance z. Applying BOTH λ/n and z/n would double-count the index.
-    const wavelengthMm = wavelengthSI * 1e3;
-    const effectiveWavelength = wavelengthMm / Math.max(refractiveIndex, 1e-6);
-    const qStart = initialQ(beamRadiusMm, effectiveWavelength);
-    const qEnd = propagateFreeSpace(qStart, segmentLength);
-    return { qStart, qEnd };
 }
 
 function lampSpectralWavelengths(lamp: Lamp): number[] {
@@ -309,12 +280,7 @@ export class Solver1 {
         }
 
         if (result.passthrough && result.rays.length === 1) {
-            const nextRay = this.applyPacketComponentConformance(
-                currentRay,
-                result.rays[0],
-                nearestComponent,
-                nearestHit,
-            );
+            const nextRay = result.rays[0];
             nextRay.interactionDistance = undefined;
             nextRay.interactionComponentId = undefined;
             nextRay.isMainRay = (currentRay.isMainRay === true);
@@ -327,18 +293,19 @@ export class Solver1 {
             return;
         }
 
+        const mainChildIndex = currentRay.isMainRay === true && result.rays.length > 1
+            ? result.rays.reduce((bestIndex, ray, index, rays) =>
+                ray.intensity > rays[bestIndex].intensity ? index : bestIndex, 0)
+            : 0;
+
         for (let i = 0; i < result.rays.length; i++) {
-            const nextRay = this.applyPacketComponentConformance(
-                currentRay,
-                result.rays[i],
-                nearestComponent,
-                nearestHit,
-            );
+            const nextRay = result.rays[i];
 
             nextRay.interactionDistance = undefined;
             nextRay.interactionComponentId = undefined;
 
-            nextRay.isMainRay = (currentRay.isMainRay === true);
+            nextRay.isMainRay = currentRay.isMainRay === true
+                && (result.rays.length === 1 || i === mainChildIndex);
             nextRay.sourceId = currentRay.sourceId;
             nextRay.sourceKind = currentRay.sourceKind;
 
@@ -357,25 +324,6 @@ export class Solver1 {
 
     private getSourceKey(path: Ray[], pathIndex: number): string {
         return path[0]?.sourceId ?? `path_${pathIndex}`;
-    }
-
-    private applyPacketComponentConformance(
-        parent: Ray,
-        child: Ray,
-        component: OpticalComponent,
-        hit: NonNullable<ReturnType<OpticalComponent['chkIntersection']>>,
-    ): Ray {
-        let conformed = child;
-
-        const reflected = reflectVector(parent.direction, hit.normal);
-        if (conformed.direction.dot(reflected) > 0.999999) {
-            conformed = applyReflectedPacketFrame(conformed, parent, hit.normal);
-        }
-
-        const profile = component.getParaxialProfile(parent.direction, parent.wavelength);
-        conformed = applyParaxialPacketTransformAtHit(parent, conformed, hit.t, profile.transformX, profile.transformY);
-
-        return conformed;
     }
 
     private resolveSourceTargets(allPaths: Ray[][]): Map<string, number> {
@@ -474,22 +422,19 @@ export class Solver1 {
                     const remainingAfterStart = totalInternalLength - traversed;
                     const opticalPathStart = ray.opticalPathLength - remainingAfterStart * glassIOR;
 
-                    const qPair = createLegacyQPair(fallbackRadius, ray.wavelength, length, glassIOR);
                     segments.push({
                         start,
                         end,
                         direction,
                         wavelength: ray.wavelength,
+                        bandwidth: ray.bandwidth,
                         power,
-                        qx_start: { ...qPair.qStart },
-                        qx_end: { ...qPair.qEnd },
-                        qy_start: { ...qPair.qStart },
-                        qy_end: { ...qPair.qEnd },
                         footprintStart: fallbackRadius,
                         footprintEnd: fallbackRadius,
                         polarization: {
                             x: { ...ray.polarization.x },
-                            y: { ...ray.polarization.y }
+                            y: { ...ray.polarization.y },
+                            z: ray.polarization.z ? { ...ray.polarization.z } : { re: 0, im: 0 },
                         },
                         opticalPathLength: opticalPathStart,
                         refractiveIndex: glassIOR,
@@ -513,24 +458,20 @@ export class Solver1 {
             if (segmentLength < 1e-6) continue;
 
             const end = ray.origin.clone().add(ray.direction.clone().multiplyScalar(segmentLength));
-            const qStart = rayPacketQAtDistance(ray, 0);
-            const qEnd = rayPacketQAtDistance(ray, segmentLength);
 
             segments.push({
                 start: ray.origin.clone(),
                 end,
                 direction: ray.direction.clone(),
                 wavelength: ray.wavelength,
+                bandwidth: ray.bandwidth,
                 power,
-                qx_start: { ...qStart.uu },
-                qx_end: { ...qEnd.uu },
-                qy_start: { ...qStart.vv },
-                qy_end: { ...qEnd.vv },
                 footprintStart: fallbackRadius,
                 footprintEnd: fallbackRadius,
                 polarization: {
                     x: { ...ray.polarization.x },
-                    y: { ...ray.polarization.y }
+                    y: { ...ray.polarization.y },
+                    z: ray.polarization.z ? { ...ray.polarization.z } : { re: 0, im: 0 },
                 },
                 opticalPathLength: ray.opticalPathLength,
                 refractiveIndex: 1.0,

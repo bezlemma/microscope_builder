@@ -4,7 +4,7 @@ import { intersectAABB } from '../math_solvers';
 import { Vector3, Box3 } from 'three';
 
 export class Laser extends OpticalComponent {
-    wavelength: number = 532; // nm (default green)
+    wavelength: number = 488; // nm (default — common Ar-ion / DPSS line for fluorescence)
     beamRadius: number = 2;   // mm (1/e² beam half-width)
     power: number = 1.0;      // Watts (optical output power)
     isOn: boolean = true;     // User-facing emission toggle; preserves configured power.

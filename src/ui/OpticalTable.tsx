@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vector3 } from 'three';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import {
     componentsAtom,
     rayConfigAtom,
@@ -20,10 +20,11 @@ import {
     cameraImageTickAtom,
     cardImageTickAtom,
     isDraggingAtom,
-    forwardRaysAtom,
-    reverseRaysAtom,
-    trapBeamSegmentsAtom,
+    publishForwardRaysAtom,
+    publishReverseRaysAtom,
+    publishTrapBeamSegmentsAtom,
     uiLockedAtom,
+    activePresetAtom,
     OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT,
 } from '../state/store';
 import type { AnimationChannel } from '../physics/PropertyAnimator';
@@ -69,27 +70,6 @@ function rehydratePath(path: SerializedPath): Ray[] {
     return path.map(r => ({
         origin: new Vector3(r.origin.x, r.origin.y, r.origin.z),
         direction: new Vector3(r.direction.x, r.direction.y, r.direction.z),
-        majorAxis: r.majorAxis
-            ? new Vector3(r.majorAxis.x, r.majorAxis.y, r.majorAxis.z)
-            : undefined,
-        majorLength: r.majorLength,
-        tanAlpha: r.tanAlpha,
-        eU: r.eU,
-        eV: r.eV,
-        sigmaU: r.sigmaU,
-        sigmaV: r.sigmaV,
-        curvatureRadiusU: r.curvatureRadiusU,
-        curvatureRadiusV: r.curvatureRadiusV,
-        packetQ: r.packetQ
-            ? {
-                uu: { ...r.packetQ.uu },
-                uv: { ...r.packetQ.uv },
-                vv: { ...r.packetQ.vv },
-            }
-            : undefined,
-        packetStateMode: r.packetStateMode,
-        transverseProfile: r.transverseProfile,
-        transverseProfileOrder: r.transverseProfileOrder,
         wavelength: r.wavelength,
         bandwidth: r.bandwidth,
         intensity: r.intensity,
@@ -105,10 +85,9 @@ function rehydratePath(path: SerializedPath): Ray[] {
         sourcePosition: r.sourcePosition
             ? new Vector3(r.sourcePosition.x, r.sourcePosition.y, r.sourcePosition.z)
             : undefined,
-        sourceCellArea: r.sourceCellArea,
         isMainRay: r.isMainRay,
         isBackward: r.isBackward,
-        polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         interactionDistance: r.interactionDistance,
         interactionComponentId: r.interactionComponentId,
         entryPoint: r.entryPoint
@@ -130,13 +109,10 @@ function rehydrateBeamSegments(branches: SerializedBeamSegment[][]): GaussianBea
         end: new Vector3(segment.end.x, segment.end.y, segment.end.z),
         direction: new Vector3(segment.direction.x, segment.direction.y, segment.direction.z),
         wavelength: segment.wavelength,
+        bandwidth: segment.bandwidth,
         power: segment.power,
         sourceId: segment.sourceId,
         bundleKey: segment.bundleKey,
-        qx_start: segment.qx_start,
-        qx_end: segment.qx_end,
-        qy_start: segment.qy_start,
-        qy_end: segment.qy_end,
         footprintStart: segment.footprintStart,
         footprintEnd: segment.footprintEnd,
         beamRadiusStart: segment.beamRadiusStart,
@@ -695,23 +671,55 @@ export const OpticalTable: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [rayConfig] = useAtom(rayConfigAtom);
     const [activeZ] = useAtom(activeZLevelAtom);
-    const [rays, setRays] = useState<Ray[][]>([]);
-    const [beamSegments, setBeamSegments] = useState<GaussianBeamSegment[][]>([]);
-    const [solver3Paths, setSolver3Paths] = useState<Ray[][]>([]);
+    // High-churn trace payloads are kept out of React state. During animation
+    // these arrays can be reassigned dozens of times per second; putting the
+    // full Ray[][] in a Canvas fiber state update lets interrupted render
+    // queues retain old traces. Store only the latest payload in refs and
+    // queue tiny revision counters to ask React for a redraw.
+    const solverPathsRef = useRef<Ray[][]>([]);
+    const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
+    const solver3PathsRef = useRef<Ray[][]>([]);
+    const trapBeamSegsRef = useRef<GaussianBeamSegment[][]>([]);
+    const [, setRayRenderRevision] = useState(0);
+    const [, setBeamRenderRevision] = useState(0);
+    const [, setSolver3RenderRevision] = useState(0);
+    const rays = solverPathsRef.current;
+    const beamSegments = beamSegsRef.current;
+    const solver3Paths = solver3PathsRef.current;
+    const setRays = (next: Ray[][]) => {
+        solverPathsRef.current = next;
+        setRayRenderRevision(revision => revision + 1);
+    };
+    const setBeamSegments = (next: GaussianBeamSegment[][]) => {
+        beamSegsRef.current = next;
+        setBeamRenderRevision(revision => revision + 1);
+    };
+    const setSolver3Paths = (next: Ray[][]) => {
+        solver3PathsRef.current = next;
+        setSolver3RenderRevision(revision => revision + 1);
+    };
     const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const [isDragging] = useAtom(isDraggingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
-    const [, setForwardRays] = useAtom(forwardRaysAtom);
-    const [, setReverseRays] = useAtom(reverseRaysAtom);
-    const [, setTrapBeamSegments] = useAtom(trapBeamSegmentsAtom);
-    const [, setCardImageTick] = useAtom(cardImageTickAtom);
-    const [, setSolver3Rendering] = useAtom(solver3RenderingAtom);
-    // Actually we need the value for the guard
+    // Write-only handles: useSetAtom, NOT useAtom. `const [, setX] = useAtom(a)`
+    // still SUBSCRIBES this fiber to `a`. forwardRays / reverseRays /
+    // trapBeamSegments / the image-tick atoms are all reassigned on every
+    // animation frame, so subscribing here means every trace schedules an
+    // update on this (large, frequently render-interrupted) fiber. Under R3F's
+    // reconciler those updates land in the hook's baseQueue faster than a
+    // committed render drains them — each one retaining a full Ray[][] — which
+    // is the unbounded heap growth that OOM-crashes heavy animated presets.
+    const setForwardRays = useSetAtom(publishForwardRaysAtom);
+    const setReverseRays = useSetAtom(publishReverseRaysAtom);
+    const setTrapBeamSegments = useSetAtom(publishTrapBeamSegmentsAtom);
+    const setCardImageTick = useSetAtom(cardImageTickAtom);
+    const setSolver3Rendering = useSetAtom(solver3RenderingAtom);
+    // The solver-3 guard genuinely needs the live value, so this one subscribes.
     const [solver3Rendering] = useAtom(solver3RenderingAtom);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
-    const [, setScanAccumProgress] = useAtom(scanAccumProgressAtom);
-    const [, setDrawnRayCounts] = useAtom(drawnRayCountsAtom);
-    const [, setCameraImageTick] = useAtom(cameraImageTickAtom);
+    const setScanAccumProgress = useSetAtom(scanAccumProgressAtom);
+    const setDrawnRayCounts = useSetAtom(drawnRayCountsAtom);
+    const setCameraImageTick = useSetAtom(cameraImageTickAtom);
     const haptic = useHaptic();
 
     // Keep the UI counter of drawn rays in sync with what the RayVisualizer sees.
@@ -720,8 +728,25 @@ export const OpticalTable: React.FC = () => {
     // separately here).
     useEffect(() => {
         setDrawnRayCounts({ forward: rays.length, reverse: solver3Paths.length });
+    }, [rays.length, solver3Paths.length, setDrawnRayCounts]);
+
+    useEffect(() => {
         setReverseRays(solver3Paths);
-    }, [rays, solver3Paths, setDrawnRayCounts, setReverseRays]);
+    }, [solver3Paths, setReverseRays]);
+
+    // Preset-switch ghost-ray cleanup: the worker-traced paths live in local
+    // refs (`rays`, `beamSegments`, `solver3Paths`), so even though
+    // loadPresetAtom clears the global ray atoms, this component still holds
+    // the old preset's traces until a new trace completes asynchronously.
+    // Wipe them synchronously the moment the active preset changes so the
+    // old lamp/laser beams don't linger over the new scene's components.
+    const [activePreset] = useAtom(activePresetAtom);
+    useEffect(() => {
+        setRays([]);
+        setBeamSegments([]);
+        setSolver3Paths([]);
+        trapBeamSegsRef.current = [];
+    }, [activePreset]);
 
     // (Sample / SampleChamber zoom-viewer auto-pinning is preset-specific —
     // see loadPresetAtom for OpenSPIM, which is the only preset where the
@@ -752,8 +777,17 @@ export const OpticalTable: React.FC = () => {
     const lastAnimationTimelineSignatureRef = useRef('');
     const timelineBakePendingSignatureRef = useRef('');
     const timelineReadySignatureRef = useRef('');
-    const trapBeamSegsRef = useRef<GaussianBeamSegment[][]>([]);
     const lastTrapRedrawMsRef = useRef(0);
+    // Re-trace throttle: the animator clock advances every frame, but the
+    // expensive cascade it triggers (re-render → full forward trace → rebuild
+    // every ray-line) only needs to run at a fraction of the display rate.
+    // Firing it 60×/s saturates the main thread so the GC never gets idle
+    // time to keep up with the per-frame allocation churn — which is what
+    // makes heavy presets (long beam paths, many rays) climb in memory until
+    // the tab OOMs. ~33 ms ≈ 30 Hz leaves headroom for GC and is still well
+    // above the perceptible threshold for the slow (seconds-long) scans.
+    const lastAnimRetraceMsRef = useRef(0);
+    const ANIM_RETRACE_MIN_INTERVAL_MS = 33;
 
     const currentAnimationTimelineSignature = (currentComponents: OpticalComponent[]): string => {
         const activeChannels = animator.channels.filter(channel =>
@@ -785,10 +819,17 @@ export const OpticalTable: React.FC = () => {
             return;
         }
         animator.playing = true;
+        // The animator clock advances every frame (cheap — just mutates
+        // component properties), but the re-render/re-trace it drives is
+        // throttled: see lastAnimRetraceMsRef above.
         const mutated = animator.tick(delta * 1000 * speed, componentsRef.current);
         if (mutated) {
-            // Force fingerprint recalculation by triggering a React re-render
-            setAnimTickRef.current(t => t + 1);
+            const now = performance.now();
+            if (now - lastAnimRetraceMsRef.current >= ANIM_RETRACE_MIN_INTERVAL_MS) {
+                lastAnimRetraceMsRef.current = now;
+                // Force fingerprint recalculation by triggering a React re-render
+                setAnimTickRef.current(t => t + 1);
+            }
         }
     });
 
@@ -876,10 +917,6 @@ export const OpticalTable: React.FC = () => {
         setScanAccumConfig(config => ({ steps: config.steps, trigger: config.trigger + 1 }));
     }, [animPlaying, animator, components, opticsFingerprint, setScanAccumConfig]);
 
-    // Refs to hold expensive solver results for card sampling effect
-    const solverPathsRef = useRef<Ray[][]>([]);
-    const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
-    const solver3PathsRef = useRef<Ray[][]>([]);
     const forwardTraceCacheRef = useRef<ForwardTraceCache | null>(null);
     const solver1WorkerRef = useRef<Worker | null>(null);
     const solver1WorkerBusyRef = useRef(false);
@@ -888,6 +925,7 @@ export const OpticalTable: React.FC = () => {
     const solver1WorkerJobIdRef = useRef(0);
     const solver1WorkerJobsRef = useRef<Map<number, PendingForwardTrace>>(new Map());
     const lastOpticsFingerprintRef = useRef<string>('');
+
     const minForwardRayCount = rayConfig.viewerMode === 'planes'
         ? OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT
         : MIN_FORWARD_RAY_COUNT;
@@ -2341,8 +2379,7 @@ export const OpticalTable: React.FC = () => {
                     power,
                     polarization: {
                         x: { re: polXre / polMag, im: polXim / polMag },
-                        y: { re: polYre / polMag, im: polYim / polMag }
-                    },
+                        y: { re: polYre / polMag, im: polYim / polMag }, z: { re: 0, im: 0 }},
                     phase: meanPhase,
                     centerU: meanU,
                     centerV: meanV,
@@ -2370,6 +2407,7 @@ export const OpticalTable: React.FC = () => {
                 hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
                 minOpacity={rayConfig.minRayOpacity}
                 maxOpacity={rayConfig.maxRayOpacity}
+                colorByPolarization={rayConfig.colorByPolarization}
             />
             {solver3Paths.length > 0 && (
                 <RayVisualizer
@@ -2379,6 +2417,7 @@ export const OpticalTable: React.FC = () => {
                     hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
                     minOpacity={rayConfig.minRayOpacity}
                     maxOpacity={rayConfig.maxRayOpacity}
+                    colorByPolarization={rayConfig.colorByPolarization}
                 />
             )}
             {rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave' && (

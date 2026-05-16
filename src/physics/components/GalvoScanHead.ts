@@ -1,6 +1,6 @@
 import { Vector3, Quaternion } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, reflectJones } from '../types';
 import { reflectVector } from '../math_solvers';
 
 /**
@@ -98,26 +98,19 @@ export class GalvoScanHead extends OpticalComponent {
 
         reflectedDir.normalize();
 
-        // Mirror-style polarization (π phase shift)
-        const polX = ray.polarization.x;
-        const polY = ray.polarization.y;
+        // Mirror reflection — keeps E-field transverse to new direction.
+        const newPolarization = reflectJones(
+            ray.polarization, ray.direction, hit.normal, reflectedDir,
+        );
 
         return {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
-                polarization: {
-                    x: { re: -polX.re, im: -polX.im },
-                    y: { re: -polY.re, im: -polY.im }
-                },
+                polarization: newPolarization,
                 opticalPathLength: ray.opticalPathLength + hit.t
             })]
         };
-    }
-
-    /** Solver 2 transfer matrix: identity (flat mirror). */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
     }
 
     getApertureRadius(): number {

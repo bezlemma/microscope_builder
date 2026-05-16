@@ -13,7 +13,7 @@ const ray = (origin: Vector3, direction: Vector3): Ray => ({
     direction,
     wavelength: 500e-9,
     intensity: 1,
-    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+    polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
     opticalPathLength: 0,
     footprintRadius: 0,
     coherenceMode: Coherence.Incoherent,

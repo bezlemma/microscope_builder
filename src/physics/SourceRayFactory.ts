@@ -16,7 +16,7 @@ import { PointSource3D } from './components/PointSource3D';
 import { ConeSource3D } from './components/ConeSource3D';
 import { WedgeSource2D } from './components/WedgeSource2D';
 import { StructuredSource } from './components/StructuredSource';
-import { Ray, Coherence, createRay } from './types';
+import { Ray, Coherence, createRay, defaultTransversePolarization } from './types';
 import {
     launchRigorousLaser,
     launchRigorousLampEmitterPoint,
@@ -243,10 +243,16 @@ export function createSourceRays(
                 : 0;
             const rayDirectionsPerPoint = mode === 'full' ? 1 + totalRays : 1;
             const sourcePointPower = (lampPower / spectralWavelengths.length) / effectiveSourcePoints;
-            const sourceId = `${lamp.id}_${wavelengthNm}nm`;
 
             for (let sourcePointIndex = 0; sourcePointIndex < effectiveSourcePoints; sourcePointIndex++) {
                 const origin = sourceOrigin(sourcePointIndex);
+                // Each (wavelength, emitter point) sub-bundle gets its own
+                // sourceId. Beamlets that share a sourceId are internally
+                // coherent (modulo the L_c cutoff inside Solver 2); different
+                // sub-bundles cannot interfere with one another.
+                const sourceId = effectiveSourcePoints > 1
+                    ? `${lamp.id}_${wavelengthNm}nm_pt${sourcePointIndex}`
+                    : `${lamp.id}_${wavelengthNm}nm`;
                 const beamlets = launchRigorousLampEmitterPoint({
                     origin,
                     direction,
@@ -282,13 +288,13 @@ export function createSourceRays(
         origin: Vector3, direction: Vector3, wavelengthM: number,
         intensity: number, footprint: number, sourceId: string,
         mainRay: boolean, sourceKind: Ray['sourceKind'],
-        coherenceMode: Coherence = Coherence.Incoherent,
+        coherenceMode: Coherence = Coherence.Coherent,
     ): Ray => createRay({
         origin: origin.clone(),
         direction: direction.clone().normalize(),
         wavelength: wavelengthM,
         intensity,
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: defaultTransversePolarization(direction),
         opticalPathLength: 0,
         footprintRadius: footprint,
         coherenceMode,
@@ -416,7 +422,7 @@ export function createSourceRays(
     for (const src of structuredSources) {
         src.updateMatrices();
         const wavelengthM = src.wavelength * 1e-9;
-        const { forward } = makeBasis(src.rotation);
+        const { forward, right, up } = makeBasis(src.rotation);
         const halfDiam = Math.max(0.05, finiteNonNegative(src.beamRadius, src.diameter / 2));
         const totalRays = mode === 'full' ? Math.max(1, rayCount) : 1;
 
@@ -450,6 +456,8 @@ export function createSourceRays(
         sourceRays.push(...launchRigorousStructured({
             origin: src.position.clone(),
             direction: forward,
+            right,
+            up,
             beamRadius: halfDiam,
             wavelengthM,
             totalPower: src.power,
@@ -472,7 +480,7 @@ export function createSourceRays(
             direction: pmtDir,
             wavelength: emWl,
             intensity: 0.3,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: defaultTransversePolarization(pmtDir),
             opticalPathLength: 0,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Coherent,

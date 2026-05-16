@@ -11,7 +11,6 @@ import { Solver1 } from '../Solver1';
 import { segmentBeamEnvelopeRadii } from '../Solver2';
 import { createSourceRays } from '../SourceRayFactory';
 import { Coherence, Ray } from '../types';
-import { coherentLaunchSigmaFromCellArea } from '../coherentPacketLaunch';
 
 function totalIntensityFor(component: { id: string }, rayCount: number): number {
     return createSourceRays([component as any], rayCount, 'full')
@@ -139,7 +138,7 @@ describe('SourceRayFactory', () => {
         expect(rays[0].footprintRadius).toBeLessThan(laser.beamRadius);
     });
 
-    test('laser launch carries explicit Gaussian Packet metadata', () => {
+    test('laser launch produces the expected ray count and conserves power', () => {
         const laser = new Laser('Packet laser');
         laser.power = 1.25;
         laser.beamRadius = 1.5;
@@ -150,12 +149,7 @@ describe('SourceRayFactory', () => {
         expect(totalPower).toBeCloseTo(laser.power, 6);
         expect(rays.length).toBe(49);
         for (const ray of rays) {
-            expect(ray.packetStateMode).toBe('explicit');
-            expect(ray.packetQ).toBeDefined();
-            expect(ray.sourceCellArea ?? 0).toBeGreaterThan(0);
-            expect(ray.sigmaU ?? 0).toBeCloseTo(coherentLaunchSigmaFromCellArea(ray.sourceCellArea ?? 0), 9);
-            expect(ray.sigmaV ?? 0).toBeCloseTo(coherentLaunchSigmaFromCellArea(ray.sourceCellArea ?? 0), 9);
-            expect(Math.abs(ray.majorAxis?.dot(ray.direction) ?? 1)).toBeLessThan(1e-6);
+            expect(ray.footprintRadius).toBeGreaterThan(0);
         }
     });
 

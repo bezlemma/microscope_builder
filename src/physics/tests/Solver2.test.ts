@@ -3,9 +3,6 @@ import { Vector3 } from "three";
 import {
     Solver2,
     GaussianBeamSegment,
-    beamRadius,
-    initialQ,
-    sampleBeamProfile
 } from "../Solver2";
 import { SphericalLens } from "../components/SphericalLens";
 import { Laser } from "../components/Laser";
@@ -19,7 +16,7 @@ function makeRay(origin: Vector3, direction: Vector3, overrides: Partial<Ray> = 
         direction: direction.normalize(),
         wavelength: 532e-9,
         intensity: 1.0,
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         footprintRadius: 0,
         coherenceMode: Coherence.Incoherent,
@@ -31,21 +28,15 @@ function makeRay(origin: Vector3, direction: Vector3, overrides: Partial<Ray> = 
 
 // ─── Helper: create a minimal GaussianBeamSegment ─────────────────────
 function makeSeg(overrides: Partial<GaussianBeamSegment> = {}): GaussianBeamSegment {
-    const wavelength = 532e-9;
-    const wavelengthMm = wavelength * 1e3;
-    const waist = 2; // mm
-    const q0 = initialQ(waist, wavelengthMm);
     return {
         start: new Vector3(0, 0, 0),
         end: new Vector3(100, 0, 0),
         direction: new Vector3(1, 0, 0),
-        wavelength,
+        wavelength: 532e-9,
         power: 1.0,
-        qx_start: { ...q0 },
-        qx_end: { re: q0.re + 100, im: q0.im },
-        qy_start: { ...q0 },
-        qy_end: { re: q0.re + 100, im: q0.im },
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        footprintStart: 2,
+        footprintEnd: 2,
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         refractiveIndex: 1.0,
         coherenceMode: Coherence.Coherent,
@@ -120,54 +111,6 @@ describe("Beer-Lambert Absorption", () => {
             expect(lastSeg.power).toBeLessThan(0.95);
             expect(lastSeg.power).toBeGreaterThan(0); // Not fully extinct
         }
-    });
-});
-
-// ═══════════════════════════════════════════════════════════════════════
-// FEATURE 2: Refractive Index q-parameter Scaling
-// ═══════════════════════════════════════════════════════════════════════
-
-describe("Refractive Index q-parameter Scaling", () => {
-    test("Beam radius in glass is smaller than in air for same q", () => {
-        const wavelength = 532e-9;
-        const wavelengthMm = wavelength * 1e3;
-        const waist = 2; // mm
-        const q0 = initialQ(waist, wavelengthMm);
-
-        // Same q-parameter, different media
-        const w_air = beamRadius(q0, wavelengthMm);
-        const w_glass = beamRadius(q0, wavelengthMm / 1.5);
-
-        // Beam should be tighter in glass (λ/n is smaller)
-        expect(w_glass).toBeLessThan(w_air);
-
-        // For BK7 (n=1.5), the beam radius scales as sqrt(λ/n) / sqrt(λ) = 1/sqrt(n)
-        // w_glass / w_air ≈ 1/sqrt(1.5) ≈ 0.816
-        const ratio = w_glass / w_air;
-        expect(ratio).toBeCloseTo(1 / Math.sqrt(1.5), 1);
-    });
-
-    test("sampleBeamProfile uses effective wavelength for glass segments", () => {
-        const seg = makeSeg({
-            refractiveIndex: 1.5,
-            start: new Vector3(0, 0, 0),
-            end: new Vector3(10, 0, 0)
-        });
-
-        const samplesGlass = sampleBeamProfile(seg, 5);
-
-        // Same segment in air
-        const segAir = makeSeg({
-            refractiveIndex: 1.0,
-            start: new Vector3(0, 0, 0),
-            end: new Vector3(10, 0, 0)
-        });
-
-        const samplesAir = sampleBeamProfile(segAir, 5);
-
-        // At the start (z=0), beam in glass should be tighter than in air
-        expect(samplesGlass[0].wx).toBeLessThan(samplesAir[0].wx);
-        expect(samplesGlass[0].wy).toBeLessThan(samplesAir[0].wy);
     });
 });
 
@@ -265,11 +208,11 @@ describe("E-field Intensity Query", () => {
         // X-polarized and Y-polarized beams should add incoherently
         const seg1 = makeSeg({
             opticalPathLength: 0,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } }
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }}
         });
         const seg2 = makeSeg({
             opticalPathLength: 0,
-            polarization: { x: { re: 0, im: 0 }, y: { re: 1, im: 0 } }
+            polarization: { x: { re: 0, im: 0 }, y: { re: 1, im: 0 }, z: { re: 0, im: 0 }}
         });
 
         const point = new Vector3(50, 0, 0);

@@ -37,9 +37,9 @@ export function createBrightfieldScene(): OpticalComponent[] {
 
     // 1. Lamp — broadband white light source.  Brightfield is absorption
     // imaging, not fluorescence, so 3 wavelengths (R/G/B) are plenty for
-    // correct appearance and give a ~4× speedup over the default 13-band set.
+    // correct appearance and give a noticeable speedup over the default.
     const lamp = new Lamp("White Light Source");
-    lamp.spectralWavelengths = [460, 540, 620];
+    lamp.spectralCount = 3;
     lamp.setPosition(-100, 0, 0);
     lamp.pointAlong(1, 0, 0);  // emit along +X
     lamp.beamRadius = 3;

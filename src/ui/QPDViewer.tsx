@@ -1,8 +1,13 @@
 import React, { useMemo } from 'react';
-import { useAtom } from 'jotai';
+import { useAtomValue, useStore } from 'jotai';
 import { QPD } from '../physics/components/QPD';
 import { TrappedBead } from '../physics/components/TrappedBead';
-import { componentsAtom, forwardRaysAtom, trapBeamSegmentsAtom } from '../state/store';
+import {
+    componentsAtom,
+    forwardRaysRevisionAtom,
+    trapBeamSegmentsAtom,
+    trapBeamSegmentsRevisionAtom,
+} from '../state/store';
 import { estimateTrapFieldDiagnostics } from '../physics/trapDiagnostics';
 
 interface QPDViewerProps {
@@ -41,18 +46,18 @@ function statusForQPD(qpd: QPD): { label: string; color: string } {
 }
 
 export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
-    const [forwardRays] = useAtom(forwardRaysAtom);
-    const [components] = useAtom(componentsAtom);
-    const [trapBeamSegments] = useAtom(trapBeamSegmentsAtom);
+    const components = useAtomValue(componentsAtom);
+    const forwardRaysRevision = useAtomValue(forwardRaysRevisionAtom);
+    const trapBeamSegmentsRevision = useAtomValue(trapBeamSegmentsRevisionAtom);
+    const store = useStore();
     const size = compact ? 128 : 220;
     const status = statusForQPD(qpd);
     const maxQuadrant = Math.max(...qpd.quadrants, 1e-15);
-    const traceCount = forwardRays.length;
 
     const trapField = useMemo(() => {
         const bead = components.find((component): component is TrappedBead => component instanceof TrappedBead);
-        return bead ? estimateTrapFieldDiagnostics(bead, trapBeamSegments) : null;
-    }, [components, trapBeamSegments, traceCount]);
+        return bead ? estimateTrapFieldDiagnostics(bead, store.get(trapBeamSegmentsAtom)) : null;
+    }, [components, forwardRaysRevision, trapBeamSegmentsRevision, store]);
 
     const spotX = size / 2 + qpd.signalX * size * 0.38;
     const spotY = size / 2 - qpd.signalY * size * 0.38;

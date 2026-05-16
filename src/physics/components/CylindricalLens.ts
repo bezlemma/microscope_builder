@@ -1,4 +1,4 @@
-import { Vector3, BufferGeometry, Float32BufferAttribute, Euler } from 'three';
+import { Vector3, BufferGeometry, Float32BufferAttribute } from 'three';
 import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult } from '../types';
 import { OpticMesh, NormalFn } from '../OpticMesh';
@@ -307,114 +307,7 @@ export class CylindricalLens extends OpticalComponent {
         );
     }
 
-    /**
-     * Solver 2 transfer matrix for the tangential plane (Y-Z, where cylindrical curvature acts).
-     * Same thick-lens compound matrix as SphericalLens.
-     * Returns [A, B, C, D].
-     */
-    getTangentialParaxialTransform(): [number, number, number, number] {
-        const R1 = this.r1;
-        const R2 = this.r2;
-        const n = this.ior;
-        const t = this.thickness;
-
-        // Convention B (reduced ray): standard for Gaussian-beam q propagation.
-        const C1 = -(n - 1) / R1;
-        const C2 = (n - 1) / R2;
-        const B_prop = t / n;
-
-        // Chain: M2 × M_prop × M1
-        const a1 = 1 + B_prop * C1;
-        const b1 = B_prop;
-        const c1 = C1;
-        const d1 = 1;
-
-        const A = a1;
-        const B = b1;
-        const C = C2 * a1 + c1;
-        const D = C2 * b1 + d1;
-
-        return [A, B, C, D];
-    }
-
-    /**
-     * Solver 2 transfer matrix for the sagittal plane (X-Z, no curvature — flat window).
-     * Just propagation through glass: [[1, t/n], [0, 1]]
-     * Returns [A, B, C, D].
-     */
-    getSagittalParaxialTransform(): [number, number, number, number] {
-        return [1, this.thickness / this.ior, 0, 1];
-    }
-
     getApertureRadius(): number {
         return this.apertureRadius;
-    }
-
-    /** Override: cylindrical lens has different tangential/sagittal transfer based on
-     *  which Solver2 transverse axis aligns with the lens curvature direction.
-     *
-     *  The curvature acts in the local Y direction (axis along local X).
-     *  Solver2 constructs a transverse frame {right, localUp} from the beam
-     *  direction using a cross-product convention with fallback up=(0,1,0).
-     *  We need to figure out whether Solver2's "right" or "localUp" aligns
-     *  with our curvature direction (local Y in world space) and assign
-     *  the tangential transfer accordingly.
-     */
-    getParaxialProfile(rayDirection?: Vector3): {
-        transformX: [number, number, number, number];
-        transformY: [number, number, number, number];
-        apertureRadius: number;
-    } {
-        // Get the lens's local Y axis in world coordinates (the curvature direction)
-        this.updateMatrices();
-        const localY = new Vector3(0, 1, 0).applyQuaternion(this.rotation).normalize();
-
-        if (rayDirection) {
-            // Reconstruct Solver2's transverse frame from the ray direction
-            // (must match Solver2.queryIntensity's logic exactly)
-            const segDir = rayDirection.clone().normalize();
-            const up = new Vector3(0, 1, 0);
-            if (Math.abs(segDir.dot(up)) > 0.99) up.set(1, 0, 0);
-            const right = new Vector3().crossVectors(segDir, up).normalize();
-            const localUp = new Vector3().crossVectors(right, segDir).normalize();
-
-            // Check which transverse axis has more overlap with our curvature Y
-            const rightDotY = Math.abs(right.dot(localY));
-            const upDotY = Math.abs(localUp.dot(localY));
-
-            if (rightDotY > upDotY) {
-                // Curvature aligns with Solver2's "right"  → transformX = tangential
-                return {
-                    transformX: this.getTangentialParaxialTransform(),
-                    transformY: this.getSagittalParaxialTransform(),
-                    apertureRadius: this.getApertureRadius()
-                };
-            } else {
-                // Curvature aligns with Solver2's "localUp" → transformY = tangential
-                return {
-                    transformX: this.getSagittalParaxialTransform(),
-                    transformY: this.getTangentialParaxialTransform(),
-                    apertureRadius: this.getApertureRadius()
-                };
-            }
-        }
-
-        // Fallback when no ray direction given — use old heuristic
-        const euler = new Euler().setFromQuaternion(this.rotation);
-        const isRotated90 = Math.abs(Math.cos(euler.z)) < 0.5;
-
-        if (isRotated90) {
-            return {
-                transformX: this.getTangentialParaxialTransform(),
-                transformY: this.getSagittalParaxialTransform(),
-                apertureRadius: this.getApertureRadius()
-            };
-        } else {
-            return {
-                transformX: this.getSagittalParaxialTransform(),
-                transformY: this.getTangentialParaxialTransform(),
-                apertureRadius: this.getApertureRadius()
-            };
-        }
     }
 }

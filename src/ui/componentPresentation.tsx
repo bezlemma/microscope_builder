@@ -104,6 +104,8 @@ export interface ComponentCapabilities {
     isCylindrical: boolean;
     isCurvedMirror: boolean;
     isFlatMirror: boolean;
+    isBeamSplitter: boolean;
+    isPolarizingBeamSplitter: boolean;
     isSample: boolean;
     isGalvoCapable: boolean;
     isScanHead: boolean;
@@ -212,6 +214,8 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
     const isDualGalvo = component instanceof DualGalvoScanHead;
     const isScanHead = component instanceof GalvoScanHead || isDualGalvo;
     const isFlatMirror = isMirror && !isCurvedMirror && !isDichroic && !isPolygonOptic;
+    const isBeamSplitter = component instanceof BeamSplitter;
+    const isPolarizingBeamSplitter = component instanceof PolarizingBeamSplitter;
     const isGalvoCapable = isFlatMirror || isCurvedMirror;
     const isPMT = component instanceof PMT;
     const isCamera = component instanceof Camera;
@@ -249,6 +253,8 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
         isCylindrical,
         isCurvedMirror,
         isFlatMirror,
+        isBeamSplitter,
+        isPolarizingBeamSplitter,
         isSample,
         isGalvoCapable,
         isScanHead,

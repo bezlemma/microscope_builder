@@ -76,11 +76,6 @@ export class SampleChamber extends Sample {
         );
     }
 
-    /** Solver 2 transfer matrix: no focusing power. */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
     getApertureRadius(): number {
         return this.cubeSize / 2;
     }

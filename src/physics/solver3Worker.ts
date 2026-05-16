@@ -163,19 +163,6 @@ const CONVERGENCE_ABSOLUTE_EPSILON = 1e-10;
 export interface SerializedRay {
     origin: { x: number; y: number; z: number };
     direction: { x: number; y: number; z: number };
-    majorAxis?: { x: number; y: number; z: number };
-    majorLength?: number;
-    tanAlpha?: number;
-    eU?: number;
-    eV?: number;
-    sigmaU?: number;
-    sigmaV?: number;
-    curvatureRadiusU?: number;
-    curvatureRadiusV?: number;
-    packetQ?: Ray['packetQ'];
-    packetStateMode?: Ray['packetStateMode'];
-    transverseProfile?: Ray['transverseProfile'];
-    transverseProfileOrder?: number;
     wavelength: number;
     bandwidth?: number;
     intensity: number;
@@ -189,7 +176,6 @@ export interface SerializedRay {
     sourceKind?: Ray['sourceKind'];
     packetLaunchRigor?: Ray['packetLaunchRigor'];
     sourcePosition?: { x: number; y: number; z: number };
-    sourceCellArea?: number;
     isMainRay?: boolean;
     isBackward?: boolean;
     polarization?: Ray['polarization'];
@@ -212,21 +198,6 @@ function serializeRay(ray: Ray): SerializedRay {
     return {
         origin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         direction: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
-        majorAxis: ray.majorAxis
-            ? { x: ray.majorAxis.x, y: ray.majorAxis.y, z: ray.majorAxis.z }
-            : undefined,
-        majorLength: ray.majorLength,
-        tanAlpha: ray.tanAlpha,
-        eU: ray.eU,
-        eV: ray.eV,
-        sigmaU: ray.sigmaU,
-        sigmaV: ray.sigmaV,
-        curvatureRadiusU: ray.curvatureRadiusU,
-        curvatureRadiusV: ray.curvatureRadiusV,
-        packetQ: ray.packetQ,
-        packetStateMode: ray.packetStateMode,
-        transverseProfile: ray.transverseProfile,
-        transverseProfileOrder: ray.transverseProfileOrder,
         wavelength: ray.wavelength,
         bandwidth: ray.bandwidth,
         intensity: ray.intensity,
@@ -242,7 +213,6 @@ function serializeRay(ray: Ray): SerializedRay {
         sourcePosition: ray.sourcePosition
             ? { x: ray.sourcePosition.x, y: ray.sourcePosition.y, z: ray.sourcePosition.z }
             : undefined,
-        sourceCellArea: ray.sourceCellArea,
         isMainRay: ray.isMainRay,
         isBackward: ray.isBackward,
         polarization: ray.polarization,
@@ -366,7 +336,7 @@ async function runPMTScan(
                 direction: dir,
                 wavelength: emissionWavelengthM,
                 intensity: 1.0,
-                polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 } },
+                polarization: { x: { re: Math.cos(polAngle), im: 0 }, y: { re: Math.sin(polAngle), im: 0 }, z: { re: 0, im: 0 }},
                 opticalPathLength: 0,
                 footprintRadius: 0.1,
                 coherenceMode: Coherence.Incoherent,

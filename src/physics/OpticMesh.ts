@@ -3,7 +3,7 @@ import {
     DoubleSide, BufferAttribute, Triangle
 } from 'three';
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
-import { childRay } from './types';
+import { childRay, refractJones, reflectJones, JonesVector } from './types';
 import { cleanVec } from './math_solvers';
 import { applyPacketMediumIndex } from './rayTransport';
 
@@ -271,6 +271,14 @@ export class OpticMesh {
         // Ensure entry normal faces against the incoming ray
         if (entryNormal.dot(localDir) > 0) entryNormal.negate();
 
+        // Polarization tracking: we update the world-frame Jones vector at every
+        // direction change (refraction or TIR bounce) so it stays transverse to
+        // the running propagation direction. Without this, a PBS downstream
+        // misreads the longitudinal leak as a mixed S/P state.
+        const incidentDirWorld = ray.direction.clone().normalize();
+        let currentDirWorld = incidentDirWorld.clone();
+        let currentJones: JonesVector = ray.polarization;
+
         // 1. Refract at Entry (Exterior → Glass)
         const dirInside = OpticMesh.refract(localDir, entryNormal, nAirEntry, nGlass);
         if (!dirInside) {
@@ -280,15 +288,28 @@ export class OpticMesh {
                 .sub(entryNormal.clone().multiplyScalar(2 * dotDN))
                 .normalize();
             const dirReflWorld = reflected.transformDirection(localToWorld).normalize();
+            const entryNormalWorld = entryNormal.clone().transformDirection(localToWorld).normalize();
+            const reflJones = reflectJones(currentJones, currentDirWorld, entryNormalWorld, dirReflWorld);
             return {
                 rays: [childInMedium({
                     origin: worldEntryPoint,
                     direction: dirReflWorld,
-                    entryPoint: worldEntryPoint
+                    entryPoint: worldEntryPoint,
+                    polarization: reflJones,
                 }, nAirEntry)]
             };
         }
         cleanVec(dirInside);
+
+        // Reproject the Jones vector onto the transverse plane of the refracted
+        // (interior) direction. S amplitude is preserved; the P basis rotates
+        // with the new direction so the field stays physical.
+        {
+            const dirInsideWorld = dirInside.clone().transformDirection(localToWorld).normalize();
+            const entryNormalWorld = entryNormal.clone().transformDirection(localToWorld).normalize();
+            currentJones = refractJones(currentJones, currentDirWorld, entryNormalWorld, dirInsideWorld);
+            currentDirWorld = dirInsideWorld;
+        }
 
         // 2. Trace through interior with internal reflection support
         const MAX_BOUNCES = 8;
@@ -408,13 +429,16 @@ export class OpticMesh {
                         if (dirOut) {
                             const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
                             const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
+                            const exitNormalWorld = exitNormal.clone().transformDirection(localToWorld).normalize();
+                            const exitJones = refractJones(currentJones, currentDirWorld, exitNormalWorld, dirOutWorld);
                             return {
                                 rays: [childInMedium({
                                     origin: exitPointWorld,
                                     direction: dirOutWorld,
                                     opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                                     entryPoint: worldEntryPoint,
-                                    internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                                    internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                                    polarization: exitJones,
                                 }, nAirExit)]
                             };
                         }
@@ -431,7 +455,8 @@ export class OpticMesh {
                             direction: dirOutWorld,
                             opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
-                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
+                            internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
+                            polarization: currentJones,
                         }, nAirEntry)]
                     };
                 }
@@ -469,6 +494,8 @@ export class OpticMesh {
                 // Transform to world space and return
                 const dirOutWorld = dirOut.transformDirection(localToWorld).normalize();
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
+                const exitNormalWorld = exitNormal.clone().transformDirection(localToWorld).normalize();
+                const exitJones = refractJones(currentJones, currentDirWorld, exitNormalWorld, dirOutWorld);
 
                 return {
                     rays: [childInMedium({
@@ -478,7 +505,8 @@ export class OpticMesh {
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         exitSurfaceId: (exitSurfaceLabel && hit.faceIndex !== undefined)
-                            ? exitSurfaceLabel(hit.faceIndex) : undefined
+                            ? exitSurfaceLabel(hit.faceIndex) : undefined,
+                        polarization: exitJones,
                     }, nAirExit)]
                 };
             }
@@ -499,13 +527,19 @@ export class OpticMesh {
 
                 const dirOutWorld = dirOutLocal.transformDirection(localToWorld).normalize();
                 const exitPointWorld = hit.point.clone().applyMatrix4(localToWorld);
+                // Grazing fallback is non-physical, but still reproject so the
+                // outgoing Jones doesn't carry a longitudinal component into
+                // downstream optics.
+                const exitNormalWorld = exitNormal.clone().transformDirection(localToWorld).normalize();
+                const grazingJones = refractJones(currentJones, currentDirWorld, exitNormalWorld, dirOutWorld);
 
                 return {
                     rays: [childInMedium({
                         origin: exitPointWorld,
                         direction: dirOutWorld,
                         opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
-                        entryPoint: worldEntryPoint
+                        entryPoint: worldEntryPoint,
+                        polarization: grazingJones,
                     }, nAirExit)]
                 };
             }
@@ -516,9 +550,18 @@ export class OpticMesh {
             // Internal reflection: reflect the ray and continue tracing
             const outwardNormal = exitNormal.clone().negate();
             const dotDN = currentDir.dot(outwardNormal);
-            currentDir = currentDir.clone()
+            const reflectedDir = currentDir.clone()
                 .sub(outwardNormal.clone().multiplyScalar(2 * dotDN))
                 .normalize();
+            // Apply mirror-style reflection (S-flip, P-preserve, retransverse)
+            // to the running Jones vector before we update currentDirWorld.
+            {
+                const reflectedDirWorld = reflectedDir.clone().transformDirection(localToWorld).normalize();
+                const outwardNormalWorld = outwardNormal.clone().transformDirection(localToWorld).normalize();
+                currentJones = reflectJones(currentJones, currentDirWorld, outwardNormalWorld, reflectedDirWorld);
+                currentDirWorld = reflectedDirWorld;
+            }
+            currentDir = reflectedDir;
             currentOrigin = hit.point.clone().add(currentDir.clone().multiplyScalar(0.01));
         }
 

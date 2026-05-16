@@ -391,47 +391,6 @@ export class SphericalLens extends OpticalComponent {
         );
     }
 
-    /**
-     * Solver 2 transfer matrix for Gaussian-beam propagation.
-     * Thick-lens compound matrix:
-     *   M = M_refract(R2) × M_propagate(t/n) × M_refract(R1)
-     *
-     * Convention: R > 0 means center of curvature is to the right of the surface.
-     * Returns [A, B, C, D].
-     */
-    getParaxialTransform(): [number, number, number, number] {
-        const { R1, R2 } = this.getRadii();
-        const n = this.ior;
-        const t = this.thickness;
-
-        // Convention B (reduced ray): standard for Gaussian-beam q propagation.
-        // Refraction matrix:  [[1, 0], [-(n2-n1)/R, 1]]
-        // Propagation in n:   [[1, d/n], [0, 1]]
-        //
-        // Surface 1 (air→glass, n1=1, n2=n):
-        const C1 = -(n - 1) / R1;
-        // Surface 2 (glass→air, n1=n, n2=1):
-        const C2 = (n - 1) / R2;
-        // Propagation through glass thickness t at index n:
-        const B_prop = t / n;
-
-        // Chain: M = M2 × M_prop × M1
-        // M1 = [[1, 0], [C1, 1]],  M_prop = [[1, B_prop], [0, 1]],  M2 = [[1, 0], [C2, 1]]
-
-        // Step 1: M_prop × M1
-        const a1 = 1 + B_prop * C1;
-        const b1 = B_prop;
-        const c1 = C1;
-        const d1 = 1;
-
-        // Step 2: M2 × (M_prop × M1)
-        const A = a1;
-        const B = b1;
-        const C = C2 * a1 + c1;
-        const D = C2 * b1 + d1;
-
-        return [A, B, C, D];
-    }
 
     getApertureRadius(): number {
         return this.apertureRadius;

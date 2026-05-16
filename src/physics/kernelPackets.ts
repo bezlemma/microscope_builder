@@ -21,7 +21,7 @@ export const SOLVER3_KERNEL_ABI_VERSION = 1;
 export const PACKED_COMPONENT_MATRIX_STRIDE = 16;
 export const PACKED_COMPONENT_BOUNDS_STRIDE = 6;
 export const PACKED_DETECTOR_BASIS_STRIDE = 12;
-export const PACKED_BEAM_SEGMENT_SCALAR_STRIDE = 27;
+export const PACKED_BEAM_SEGMENT_SCALAR_STRIDE = 19;
 export const PACKED_SURFACE_PARAM_STRIDE = 8;
 export const PACKED_INTERACTION_INPUT_STRIDE = 16;
 export const PACKED_INTERACTION_OUTPUT_STRIDE = 16;
@@ -295,10 +295,6 @@ export function createPackedBeamField(beamSegments: GaussianBeamSegment[][]): Pa
                 segment.direction.x, segment.direction.y, segment.direction.z,
                 segment.wavelength,
                 segment.power,
-                segment.qx_start.re, segment.qx_start.im,
-                segment.qx_end.re, segment.qx_end.im,
-                segment.qy_start.re, segment.qy_start.im,
-                segment.qy_end.re, segment.qy_end.im,
                 segment.footprintStart ?? -1,
                 segment.footprintEnd ?? -1,
                 segment.opticalPathLength,

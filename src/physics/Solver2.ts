@@ -1,70 +1,27 @@
 import { Vector3 } from 'three';
 import { Ray, JonesVector, Coherence } from './types';
 import { OpticalComponent } from './Component';
-import { Complex, cInv } from './complex';
 import { Solver1 } from './Solver1';
 import { erf } from './math_solvers';
-
-// ─── Legacy q-Parameter Helpers ───────────────────────────────────────
-//
-// Solver 2 now builds beamlet envelopes directly from Solver 1 ray paths.
-// These helpers remain as a compatibility path for tests, fixtures, and any
-// callers that still construct analytic q-based segments by hand.
-
-/**
- * Compute beam radius w(z) from the q-parameter.
- * 1/q = 1/R - i·λ/(π·w²)
- * So Im(1/q) = -λ/(π·w²), therefore w = sqrt(-λ/(π·Im(1/q)))
- */
-export function beamRadius(q: Complex, wavelengthMm: number): number {
-    const invQ = cInv(q);
-    const imInvQ = invQ.im;
-    if (imInvQ >= 0) return 100;
-    return Math.sqrt(-wavelengthMm / (Math.PI * imInvQ));
-}
-
-/**
- * Compute wavefront radius of curvature R(z) from the q-parameter.
- * Re(1/q) = 1/R
- */
-export function wavefrontRadius(q: Complex): number {
-    const invQ = cInv(q);
-    if (Math.abs(invQ.re) < 1e-15) return Infinity;
-    return 1 / invQ.re;
-}
-
-/**
- * Initialize q-parameter from beam waist:
- *   q₀ = i · π · w₀² / λ
- * where w₀ is beam waist radius and λ is wavelength (both in mm).
- */
-export function initialQ(waistRadius: number, wavelengthMm: number): Complex {
-    return { re: 0, im: Math.PI * waistRadius * waistRadius / wavelengthMm };
-}
 
 // ─── Data Structures ──────────────────────────────────────────────────
 
 /**
- * A single Solver 2 beam segment.
+ * A single beam segment — one length of a beamlet between two interactions.
  *
- * The production path uses `footprintStart`/`footprintEnd`, estimated from the
- * neighboring Solver 1 rays in the same beamlet cohort. The q fields remain for
- * legacy callers that still construct analytic Gaussian segments directly.
+ * Width along the segment is set by `footprintStart`/`footprintEnd`, estimated
+ * from the neighbouring rays in the same beamlet cohort. The whole-beam envelope
+ * (`beamRadiusStart`/`beamRadiusEnd`) is a separate cohort-wide measurement.
  */
 export interface GaussianBeamSegment {
     start: Vector3;
     end: Vector3;
     direction: Vector3;
     wavelength: number;     // meters (SI, matching Ray.wavelength)
+    bandwidth?: number;     // meters (SI) — spectral width Δλ for coherence-length cutoff
     power: number;          // Beam power carried by this beamlet segment
     sourceId?: string;
     bundleKey?: string;
-
-    // Legacy q-parameter data retained for fallback/tests.
-    qx_start: Complex;
-    qx_end: Complex;
-    qy_start: Complex;
-    qy_end: Complex;
 
     // Beamlet footprint estimate [mm] at the segment start/end.
     footprintStart?: number;
@@ -78,11 +35,25 @@ export interface GaussianBeamSegment {
     opticalPathLength: number;
     refractiveIndex: number;
     coherenceMode: Coherence;
-    
+
     // Performance caches
     bounds?: Float64Array;
     basis?: Float64Array;
     length?: number;
+}
+
+/**
+ * Coherence length L_c = λ² / Δλ, in mm.
+ *
+ * Beamlets in the same coherent sub-bundle interfere only when their optical
+ * path lengths at the query point agree to within L_c. Above that, the
+ * temporal envelopes don't overlap and the field sums add as intensities.
+ *
+ * A zero or undefined bandwidth means infinite coherence length (lasers).
+ */
+export function coherenceLengthMm(wavelengthM: number, bandwidthM: number | undefined): number {
+    if (!bandwidthM || bandwidthM <= 0) return Number.POSITIVE_INFINITY;
+    return (wavelengthM * wavelengthM / bandwidthM) * 1e3;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -97,19 +68,11 @@ function getSegmentLength(segment: GaussianBeamSegment): number {
 }
 
 function ensureSegmentBounds(seg: GaussianBeamSegment): Float64Array {
-    const segLength = getSegmentLength(seg);
     if (!seg.bounds) {
         const sx = seg.start.x, sy = seg.start.y, sz = seg.start.z;
         const ex = seg.end.x, ey = seg.end.y, ez = seg.end.z;
-        let startR = Math.max(seg.footprintStart ?? seg.footprintEnd ?? 0.05, 0.05);
-        let endR = Math.max(seg.footprintEnd ?? seg.footprintStart ?? 0.05, 0.05);
-        if (seg.footprintStart === undefined && seg.footprintEnd === undefined) {
-            const midRadii = legacySegmentBeamRadii(seg, segLength * 0.5);
-            const startRadii = legacySegmentBeamRadii(seg, 0);
-            const endRadii = legacySegmentBeamRadii(seg, segLength);
-            startR = Math.max(startRadii.wx, startRadii.wy, midRadii.wx, midRadii.wy, 0.05);
-            endR = Math.max(endRadii.wx, endRadii.wy, midRadii.wx, midRadii.wy, 0.05);
-        }
+        const startR = Math.max(seg.footprintStart ?? seg.footprintEnd ?? 0.05, 0.05);
+        const endR = Math.max(seg.footprintEnd ?? seg.footprintStart ?? 0.05, 0.05);
         const maxR = Math.max(startR, endR) * 10.0;
         seg.bounds = new Float64Array([
             Math.min(sx, ex) - maxR, Math.min(sy, ey) - maxR, Math.min(sz, ez) - maxR,
@@ -147,6 +110,9 @@ function getSegmentBasis(segment: GaussianBeamSegment): Float64Array {
 interface PreparedBranch {
     segments: GaussianBeamSegment[];
     wavelength: number;
+    /** Coherence length [mm] derived from the segment bandwidth. Used to bin
+     *  beamlet contributions inside a coherent sub-bundle. */
+    coherenceLengthMm: number;
     sourceKey: string;
     coherent: boolean;
     bounds: Float64Array;
@@ -177,6 +143,7 @@ function createPreparedBranch(branch: GaussianBeamSegment[], _fallbackIndex: num
     return {
         segments: branch,
         wavelength: first.wavelength,
+        coherenceLengthMm: coherenceLengthMm(first.wavelength, first.bandwidth),
         sourceKey: first.sourceId ?? '__anonymous__',
         coherent: mode === Coherence.Coherent || mode === undefined,
         bounds: new Float64Array([minX, minY, minZ, maxX, maxY, maxZ]),
@@ -221,25 +188,9 @@ function branchContainsPoint(branch: PreparedBranch, px: number, py: number, pz:
     return px >= b[0] && py >= b[1] && pz >= b[2] && px <= b[3] && py <= b[4] && pz <= b[5];
 }
 
-function legacySegmentBeamRadii(
-    segment: GaussianBeamSegment,
-    distanceAlong: number
-): { wx: number; wy: number } {
-    const wavelengthMm = segment.wavelength * 1e3;
-    const effectiveWavelength = wavelengthMm / (segment.refractiveIndex || 1.0);
-    const qx: Complex = { re: segment.qx_start.re + distanceAlong, im: segment.qx_start.im };
-    const qy: Complex = { re: segment.qy_start.re + distanceAlong, im: segment.qy_start.im };
-    return {
-        wx: beamRadius(qx, effectiveWavelength),
-        wy: beamRadius(qy, effectiveWavelength),
-    };
-}
-
 /**
- * Beam radii at a point along a segment.
- *
- * Production segments use beamlet footprints from Solver 1 geometry.
- * Legacy/manual segments fall back to q-parameter evaluation.
+ * Beam radii at a point along a segment, from the per-endpoint footprints
+ * that the forward tracer's cohort estimator wrote.
  */
 export function segmentBeamRadii(
     segment: GaussianBeamSegment,
@@ -248,15 +199,11 @@ export function segmentBeamRadii(
     const segLength = getSegmentLength(segment);
     const clampedDistance = clamp(distanceAlong, 0, segLength);
 
-    if (segment.footprintStart !== undefined || segment.footprintEnd !== undefined) {
-        const start = Math.max(segment.footprintStart ?? segment.footprintEnd ?? 0.05, 0.05);
-        const end = Math.max(segment.footprintEnd ?? segment.footprintStart ?? start, 0.05);
-        const frac = segLength > 1e-9 ? clampedDistance / segLength : 0;
-        const radius = start + (end - start) * frac;
-        return { wx: radius, wy: radius };
-    }
-
-    return legacySegmentBeamRadii(segment, clampedDistance);
+    const start = Math.max(segment.footprintStart ?? segment.footprintEnd ?? 0.05, 0.05);
+    const end = Math.max(segment.footprintEnd ?? segment.footprintStart ?? start, 0.05);
+    const frac = segLength > 1e-9 ? clampedDistance / segLength : 0;
+    const radius = start + (end - start) * frac;
+    return { wx: radius, wy: radius };
 }
 
 export function segmentBeamEnvelopeRadii(
@@ -309,7 +256,7 @@ export class Solver2 {
         py: number,
         pz: number,
         segments: GaussianBeamSegment[]
-    ): { intensity: number; polarization: JonesVector; phase: number } | null {
+    ): { intensity: number; polarization: JonesVector; phase: number; opl: number } | null {
         if (segments.length === 0) return null;
 
         let bestSeg: GaussianBeamSegment | null = null;
@@ -378,22 +325,31 @@ export class Solver2 {
 
         const wavelengthMm = seg.wavelength * 1e3;
         const n = seg.refractiveIndex || 1.0;
-        const phase = (2 * Math.PI / wavelengthMm) * (seg.opticalPathLength + bestT * n);
+        const opl = seg.opticalPathLength + bestT * n;
+        const phase = (2 * Math.PI / wavelengthMm) * opl;
 
         return {
             intensity,
             polarization: seg.polarization,
-            phase
+            phase,
+            opl,
         };
     }
 
     /**
      * Query the total intensity at a 3D point from all beamlet branches.
      *
-     * Branches with Coherence.Coherent that share a sourceId are summed coherently
-     * (same emitter → they can interfere). Branches from different sources sum
-     * incoherently even if both are flagged coherent, since separate lasers/lamps
-     * are mutually incoherent in practice.
+     * Coherent grouping is two-tiered:
+     *   1. Branches that share the same `sourceId` belong to the same coherent
+     *      sub-bundle (same emitter point at the same wavelength).
+     *   2. Inside one sub-bundle, beamlet contributions are further binned by
+     *      `floor(opl / L_c)` where L_c = λ²/Δλ is the coherence length derived
+     *      from the segment bandwidth. Contributions in the same bin sum
+     *      coherently; contributions in different bins add as intensities.
+     *      A bandwidth of 0 (laser) gives an infinite coherence length, so the
+     *      whole sub-bundle is one bin and sums fully coherently.
+     *
+     * Incoherent branches always add as intensities.
      */
     static queryIntensityMultiBeam(
         px: number,
@@ -418,86 +374,69 @@ export class Solver2 {
             return result?.intensity ?? 0;
         }
 
-        let sameCoherentSource: string | null = null;
-        let allSameCoherentSource = true;
-        let allIncoherent = true;
-        for (const branch of branches) {
-            if (branch.coherent) {
-                allIncoherent = false;
-                if (sameCoherentSource === null) sameCoherentSource = branch.sourceKey;
-                else if (sameCoherentSource !== branch.sourceKey) allSameCoherentSource = false;
-            } else {
-                allSameCoherentSource = false;
-            }
-        }
-
-        if (allIncoherent) {
-            let total = 0;
-            for (const branch of branches) {
-                const result = Solver2.queryIntensity(px, py, pz, branch.segments);
-                if (result && result.intensity >= 1e-12) total += result.intensity;
-            }
-            return total;
-        }
-
-        if (allSameCoherentSource) {
-            let exRe = 0, exIm = 0, eyRe = 0, eyIm = 0;
-            for (const branch of branches) {
-                const result = Solver2.queryIntensity(px, py, pz, branch.segments);
-                if (!result || result.intensity < 1e-12) continue;
-
-                const amplitude = Math.sqrt(result.intensity);
-                const cosPhi = Math.cos(result.phase);
-                const sinPhi = Math.sin(result.phase);
-                const jx = result.polarization.x;
-                const jy = result.polarization.y;
-
-                exRe += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
-                exIm += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
-                eyRe += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
-                eyIm += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
-            }
-            return exRe * exRe + exIm * exIm + eyRe * eyRe + eyIm * eyIm;
-        }
-
-        // Per-coherence-group accumulators: keyed by sourceId (or a stable fallback).
-        const groups = new Map<string, { ex_re: number; ex_im: number; ey_re: number; ey_im: number }>();
+        // Group keyed by `sourceKey|opl_bin`. Same key → coherent sum of E.
+        // Different keys → incoherent sum of |E|². All three Cartesian Jones
+        // components have to be summed — a ray going in world +X has its
+        // transverse field in the (Y, Z) plane, so dropping z would silently
+        // discard the entire field of a horizontally-propagating lamp.
+        type Acc = {
+            ex_re: number; ex_im: number;
+            ey_re: number; ey_im: number;
+            ez_re: number; ez_im: number;
+        };
+        const groups = new Map<string, Acc>();
         let incoherentSum = 0;
 
         for (const branch of branches) {
             const result = Solver2.queryIntensity(px, py, pz, branch.segments);
             if (!result || result.intensity < 1e-12) continue;
 
-            if (branch.coherent) {
-                // Branches from the same source may interfere; branches from different
-                // sources (different lasers, different lamp wavelengths) must not.
-                let acc = groups.get(branch.sourceKey);
-                if (!acc) {
-                    acc = { ex_re: 0, ex_im: 0, ey_re: 0, ey_im: 0 };
-                    groups.set(branch.sourceKey, acc);
-                }
-
-                const amplitude = Math.sqrt(result.intensity);
-                const phi = result.phase;
-                const cosPhi = Math.cos(phi);
-                const sinPhi = Math.sin(phi);
-
-                const jx = result.polarization.x;
-                acc.ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
-                acc.ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
-
-                const jy = result.polarization.y;
-                acc.ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
-                acc.ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
-            } else {
+            if (!branch.coherent) {
                 incoherentSum += result.intensity;
+                continue;
+            }
+
+            // Bin by the local optical-path-length, in units of the branch's
+            // coherence length. Finite Lc means beamlets whose OPLs drift past
+            // each other by more than Lc lose their phase relationship.
+            const Lc = branch.coherenceLengthMm;
+            const bin = Number.isFinite(Lc) ? Math.floor(result.opl / Lc) : 0;
+            const key = `${branch.sourceKey}|${bin}`;
+
+            let acc = groups.get(key);
+            if (!acc) {
+                acc = {
+                    ex_re: 0, ex_im: 0,
+                    ey_re: 0, ey_im: 0,
+                    ez_re: 0, ez_im: 0,
+                };
+                groups.set(key, acc);
+            }
+
+            const amplitude = Math.sqrt(result.intensity);
+            const cosPhi = Math.cos(result.phase);
+            const sinPhi = Math.sin(result.phase);
+
+            const jx = result.polarization.x;
+            acc.ex_re += amplitude * (jx.re * cosPhi - jx.im * sinPhi);
+            acc.ex_im += amplitude * (jx.re * sinPhi + jx.im * cosPhi);
+
+            const jy = result.polarization.y;
+            acc.ey_re += amplitude * (jy.re * cosPhi - jy.im * sinPhi);
+            acc.ey_im += amplitude * (jy.re * sinPhi + jy.im * cosPhi);
+
+            const jz = result.polarization.z;
+            if (jz) {
+                acc.ez_re += amplitude * (jz.re * cosPhi - jz.im * sinPhi);
+                acc.ez_im += amplitude * (jz.re * sinPhi + jz.im * cosPhi);
             }
         }
 
         let totalIntensity = incoherentSum;
         for (const acc of groups.values()) {
             totalIntensity += acc.ex_re * acc.ex_re + acc.ex_im * acc.ex_im
-                            + acc.ey_re * acc.ey_re + acc.ey_im * acc.ey_im;
+                            + acc.ey_re * acc.ey_re + acc.ey_im * acc.ey_im
+                            + acc.ez_re * acc.ez_re + acc.ez_im * acc.ez_im;
         }
         return totalIntensity;
     }

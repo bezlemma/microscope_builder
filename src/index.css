@@ -82,6 +82,31 @@ canvas {
   background: transparent;
 }
 
+/* ─── Splash screen animations ───────────────────────────── */
+
+@keyframes splash-reticle-pulse {
+  0%, 100% { opacity: 0.16; }
+  50%      { opacity: 0.26; }
+}
+
+/* Preset gallery on the splash. The marquee is JS-driven (Splash.tsx adjusts
+ * scrollLeft in a requestAnimationFrame loop) so the user keeps a real
+ * horizontal scrollbar and can drag / wheel / touch through the strip. */
+.splash-strip::-webkit-scrollbar {
+  height: 8px;
+}
+.splash-strip::-webkit-scrollbar-thumb {
+  background: rgba(100, 255, 218, 0.32);
+  border-radius: 4px;
+}
+.splash-strip::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 255, 218, 0.55);
+}
+.splash-strip::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+}
+
 /* ─── Premium Mobile Gradients & Interactions ─── */
 
 .cyber-btn {

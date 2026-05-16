@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
-import { Coherence, Ray, createRay } from './types';
-import { collimatedPacketQFromSourceCellArea } from './coherentPacketLaunch';
+import { Coherence, Ray, createRay, defaultTransversePolarization } from './types';
 
 export interface LaunchRigor {
     rigorous: boolean;
@@ -43,18 +42,17 @@ export function getLaunchRigor(component: { constructor: { name: string } }): La
     return LAUNCH_RIGOR[component.constructor.name] ?? null;
 }
 
-export const HEX_GABOR_FACTOR = 0.7;
-const LEGACY_DISPLAY_BANDWIDTH_SCALE = 1.2;
-const LEGACY_DISPLAY_MAX_FRACTION = 0.95;
-const LEGACY_DISPLAY_MIN_FRACTION = 0.08;
+const DISPLAY_BANDWIDTH_SCALE = 1.2;
+const DISPLAY_MAX_FRACTION = 0.95;
+const DISPLAY_MIN_FRACTION = 0.08;
 
-function displayFootprintRadius(beamRadius: number, packetCount: number, packetSigma: number): number {
-    if (packetCount <= 1) return Math.max(beamRadius, Math.SQRT2 * packetSigma, 0.05);
+function displayFootprintRadius(beamRadius: number, packetCount: number): number {
+    if (packetCount <= 1) return Math.max(beamRadius, 0.05);
     const bandwidthFraction = Math.min(
-        LEGACY_DISPLAY_MAX_FRACTION,
-        Math.max(LEGACY_DISPLAY_MIN_FRACTION, LEGACY_DISPLAY_BANDWIDTH_SCALE * packetCount ** (-1 / 6)),
+        DISPLAY_MAX_FRACTION,
+        Math.max(DISPLAY_MIN_FRACTION, DISPLAY_BANDWIDTH_SCALE * packetCount ** (-1 / 6)),
     );
-    return Math.max(beamRadius * bandwidthFraction, Math.SQRT2 * packetSigma, 0.05);
+    return Math.max(beamRadius * bandwidthFraction, 0.05);
 }
 
 function buildPerpBasis(forward: Vector3): { right: Vector3; up: Vector3 } {
@@ -153,7 +151,6 @@ function sampleProfilePositions(
 }
 
 export interface RigorousRayLaunch {
-    packetSigma: number;
     rayCount: number;
     rays: Ray[];
 }
@@ -193,14 +190,10 @@ export function launchRigorousLaser(params: {
         profileAmplitude(intensityProfile, x, y, safeRadius)
     );
     positions.sort((a, b) => (a.x * a.x + a.y * a.y) - (b.x * b.x + b.y * b.y));
-    const diskArea = Math.PI * safeRadius * safeRadius;
-    const cellArea = diskArea / Math.max(positions.length, 1);
-    const sigma = HEX_GABOR_FACTOR * Math.sqrt(cellArea / (Math.sqrt(3) / 2));
-    const packetQ = collimatedPacketQFromSourceCellArea(wavelengthM, 1, cellArea);
-    const displayFootprint = displayFootprintRadius(safeRadius, positions.length, sigma);
+    const displayFootprint = displayFootprintRadius(safeRadius, positions.length);
     const { right, up } = buildPerpBasis(direction);
     const dir = direction.clone().normalize();
-    const jones = polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } };
+    const jones = polarization ?? defaultTransversePolarization(direction);
     const intensityPerRay = totalPower / Math.max(positions.length, 1);
     const rays = positions.map((p, index) => {
         const rayOrigin = origin.clone()
@@ -222,28 +215,21 @@ export function launchRigorousLaser(params: {
             sourceKind,
             packetLaunchRigor: 'rigorous',
             sourcePosition: rayOrigin.clone(),
-            sourceCellArea: cellArea,
-            sigmaU: sigma,
-            sigmaV: sigma,
-            curvatureRadiusU: Number.POSITIVE_INFINITY,
-            curvatureRadiusV: Number.POSITIVE_INFINITY,
-            packetQ,
-            packetStateMode: 'explicit',
-            transverseProfile: 'gaussian',
-            transverseProfileOrder: 1,
-            majorAxis: right.clone(),
-            majorLength: Math.max(3 * sigma, 0.001),
-            tanAlpha: (wavelengthM * 1e3) / (Math.PI * Math.max(safeRadius, 0.001)),
             isMainRay: index === 0,
         });
     });
 
-    return { packetSigma: sigma, rayCount: rays.length, rays };
+    return { rayCount: rays.length, rays };
 }
 
 export function launchRigorousStructured(params: {
     origin: Vector3;
     direction: Vector3;
+    /** Component's local +X axis in world coords. Required for anisotropic patterns
+     *  so the mask orientation tracks the source's rotation/roll. */
+    right?: Vector3;
+    /** Component's local +Y axis in world coords. */
+    up?: Vector3;
     beamRadius: number;
     wavelengthM: number;
     bandwidth?: number;
@@ -263,6 +249,13 @@ export function launchRigorousStructured(params: {
 export function launchRigorousMaskedSource(params: {
     origin: Vector3;
     direction: Vector3;
+    /** Component's local +X axis in world coords. If omitted, an arbitrary
+     *  perpendicular basis is built from `direction` — fine for rotationally
+     *  symmetric masks but wrong for anisotropic patterns whose orientation
+     *  must follow the source's local frame. */
+    right?: Vector3;
+    /** Component's local +Y axis in world coords. */
+    up?: Vector3;
     beamRadius: number;
     wavelengthM: number;
     bandwidth?: number;
@@ -277,19 +270,18 @@ export function launchRigorousMaskedSource(params: {
     const {
         origin, direction, beamRadius, wavelengthM, totalPower, targetRayCount,
         maskFn, sourceId, sourceKind, coherenceMode, bandwidth, polarization,
+        right: rightOverride, up: upOverride,
     } = params;
     const N = Math.max(1, Math.floor(targetRayCount));
     const safeRadius = Math.max(beamRadius, 0.001);
     const positions = sampleProfilePositions(N, safeRadius, maskFn);
     positions.sort((a, b) => (a.x * a.x + a.y * a.y) - (b.x * b.x + b.y * b.y));
-    const diskArea = Math.PI * safeRadius * safeRadius;
-    const cellArea = diskArea / Math.max(positions.length, 1);
-    const sigma = HEX_GABOR_FACTOR * Math.sqrt(cellArea / (Math.sqrt(3) / 2));
-    const packetQ = collimatedPacketQFromSourceCellArea(wavelengthM, 1, cellArea);
-    const displayFootprint = displayFootprintRadius(safeRadius, positions.length, sigma);
-    const { right, up } = buildPerpBasis(direction);
+    const displayFootprint = displayFootprintRadius(safeRadius, positions.length);
+    const { right, up } = rightOverride && upOverride
+        ? { right: rightOverride.clone().normalize(), up: upOverride.clone().normalize() }
+        : buildPerpBasis(direction);
     const dir = direction.clone().normalize();
-    const jones = polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } };
+    const jones = polarization ?? defaultTransversePolarization(direction);
     const intensityPerRay = totalPower / Math.max(positions.length, 1);
     const rays = positions.map((p, index) => {
         const rayOrigin = origin.clone()
@@ -311,22 +303,10 @@ export function launchRigorousMaskedSource(params: {
             sourceKind,
             packetLaunchRigor: 'rigorous',
             sourcePosition: rayOrigin.clone(),
-            sourceCellArea: cellArea,
-            sigmaU: sigma,
-            sigmaV: sigma,
-            curvatureRadiusU: Number.POSITIVE_INFINITY,
-            curvatureRadiusV: Number.POSITIVE_INFINITY,
-            packetQ,
-            packetStateMode: 'explicit',
-            transverseProfile: 'gaussian',
-            transverseProfileOrder: 1,
-            majorAxis: right.clone(),
-            majorLength: Math.max(3 * sigma, 0.001),
-            tanAlpha: (wavelengthM * 1e3) / (Math.PI * Math.max(safeRadius, 0.001)),
             isMainRay: index === 0,
         });
     });
-    return { packetSigma: sigma, rayCount: rays.length, rays };
+    return { rayCount: rays.length, rays };
 }
 
 export function launchRigorousLampEmitterPoint(params: {
@@ -344,6 +324,11 @@ export function launchRigorousLampEmitterPoint(params: {
     return launchRigorousLaser({
         ...params,
         sourceKind: 'lamp',
-        coherenceMode: Coherence.Incoherent,
+        // Each (wavelength, emitter point) sub-bundle is internally coherent.
+        // Solver 2 / cardFieldSynthesis bin contributions by OPL inside one
+        // sourceId, with bin size set by the coherence length L_c = λ²/Δλ
+        // derived from the lamp bandwidth (10 nm here → L_c ≈ 30 µm). Beamlets
+        // whose paths diverge by more than L_c automatically decohere.
+        coherenceMode: Coherence.Coherent,
     });
 }

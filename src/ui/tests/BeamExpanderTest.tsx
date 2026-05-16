@@ -57,19 +57,19 @@ export const BeamExpanderTest: React.FC = () => {
             {
                 origin: new Vector3(-50, 0, 0),
                 direction: new Vector3(1, 0, 0),
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             },
             // Marginal + (y=5)
             {
                 origin: new Vector3(-50, 5, 0),
                 direction: new Vector3(1, 0, 0),
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             },
             // Marginal - (y=-5)
             {
                 origin: new Vector3(-50, -5, 0),
                 direction: new Vector3(1, 0, 0),
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             }
         ];
 

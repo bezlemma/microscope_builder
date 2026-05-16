@@ -112,6 +112,14 @@ function buildProfileShapeGeo(profile: Vector2[]): ShapeGeometry {
     return new ShapeGeometry(shape);
 }
 
+function useDisposableGeometry<T extends BufferGeometry>(factory: () => T, deps: React.DependencyList): T {
+    const geometry = useMemo(factory, deps);
+    React.useEffect(() => () => {
+        geometry.dispose();
+    }, [geometry]);
+    return geometry;
+}
+
 /**
  * Explicit rim outline for LatheGeometry-based lenses.
  * EdgesGeometry doesn't work well on curved lathe surfaces (picks up seam,
@@ -194,7 +202,7 @@ const WallWithHole = ({ wallSize, holeRadius, thickness, position, rotation, col
     rotation: [number, number, number];
     color: string;
 }) => {
-    const geometry = useMemo(() => {
+    const geometry = useDisposableGeometry(() => {
         const hs = wallSize / 2;
         const shape = new Shape();
         shape.moveTo(-hs, -hs);
@@ -671,7 +679,7 @@ export const DualGalvoScanHeadVisualizer = ({ component }: { component: DualGalv
 };
 
 export const PolygonScannerVisualizer = ({ component }: { component: PolygonScanner }) => {
-    const geometry = useMemo(() => component.buildDisplayGeometry(), [component.version]);
+    const geometry = useDisposableGeometry(() => component.buildDisplayGeometry(), [component.version]);
 
     return (
         <group
@@ -696,7 +704,7 @@ export const PolygonScannerVisualizer = ({ component }: { component: PolygonScan
 };
 
 export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
-    const geom = useMemo(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
+    const geom = useDisposableGeometry(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
@@ -721,24 +729,48 @@ export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror 
 
 export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter }) => {
     const radius = component.diameter / 2;
+    const [blend] = useAtom(cameraBlendAtom);
+    const opticColor = '#88ccff';
+    const show3D = blend > 0.01;
+    const show2D = blend < 0.99;
+    const flatOpacity = 0.5;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color="#88ccff"
-                    metalness={0.3}
-                    roughness={0.1}
-                    transparent={true}
-                    opacity={0.6}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                />
-            </mesh>
+            {show2D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                    <meshBasicMaterial
+                        color={opticColor}
+                        transparent
+                        opacity={flatOpacity * (1 - blend)}
+                        depthWrite={false}
+                        side={DoubleSide}
+                    />
+                </mesh>
+            )}
+            {show3D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                    <meshPhysicalMaterial
+                        color={opticColor}
+                        transmission={blend * 0.95}
+                        opacity={0.5 * blend}
+                        transparent
+                        roughness={0.1 * (1 - blend)}
+                        metalness={0}
+                        ior={1.5}
+                        thickness={0.5}
+                        attenuationColor="#aaddff"
+                        attenuationDistance={5}
+                        side={DoubleSide}
+                        depthWrite={false}
+                    />
+                </mesh>
+            )}
         </group>
     );
 };
@@ -863,24 +895,47 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
     const radius = component.diameter / 2;
     const dominantNm = component.spectralProfile.getDominantPassWavelength();
     const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#88ccff';
+    const [blend] = useAtom(cameraBlendAtom);
+    const show3D = blend > 0.01;
+    const show2D = blend < 0.99;
+    const flatOpacity = 0.5;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color={tintColor}
-                    metalness={0.4}
-                    roughness={0.05}
-                    transparent={true}
-                    opacity={0.55}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                />
-            </mesh>
+            {show2D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                    <meshBasicMaterial
+                        color={tintColor}
+                        transparent
+                        opacity={flatOpacity * (1 - blend)}
+                        depthWrite={false}
+                        side={DoubleSide}
+                    />
+                </mesh>
+            )}
+            {show3D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+                    <meshPhysicalMaterial
+                        color={tintColor}
+                        transmission={blend * 0.95}
+                        opacity={0.5 * blend}
+                        transparent
+                        roughness={0.1 * (1 - blend)}
+                        metalness={0}
+                        ior={1.5}
+                        thickness={0.5}
+                        attenuationColor="#aaddff"
+                        attenuationDistance={5}
+                        side={DoubleSide}
+                        depthWrite={false}
+                    />
+                </mesh>
+            )}
         </group>
     );
 };
@@ -1030,8 +1085,8 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
 
     const [blend] = useAtom(cameraBlendAtom);
 
-    const lensGeo = useMemo(() => new LatheGeometry(profilePoints, 32), [profilePoints]);
-    const lensFlatGeo = useMemo(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
+    const lensGeo = useDisposableGeometry(() => new LatheGeometry(profilePoints, 32), [profilePoints]);
+    const lensFlatGeo = useDisposableGeometry(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
 
     const lensColor = component.ior > 1.55 ? "#88ffee" : "#aaddff";
     const lensEmissive = isSelected ? "#64ffda" : "#000000";
@@ -1113,8 +1168,8 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
     );
 
     const [blend] = useAtom(cameraBlendAtom);
-    const lensGeo = useMemo(() => new LatheGeometry(profilePoints, 64), [profilePoints]);
-    const lensFlatGeo = useMemo(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
+    const lensGeo = useDisposableGeometry(() => new LatheGeometry(profilePoints, 64), [profilePoints]);
+    const lensFlatGeo = useDisposableGeometry(() => buildProfileShapeGeo(profilePoints), [profilePoints]);
 
     const lensColor = component.ior > 1.55 ? '#88ffee' : '#aaddff';
     const lensEmissive = isSelected ? '#64ffda' : '#000000';
@@ -1291,7 +1346,7 @@ export const IdealLensVisualizer = ({ component }: { component: IdealLens }) => 
 };
 
 export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
-    const geometry = useMemo(() => {
+    const geometry = useDisposableGeometry(() => {
         const segsY = 24;
         const segsX = 2;
         const halfW = component.width / 2;
@@ -1435,7 +1490,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
 };
 
 export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-    const geometry = useMemo(() => component.buildDisplayGeometry(), [component.version]);
+    const geometry = useDisposableGeometry(() => component.buildDisplayGeometry(), [component.version]);
 
     return (
         <group
@@ -1464,7 +1519,7 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
     const [blend] = useAtom(cameraBlendAtom);
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
-    const geometry = useMemo(() => component.buildDisplayGeometry(), [component.version]);
+    const geometry = useDisposableGeometry(() => component.buildDisplayGeometry(), [component.version]);
 
     const isGlass = component.faceModes.some(m => m === 'refractive');
 
@@ -1604,7 +1659,7 @@ export const MediumVolumeVisualizer = ({ component }: { component: MediumVolume 
 
 export const DiffuserVisualizer = ({ component }: { component: Diffuser }) => {
     const radius = component.diameter / 2;
-    const geo = useMemo(() => new CylinderGeometry(radius, radius, component.thickness, 32), [radius, component.thickness]);
+    const geo = useDisposableGeometry(() => new CylinderGeometry(radius, radius, component.thickness, 32), [radius, component.thickness]);
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
@@ -1750,11 +1805,11 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
         [component.version],
     );
 
-    const frontGeo = useMemo(() => new LatheGeometry(frontProfile, 32), [frontProfile]);
-    const backGeo = useMemo(() => new LatheGeometry(backProfile, 32), [backProfile]);
+    const frontGeo = useDisposableGeometry(() => new LatheGeometry(frontProfile, 32), [frontProfile]);
+    const backGeo = useDisposableGeometry(() => new LatheGeometry(backProfile, 32), [backProfile]);
 
-    const frontFlatGeo = useMemo(() => buildProfileShapeGeo(frontProfile), [frontProfile]);
-    const backFlatGeo = useMemo(() => buildProfileShapeGeo(backProfile), [backProfile]);
+    const frontFlatGeo = useDisposableGeometry(() => buildProfileShapeGeo(frontProfile), [frontProfile]);
+    const backFlatGeo = useDisposableGeometry(() => buildProfileShapeGeo(backProfile), [backProfile]);
 
     const frontColor = "#88ffee";
     const backColor  = "#aabbff";
@@ -1886,13 +1941,13 @@ export const StructuredSourceVisualizer: React.FC<{ component: StructuredSource 
                 <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
                 <EdgeOutline />
             </mesh>
-            <mesh position={[0, 20.1, -40]} rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[20, 38]} />
+            <mesh position={[0, 20.1, -33]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]}>
+                <planeGeometry args={[38, 20]} />
                 <meshBasicMaterial color={beamColor} />
             </mesh>
             <Text
                 position={[0, 20.2, -33]}
-                rotation={[-Math.PI / 2, 0, 0]}
+                rotation={[-Math.PI / 2, 0, -Math.PI / 2]}
                 fontSize={18}
                 color="#fff"
                 anchorX="center"

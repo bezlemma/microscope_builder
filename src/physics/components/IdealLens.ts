@@ -97,11 +97,7 @@ export class IdealLens extends OpticalComponent {
         };
     }
 
-    /**
-     * Solver 2 q-parameter transfer for the same ideal thin phase sheet.
-     * Returns [A, B, C, D].
-     */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, -1 / this.focalLength, 1];
+    getApertureRadius(): number {
+        return this.apertureRadius;
     }
 }

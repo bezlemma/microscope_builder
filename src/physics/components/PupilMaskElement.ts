@@ -122,14 +122,16 @@ export class PupilMaskElement extends OpticalComponent {
                 re: (m10.re * ex.re - m10.im * ex.im + m11.re * ey.re - m11.im * ey.im),
                 im: (m10.re * ex.im + m10.im * ex.re + m11.re * ey.im + m11.im * ey.re),
             };
-            polarization = { x: outX, y: outY };
+            polarization = { x: outX, y: outY, z: { re: ray.polarization.z.re, im: ray.polarization.z.im } };
         } else {
-            // Scalar phase: rotate both components
+            // Scalar phase: rotate all three components by the same complex phase factor.
             const ex = ray.polarization.x;
             const ey = ray.polarization.y;
+            const ez = ray.polarization.z;
             polarization = {
                 x: { re: ex.re * cosPhase - ex.im * sinPhase, im: ex.re * sinPhase + ex.im * cosPhase },
                 y: { re: ey.re * cosPhase - ey.im * sinPhase, im: ey.re * sinPhase + ey.im * cosPhase },
+                z: { re: ez.re * cosPhase - ez.im * sinPhase, im: ez.re * sinPhase + ez.im * cosPhase },
             };
         }
 

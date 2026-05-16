@@ -265,10 +265,6 @@ function buildEnvelopeProfile(
     });
 }
 
-function makeLegacyBeamState(radius: number) {
-    return { re: 0, im: Math.PI * Math.max(radius, 0.05) * Math.max(radius, 0.05) / 0.000532 };
-}
-
 function normalizeReverseSourceId(path: Ray[], pathIndex: number): string {
     const raw = path[0]?.sourceId ?? `reverse_path_${pathIndex}`;
     if (raw.startsWith('solver3_cam_') && raw.includes('_px')) {
@@ -306,7 +302,6 @@ function buildReverseBranch(path: Ray[], pathIndex: number): GaussianBeamSegment
         if (ray.intensity < 1e-6) break;
 
         const fallbackRadius = Math.max(ray.footprintRadius || 0.05, 0.05);
-        const legacyQ = makeLegacyBeamState(fallbackRadius);
         const previousRay = rayIndex > 0 ? path[rayIndex - 1] : undefined;
 
         if (ray.entryPoint) {
@@ -346,10 +341,6 @@ function buildReverseBranch(path: Ray[], pathIndex: number): GaussianBeamSegment
                     power: ray.intensity,
                     sourceId,
                     bundleKey: `${sourceId}|reverse|${rayIndex}|internal`,
-                    qx_start: legacyQ,
-                    qx_end: legacyQ,
-                    qy_start: legacyQ,
-                    qy_end: legacyQ,
                     footprintStart: fallbackRadius,
                     footprintEnd: fallbackRadius,
                     polarization: ray.polarization,
@@ -383,10 +374,6 @@ function buildReverseBranch(path: Ray[], pathIndex: number): GaussianBeamSegment
             power: ray.intensity,
             sourceId,
             bundleKey: `${sourceId}|reverse|${rayIndex}|travel`,
-            qx_start: legacyQ,
-            qx_end: legacyQ,
-            qy_start: legacyQ,
-            qy_end: legacyQ,
             footprintStart: fallbackRadius,
             footprintEnd: fallbackRadius,
             polarization: ray.polarization,
@@ -412,15 +399,15 @@ export function buildBundleWaveSegmentsFromRayPaths(paths: Ray[][]): BundleWaveS
 
 function normalizeJones(jones: JonesVector): JonesVector {
     const norm = Math.hypot(
-        jones.x.re,
-        jones.x.im,
-        jones.y.re,
-        jones.y.im
+        jones.x.re, jones.x.im,
+        jones.y.re, jones.y.im,
+        jones.z.re, jones.z.im,
     ) || 1;
 
     return {
         x: { re: jones.x.re / norm, im: jones.x.im / norm },
         y: { re: jones.y.re / norm, im: jones.y.im / norm },
+        z: { re: jones.z.re / norm, im: jones.z.im / norm },
     };
 }
 
@@ -428,6 +415,7 @@ function averagePolarization(segments: GaussianBeamSegment[]): JonesVector {
     const sum: JonesVector = {
         x: { re: 0, im: 0 },
         y: { re: 0, im: 0 },
+        z: { re: 0, im: 0 },
     };
 
     for (const segment of segments) {
@@ -436,6 +424,8 @@ function averagePolarization(segments: GaussianBeamSegment[]): JonesVector {
         sum.x.im += segment.polarization.x.im * weight;
         sum.y.re += segment.polarization.y.re * weight;
         sum.y.im += segment.polarization.y.im * weight;
+        sum.z.re += segment.polarization.z.re * weight;
+        sum.z.im += segment.polarization.z.im * weight;
     }
 
     return normalizeJones(sum);

@@ -1,13 +1,13 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
-import { useAtom } from 'jotai';
+import { useAtomValue, useStore } from 'jotai';
 import { Vector3, Euler } from 'three';
 import { defaultColloidColor, Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Camera as OpticCamera } from '../physics/components/Camera';
 import { TrappedBead } from '../physics/components/TrappedBead';
-import { forwardRaysAtom, componentsAtom, cameraImageTickAtom } from '../state/store';
+import { cameraImageTickAtom, componentsAtom, forwardRaysAtom, forwardRaysRevisionAtom } from '../state/store';
 import { wavelengthToCSS } from '../physics/spectral';
 import type { Ray } from '../physics/types';
 
@@ -369,21 +369,23 @@ const TrapCloseupViewer: React.FC<{
  * Pinnable mini 3D viewer that frames the sample tightly so the user can see
  * how forward / reverse rays hit and exit the specimen in real time as they
  * adjust upstream optics.  The viewer reads the same `forwardRaysAtom`
- * snapshot that drives the main scene, plus any reverse paths cached on
- * Camera components, so it stays in sync without re-tracing.
+ * snapshot that drives the main scene when its lightweight revision counter
+ * changes, plus any reverse paths cached on Camera components, so it stays in
+ * sync without re-tracing or subscribing to full Ray[][] payloads.
  *
  * Layout: 2×2 grid — three orthogonal axis views (X, Y, Z) and one
  * perspective 3D view in the corner.  All four cells render the same
  * geometry at the same scale so cross-checking ray paths is easy.
  */
 export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size = 240 }) => {
-    const [forwardRays] = useAtom(forwardRaysAtom);
-    const [components] = useAtom(componentsAtom);
+    const components = useAtomValue(componentsAtom);
+    const forwardRaysRevision = useAtomValue(forwardRaysRevisionAtom);
     // Reverse paths live on Camera instances and are mutated in place when
     // camera-done messages arrive (the components atom isn't reassigned), so
     // the segments memo wouldn't otherwise re-run.  cameraImageTickAtom bumps
     // on every camera-done, which gives us the trigger we need.
-    const [cameraImageTick] = useAtom(cameraImageTickAtom);
+    const cameraImageTick = useAtomValue(cameraImageTickAtom);
+    const store = useStore();
     const hasTrapBeads = components.some(c => c instanceof TrappedBead);
     const [trapViewerTick, setTrapViewerTick] = React.useState(0);
 
@@ -472,6 +474,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
         type Seg = { points: [number, number, number][]; color: string };
         const out: Seg[] = [];
         if (showTrapCloseup) return out;
+        const forwardRays = store.get(forwardRaysAtom);
 
         const trace = (paths: Ray[][]) => {
             for (const path of paths) {
@@ -502,7 +505,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
             if (c instanceof OpticCamera && c.solver3Paths) trace(c.solver3Paths);
         }
         return out;
-    }, [forwardRays, components, focus.x, focus.y, focus.z, cameraImageTick, showTrapCloseup]);
+    }, [components, focus.x, focus.y, focus.z, cameraImageTick, forwardRaysRevision, showTrapCloseup, store]);
 
     const tickRef = useRef(0);
     useEffect(() => { tickRef.current++; }, [sample.version]);

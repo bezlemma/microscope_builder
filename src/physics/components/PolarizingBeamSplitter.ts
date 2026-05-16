@@ -1,13 +1,27 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import {
+    Ray, HitRecord, InteractionResult,
+    childRay, jonesFromBasis, jonesProject,
+} from '../types';
 import { reflectVector } from '../math_solvers';
 
 /**
  * PolarizingBeamSplitter — Reflects S-polarization, Transmits P-polarization.
  *
- * Projects the incoming Jones vector onto the incidence surface plane
- * to dynamically partition beam energy between reflected and transmitted rays.
+ * Thin circular polarizing beam-splitter plate. The physics surface is the
+ * plate mid-plane (same convention as BeamSplitter and DichroicMirror); the
+ * visible thickness is the holder/substrate envelope.
+ *
+ * S and P are defined by the actual incidence plane on that surface:
+ *
+ *   s = normalize(d x n)
+ *   p = normalize(s x d)
+ *
+ * where d is the incoming ray direction and n is the surface normal facing the
+ * incoming side. Ideal coating rule: S reflects, P transmits. At normal
+ * incidence the incidence plane is undefined, so this ideal S/P plate has no
+ * physically defined split and passes the ray through.
  */
 export class PolarizingBeamSplitter extends OpticalComponent {
     diameter: number;
@@ -26,6 +40,19 @@ export class PolarizingBeamSplitter extends OpticalComponent {
             new Vector3(-r, -r, -thickness / 2),
             new Vector3(r, r, thickness / 2),
         );
+    }
+
+    private incidenceBasis(direction: Vector3, normal: Vector3): { sVec: Vector3; pVec: Vector3 } | null {
+        const d = direction.clone().normalize();
+        const n = normal.clone().normalize();
+        const sVec = new Vector3().crossVectors(d, n);
+        const sLen = sVec.length();
+        if (sLen < 1e-9) return null;
+        sVec.divideScalar(sLen);
+        return {
+            sVec,
+            pVec: new Vector3().crossVectors(sVec, d).normalize(),
+        };
     }
 
     intersect(rayLocal: Ray): HitRecord | null {
@@ -52,7 +79,6 @@ export class PolarizingBeamSplitter extends OpticalComponent {
 
     interact(ray: Ray, hit: HitRecord): InteractionResult {
         const approaching = ray.direction.dot(hit.normal) < 0;
-
         if (!approaching) {
             return {
                 rays: [childRay(ray, {
@@ -64,64 +90,75 @@ export class PolarizingBeamSplitter extends OpticalComponent {
         }
 
         const opl = ray.opticalPathLength + hit.t;
-        const Ex = ray.polarization.x;
-        const Ey = ray.polarization.y;
+        const d = ray.direction.clone().normalize();
+        const n = hit.normal.clone().normalize();
 
-        // Calculate power in S and P components
-        // S-polarization (perpendicular to incidence plane) is reflected
-        // P-polarization (parallel to incidence plane) is transmitted
-        const totalPower = Ex.re * Ex.re + Ex.im * Ex.im + Ey.re * Ey.re + Ey.im * Ey.im;
-        // For a PBS aligned with the component axes, S ~ y-component, P ~ x-component
-        const powerS = Ey.re * Ey.re + Ey.im * Ey.im;
-        const powerP = Ex.re * Ex.re + Ex.im * Ex.im;
-        const reflectFraction = totalPower > 1e-12 ? powerS / totalPower : 0;
-        const transmitFraction = totalPower > 1e-12 ? powerP / totalPower : 0;
+        const basis = this.incidenceBasis(d, n);
+        if (!basis) {
+            return {
+                rays: [childRay(ray, {
+                    origin: hit.point,
+                    intensity: ray.intensity,
+                    opticalPathLength: opl,
+                })]
+            };
+        }
+        const { sVec, pVec } = basis;
+
+        // Project the world-frame Jones vector onto the S and P basis vectors.
+        const Es = jonesProject(ray.polarization, sVec);
+        const Ep = jonesProject(ray.polarization, pVec);
+
+        const powerS = Es.re * Es.re + Es.im * Es.im;
+        const powerP = Ep.re * Ep.re + Ep.im * Ep.im;
+        const total = powerS + powerP;
+        if (total < 1e-12) {
+            // Unpolarized / zero-amplitude — no physically meaningful split.
+            // Send everything through to avoid disappearing the ray.
+            return {
+                rays: [childRay(ray, {
+                    origin: hit.point,
+                    intensity: ray.intensity,
+                    opticalPathLength: opl,
+                })]
+            };
+        }
+        const fR = powerS / total;
+        const fT = powerP / total;
 
         const raysOut: Ray[] = [];
 
-        // Reflected ray (S polarization).
-        // Normalize the output Jones vector to unit magnitude so the downstream
-        // |E|² = intensity · |Jones|² convention doesn't double-count the amplitude
-        // reduction that's already encoded in `intensity * reflectFraction`.
-        if (reflectFraction > 1e-6) {
-            const reflectedDir = reflectVector(ray.direction, hit.normal);
+        // Reflected: S-polarization preserved, π phase flip on reflection.
+        // Output Jones is unit-magnitude; intensity carries the split fraction.
+        if (fR > 1e-6) {
+            const reflectedDir = reflectVector(d, n);
             const sMag = Math.sqrt(powerS);
-            const nyRe = sMag > 1e-12 ? -Ey.re / sMag : 0;
-            const nyIm = sMag > 1e-12 ? -Ey.im / sMag : 0;
+            const phase = { re: -Es.re / sMag, im: -Es.im / sMag };
+            const newPolarization = jonesFromBasis(phase, sVec);
             raysOut.push(childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
-                intensity: ray.intensity * reflectFraction,
+                intensity: ray.intensity * fR,
                 opticalPathLength: opl,
-                polarization: {
-                    x: { re: 0, im: 0 },
-                    y: { re: nyRe, im: nyIm }, // unit-magnitude, π phase flip on reflection
-                },
+                polarization: newPolarization,
             }));
         }
 
-        // Transmitted ray (P polarization) — also unit-normalized.
-        if (transmitFraction > 1e-6) {
+        // Transmitted: P-polarization preserved, direction unchanged.
+        if (fT > 1e-6) {
             const pMag = Math.sqrt(powerP);
-            const nxRe = pMag > 1e-12 ? Ex.re / pMag : 0;
-            const nxIm = pMag > 1e-12 ? Ex.im / pMag : 0;
+            const phase = { re: Ep.re / pMag, im: Ep.im / pMag };
+            const newPolarization = jonesFromBasis(phase, pVec);
             raysOut.push(childRay(ray, {
                 origin: hit.point,
-                direction: ray.direction.clone(),
-                intensity: ray.intensity * transmitFraction,
+                direction: d.clone(),
+                intensity: ray.intensity * fT,
                 opticalPathLength: opl,
-                polarization: {
-                    x: { re: nxRe, im: nxIm },
-                    y: { re: 0, im: 0 },
-                },
+                polarization: newPolarization,
             }));
         }
 
         return { rays: raysOut };
-    }
-
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
     }
 
     getApertureRadius(): number {

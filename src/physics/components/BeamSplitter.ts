@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, reflectJones } from '../types';
 import { reflectVector } from '../math_solvers';
 
 /**
@@ -83,19 +83,17 @@ export class BeamSplitter extends OpticalComponent {
 
         const opl = ray.opticalPathLength + hit.t;
 
-        // Reflected ray — π phase shift on reflection (negate Jones vector)
+        // Reflected ray — proper incidence-plane reflection physics.
         const reflectedDir = reflectVector(ray.direction, hit.normal);
-        const polX = ray.polarization.x;
-        const polY = ray.polarization.y;
+        const reflectedPolarization = reflectJones(
+            ray.polarization, ray.direction, hit.normal, reflectedDir,
+        );
         const reflectedRay = childRay(ray, {
             origin: hit.point,
             direction: reflectedDir,
             intensity: ray.intensity * this.splitRatio,
             opticalPathLength: opl,
-            polarization: {
-                x: { re: -polX.re, im: -polX.im },
-                y: { re: -polY.re, im: -polY.im },
-            },
+            polarization: reflectedPolarization,
         });
 
         // Transmitted ray — passes straight through
@@ -109,11 +107,6 @@ export class BeamSplitter extends OpticalComponent {
         return {
             rays: [reflectedRay, transmittedRay]
         };
-    }
-
-    // Solver 2 transfer matrix — thin flat plate = identity.
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
     }
 
     getApertureRadius(): number {

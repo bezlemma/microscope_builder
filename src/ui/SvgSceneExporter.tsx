@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type React from 'react';
 import { useThree } from '@react-three/fiber';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useStore } from 'jotai';
 import { Color, Material, Object3D, Scene, Vector3, type Camera } from 'three';
 import { SVGRenderer } from 'three-stdlib';
 import { forwardRaysAtom, rayConfigAtom, reverseRaysAtom, svgExportRequestAtom } from '../state/store';
@@ -45,6 +45,15 @@ function formatSvgNumber(value: number): string {
 function rgbToHex(rgb: Pick<DisplayRGB, 'r' | 'g' | 'b'>): string {
     const toHex = (value: number) => Math.round(Math.min(1, Math.max(0, value)) * 255).toString(16).padStart(2, '0');
     return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
+}
+
+/** Mirrors `isThermalForDisplay` in `RayVisualizer.tsx`: thermal sources get
+ *  additive-blending wavelength colour even when the ray is tagged Coherent
+ *  (any nonzero spectral bandwidth means it's a lamp-like source). */
+function isThermalForDisplay(ray: Ray | undefined): boolean {
+    if (!ray) return false;
+    if (ray.coherenceMode === Coherence.Incoherent) return true;
+    return (ray.bandwidth ?? 0) > 0;
 }
 
 function coherentDisplayRGB(wavelengthMeters: number): DisplayRGB {
@@ -128,7 +137,7 @@ function rayVisualPoints(path: Ray[]): Vector3[] {
         const lastRay = lastVisibleRay(path);
         const terminalRelativeIntensity = relativePathIntensity(path, lastRay);
         const shouldDrawOpenTail = isMain
-            || path[0].coherenceMode === Coherence.Incoherent
+            || isThermalForDisplay(path[0])
             || terminalRelativeIntensity >= OPEN_TAIL_RELATIVE_INTENSITY;
         const dist = terminalVisualizationDistance(
             lastRay,
@@ -158,10 +167,9 @@ function raySvgStyle(path: Ray[], direction: RayExportDirection, minOpacity: num
     const wavelength = firstRay.wavelength;
     const wavelengthNm = wavelength * 1e9;
     const isMain = firstRay.isMainRay === true;
-    const isIncoherent = firstRay.coherenceMode === Coherence.Incoherent;
     const reverseScale = direction === 'reverse' ? 0.72 : 1;
 
-    if (isIncoherent) {
+    if (isThermalForDisplay(firstRay)) {
         const rgb = wavelengthToRGB(wavelengthNm);
         const rawOpacity = Math.min(1, firstRay.intensity);
         return {
@@ -427,9 +435,16 @@ function exportGroupedSvg(
 
 export const SvgSceneExporter: React.FC = () => {
     const request = useAtomValue(svgExportRequestAtom);
-    const forwardRays = useAtomValue(forwardRaysAtom);
-    const reverseRays = useAtomValue(reverseRaysAtom);
-    const rayConfig = useAtomValue(rayConfigAtom);
+    // This component lives INSIDE the R3F <Canvas> (it needs useThree for the
+    // scene/camera). R3F runs its own reconciler on a frame-driven schedule,
+    // so a component in here is not guaranteed a React render on every atom
+    // change. forwardRaysAtom / reverseRaysAtom are reassigned on every
+    // animation frame — subscribing to them with useAtomValue would queue one
+    // update (each retaining a full Ray[][]) per frame in this fiber's hook
+    // queue, and that queue never drains here → unbounded memory growth.
+    // We only need those ray snapshots at the instant of an export, so read
+    // them imperatively from the store (no subscription) inside the effect.
+    const store = useStore();
     const { camera, scene, size } = useThree();
     const lastRequestRef = useRef(request);
 
@@ -440,9 +455,10 @@ export const SvgSceneExporter: React.FC = () => {
         lastRequestRef.current = request;
 
         try {
+            const rayConfig = store.get(rayConfigAtom);
             const svg = exportGroupedSvg(scene, camera, size.width, size.height, {
-                forward: forwardRays,
-                reverse: reverseRays,
+                forward: store.get(forwardRaysAtom),
+                reverse: store.get(reverseRaysAtom),
                 minOpacity: rayConfig.minRayOpacity,
                 maxOpacity: rayConfig.maxRayOpacity,
             });
@@ -453,7 +469,7 @@ export const SvgSceneExporter: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Unknown SVG renderer error';
             window.alert(`SVG export failed: ${message}`);
         }
-    }, [camera, forwardRays, rayConfig.maxRayOpacity, rayConfig.minRayOpacity, request, reverseRays, scene, size.height, size.width]);
+    }, [camera, request, scene, size.height, size.width, store]);
 
     return null;
 };

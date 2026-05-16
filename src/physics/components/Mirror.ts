@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, reflectJones } from '../types';
 import { reflectVector } from '../math_solvers';
 
 export class Mirror extends OpticalComponent {
@@ -99,27 +99,21 @@ export class Mirror extends OpticalComponent {
         // Ray approaching from outside → reflect
         const reflectedDir = reflectVector(ray.direction, hit.normal);
 
-        // Mirror reflection introduces a π phase shift (E → -E)
-        // This negates both Jones vector components
-        const polX = ray.polarization.x;
-        const polY = ray.polarization.y;
+        // Reflect the Jones vector with the proper incidence-plane physics:
+        // π phase shift on S, no phase shift on P, and the P-basis rotates
+        // with the outgoing direction so the result stays transverse.
+        const newPolarization = reflectJones(
+            ray.polarization, ray.direction, hit.normal, reflectedDir,
+        );
 
         return {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
-                polarization: {
-                    x: { re: -polX.re, im: -polX.im },
-                    y: { re: -polY.re, im: -polY.im }
-                },
+                polarization: newPolarization,
                 opticalPathLength: ray.opticalPathLength + hit.t
             })]
         };
-    }
-
-    /** Solver 2 transfer matrix. Flat mirrors leave q unchanged. */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
     }
 
     getApertureRadius(): number {

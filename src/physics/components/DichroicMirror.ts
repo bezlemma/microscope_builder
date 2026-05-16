@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, reflectJones } from '../types';
 import { reflectVector } from '../math_solvers';
 import { SpectralProfile } from '../SpectralProfile';
 
@@ -122,18 +122,15 @@ export class DichroicMirror extends OpticalComponent {
         if (reflectedIntensity > minIntensity) {
             const reflectedDir = reflectVector(ray.direction, hit.normal);
 
-            // Mirror reflection introduces π phase shift (E → -E)
-            const polX = ray.polarization.x;
-            const polY = ray.polarization.y;
-
+            // Proper incidence-plane reflection physics.
+            const reflectedPolarization = reflectJones(
+                ray.polarization, ray.direction, hit.normal, reflectedDir,
+            );
             rays.push(childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
                 intensity: reflectedIntensity,
-                polarization: {
-                    x: { re: -polX.re, im: -polX.im },
-                    y: { re: -polY.re, im: -polY.im }
-                },
+                polarization: reflectedPolarization,
                 opticalPathLength: opl
             }));
         }
@@ -141,11 +138,6 @@ export class DichroicMirror extends OpticalComponent {
         return { rays };
     }
     
-
-    /** Solver 2 transfer matrix — identity (thin flat plate). */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
 
     getApertureRadius(): number {
         return this.diameter / 2;

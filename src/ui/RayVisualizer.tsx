@@ -1,19 +1,33 @@
 import React, { useRef } from 'react';
 import { Line } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import {
     Vector3,
     Color,
     NormalBlending,
     AdditiveBlending,
+    type Blending,
 } from 'three';
-import { Ray, Coherence } from '../physics/types';
+import { LineSegments2, LineSegmentsGeometry, LineMaterial } from 'three-stdlib';
+import { Ray, Coherence, polarizationToColor } from '../physics/types';
 import { wavelengthToRGB } from '../physics/spectral';
 
 type DisplayRGB = ReturnType<typeof wavelengthToRGB>;
 
 function rgbToCSS(rgb: Pick<DisplayRGB, 'r' | 'g' | 'b'>, scale = 1): string {
     return `rgb(${Math.round(rgb.r * 255 * scale)}, ${Math.round(rgb.g * 255 * scale)}, ${Math.round(rgb.b * 255 * scale)})`;
+}
+
+/** Visualisation predicate: a ray is "thermal" — and so should render with
+ *  the additive-blending wavelength colour rather than the laser-style
+ *  coherent path — if it is either tagged Incoherent or coherent with a
+ *  non-zero spectral bandwidth (e.g. one of a lamp's per-line sub-bundles).
+ *  Pure-coherent rays with Δλ = 0 (lasers, structured sources) keep the
+ *  laser look. */
+function isThermalForDisplay(ray: Ray | undefined): boolean {
+    if (!ray) return false;
+    if (ray.coherenceMode === Coherence.Incoherent) return true;
+    return (ray.bandwidth ?? 0) > 0;
 }
 
 function coherentDisplayRGB(wavelengthMeters: number): DisplayRGB {
@@ -39,17 +53,46 @@ function toVec3(v: { x: number; y: number; z: number }): Vector3 {
 }
 
 const MIN_DRAW_RELATIVE_INTENSITY = 1e-3;
+const POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY = 1e-6;
 const OPEN_TAIL_RELATIVE_INTENSITY = 3e-2;
 
-function lastVisibleRay(path: Ray[]): Ray | undefined {
-    const extinctIdx = path.findIndex(r => r.intensity < 1e-6);
-    if (extinctIdx >= 0) return path[Math.max(0, extinctIdx - 1)];
+function terminalBranchRay(path: Ray[]): Ray | undefined {
     return path[path.length - 1];
 }
 
 function relativePathIntensity(path: Ray[], ray: Ray | undefined): number {
     const sourceIntensity = Math.max(path[0]?.intensity ?? 0, 1e-12);
     return Math.max(0, Math.min(1, (ray?.intensity ?? 0) / sourceIntensity));
+}
+
+export function isMainRayPath(path: Ray[]): boolean {
+    return terminalBranchRay(path)?.isMainRay === true;
+}
+
+export function shouldDrawPolarizationPath(path: Ray[]): boolean {
+    if (path.length === 0) return false;
+    if (isMainRayPath(path)) return true;
+    return relativePathIntensity(path, terminalBranchRay(path)) >= POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY;
+}
+
+export function shouldDrawPolarizationOpenTail(path: Ray[]): boolean {
+    return shouldDrawPolarizationPath(path);
+}
+
+function polarizationSegmentVisibility(relativeIntensity: number): number {
+    const clamped = Math.max(0, Math.min(1, relativeIntensity));
+    return Math.sqrt(clamped);
+}
+
+function stableSegmentKey(start: Vector3, end: Vector3): string {
+    const q = (v: number) => Math.round(v * 1e6);
+    return `${q(start.x)},${q(start.y)},${q(start.z)}>${q(end.x)},${q(end.y)},${q(end.z)}`;
+}
+
+function nextPowerOfTwo(value: number): number {
+    let capacity = 1;
+    while (capacity < value) capacity *= 2;
+    return capacity;
 }
 
 export function coherentBranchDisplayStyle(
@@ -205,9 +248,17 @@ interface RegularRayDraw {
     opacity: number;
     lineWidth: number;
     dashed: boolean;
-    blending: typeof NormalBlending | typeof AdditiveBlending;
+    blending: Blending;
     renderOrder: number;
     depthWrite: boolean;
+    /** When true, `points` is laid out as consecutive (start, end) pairs and
+     *  each pair is rendered as a discrete segment. Used by the polarization
+     *  view so segments with different polarizations don't share endpoints. */
+    segments?: boolean;
+    /** Per-vertex colors, one entry per point in `points`. When provided, the
+     *  base `color` is set to white so the vertex colors come through cleanly
+     *  on drei's Line material. */
+    vertexColors?: Array<[number, number, number]>;
 }
 
 interface MainRayDraw {
@@ -238,23 +289,143 @@ const RayPathLine: React.FC<RegularRayDraw> = ({
     blending,
     renderOrder,
     depthWrite,
-}) => (
-    <Line
-        points={points}
-        color={rgbToCSS(color)}
-        lineWidth={lineWidth}
-        transparent
-        opacity={opacity}
-        depthWrite={depthWrite}
-        dashed={dashed}
-        dashSize={dashed ? 3 : undefined}
-        gapSize={dashed ? 2 : undefined}
-        depthTest={true}
-        renderOrder={renderOrder}
-        toneMapped={false}
-        blending={blending}
-    />
-);
+    segments,
+    vertexColors,
+}) => {
+    if (segments && vertexColors) {
+        return (
+            <StableSegmentLine
+                points={points}
+                vertexColors={vertexColors}
+                opacity={opacity}
+                lineWidth={lineWidth}
+                blending={blending}
+                renderOrder={renderOrder}
+                depthWrite={depthWrite}
+            />
+        );
+    }
+
+    return (
+        <Line
+            points={points}
+            color={vertexColors ? 'white' : rgbToCSS(color)}
+            vertexColors={vertexColors}
+            segments={segments}
+            lineWidth={lineWidth}
+            transparent
+            opacity={opacity}
+            depthWrite={depthWrite}
+            dashed={dashed}
+            dashSize={dashed ? 3 : undefined}
+            gapSize={dashed ? 2 : undefined}
+            depthTest={true}
+            renderOrder={renderOrder}
+            toneMapped={false}
+            blending={blending}
+        />
+    );
+};
+
+const StableSegmentLine: React.FC<{
+    points: Vector3[];
+    vertexColors: Array<[number, number, number]>;
+    opacity: number;
+    lineWidth: number;
+    blending: Blending;
+    renderOrder: number;
+    depthWrite: boolean;
+}> = ({ points, vertexColors, opacity, lineWidth, blending, renderOrder, depthWrite }) => {
+    const size = useThree(state => state.size);
+    const geometry = React.useMemo(() => new LineSegmentsGeometry(), []);
+    const material = React.useMemo(() => {
+        const mat = new LineMaterial({
+            color: 0xffffff,
+            vertexColors: true,
+            transparent: true,
+            opacity,
+            linewidth: lineWidth,
+            depthTest: true,
+            depthWrite,
+            toneMapped: false,
+            blending,
+        });
+        return mat;
+    }, []);
+    const line = React.useMemo(() => {
+        const obj = new LineSegments2(geometry, material);
+        obj.frustumCulled = false;
+        return obj;
+    }, [geometry, material]);
+    const capacityRef = React.useRef(0);
+
+    React.useLayoutEffect(() => {
+        material.resolution.set(size.width, size.height);
+    }, [material, size.width, size.height]);
+
+    React.useLayoutEffect(() => {
+        material.opacity = opacity;
+        material.linewidth = lineWidth;
+        material.blending = blending;
+        material.depthWrite = depthWrite;
+        material.depthTest = true;
+        material.transparent = true;
+        material.toneMapped = false;
+    }, [blending, depthWrite, lineWidth, material, opacity]);
+
+    React.useLayoutEffect(() => {
+        const segmentCount = Math.floor(points.length / 2);
+        if (segmentCount <= 0) {
+            geometry.instanceCount = 0;
+            return;
+        }
+
+        if (segmentCount > capacityRef.current) {
+            const capacity = nextPowerOfTwo(segmentCount);
+            geometry.setPositions(new Float32Array(capacity * 6));
+            geometry.setColors(new Float32Array(capacity * 6), 3);
+            capacityRef.current = capacity;
+        }
+
+        const startAttr = geometry.getAttribute('instanceStart') as any;
+        const colorStartAttr = geometry.getAttribute('instanceColorStart') as any;
+        const positions = startAttr.data.array as Float32Array;
+        const colors = colorStartAttr.data.array as Float32Array;
+
+        for (let segment = 0; segment < segmentCount; segment++) {
+            const start = points[segment * 2];
+            const end = points[segment * 2 + 1];
+            const colorStart = vertexColors[segment * 2] ?? [1, 1, 1];
+            const colorEnd = vertexColors[segment * 2 + 1] ?? colorStart;
+            const posOffset = segment * 6;
+            positions[posOffset] = start.x;
+            positions[posOffset + 1] = start.y;
+            positions[posOffset + 2] = start.z;
+            positions[posOffset + 3] = end.x;
+            positions[posOffset + 4] = end.y;
+            positions[posOffset + 5] = end.z;
+            colors[posOffset] = colorStart[0];
+            colors[posOffset + 1] = colorStart[1];
+            colors[posOffset + 2] = colorStart[2];
+            colors[posOffset + 3] = colorEnd[0];
+            colors[posOffset + 4] = colorEnd[1];
+            colors[posOffset + 5] = colorEnd[2];
+        }
+
+        startAttr.data.needsUpdate = true;
+        colorStartAttr.data.needsUpdate = true;
+        geometry.instanceCount = segmentCount;
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+    }, [geometry, points, vertexColors]);
+
+    React.useEffect(() => () => {
+        geometry.dispose();
+        material.dispose();
+    }, [geometry, material]);
+
+    return <primitive object={line} renderOrder={renderOrder} />;
+};
 
 const StaticMainRayLine: React.FC<MainRayDraw> = ({ points, wavelength, dashed, opacity }) => {
     const wc = coherentDisplayRGB(wavelength);
@@ -307,9 +478,13 @@ interface RayVisualizerProps {
     hideAll?: boolean;  // E-field mode: hide all rays
     minOpacity?: number; // 0..1, controls dimmest visible ray alpha
     maxOpacity?: number; // 0..1, controls brightest ray alpha
+    /** Polariscope view: color each segment by its E-field polarization state
+     *  rather than the laser's wavelength. Useful for tracking what happens
+     *  to polarization through PBS/waveplate chains. */
+    colorByPolarization?: boolean;
 }
 
-export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled = true, noBloom = false, hideAll = false, minOpacity = 0.33, maxOpacity = 1.0 }) => {
+export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled = true, noBloom = false, hideAll = false, minOpacity = 0.33, maxOpacity = 1.0, colorByPolarization = false }) => {
     // Sort paths: non-main rays first, main ray last so it renders on top.
     // Within incoherent sets, sort by wavelength (longest first) so shorter
     // wavelengths (blue/violet) draw on top and are visible in the rainbow fan.
@@ -318,8 +493,8 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
         const indexed = paths.map((path, idx) => ({ path, idx }));
         indexed.sort((a, b) => {
-            const aMain = a.path.length > 0 && a.path[0].isMainRay === true ? 1 : 0;
-            const bMain = b.path.length > 0 && b.path[0].isMainRay === true ? 1 : 0;
+            const aMain = isMainRayPath(a.path) ? 1 : 0;
+            const bMain = isMainRayPath(b.path) ? 1 : 0;
             if (aMain !== bMain) return aMain - bMain;
             // Same main-ness: sort by wavelength descending (longest first → drawn first)
             const aWl = a.path.length > 0 ? a.path[0].wavelength : 0;
@@ -332,6 +507,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
     const prepared = React.useMemo(() => {
         const regularRays: RegularRayDraw[] = [];
         const mainRays: MainRayDraw[] = [];
+        const polarizationPoints: Vector3[] = [];
+        const polarizationColors: Array<[number, number, number]> = [];
+        const seenPolarizationSegments = new Set<string>();
 
         for (const { path, idx } of sortedPaths) {
             const points: Vector3[] = [];
@@ -354,15 +532,19 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
                 }
             }
 
-            const isMain = path.length > 0 && path[0].isMainRay === true;
+            const isMain = isMainRayPath(path);
             const wavelength = path.length > 0 ? path[0].wavelength : 532e-9;
-            const lastRay = lastVisibleRay(path);
+            const lastRay = terminalBranchRay(path);
             const terminalRelativeIntensity = relativePathIntensity(path, lastRay);
 
             if (points.length > 0 && path.length > 0) {
-                const shouldDrawOpenTail = isMain
-                    || path[0].coherenceMode === Coherence.Incoherent
-                    || terminalRelativeIntensity >= OPEN_TAIL_RELATIVE_INTENSITY;
+                const shouldDrawOpenTail = colorByPolarization
+                    ? shouldDrawPolarizationOpenTail(path)
+                    : (
+                        isMain
+                        || isThermalForDisplay(path[0])
+                        || terminalRelativeIntensity >= OPEN_TAIL_RELATIVE_INTENSITY
+                    );
                 const dist = terminalVisualizationDistance(
                     lastRay,
                     shouldDrawOpenTail,
@@ -377,8 +559,52 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
 
             if (points.length < 2) continue;
 
-            const isIncoherent = path.length > 0 && path[0].coherenceMode === Coherence.Incoherent;
-            if (isIncoherent) {
+            // ── Polarization view ─────────────────────────────────────────
+            // Color each segment of the path by the polarization state of the
+            // E-field on that segment. Bypasses the wavelength/main/incoherent
+            // branches below so a beam can change color when it goes through
+            // a PBS or waveplate.
+            if (colorByPolarization && path.length > 0) {
+                // Draw visibility is decided per physical segment, not per
+                // terminal path. A faint PBS leakage child must not make the
+                // shared incoming launch segment disappear, which otherwise
+                // makes the laser look like it changes ray count while scanning.
+                const scale = noBloom ? 0.45 : 1.0;
+                for (let i = 0; i < path.length; i++) {
+                    const r = path[i];
+                    const relativeIntensity = relativePathIntensity(path, r);
+                    if (relativeIntensity < POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY) break;
+                    if (r.suppressVisualization) break;
+                    const segStart = toVec3(r.origin);
+                    let segEnd: Vector3;
+                    const next = path[i + 1];
+                    if (next) {
+                        segEnd = toVec3(next.origin);
+                    } else {
+                        const dist = terminalVisualizationDistance(
+                            r,
+                            shouldDrawPolarizationOpenTail(path),
+                            openTailSuppressionExpired(path),
+                        );
+                        if (dist === null) break;
+                        segEnd = segStart.clone().addScaledVector(toVec3(r.direction), dist);
+                    }
+                    if (segStart.distanceToSquared(segEnd) < 1e-18) continue;
+                    const key = stableSegmentKey(segStart, segEnd);
+                    if (seenPolarizationSegments.has(key)) continue;
+                    seenPolarizationSegments.add(key);
+
+                    const segVisibility = polarizationSegmentVisibility(relativeIntensity);
+                    const dim = scale * segVisibility;
+                    const polColor = polarizationToColor(r.polarization, r.direction);
+                    const c: [number, number, number] = [polColor.r * dim, polColor.g * dim, polColor.b * dim];
+                    polarizationPoints.push(segStart, segEnd);
+                    polarizationColors.push(c, c);
+                }
+                continue;
+            }
+
+            if (isThermalForDisplay(path[0])) {
                 const rgb = wavelengthToRGB(wavelength * 1e9);
                 const scale = noBloom ? 0.18 : 1.0;
                 const color = rgb.isVisible
@@ -438,11 +664,33 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, glowEnabled
             });
         }
 
+        if (colorByPolarization) {
+            if (polarizationPoints.length >= 2) {
+                regularRays.push({
+                    key: 'pol-segments',
+                    points: polarizationPoints,
+                    color: { r: 1, g: 1, b: 1 },
+                    // The whole Line rides at maxOpacity; the per-segment
+                    // vertex-color scaling above does the faint/bright
+                    // differentiation, so there is no path-wide average
+                    // and no minOpacity floor to lift faint rays.
+                    opacity: maxOpacity,
+                    lineWidth: 2,
+                    dashed: false,
+                    blending: AdditiveBlending,
+                    renderOrder: 1,
+                    depthWrite: false,
+                    segments: true,
+                    vertexColors: polarizationColors,
+                });
+            }
+        }
+
         return {
             regularRays,
             mainRays,
         };
-    }, [glowEnabled, maxOpacity, minOpacity, noBloom, sortedPaths]);
+    }, [glowEnabled, maxOpacity, minOpacity, noBloom, sortedPaths, colorByPolarization]);
 
     // In E-field mode, hide all rays entirely. Keep hooks above this point
     // unconditional so toggling the mode cannot corrupt React hook order.

@@ -409,28 +409,6 @@ export class AsphericLens extends OpticalComponent {
         );
     }
 
-    /**
-     * Solver 2 transfer matrix. Conic + Aᵢ terms vanish at the apex, so the
-     * paraxial transfer is identical to a SphericalLens with the same R₁/R₂.
-     */
-    getParaxialTransform(): [number, number, number, number] {
-        const n = this.ior;
-        const t = this.thickness;
-        const R1 = isFlat(this.r1) ? 1e12 : this.r1;
-        const R2 = isFlat(this.r2) ? 1e12 : this.r2;
-        const C1 = -(n - 1) / R1;
-        const C2 = (n - 1) / R2;
-        const Bp = t / n;
-        const a1 = 1 + Bp * C1;
-        const b1 = Bp;
-        const c1 = C1;
-        const A = a1;
-        const B = b1;
-        const C = C2 * a1 + c1;
-        const D = C2 * b1 + 1;
-        return [A, B, C, D];
-    }
-
     getApertureRadius(): number {
         return this.apertureRadius;
     }

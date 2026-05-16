@@ -86,26 +86,7 @@ export class SlitAperture extends OpticalComponent {
         };
     }
 
-    // Solver 2 transfer matrix — identity (slit is just a stop, no optical power).
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
-    // Aperture radius for Solver2 beam clipping — use half the slit width.
     getApertureRadius(): number {
         return this.slitWidth / 2;
-    }
-
-    /** Override: slit clips only in X direction, Y is unobstructed */
-    getParaxialProfile(): {
-        transformX: [number, number, number, number];
-        transformY: [number, number, number, number];
-        apertureRadius: number;
-    } {
-        return {
-            transformX: this.getParaxialTransform(),
-            transformY: [1, 0, 0, 1],
-            apertureRadius: this.getApertureRadius()
-        };
     }
 }

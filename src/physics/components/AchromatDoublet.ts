@@ -412,41 +412,6 @@ export class AchromatDoublet extends OpticalComponent {
         return points;
     }
 
-    getParaxialTransform(): [number, number, number, number] {
-        const n1 = this.ior1;
-        const n2 = this.ior2;
-        const R1 = this.r1;
-        const R2 = this.r2;
-        const R3 = this.r3;
-        const t1 = this.t1;
-        const t2 = this.t2;
-
-        // 3 refraction surfaces + 2 propagation steps
-        // S1: air->crown, S2: crown->flint, S3: flint->air
-        const C1 = -(n1 - 1) / R1;
-        const C2 = -(n2 - n1) / R2;
-        const C3 = (n2 - 1) / R3;
-        const B1 = t1 / n1;
-        const B2 = t2 / n2;
-
-        // Chain: M3 * Mprop2 * M2 * Mprop1 * M1
-        // Each refraction: [[1,0],[C,1]], propagation: [[1,B],[0,1]]
-        let a = 1, b = 0, c = 0, d = 1;
-
-        // M1
-        const a1 = a + b * C1, b1 = b, c1 = c + d * C1, d1 = d;
-        // Mprop1
-        const a2 = a1 + b1 * 0, b2 = a1 * B1 + b1, c2 = c1 + d1 * 0, d2 = c1 * B1 + d1;
-        // M2
-        const a3 = a2 + b2 * C2, b3 = b2, c3 = c2 + d2 * C2, d3 = d2;
-        // Mprop2
-        const a4 = a3 + b3 * 0, b4 = a3 * B2 + b3, c4 = c3 + d3 * 0, d4 = c3 * B2 + d3;
-        // M3
-        const A = a4 + b4 * C3, B = b4, C = c4 + d4 * C3, D = d4;
-
-        return [A, B, C, D];
-    }
-
     getApertureRadius(): number {
         return this.apertureRadius;
     }

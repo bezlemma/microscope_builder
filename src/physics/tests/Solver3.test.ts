@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
 import { Solver3 } from "../Solver3";
 import { Solver1 } from "../Solver1";
-import { GaussianBeamSegment, initialQ } from "../Solver2";
+import { GaussianBeamSegment } from "../Solver2";
 import { Camera } from "../components/Camera";
 import { Sample } from "../components/Sample";
 import { Laser } from "../components/Laser";
@@ -16,22 +16,15 @@ function makeSeg(
     start: Vector3, end: Vector3, direction: Vector3,
     overrides: Partial<GaussianBeamSegment> = {}
 ): GaussianBeamSegment {
-    const wavelength = 488e-9;
-    const wavelengthMm = wavelength * 1e3;
-    const waist = 2;
-    const q0 = initialQ(waist, wavelengthMm);
-    const len = start.distanceTo(end);
     return {
         start: start.clone(),
         end: end.clone(),
         direction: direction.clone().normalize(),
-        wavelength,
+        wavelength: 488e-9,
         power: 1.0,
-        qx_start: { ...q0 },
-        qx_end: { re: q0.re + len, im: q0.im },
-        qy_start: { ...q0 },
-        qy_end: { re: q0.re + len, im: q0.im },
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        footprintStart: 2,
+        footprintEnd: 2,
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         refractiveIndex: 1.0,
         coherenceMode: Coherence.Coherent,
@@ -180,7 +173,7 @@ describe("Solver 3: Backward Ray Direction", () => {
             direction: new Vector3(0, -1, 0),
             wavelength: sample.getEmissionWavelength() * 1e-9,
             intensity: 1.0,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Coherent,
@@ -212,7 +205,7 @@ describe("Solver 3: Backward Ray Direction", () => {
             direction: cameraSnapshot.forward.clone(),
             wavelength: 550e-9,
             intensity: 1,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Incoherent,
@@ -261,7 +254,7 @@ describe("Solver 3: Backward Ray Direction", () => {
             direction: new Vector3(0, -1, 0),
             wavelength: 532e-9,
             intensity: 1,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Incoherent,

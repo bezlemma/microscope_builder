@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { Solver3 } from '../Solver3';
 import { Camera } from '../components/Camera';
 import { Sample } from '../components/Sample';
-import { GaussianBeamSegment, initialQ } from '../Solver2';
+import { GaussianBeamSegment } from '../Solver2';
 import {
     PACKED_BEAM_SEGMENT_SCALAR_STRIDE,
     PACKED_COMPONENT_BOUNDS_STRIDE,
@@ -14,22 +14,13 @@ import {
 import { Coherence } from '../types';
 
 function makeSeg(start: Vector3, end: Vector3, direction: Vector3): GaussianBeamSegment {
-    const wavelength = 488e-9;
-    const wavelengthMm = wavelength * 1e3;
-    const waist = 2;
-    const q0 = initialQ(waist, wavelengthMm);
-    const len = start.distanceTo(end);
     return {
         start: start.clone(),
         end: end.clone(),
         direction: direction.clone().normalize(),
-        wavelength,
+        wavelength: 488e-9,
         power: 1.0,
-        qx_start: { ...q0 },
-        qx_end: { re: q0.re + len, im: q0.im },
-        qy_start: { ...q0 },
-        qy_end: { re: q0.re + len, im: q0.im },
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         refractiveIndex: 1.0,
         coherenceMode: Coherence.Coherent,

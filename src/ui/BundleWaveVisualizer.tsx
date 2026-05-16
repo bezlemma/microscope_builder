@@ -112,6 +112,12 @@ const BundleEnvelopeView: React.FC<{ bundle: BundleWaveSegment }> = ({ bundle })
         return nextGeometry;
     }, [bundle.profile]);
 
+    React.useEffect(() => {
+        return () => {
+            geometry?.dispose();
+        };
+    }, [geometry]);
+
     if (!geometry) return null;
 
     return (

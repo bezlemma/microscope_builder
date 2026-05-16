@@ -1,18 +1,11 @@
 import { Vector3 } from 'three';
-
 import { OpticalComponent } from '../physics/Component';
 import { Laser } from '../physics/components/Laser';
 import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
 import { Waveplate } from '../physics/components/Waveplate';
-import { GalvoScanHead } from '../physics/components/GalvoScanHead';
-import { AchromatDoublet } from '../physics/components/AchromatDoublet';
+import { Mirror } from '../physics/components/Mirror';
 import { SphericalLens } from '../physics/components/SphericalLens';
-import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { Objective } from '../physics/components/Objective';
-import { Sample } from '../physics/components/Sample';
-import { PMT } from '../physics/components/PMT';
-import { Blocker } from '../physics/components/Blocker';
-import { SpectralProfile } from '../physics/SpectralProfile';
+import { Card } from '../physics/components/Card';
 import { AnimationChannel, generateChannelId } from '../physics/PropertyAnimator';
 import type { PresetResult } from '../state/store';
 
@@ -20,273 +13,171 @@ import type { PresetResult } from '../state/store';
  * Yu et al., Optica 13(3):409 (March 2026):
  *   "Non-inertial scan angle multiplier for expanded fields-of-view"
  *
- * Reproduces Figure 3 — the angle-doubled microscope layout. The trick:
- * the scanned beam is sent through a 4-f relay to a (slow) retroreflecting
- * mirror, which sends it back to strike the SAME resonant mirror a second
- * time. Each bounce contributes 2Δθ, so a ±5° resonant scanner produces a
- * ±10° optical scan with no penalty in mirror size or scan frequency.
+ * A minimal scene to *demonstrate the trick*. The paper's central idea is
+ * that the same resonant scan mirror is hit **twice** in one beam path,
+ * doubling the optical scan angle (±5° → ±10°) without paying for a bigger
+ * or slower mirror.
  *
- * Beam path (excitation):
- *   Laser → PBS (S→reflect) → resonant galvo (1st bounce) →
- *   scan lens 1 → QWP → scan lens 2 → slow galvo (retro) →
- *   ... beam returns through the relay, P-polarized after 2× λ/4 ...
- *   resonant galvo (2nd bounce, doubled angle) → PBS (P→transmit) →
- *   imaging scan lens → tube lens → dichroic → objective → sample
+ * Beam path:
+ *   Laser → PBS (S→reflect) → resonant scanner (1st bounce) → scan lens 1
+ *      → λ/4 → scan lens 2 → slow galvo (retroreflects + slow-axis tilt)
+ *      → back through λ/4 → scan lens 1 → resonant scanner (2nd bounce,
+ *        doubled angle) → PBS (P→transmit) → viewing card.
  *
- * Beam path (emission, descanned NDD):
- *   sample → objective → dichroic (reflect 510 nm) → collection lens → PMT
+ * The viewing card at the PBS exit catches the *doubled* scan line. The
+ * "Polarization View" toggle in the inspector makes the trick legible:
+ * the S-polarized entry beam, the circularly-polarized doubler arm, and
+ * the P-polarized doubled exit all show up as distinct colors.
  *
- * Hardware called out by the paper (modeled with thick approximations):
- *   - Resonant scanner: CRS 12 kHz, ±5° optical (Cambridge Technology)
- *   - Slow galvo: 6220H, ±20° (Cambridge Technology), used as retroreflector
- *   - Scan lenses: LSM54-1050, EFL 54 mm (Thorlabs) ×2
- *   - Tube lens: TTL200MP, EFL 200 mm (Thorlabs)
- *   - Dichroic: visible surrogate — shortpass near 485 nm
- *   - Objective: Nikon 16×/0.8 NA water immersion (EFL 12.5 mm)
- *   - PBS: PBS513 (Thorlabs); QWP: 39-046 (Edmund Optics)
- *   - PMT: PMT2102 (Thorlabs)
+ * The full two-photon imaging arm and PMT collection optics from the
+ * paper are intentionally omitted to keep the demo focused.
  */
 export function createCheHangYu2026Scene(): PresetResult {
     const scene: OpticalComponent[] = [];
 
     // Geometry — top-down view, all components on z = 0.
-    // Vertical column at x = 20 carries PBS, imaging arm, and objective.
-    // Horizontal arm carries the angle-doubling 4-f relay.
+    // Vertical column at x = 20 carries laser, PBS, and the viewing card.
+    // Horizontal arm at y = yArm carries the angle-doubling 4-f relay.
     const xCol = 20;
     const yArm = 36;
-    const fScan = 54;   // mm — LSM54-1050 effective focal length
-    const fTube = 200;  // mm — TTL200MP effective focal length
-    const achromat200 = {
-        r1: 77.4, r2: -87.6, r3: 291.1,
-        t1: 4.0, t2: 2.5,
-        ior1: 1.658, ior2: 1.750,
-    };
-    const makeScaledAchromat = (
-        focalLengthMm: number,
-        apertureRadius: number,
-        name: string,
-    ) => {
-        const scale = focalLengthMm / 200;
-        return new AchromatDoublet(
-            achromat200.r1 * scale,
-            achromat200.r2 * scale,
-            achromat200.r3 * scale,
-            achromat200.t1,
-            achromat200.t2,
-            apertureRadius,
-            achromat200.ior1,
-            achromat200.ior2,
-            name,
-        );
-    };
-    const makePlanoConvex = (
-        focalLengthMm: number,
-        apertureRadius: number,
-        thickness: number,
-        name: string,
-    ) => {
-        const ior = 1.5168;
-        const radius = (ior - 1) * focalLengthMm;
-        return new SphericalLens(1 / focalLengthMm, apertureRadius, thickness, name, radius, 1e9, ior);
-    };
+    const fScan = 54;       // mm — LSM54-1050 effective focal length
 
-    // ── Laser: visible surrogate excitation, 5 mm beam ─────────────────────
-    // The scan-angle multiplier is geometric; 460 nm keeps the preset readable
-    // in the renderer while using physically compatible 460/510 fluorescence.
-    const laser = new Laser('460 nm excitation laser');
-    laser.setPosition(-300, 0, 0);
+    // ── Laser ──
+    // 1040 nm two-photon excitation source — matches the wavelength range the
+    // paper's imaging arm runs at (Mai-Tai / InSight class systems for deeper
+    // tissue). Default polarization is perpendicular to propagation (world +Z),
+    // which is S-polarized for the 45° PBS in the XY plane → reflects upward
+    // into the doubler arm. Sits a short way off the PBS so the housing
+    // doesn't visually dwarf the rest of the unit. The laser wavelength is
+    // NIR, so the wavelength-based ray color is essentially invisible — in
+    // Polarization View the only thing the beam color reflects is the
+    // polarization state, which is the whole point of the demo.
+    const laser = new Laser('1040 nm 2P laser');
+    laser.setPosition(-50, 0, 0);
     laser.pointAlong(1, 0, 0);
-    laser.wavelength = 460;
+    laser.wavelength = 1040;
     laser.beamRadius = 2.5;
     laser.power = 1.0;
     scene.push(laser);
 
-    // ── λ/2 plate at 45°: rotates the laser's default x-polarization to
-    //    y-polarization so the PBS sees an S-polarized input and reflects it
-    //    into the angle-doubling arm.
-    const hwp = new Waveplate('half', 12.5, Math.PI / 4, 'λ/2 Polarization Rotator');
-    hwp.setPosition(-100, 0, 0);
-    hwp.pointAlong(1, 0, 0);
-    scene.push(hwp);
-
-    // ── PBS at the junction: S-pol reflects up to the angle doubler,
-    //    P-pol returning from the doubler transmits down to the imaging arm.
-    const pbs = new PolarizingBeamSplitter(25.4, 2, 'PBS513 (S→up, P→down)');
+    // ── PBS at the junction ──
+    // S-pol reflects up into the doubler; P-pol returning from the doubler
+    // transmits straight down to the viewing card. Oversized 3-inch aperture
+    // (much larger than a catalog PBS optic) so the doubled-scan exit
+    // at the full ±5° mechanical resonant extreme — which leaves the second
+    // mirror bounce at 4·5° = 20° optical and hits the PBS face at ~14 mm
+    // off-center — has obvious visual margin to the rim. The actual coating
+    // surface is a 45° internal plane; an undersized aperture made the
+    // demo's beam look like it was grazing the edge.
+    const pbs = new PolarizingBeamSplitter(76.2, 2, 'PBS513 (S→up, P→down)');
     pbs.setPosition(xCol, 0, 0);
     // n = normalize(d_in − d_out) = normalize((+1,0,0) − (0,+1,0))
     pbs.pointAlong(1, -1, 0);
     scene.push(pbs);
 
-    // ═══ ANGLE-DOUBLING ARM (Fig. 3a, top of unit) ═════════════════════════
-    // The resonant scan mirror is hit TWICE — once on the way out and once
-    // on the return path from the slow galvo — doubling the optical angle.
-
-    // Resonant 12 kHz scan mirror (fast / x-axis). pointAlong(-1,+1,0):
-    //   beam from PBS (going +Y) reflects off this mirror toward +X.
-    const resonant = new GalvoScanHead(15, 2, '12 kHz Resonant Scanner (CRS)');
-    resonant.setPosition(xCol, yArm, 0);
-    resonant.pointAlong(-1, 1, 0);
+    // ═══ ANGLE-DOUBLING ARM (top of the unit) ════════════════════════════
+    // Apertures are oversized vs. the real hardware so the demo doesn't
+    // clip at the dramatic ±5° mechanical scan amplitude we crank to below.
+    // Resonant scan mirror — gets hit twice. A real CRS is a single-axis
+    // resonant galvo, so we model it as a plain flat mirror whose normal
+    // pans in the table plane (animated via panAngle below). We use
+    // reflectAt() rather than setPosition+pointAlong directly so the
+    // front-surface (the reflective coating) lands exactly on the pivot we
+    // care about — at (xCol, yArm, 0). Doing it the naive way puts the
+    // mirror's *center* there, which would offset the surface by
+    // thickness/2 ≈ 1.4 mm along the normal and walk the beam off-axis at
+    // the scan lenses.
+    const resonant = new Mirror(50, 4, '12 kHz Resonant Scanner (CRS)');
+    resonant.reflectAt(
+        xCol, yArm, 0,
+        new Vector3(0, 1, 0),     // beam arrives going +Y from the PBS below
+        new Vector3(1, 0, 0),     // and leaves going +X into the relay
+    );
+    const RESONANT_BASE_PAN = resonant.panAngle;   // ¾π for the 90° fold
     scene.push(resonant);
 
-    // Scan lens 1 of the angle-doubling 4-f relay.
-    const scanLens1 = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Scan Lens 1 (thick f=54)');
+    // Scan lenses (4-f relay). Real refracting singlets — biconvex BK7-grade
+    // crown at f=54 mm. Aperture and thickness picked so the rim has positive
+    // glass at the chosen sag, and so the ±10°-optical beam from the resonant
+    // mirror still lands inside the clear aperture on the return pass.
+    const scanLens1 = new SphericalLens(1 / fScan, 25, 14, 'Scan Lens 1 (f=54)');
     scanLens1.setPosition(xCol + fScan, yArm, 0);
     scanLens1.pointAlong(1, 0, 0);
     scene.push(scanLens1);
 
-    // Scan lens 2 of the angle-doubling 4-f relay.
-    const scanLens2 = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Scan Lens 2 (thick f=54)');
+    const scanLens2 = new SphericalLens(1 / fScan, 25, 14, 'Scan Lens 2 (f=54)');
     scanLens2.setPosition(xCol + 3 * fScan, yArm, 0);
     scanLens2.pointAlong(1, 0, 0);
     scene.push(scanLens2);
 
-    // Quarter-wave plate at 45° fast axis. The beam passes through twice
-    // (S → circular outbound, circular → P on return), so the round-trip
-    // polarization rotation is 90° — exactly what the PBS needs to switch
-    // the return beam from "reflect" to "transmit".
-    const qwp = new Waveplate('quarter', 12.5, Math.PI / 4, 'λ/4 Plate (fast axis 45°)');
+    // λ/4 plate at 45° — the round trip through it (forward + return) rotates
+    // S-pol into P-pol so the PBS switches the return beam from reflect to
+    // transmit on its second pass. Design wavelength matches the laser (1040 nm).
+    const qwp = new Waveplate('quarter', 25, Math.PI / 4, 'λ/4 Plate (fast axis 45°, 1040 nm)', 1040);
     qwp.setPosition(xCol + 3 * fScan + 25, yArm, 0);
     qwp.pointAlong(1, 0, 0);
     scene.push(qwp);
 
-    // Slow galvo (linear servo, ±20°) acting as the retroreflector that
-    // closes the 4-f loop. Normal points back along -X so the beam returns
-    // straight along the relay; small scanY values steer the slow axis.
-    const slow = new GalvoScanHead(15, 2, 'Slow Galvo (6220H, ±20°)');
-    slow.setPosition(xCol + 4 * fScan, yArm, 0);
-    slow.pointAlong(1, 0, 0);
+    // Slow galvo — flat mirror at neutral tilt sends the beam back; a small
+    // out-of-plane tilt adds the slow Y-axis scan on top of the resonant
+    // fast X scan. Animated via tiltAngle (rotates the normal in the XZ
+    // plane), so the returning beam picks up a Z-component that survives the
+    // PBS reflection and lands as the orthogonal scan axis on the card.
+    // reflectAt() again, so the silvered front face is exactly at the back
+    // focal plane of scan lens 2 (xCol + 4·fScan) rather than offset by
+    // half the substrate thickness.
+    const slow = new Mirror(30, 4, 'Slow Galvo (6220H, ±20°)');
+    slow.reflectAt(
+        xCol + 4 * fScan, yArm, 0,
+        new Vector3(1, 0, 0),     // beam arrives going +X from the relay
+        new Vector3(-1, 0, 0),    // retroreflects straight back -X
+    );
     scene.push(slow);
 
-    // ═══ IMAGING ARM (below the PBS) ═══════════════════════════════════════
-    // After the second bounce off the resonant mirror, the beam is now
-    // P-polarized (two QWP passes) and exits the PBS heading -Y with the
-    // doubled scan angle.
+    // ── Viewing card at the doubled-scan exit ──
+    // Sits directly below the PBS along -Y. With the resonant scanner at
+    // ±5° mechanical, the doubled exit fan is ±20° optical — the card sees
+    // a much wider scan line than the resonant mirror alone could produce.
+    // Width chosen so the ±20° fan plus the lateral offset of the exit ray
+    // at the PBS face (~10 mm at the extremes) clears the edge with margin.
+    const card = new Card(140, 80, 'Doubled-scan viewing card');
+    const yCard = -80;
+    card.setPosition(xCol, yCard, 0);
+    // pointAlong(0,1,0) → card faces +Y (toward the PBS, which is above).
+    card.pointAlong(0, 1, 0);
+    // Phosphor afterglow on the inspector preview, so the swept scan leaves
+    // a visible line instead of a flickering dot.
+    card.persistTrail = true;
+    scene.push(card);
 
-    // Scan lens of the imaging arm (forms intermediate scan focus).
-    const imagingScanLens = makeScaledAchromat(fScan, 12.5, 'LSM54-1050 Imaging Scan Lens (thick f=54)');
-    const yImagingScanLens = yArm - fScan;
-    imagingScanLens.setPosition(xCol, yImagingScanLens, 0);
-    imagingScanLens.pointAlong(0, -1, 0);
-    scene.push(imagingScanLens);
-
-    // Tube lens (TTL200MP). Combined with the scan lens, this gives a
-    // 200/54 ≈ 3.7× beam expansion onto the objective back aperture and
-    // a 0.27× angle minification, matching the paper's geometry.
-    const tubeLens = makeScaledAchromat(fTube, 22.5, 'TTL200MP Tube Lens (thick f=200)');
-    const yTubeLens = yImagingScanLens - (fScan + fTube);
-    tubeLens.setPosition(xCol, yTubeLens, 0);
-    tubeLens.pointAlong(0, -1, 0);
-    scene.push(tubeLens);
-
-    // Dichroic: visible surrogate — transmits 460 nm excitation toward the
-    // objective, reflects ~510 nm GCaMP emission sideways into the PMT arm.
-    const yDichroic = yTubeLens - 100;
-    const dichroic = new DichroicMirror(
-        50.8, 2,
-        new SpectralProfile('shortpass', 485, [], 10),
-        'Visible Dichroic (SP 485)',
-    );
-    dichroic.setPosition(xCol, yDichroic, 0);
-    // Reflect emission from -Y-traveling fluorescence to +X.
-    // n = normalize(d_in − d_out) = normalize((0,+1,0) − (+1,0,0))
-    dichroic.pointAlong(-1, 1, 0);
-    scene.push(dichroic);
-
-    // Objective: Nikon 16×/0.8 NA water immersion (paper's primary objective).
-    const objective = new Objective({
-        magnification: 16,
-        NA: 0.8,
-        immersionIndex: 1.33,
-        workingDistance: 3.0,
-        tubeLensFocal: fTube,
-        diameter: 30,
-        name: 'Nikon 16×/0.8 W',
-    });
-    objective.setImmersionMedium('water');
-    objective.setPosition(xCol, yTubeLens - fTube, 0);
-    objective.pointAlong(0, 1, 0);
-    scene.push(objective);
-
-    // Sample: place at the objective's front focal plane.
-    const sampleHolderGapMm = 0.25;
-    objective.updateMatrices();
-    const focusWorld = new Vector3(0, 0, -objective.focalLength).applyMatrix4(objective.localToWorld);
-    const sampleNormal = objective.getSampleSideNormalWorld();
-    const holderCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(sampleHolderGapMm));
-
-    const sample = new Sample('GCaMP6s mouse cortex (V1)');
-    sample.excitationSpectrum = new SpectralProfile('bandpass', 460, [{ center: 460, width: 40 }]);
-    sample.emissionSpectrum = new SpectralProfile('bandpass', 510, [{ center: 510, width: 50 }]);
-    sample.fluorescenceEfficiency = 0.6;
-    sample.setPosition(holderCenter.x, holderCenter.y, holderCenter.z);
-    sample.pointAlong(0, 1, 0);
-    sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
-    scene.push(sample);
-
-    // Absorb excitation that has passed the specimen so the table view is not
-    // cluttered with rays continuing indefinitely beyond the sample plane.
-    const beamDump = new Blocker(50, 4, 'Post-Sample Beam Dump');
-    const beamDumpCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(24));
-    beamDump.setPosition(beamDumpCenter.x, beamDumpCenter.y, beamDumpCenter.z);
-    beamDump.pointAlong(0, 1, 0);
-    scene.push(beamDump);
-
-    // ── PMT collection arm (off the dichroic, +X side) ─────────────────────
-    const collectionLens = makePlanoConvex(100, 12.5, 3.6, 'LA1050-A-ML Collection Lens (thick f=100)');
-    collectionLens.setPosition(xCol + 70, yDichroic, 0);
-    collectionLens.pointAlong(1, 0, 0);
-    scene.push(collectionLens);
-
-    // Visual/physics surrogate for the compact PMT condenser. A scaled 20 mm
-    // achromat would require surface radii smaller than this display aperture,
-    // so use a modest thick plano-convex relay lens instead.
-    const pmtCondenser = makePlanoConvex(50, 8, 4, 'ACL2520U-A PMT Relay Lens (thick f≈50)');
-    pmtCondenser.setPosition(xCol + 125, yDichroic, 0);
-    pmtCondenser.pointAlong(1, 0, 0);
-    scene.push(pmtCondenser);
-
-    const pmt = new PMT(10, 10, 'PMT2102');
-    pmt.setPosition(xCol + 170, yDichroic, 0);
-    pmt.pointAlong(-1, 0, 0);
-    pmt.sensorNA = 0.05;
-    pmt.samplesPerPixel = 12;
-    pmt.pmtSampleHz = 4096;
-    pmt.scanResX = 32;
-    pmt.scanResY = 32;
-    pmt.xAxisComponentId = resonant.id;
-    pmt.xAxisProperty = 'scanX';
-    pmt.yAxisComponentId = slow.id;
-    pmt.yAxisProperty = 'scanY';
-    scene.push(pmt);
-
-    // ── Animation channels ─────────────────────────────────────────────────
-    // GalvoScanHead properties are mechanical mirror angles. Reflection doubles
-    // them optically, so ±2.5° mechanical gives the paper's ±5° optical scan
-    // before the non-inertial second bounce, then ±10° after the multiplier.
-    const RES_HALF_ANGLE_RAD = (2.5 * Math.PI) / 180;
+    // ── Animation ──
+    // Crank the resonant mirror to its full ±5° mechanical (=±10° optical
+    // per single bounce, ±20° after the Nisam2× double-bounce). Slowed well
+    // below the physical 12 kHz to a leisurely teaching speed so the eye can
+    // follow the doubled scan line across the card.
+    const RES_HALF_ANGLE_RAD = (5 * Math.PI) / 180;
     const SLOW_HALF_ANGLE_RAD = (2.5 * Math.PI) / 180;
 
     const channels: AnimationChannel[] = [
         {
             id: generateChannelId(),
             targetId: resonant.id,
-            property: 'scanX',
-            from: -RES_HALF_ANGLE_RAD,
-            to: RES_HALF_ANGLE_RAD,
+            property: 'panAngle',
+            from: RESONANT_BASE_PAN - RES_HALF_ANGLE_RAD,
+            to: RESONANT_BASE_PAN + RES_HALF_ANGLE_RAD,
             easing: 'sinusoidal',
-            // Slowed from physical 12 kHz → 32 Hz for visual sweep.
-            periodMs: 1000 / 32,
+            periodMs: 3000,
             repeat: true,
-            restoreValue: 0,
+            restoreValue: RESONANT_BASE_PAN,
         },
         {
             id: generateChannelId(),
             targetId: slow.id,
-            property: 'scanY',
+            property: 'tiltAngle',
             from: -SLOW_HALF_ANGLE_RAD,
             to: SLOW_HALF_ANGLE_RAD,
             easing: 'sinusoidal',
-            periodMs: 1000,
+            periodMs: 12000,
             repeat: true,
             restoreValue: 0,
         },
@@ -295,12 +186,14 @@ export function createCheHangYu2026Scene(): PresetResult {
     return {
         scene,
         channels,
-        animationPlaying: false,
-        animationSpeed: 0.1,
+        animationPlaying: true,
+        animationSpeed: 1.0,
+        rayConfig: { colorByPolarization: true },
         description:
-            'Yu et al., Optica 13(3):409 (2026) — "Non-inertial scan angle multiplier for expanded ' +
-            'fields-of-view." Angle-doubled microscope layout: a 4-f relay sends the scanned ' +
-            'beam to a slow-galvo retroreflector and back through the SAME resonant mirror, doubling ' +
-            'the optical scan angle (±5° → ±10°) with no loss in scan frequency or mirror size.',
+            'Yu et al., Optica 13(3):409 (2026) — "Non-inertial scan angle multiplier." ' +
+            'The resonant mirror is hit twice in one beam path: each bounce contributes ' +
+            '2Δθ, so a ±5° resonant scan exits the unit as ±20° optical with no penalty ' +
+            'in mirror size or scan frequency. Polarization View highlights how a PBS + ' +
+            'λ/4 round-trip separates the entry beam (S) from the doubled exit (P).',
     };
 }

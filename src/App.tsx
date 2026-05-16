@@ -1,9 +1,9 @@
 // React is implicitly used by JSX
 import React, { useEffect, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
-import { BackSide } from 'three'
+import { BackSide, Box3, Vector3, PerspectiveCamera } from 'three'
 
 /**
  * Procedural "starry night" cube map for mirror reflections. Renders a dark
@@ -71,13 +71,16 @@ import { ControlsHelp } from './ui/ControlsHelp'
 import { ZLevelBar } from './ui/ZLevelBar'
 import { RailPlacementOverlay } from './ui/RailPlacementOverlay'
 import { AltSnapIndicator } from './ui/AltSnapIndicator'
-import { loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom, uiLockedAtom } from './state/store';
+import { appRouteAtom, componentsAtom, loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom, uiLockedAtom } from './state/store';
+import { Splash } from './ui/Splash';
 import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
 import { PresetTooltip } from './ui/PresetTooltip';
 import { TutorialDomOverlay } from './ui/TutorialDomOverlay';
 import { MeasureOverlay } from './ui/MeasureOverlay';
 import { SvgSceneExporter } from './ui/SvgSceneExporter';
+import { ComponentContextMenu } from './ui/ComponentContextMenu';
+import { AlignmentHoverHighlight } from './ui/AlignmentHoverHighlight';
 
 // ── Canvas Error Boundary ──────────────────────────────────
 class CanvasErrorBoundary extends React.Component<
@@ -156,6 +159,68 @@ function presetFromHash(): PresetName | undefined {
   return matchPresetSlug(decodeURIComponent(rawHash));
 }
 
+// ── Capture-mode helpers ───────────────────────────────────────────────
+// When the URL has `?capture=1`, render the scene with a perspective camera
+// at a 3/4 angle and no table grid. Used by scripts/capture-presets.mjs.
+const isCaptureMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('capture') === '1';
+};
+
+/** Inside-canvas component: computes scene bounds from all visible meshes
+ *  (skipping the table grid + tagged helpers) and parks a perspective camera
+ *  in a 3/4-view that fits everything in frame. Runs once components mount. */
+const CaptureFramer: React.FC = () => {
+  const { scene, set, size } = useThree();
+  const [components] = useAtom(componentsAtom);
+  useEffect(() => {
+    if (components.length === 0) return;
+    // Give R3F a few frames to lay out the meshes before measuring.
+    const id = window.setTimeout(() => {
+      const box = new Box3();
+      scene.traverse(obj => {
+        // Skip helpers, ray-overlays, and the (already-hidden-in-capture) table.
+        if (!obj.visible) return;
+        const data = obj.userData || {};
+        if (data.svgExport === 'skip') return;
+        const isMesh = (obj as { isMesh?: boolean }).isMesh === true;
+        if (!isMesh) return;
+        const expanded = new Box3().setFromObject(obj);
+        if (expanded.isEmpty()) return;
+        box.union(expanded);
+      });
+      if (box.isEmpty()) return;
+      const center = box.getCenter(new Vector3());
+      const dims = box.getSize(new Vector3());
+      // Radius of a sphere enclosing the box; pad so nothing kisses the edge.
+      const radius = Math.max(0.5 * Math.hypot(dims.x, dims.y, dims.z), 80);
+      const fovDeg = 32;
+      const fovRad = (fovDeg * Math.PI) / 180;
+      const aspect = Math.max(0.5, size.width / Math.max(1, size.height));
+      // Account for both vertical and horizontal FOV so wide scenes still fit.
+      const distV = radius / Math.tan(fovRad / 2);
+      const fovHoriz = 2 * Math.atan(Math.tan(fovRad / 2) * aspect);
+      const distH = radius / Math.tan(fovHoriz / 2);
+      const distance = Math.max(distV, distH) * 1.15;
+      // 3/4 angle: azimuth 30° around the Z axis, elevation 32° above the table.
+      const azimuth = Math.PI / 6;
+      const elevation = (32 * Math.PI) / 180;
+      const horiz = distance * Math.cos(elevation);
+      const dx = horiz * Math.sin(azimuth);
+      const dy = -horiz * Math.cos(azimuth);
+      const dz = distance * Math.sin(elevation);
+      const cam = new PerspectiveCamera(fovDeg, aspect, 0.1, 50000);
+      cam.position.set(center.x + dx, center.y + dy, center.z + dz);
+      cam.up.set(0, 0, 1);
+      cam.lookAt(center);
+      cam.updateProjectionMatrix();
+      set({ camera: cam });
+    }, 2200);
+    return () => window.clearTimeout(id);
+  }, [components, scene, set, size.width, size.height]);
+  return null;
+};
+
 const LockOverlay: React.FC = () => {
   const [, setUiLocked] = useAtom(uiLockedAtom);
   return (
@@ -192,6 +257,8 @@ function App() {
   const [, loadScene] = useAtom(loadSceneAtom);
   const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
   const [uiLocked] = useAtom(uiLockedAtom);
+  const [appRoute, setAppRoute] = useAtom(appRouteAtom);
+  const captureMode = useMemo(() => isCaptureMode(), []);
 
   // iOS Safari reports `100vh` as the full screen height, not the visible
   // viewport after the URL / toolbar chrome is applied. R3F uses the measured
@@ -244,6 +311,7 @@ function App() {
       const restored = loadSceneFromUrlHash();
       if (restored && restored.length > 0) {
         loadScene(restored);
+        setAppRoute('editor');
         return;
       }
     } catch (e) {
@@ -254,6 +322,7 @@ function App() {
     const match = presetFromHash() || matchPresetSlug(params.get('preset'));
     if (match) {
       loadPreset(match);
+      setAppRoute('editor');
     }
 
     const solver2Param = params.get('solver2');
@@ -265,28 +334,63 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+    if (appRoute === 'splash') {
+      return <Splash />;
+    }
+
+    if (captureMode) {
+      // Headless capture: just the scene, perspective camera, no table grid,
+      // no UI chrome. scripts/capture-presets.mjs grabs canvas.toDataURL().
+      return (
+        <div style={{ width: '100vw', height: 'var(--app-height, 100dvh)', background: 'radial-gradient(circle at center, #0a0e17 0%, #000000 100%)' }}>
+          <CanvasErrorBoundary>
+            <Canvas
+              dpr={[1, 2]}
+              gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
+              camera={{ fov: 32, position: [400, -500, 350], up: [0, 0, 1], near: 0.1, far: 50000 }}
+            >
+              <ambientLight intensity={0.65} />
+              <hemisphereLight args={['#d7e7ff', '#171717', 0.45]} />
+              <pointLight position={[100, 100, 100]} intensity={1.0} />
+              <Environment frames={1} resolution={512} background={false} environmentIntensity={0.8}>
+                <StarrySky />
+              </Environment>
+              <CaptureFramer />
+              <OpticalTable />
+              <EffectComposer>
+                <Bloom luminanceThreshold={1.0} mipmapBlur luminanceSmoothing={0.9} intensity={0.15} />
+              </EffectComposer>
+            </Canvas>
+          </CanvasErrorBoundary>
+        </div>
+      );
+    }
+
     return (
       <div style={{ width: '100vw', height: 'var(--app-height, 100dvh)', display: 'flex' }}>
         {!uiLocked && <Sidebar />}
-        <div style={{ 
-          flex: 1, 
-          position: 'relative', 
-          background: 'radial-gradient(circle at center, #0a0e17 0%, #000000 100%)' 
+        <div style={{
+          flex: 1,
+          position: 'relative',
+          background: 'radial-gradient(circle at center, #0a0e17 0%, #000000 100%)'
         }}>
-  
+
           {!uiLocked && <PresetTooltip />}
           {!uiLocked && <TutorialDomOverlay />}
 
           {/* Advanced mobile toolbar layered on top */}
           {!uiLocked && <MobileActionBar />}
-  
+
           <CanvasErrorBoundary>
           {/* Top-Down Engineering View - Orthographic, Z-up per PhysicsPlan.md */}
           <Canvas
             orthographic
             dpr={[1, 2]}
-            gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+            // preserveDrawingBuffer lets scripts/capture-presets.mjs read the
+            // canvas via toDataURL() for the splash preset thumbnails.
+            gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
             camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}
+            onCreated={(state) => { (window as unknown as { __r3f?: unknown }).__r3f = state; }}
           >
             <ambientLight intensity={0.65} />
             <hemisphereLight args={['#d7e7ff', '#171717', 0.45]} />
@@ -309,6 +413,7 @@ function App() {
             <InfiniteTable />
             {!uiLocked && <AltSnapIndicator />}
             <OpticalTable />
+            {!uiLocked && <AlignmentHoverHighlight />}
 
             <EffectComposer>
               <Bloom luminanceThreshold={1.0} mipmapBlur luminanceSmoothing={0.9} intensity={0.15} />
@@ -322,6 +427,7 @@ function App() {
         <ViewerPanels />
         {!uiLocked && <ZLevelBar />}
         {!uiLocked && <ControlsHelp />}
+        {!uiLocked && <ComponentContextMenu />}
       </div>
     </div>
   )

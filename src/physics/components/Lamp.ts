@@ -33,17 +33,32 @@ export function computeAdditiveOpacity(wavelengthsNm: number[]): number {
 }
 
 /**
+ * Generate `N` evenly spaced wavelengths centred in the visible RGB-primary
+ * band 460–620 nm. Odd N keeps a wavelength exactly at the 540 nm centre, which
+ * is what makes the bundle look white when additively blended.
+ *   N = 1 → [540]
+ *   N = 3 → [460, 540, 620]   (R/G/B primaries — what brightfield uses)
+ *   N = 7 → [460, 487, 513, 540, 567, 593, 620]
+ */
+export function generateLampSpectrum(N: number): number[] {
+    const count = Math.max(1, Math.round(N));
+    if (count === 1) return [540];
+    const minWl = 460;
+    const maxWl = 620;
+    const step = (maxWl - minWl) / (count - 1);
+    return Array.from({ length: count }, (_, i) => minWl + i * step);
+}
+
+/**
  * Lamp — broadband white-light source for brightfield microscopy.
  *
  * Emits rays at multiple discrete wavelengths spanning the visible spectrum.
  * Each wavelength traces independently through the optical system, enabling
  * chromatic aberration, filter spectral effects, and true white-light imaging.
  *
- * Default: 7 visible wavelengths (ROYGBIV) at 40nm spacing.
- * Can include UV (<380nm) and IR (>780nm) bands for prism demonstrations.
- * Unpolarized (modeled as fixed horizontal polarization — irrelevant for
- * non-polarization-sensitive setups).
- * Incoherent — no interference between wavelengths.
+ * Wavelength count is set with `spectralCount` (snaps to odd; default 7).
+ * `spectralWavelengths` is also directly assignable for callers that need to
+ * pin specific wavelengths (e.g. fluorescence presets, .ubz round-trip).
  */
 export class Lamp extends OpticalComponent {
     beamRadius: number = 3;       // mm (1/e² beam half-width)
@@ -51,8 +66,24 @@ export class Lamp extends OpticalComponent {
     sourcePointCount: number = 1; // Number of source points (for extended sources)
     emitterRadius: number = 0;    // Physical emitter radius (mm)
 
-    // Discrete wavelengths to emit, in nm.
-    spectralWavelengths: number[] = [340, 380, 420, 460, 500, 540, 580, 620, 660, 700, 740, 780, 820];
+    // Discrete wavelengths to emit, in nm. Initialised by the constructor from
+    // the default `spectralCount`; can be reassigned directly to override.
+    spectralWavelengths: number[] = generateLampSpectrum(7);
+
+    /**
+     * Number of discrete spectral lines the lamp is split into. Snaps to odd
+     * on assignment so the bundle stays white-balanced around 540 nm, and
+     * regenerates `spectralWavelengths` to a fresh evenly-spaced set.
+     */
+    get spectralCount(): number {
+        return this.spectralWavelengths.length;
+    }
+    set spectralCount(n: number) {
+        let value = Math.max(1, Math.round(n));
+        if (value % 2 === 0) value += 1;
+        this.spectralWavelengths = generateLampSpectrum(value);
+        this.version++;
+    }
 
     /**
      * Optimal per-ray opacity for additive blending.

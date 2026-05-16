@@ -37,6 +37,8 @@ import { SphericalLens } from '../physics/components/SphericalLens';
 import { AsphericLens, AsphericPreset, ASPHERE_MAX_TERMS } from '../physics/components/AsphericLens';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Mirror } from '../physics/components/Mirror';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { Blocker } from '../physics/components/Blocker';
@@ -857,6 +859,25 @@ const SolverPanel: React.FC<{
                                 </button>
                             );
                         })}
+                        {/* Polarization view is an orthogonal coloring overlay,
+                            not a view mode — toggle it independently of the
+                            Ray/Wave/Plane buttons above. */}
+                        <button
+                            onClick={() => setrayConfig({ ...rayConfig, colorByPolarization: !rayConfig.colorByPolarization })}
+                            title="Color each ray segment by its polarization state — entry/exit beams that differ only by polarization become visibly distinct."
+                            style={{
+                                padding: '2px 8px',
+                                background: rayConfig.colorByPolarization ? '#3a2f48' : '#1a1a1a',
+                                border: rayConfig.colorByPolarization ? '1px solid #c084fc' : '1px solid #444',
+                                borderRadius: '999px',
+                                color: rayConfig.colorByPolarization ? '#e9d5ff' : '#888',
+                                cursor: 'pointer',
+                                fontSize: '10px',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            Polarization View
+                        </button>
                     </div>
 
                     <div style={{ marginTop: 10 }}>
@@ -1302,6 +1323,11 @@ export const Inspector: React.FC = () => {
 
     const [localMirrorDiameter, setLocalMirrorDiameter] = useState<string>('25');
     const [localMirrorThickness, setLocalMirrorThickness] = useState<string>('2');
+    // Beam splitter shared geometry; splitRatio is only meaningful for the
+    // non-polarizing BeamSplitter (PBS is determined by polarization).
+    const [localBsDiameter, setLocalBsDiameter] = useState<string>('25');
+    const [localBsThickness, setLocalBsThickness] = useState<string>('2');
+    const [localBsSplit, setLocalBsSplit] = useState<string>('50');
 
 
     const [localBlockerDiameter, setLocalBlockerDiameter] = useState<string>('20');
@@ -1542,6 +1568,15 @@ export const Inspector: React.FC = () => {
                 if (selectedComponent instanceof Mirror) {
                     setLocalMirrorDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
                     setLocalMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
+                }
+                if (selectedComponent instanceof BeamSplitter) {
+                    setLocalBsDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalBsThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
+                    setLocalBsSplit(String(Math.round(selectedComponent.splitRatio * 100)));
+                }
+                if (selectedComponent instanceof PolarizingBeamSplitter) {
+                    setLocalBsDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalBsThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
                 if (selectedComponent instanceof Blocker) {
                     setLocalBlockerDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
@@ -2004,6 +2039,8 @@ export const Inspector: React.FC = () => {
         isDichroic,
         isCylindrical,
         isCurvedMirror,
+        isBeamSplitter,
+        isPolarizingBeamSplitter,
         isSample,
         isScanHead,
         isDualGalvo,
@@ -2605,6 +2642,89 @@ export const Inspector: React.FC = () => {
                                 min={0.5}
                                 max={20}
                             />
+                        </div>
+                    </div>
+                )}
+
+                {(isBeamSplitter || isPolarizingBeamSplitter) && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>
+                            {isPolarizingBeamSplitter ? 'Polarizing Beam Splitter' : 'Beam Splitter'}
+                        </label>
+                        <div style={{ fontSize: '10px', color: '#888', marginBottom: 8 }}>
+                            {isPolarizingBeamSplitter
+                                ? 'S-pol → reflected, P-pol → transmitted (incidence-plane decomposition).'
+                                : 'Non-polarizing; split fraction is independent of polarization.'}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: isPolarizingBeamSplitter ? '1fr 1fr' : '1fr 1fr 1fr', gap: 10 }}>
+                            <ScrubInput
+                                label="Aperture"
+                                suffix="mm"
+                                value={localBsDiameter}
+                                onChange={setLocalBsDiameter}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && (c instanceof BeamSplitter || c instanceof PolarizingBeamSplitter)) {
+                                            c.diameter = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.5}
+                                min={1}
+                                max={200}
+                            />
+                            <ScrubInput
+                                label="Thickness"
+                                suffix="mm"
+                                value={localBsThickness}
+                                onChange={setLocalBsThickness}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (isNaN(val) || val <= 0) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && (c instanceof BeamSplitter || c instanceof PolarizingBeamSplitter)) {
+                                            c.thickness = val;
+                                            c.version++;
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={0.1}
+                                min={0.5}
+                                max={20}
+                            />
+                            {isBeamSplitter && (
+                                <ScrubInput
+                                    label="Reflect %"
+                                    suffix="%"
+                                    value={localBsSplit}
+                                    onChange={setLocalBsSplit}
+                                    onCommit={(v: string) => {
+                                        const val = parseFloat(v);
+                                        if (isNaN(val) || val < 0 || val > 100) return;
+                                        const newComponents = components.map(c => {
+                                            if (c.id === selection[0] && c instanceof BeamSplitter) {
+                                                c.splitRatio = val / 100;
+                                                c.version++;
+                                                return c;
+                                            }
+                                            return c;
+                                        });
+                                        setComponents([...newComponents]);
+                                    }}
+                                    speed={1}
+                                    min={0}
+                                    max={100}
+                                />
+                            )}
                         </div>
                     </div>
                 )}
@@ -4249,8 +4369,8 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input
                                     type="range"
-                                    min="200"
-                                    max="1000"
+                                    min="300"
+                                    max="1400"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {
@@ -4371,8 +4491,8 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input
                                     type="range"
-                                    min="200"
-                                    max="1000"
+                                    min="300"
+                                    max="1400"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {
@@ -4426,8 +4546,8 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input
                                     type="range"
-                                    min="200"
-                                    max="1000"
+                                    min="300"
+                                    max="1400"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {
@@ -4493,8 +4613,8 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input
                                     type="range"
-                                    min="200"
-                                    max="1000"
+                                    min="300"
+                                    max="1400"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {
@@ -4560,8 +4680,8 @@ export const Inspector: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <input
                                     type="range"
-                                    min="200"
-                                    max="1000"
+                                    min="300"
+                                    max="1400"
                                     step="1"
                                     value={localWavelength}
                                     onChange={(e) => {

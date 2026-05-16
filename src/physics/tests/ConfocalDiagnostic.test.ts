@@ -36,7 +36,7 @@ describe('Confocal Beam Path Diagnostic', () => {
             direction,
             wavelength: laser.wavelength * 1e-9,
             intensity: 1.0,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0,
             coherenceMode: 0,

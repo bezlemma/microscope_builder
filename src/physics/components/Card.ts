@@ -29,6 +29,10 @@ export class Card extends OpticalComponent {
     fieldPixelPitchOverrideX: number = 0;
     fieldPixelPitchOverrideY: number = 0;
     emissionPowerRef: number = 0;   // Estimated total fluorescence emission power (W)
+    /** Phosphor trail: accumulate hits across frames with exponential fade, so a
+     *  moving scan spot leaves a visible afterglow. Opt-in per card; presets
+     *  that animate a single scanning beam onto a card set this true. */
+    persistTrail: boolean = false;
 
     constructor(width: number, height: number, name: string) {
         super(name);

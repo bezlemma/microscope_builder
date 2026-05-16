@@ -1,6 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, Vector3 } from 'three';
 import { OpticalComponent } from '../Component';
-import { HitRecord, InteractionResult, Ray, childRay } from '../types';
+import { HitRecord, InteractionResult, Ray, childRay, reflectJones } from '../types';
 import { OpticMesh, NormalFn } from '../OpticMesh';
 import { reflectVector } from '../math_solvers';
 
@@ -171,14 +171,14 @@ export abstract class AbstractPolygonOptic extends OpticalComponent {
 
         if (faceMode === 'reflective') {
             const reflectedDir = reflectVector(ray.direction, hit.normal);
+            const newPolarization = reflectJones(
+                ray.polarization, ray.direction, hit.normal, reflectedDir,
+            );
             return {
                 rays: [childRay(ray, {
                     origin: hit.point,
                     direction: reflectedDir,
-                    polarization: {
-                        x: { re: -ray.polarization.x.re, im: -ray.polarization.x.im },
-                        y: { re: -ray.polarization.y.re, im: -ray.polarization.y.im },
-                    },
+                    polarization: newPolarization,
                     opticalPathLength: ray.opticalPathLength + hit.t,
                 })],
             };

@@ -251,31 +251,10 @@ export abstract class OpticalComponent implements Surface {
         this._worldBoundsVersion = this.version;
     }
 
-    // ── Solver 2 Legacy q-Fallback Interface ─────────────────────────
-    // Production Solver 2 now uses Solver 1 beamlets directly. These hooks
-    // remain for legacy analytic segments and compatibility code paths.
-
-    /** Legacy q-fallback paraxial transform [A, B, C, D]. Default: identity. */
-    getParaxialTransform(_rayDirection?: Vector3, _wavelengthSI?: number): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
-    /** Clear aperture radius [mm]. Default: 0 (no aperture info). */
+    /** Clear aperture radius [mm]. Used by Solver 3 aperture importance sampling
+     *  and by the measurement overlay. Default: 0 (no aperture info). */
     getApertureRadius(): number {
         return 0;
-    }
-
-    /**
-     * Full legacy q-fallback descriptor with separate tangential/sagittal transforms.
-     * Override in components with astigmatic behavior (CylindricalLens, SlitAperture, PrismLens).
-     */
-    getParaxialProfile(_rayDirection?: Vector3, _wavelengthSI?: number): {
-        transformX: [number, number, number, number];
-        transformY: [number, number, number, number];
-        apertureRadius: number;
-    } {
-        const transform = this.getParaxialTransform(_rayDirection, _wavelengthSI);
-        return { transformX: transform, transformY: transform, apertureRadius: this.getApertureRadius() };
     }
 
     abstract intersect(rayLocal: Ray): HitRecord | null;

@@ -76,10 +76,6 @@ export class PolygonScanner extends AbstractPolygonOptic {
         this.invalidateMesh();
     }
 
-    override getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
     override getApertureRadius(): number {
         return this.circumRadius;
     }

@@ -148,6 +148,7 @@ export function createWasmPackedInteractionBackend(
                 polarization: {
                     x: scaleComplex(ray.polarization.x, scaleRe, scaleIm),
                     y: scaleComplex(ray.polarization.y, scaleRe, scaleIm),
+                    z: scaleComplex(ray.polarization.z, scaleRe, scaleIm),
                 },
             })],
         };

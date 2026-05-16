@@ -43,19 +43,19 @@ export const InfinitySystemTest: React.FC = () => {
             {
                 origin: new Vector3(0, 0, 0),
                 direction: new Vector3(1, 0, 0).normalize(),
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             },
             // Divergent Up (Angle ~ 0.1 rad)
             {
                 origin: new Vector3(0, 0, 0),
                 direction: new Vector3(1, 0.1, 0).normalize(),
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             },
             // Divergent Down
             {
                 origin: new Vector3(0, 0, 0),
                 direction: new Vector3(1, -0.1, 0).normalize(), // 
-                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
+                wavelength: 532e-9, intensity: 1, polarization: {x:{re:1,im:0},y:{re:0,im:0}, z: { re: 0, im: 0 }}, opticalPathLength: 0, footprintRadius: 0, coherenceMode: Coherence.Coherent
             }
         ];
 

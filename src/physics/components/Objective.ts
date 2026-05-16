@@ -500,16 +500,6 @@ export class Objective extends OpticalComponent {
         };
     }
 
-    /**
-     * Solver 2 q-parameter transfer for this ideal objective.
-     *
-     * Gaussian beams remain paraxial in Solver 2, so the ideal-objective
-     * q transform stays as the thin-lens transfer there.
-     */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, -1 / this.focalLength, 1];
-    }
-
     /** Formatted label for visualization. */
     get label(): string {
         const immersionStr = this.immersionIndex > 1.3

@@ -139,7 +139,7 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'quarterWavePlate') return new Waveplate('quarter', 12.5, Math.PI / 4, 'lambda/4 Plate');
     if (type === 'polarizer') return new Waveplate('polarizer', 12.5, 0, 'Linear Polarizer');
     if (type === 'beamSplitter') return new BeamSplitter(25, 2, 0.5, 'Beam Splitter');
-    if (type === 'polarizingBeamSplitter') return new PolarizingBeamSplitter(25, 2, 'PBS Cube');
+    if (type === 'polarizingBeamSplitter') return new PolarizingBeamSplitter(25, 2, 'PBS Plate');
     if (type === 'aperture') return new Aperture(10, 25, 'Aperture');
     if (type === 'slitAperture') return new SlitAperture(0.5, 20, 25, 'Slit Aperture');
     if (type === 'filter') return new Filter(25, 3, new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]), 'Filter');

@@ -15,7 +15,7 @@ describe("SphericalLens", () => {
             direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
-            polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
+            polarization: { x: {re:1, im:0}, y: {re:0, im:0}, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0,
             coherenceMode: Coherence.Incoherent
@@ -44,7 +44,7 @@ describe("SphericalLens", () => {
             direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
-            polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
+            polarization: { x: {re:1, im:0}, y: {re:0, im:0}, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0,
             coherenceMode: Coherence.Incoherent
@@ -71,7 +71,7 @@ describe("SphericalLens", () => {
             direction: new Vector3(0, 0, 1),
             wavelength: 500e-9,
             intensity: 1,
-            polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
+            polarization: { x: {re:1, im:0}, y: {re:0, im:0}, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0,
             coherenceMode: Coherence.Incoherent
@@ -125,7 +125,7 @@ describe("SphericalLens", () => {
                 direction: new Vector3(1, 0, 0),
                 wavelength: 550e-9,
                 intensity: 1,
-                polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
+                polarization: { x: {re:1, im:0}, y: {re:0, im:0}, z: { re: 0, im: 0 }},
                 opticalPathLength: 0,
                 footprintRadius: 0,
                 coherenceMode: Coherence.Incoherent
@@ -182,7 +182,7 @@ describe("SphericalLens", () => {
             direction: new Vector3(1, 0, 0), // Parallel to optical axis
             wavelength: 500e-9,
             intensity: 1,
-            polarization: { x: {re:1, im:0}, y: {re:0, im:0} },
+            polarization: { x: {re:1, im:0}, y: {re:0, im:0}, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0,
             coherenceMode: Coherence.Incoherent

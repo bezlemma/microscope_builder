@@ -75,7 +75,7 @@ export class FaradayIsolator extends OpticalComponent {
             re: sin45 * jx.re + cos45 * jy.re,
             im: sin45 * jx.im + cos45 * jy.im,
         };
-        polarization = { x: outX, y: outY };
+        polarization = { x: outX, y: outY, z: { re: 0, im: 0 } };
 
         if (isForward) {
             throughput = this.insertionLoss;

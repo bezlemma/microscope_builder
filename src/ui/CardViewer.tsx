@@ -104,7 +104,7 @@ function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
         let meanU = 0;
         let meanV = 0;
         let meanPhase = 0;
-        let polXre = 0, polXim = 0, polYre = 0, polYim = 0;
+        let polXre = 0, polXim = 0, polYre = 0, polYim = 0, polZre = 0, polZim = 0;
         const avgDir = group[0].ray.direction.clone();
 
         for (let i = 0; i < group.length; i++) {
@@ -118,6 +118,8 @@ function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
             polXim += ray.polarization.x.im * weight;
             polYre += ray.polarization.y.re * weight;
             polYim += ray.polarization.y.im * weight;
+            polZre += ray.polarization.z.re * weight;
+            polZim += ray.polarization.z.im * weight;
             if (i > 0) avgDir.add(ray.direction);
         }
 
@@ -138,7 +140,7 @@ function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
         const footprint = group.reduce((sum, hit) => sum + (hit.ray.footprintRadius ?? 0), 0) / group.length;
         const wx = Math.max(Math.sqrt(varU / totalPower), footprint, 0.05);
         const wy = Math.max(Math.sqrt(varV / totalPower), footprint, 0.05);
-        const polMag = Math.sqrt(polXre ** 2 + polXim ** 2 + polYre ** 2 + polYim ** 2) || 1;
+        const polMag = Math.sqrt(polXre ** 2 + polXim ** 2 + polYre ** 2 + polYim ** 2 + polZre ** 2 + polZim ** 2) || 1;
 
         profiles.push({
             wx,
@@ -148,6 +150,7 @@ function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
             polarization: {
                 x: { re: polXre / polMag, im: polXim / polMag },
                 y: { re: polYre / polMag, im: polYim / polMag },
+                z: { re: polZre / polMag, im: polZim / polMag },
             },
             phase: meanPhase,
             centerU: meanU,
@@ -256,15 +259,13 @@ function drawDetectorScaleBar(
     ctx.restore();
 }
 
-function drawDirectHits(
-    ctx: CanvasRenderingContext2D,
+function depositHitsToBuffer(
+    rgb: Float32Array,
     width: number,
     height: number,
     hits: DirectCardHit[],
     viewport: DetectorViewport,
-    mapping: DisplayMapping,
 ) {
-    const rgb = new Float32Array(width * height * 3);
     const viewExtentMm = viewport.extentMm;
     const scaleX = viewExtentMm / width;
     const scaleY = viewExtentMm / height;
@@ -322,8 +323,23 @@ function drawDirectHits(
         const beamletRadiusMm = Math.max(footprintRadius, pixelSizeMm * 0.75);
         deposit(cx, cy, r, g, b, power, beamletRadiusMm);
     }
+}
 
-    const imageData = ctx.createImageData(width, height);
+function renderBufferToCanvas(
+    ctx: CanvasRenderingContext2D,
+    rgb: Float32Array,
+    width: number,
+    height: number,
+    mapping: DisplayMapping,
+    reusableImageData?: ImageData,
+) {
+    // Allocate a fresh ImageData only when no reusable one was provided (or
+    // its size doesn't match). The phosphor path always provides one because
+    // it runs at animation rate and the per-frame Uint8ClampedArray
+    // allocation otherwise dominates GC churn.
+    const imageData = (reusableImageData && reusableImageData.width === width && reusableImageData.height === height)
+        ? reusableImageData
+        : ctx.createImageData(width, height);
     const data = imageData.data;
     let maxValue = 0;
     for (let i = 0; i < rgb.length; i++) {
@@ -337,8 +353,20 @@ function drawDirectHits(
         data[j + 3] = 255;
     }
     ctx.putImageData(imageData, 0, 0);
+}
 
-    drawDetectorScaleBar(ctx, width, height, viewExtentMm);
+function drawDirectHits(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    hits: DirectCardHit[],
+    viewport: DetectorViewport,
+    mapping: DisplayMapping,
+) {
+    const rgb = new Float32Array(width * height * 3);
+    depositHitsToBuffer(rgb, width, height, hits, viewport);
+    renderBufferToCanvas(ctx, rgb, width, height, mapping);
+    drawDetectorScaleBar(ctx, width, height, viewport.extentMm);
 }
 
 // ─── Power formatting ──────────────────────────────────────────────
@@ -566,6 +594,9 @@ function fmtLength(deltaMm: number): string {
 
 export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?: number }> = ({ card, compact }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const phosphorBufferRef = useRef<Float32Array | null>(null);
+    const phosphorKeyRef = useRef<string>('');
+    const phosphorImageDataRef = useRef<ImageData | null>(null);
     const [cardImageTick] = useAtom(cardImageTickAtom);
     const directHits = useMemo(() => directCardHits(card), [card, cardImageTick]);
     const fallbackProfiles = useMemo(() => beamProfilesFromDirectHits(directHits), [directHits]);
@@ -573,9 +604,20 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     const hasBeams = profiles.length > 0 || directHits.length > 0;
 
     const canvasSize = compact ? 96 : 260;
+    // Phosphor-trail cards keep the viewport pinned to the full card extent so
+    // the persistent accumulator doesn't smear when auto-fit zooms in/out.
     const viewport = useMemo(
-        () => detectorViewport(card, directHits),
-        [card, card.width, card.height, directHits],
+        () => {
+            if (card.persistTrail) {
+                return {
+                    extentMm: Math.max(card.width, card.height),
+                    centerU: 0,
+                    centerV: 0,
+                };
+            }
+            return detectorViewport(card, directHits);
+        },
+        [card, card.width, card.height, card.persistTrail, directHits],
     );
 
     useEffect(() => {
@@ -583,6 +625,36 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+
+        if (card.persistTrail) {
+            // Phosphor mode: fade existing accumulator, deposit current hits,
+            // and render. Buffer is keyed on card id + canvas size so a preset
+            // switch or resize starts clean.
+            const key = `${card.id}:${canvas.width}x${canvas.height}`;
+            const len = canvas.width * canvas.height * 3;
+            let buf = phosphorBufferRef.current;
+            if (!buf || buf.length !== len || phosphorKeyRef.current !== key) {
+                buf = new Float32Array(len);
+                phosphorBufferRef.current = buf;
+                phosphorKeyRef.current = key;
+            }
+            const fade = 0.93;
+            for (let i = 0; i < buf.length; i++) buf[i] *= fade;
+            if (hasBeams) {
+                depositHitsToBuffer(buf, canvas.width, canvas.height, directHits, viewport);
+            }
+            // Reuse one ImageData across frames; allocating ~260KB per frame
+            // (canvas 260×260×4 bytes) was a meaningful chunk of GC pressure
+            // when the animation runs at 60fps.
+            let imgData = phosphorImageDataRef.current;
+            if (!imgData || imgData.width !== canvas.width || imgData.height !== canvas.height) {
+                imgData = ctx.createImageData(canvas.width, canvas.height);
+                phosphorImageDataRef.current = imgData;
+            }
+            renderBufferToCanvas(ctx, buf, canvas.width, canvas.height, 'gamma', imgData);
+            drawDetectorScaleBar(ctx, canvas.width, canvas.height, viewport.extentMm);
+            return;
+        }
 
         if (!hasBeams) {
             // No beam: dark empty state
@@ -603,8 +675,10 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     }, [
         directHits,
         hasBeams,
+        card,
         card.width,
         card.height,
+        card.persistTrail,
         canvasSize,
         viewport,
         cardImageTick,

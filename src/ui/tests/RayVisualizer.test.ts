@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { coherentBranchDisplayStyle, openTailSuppressionExpired, terminalVisualizationDistance } from '../RayVisualizer';
+import {
+    coherentBranchDisplayStyle,
+    isMainRayPath,
+    openTailSuppressionExpired,
+    shouldDrawPolarizationOpenTail,
+    shouldDrawPolarizationPath,
+    terminalVisualizationDistance,
+} from '../RayVisualizer';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
 import { Solver1 } from '../../physics/Solver1';
 import { createSourceRays } from '../../physics/SourceRayFactory';
@@ -14,7 +21,7 @@ function testRay(overrides: Partial<Ray>): Ray {
         direction: new Vector3(1, 0, 0),
         wavelength: 780e-9,
         intensity: 1,
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         footprintRadius: 0.1,
         coherenceMode: Coherence.Coherent,
@@ -38,6 +45,74 @@ describe('RayVisualizer coherent branch display', () => {
         }, false);
 
         expect(finiteComponentHit).toBe(25);
+    });
+
+    test('polarization view suppresses only truly extinct non-main leak branches even when they hit hardware', () => {
+        const path = [
+            testRay({ intensity: 1, isMainRay: false }),
+            testRay({
+                origin: new Vector3(10, 0, 0),
+                intensity: 1e-7,
+                isMainRay: false,
+                interactionDistance: 25,
+                interactionComponentId: 'laser-housing',
+            }),
+        ];
+
+        expect(shouldDrawPolarizationPath(path)).toBe(false);
+    });
+
+    test('polarization view draws open tails for every branch above its draw threshold', () => {
+        const path = [
+            testRay({ intensity: 1, isMainRay: false }),
+            testRay({
+                origin: new Vector3(10, 0, 0),
+                intensity: 0.005,
+                isMainRay: false,
+            }),
+        ];
+
+        expect(shouldDrawPolarizationPath(path)).toBe(true);
+        expect(shouldDrawPolarizationOpenTail(path)).toBe(true);
+        expect(terminalVisualizationDistance(path[1], shouldDrawPolarizationOpenTail(path))).toBe(1000);
+    });
+
+    test('a weak split child from the chief source ray is still drawable', () => {
+        const path = [
+            testRay({ intensity: 1, isMainRay: true }),
+            testRay({
+                origin: new Vector3(10, 0, 0),
+                intensity: 1,
+                isMainRay: true,
+            }),
+            testRay({
+                origin: new Vector3(20, 0, 0),
+                intensity: 1e-5,
+                isMainRay: false,
+            }),
+        ];
+
+        expect(isMainRayPath(path)).toBe(false);
+        expect(shouldDrawPolarizationPath(path)).toBe(true);
+        expect(shouldDrawPolarizationOpenTail(path)).toBe(true);
+    });
+
+    test('polarization view does not revive a path by backing up before an extinct child', () => {
+        const path = [
+            testRay({ intensity: 1, isMainRay: false }),
+            testRay({
+                origin: new Vector3(10, 0, 0),
+                intensity: 1,
+                isMainRay: false,
+            }),
+            testRay({
+                origin: new Vector3(20, 0, 0),
+                intensity: 1e-7,
+                isMainRay: false,
+            }),
+        ];
+
+        expect(shouldDrawPolarizationPath(path)).toBe(false);
     });
 
     test('still suppresses infinite escape tails when requested', () => {

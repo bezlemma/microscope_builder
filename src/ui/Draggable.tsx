@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
-import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom, uiLockedAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom, uiLockedAtom, contextMenuAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
@@ -20,6 +20,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const [components, setComponents] = useAtom(componentsAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
+    const [, setContextMenu] = useAtom(contextMenuAtom);
     const { controls, camera } = useThree();
     const [isDragging, setIsDragging] = useState(false);
     const [, setGlobalDragging] = useAtom(isDraggingAtom);
@@ -66,9 +67,59 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
     };
 
-    const handlePointerDown = (e: any) => {
+    // Right-click on a component opens the alignment context menu.
+    // OrbitControls also grabs right-button for pan, but if the user releases
+    // without moving (= a real click) we still get a contextmenu event and pan
+    // is a no-op. Pan-drag is unaffected.
+    const handleContextMenu = (e: any) => {
         if (uiLocked) return;
         e.stopPropagation();
+        e.nativeEvent?.preventDefault?.();
+        if (!selection.includes(component.id)) {
+            setSelection([component.id]);
+        }
+        const x = e.nativeEvent?.clientX ?? e.clientX ?? 0;
+        const y = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+        setContextMenu({ componentId: component.id, x, y });
+    };
+
+    // ── Long-press detector (mobile equivalent of right-click) ────────────
+    const longPressTimer = useRef<number | null>(null);
+    const longPressStart = useRef<{ x: number; y: number; pointerType: string }>({ x: 0, y: 0, pointerType: 'mouse' });
+    const cancelLongPress = () => {
+        if (longPressTimer.current !== null) {
+            window.clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    const handlePointerDown = (e: any) => {
+        if (uiLocked) return;
+        // Right-button pointerdown: let onContextMenu handle it. Don't start a drag.
+        if (e.button === 2) return;
+        e.stopPropagation();
+
+        // Start the long-press timer for touch input. If the pointer stays
+        // within a small radius for ~500 ms, we treat it as a right-click and
+        // open the alignment context menu instead of dragging.
+        const pointerType = e.nativeEvent?.pointerType ?? e.pointerType ?? 'mouse';
+        if (pointerType === 'touch' || pointerType === 'pen') {
+            const sx = e.nativeEvent?.clientX ?? e.clientX ?? 0;
+            const sy = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+            longPressStart.current = { x: sx, y: sy, pointerType };
+            cancelLongPress();
+            longPressTimer.current = window.setTimeout(() => {
+                if (!selection.includes(component.id)) {
+                    setSelection([component.id]);
+                }
+                setContextMenu({ componentId: component.id, x: sx, y: sy });
+                // Stop the drag we started — long-press wins.
+                setIsDragging(false);
+                setGlobalDragging(false);
+                if (controls) (controls as any).enabled = true;
+                longPressTimer.current = null;
+            }, 500);
+        }
 
         // Shift+Click: toggle this component in the multi-selection
         // (Can't use Ctrl/Cmd -- OrbitControls intercepts those for panning)
@@ -114,6 +165,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const handlePointerUp = (e: any) => {
         if (uiLocked) return;
         e.stopPropagation();
+        cancelLongPress();
         try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
         setIsDragging(false);
         setGlobalDragging(false);
@@ -124,6 +176,14 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
     const handlePointerMove = (e: any) => {
         if (uiLocked) return;
+        // Cancel a pending long-press if the touch moves more than a few pixels.
+        if (longPressTimer.current !== null) {
+            const cx = e.nativeEvent?.clientX ?? e.clientX ?? 0;
+            const cy = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+            const dx = cx - longPressStart.current.x;
+            const dy = cy - longPressStart.current.y;
+            if (dx * dx + dy * dy > 64 /* 8 px² */) cancelLongPress();
+        }
         if (!isDragging) return;
         e.stopPropagation();
 
@@ -374,6 +434,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerMove={handlePointerMove}
+            onContextMenu={handleContextMenu}
         >
             {children}
 

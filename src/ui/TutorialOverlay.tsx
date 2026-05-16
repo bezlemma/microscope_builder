@@ -169,7 +169,7 @@ const FineNudgePanel: React.FC<{
     );
 };
 
-export const TutorialOverlay: React.FC = () => {
+const TutorialOverlayContent: React.FC = () => {
     const [components] = useAtom(componentsAtom);
     const [, setComponents] = useAtom(componentsAtom);
     const [activePreset] = useAtom(activePresetAtom);
@@ -398,4 +398,26 @@ export const TutorialOverlay: React.FC = () => {
             )}
         </group>
     );
+};
+
+/**
+ * Thin preset gate for the tutorial / MZ overlay.
+ *
+ * TutorialOverlayContent subscribes to forwardRaysAtom — it needs live rays to
+ * detect tutorial-stage completion. forwardRaysAtom is reassigned on every
+ * animation frame, so for a continuously-animated preset like Che-Hang Yu,
+ * keeping the content mounted would subscribe an in-<Canvas> fiber — one that
+ * renders `null` and therefore never re-renders — to a per-frame atom. Its
+ * hook update queue then grows without bound (a fresh Ray[][] every frame),
+ * which OOM-crashes the tab. Mount the content only for presets that actually
+ * draw a tutorial or interferometer cue.
+ */
+export const TutorialOverlay: React.FC = () => {
+    const [activePreset] = useAtom(activePresetAtom);
+    const needsOverlay =
+        activePreset === PresetName.Tutorial
+        || activePreset === PresetName.Tutorial2
+        || activePreset === PresetName.MZInterferometer;
+    if (!needsOverlay) return null;
+    return <TutorialOverlayContent />;
 };

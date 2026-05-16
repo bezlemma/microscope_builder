@@ -125,12 +125,6 @@ export class Aperture extends OpticalComponent {
         };
     }
 
-    // Solver 2 transfer matrix — identity (aperture is just a stop, no optical power).
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
-    // Aperture radius for Solver2 beam clipping.
     getApertureRadius(): number {
         return this.openingDiameter / 2;
     }

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom } from '../state/store';
+import { appRouteAtom, loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom } from '../state/store';
 import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
 
@@ -303,6 +303,7 @@ const ComponentGroupSection = ({
 export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
+    const [, setAppRoute] = useAtom(appRouteAtom);
     const [components] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
@@ -556,8 +557,28 @@ export const Sidebar: React.FC = () => {
                     )}
                 </div>
                 <div style={{ flex: 1 }}>
-                    {/* Brand mark: giant caps inlined in "Bez's Optics & Microscope Builder" on one line. */}
-                    <div style={{ marginBottom: isMobile ? 6 : 10 }}>
+                    {/* Brand mark: also acts as the "back to splash" affordance. */}
+                    <button
+                        type="button"
+                        onClick={() => setAppRoute('splash')}
+                        aria-label="Back to home screen"
+                        title="Back to home screen"
+                        style={{
+                            appearance: 'none',
+                            background: 'transparent',
+                            border: '1px solid transparent',
+                            padding: 0,
+                            margin: 0,
+                            marginBottom: isMobile ? 6 : 10,
+                            cursor: 'pointer',
+                            display: 'block',
+                            textAlign: 'left',
+                            borderRadius: 4,
+                            transition: 'opacity 0.15s',
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.opacity = '0.78'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    >
                         {(() => {
                             const smallPx = isMobile ? 10 : 12;
                             const bigPx = isMobile ? 15 : 18;
@@ -591,7 +612,7 @@ export const Sidebar: React.FC = () => {
                                 </div>
                             );
                         })()}
-                    </div>
+                    </button>
                     <h3 style={{
                         color: '#fff',
                         marginBottom: '12px',

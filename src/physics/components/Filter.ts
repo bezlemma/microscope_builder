@@ -96,11 +96,6 @@ export class Filter extends OpticalComponent {
         };
     }
 
-    /** Solver 2 transfer matrix — identity (no optical power). */
-    getParaxialTransform(): [number, number, number, number] {
-        return [1, 0, 0, 1];
-    }
-
     getApertureRadius(): number {
         return this.diameter / 2;
     }

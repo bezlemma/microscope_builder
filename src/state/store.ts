@@ -35,6 +35,10 @@ export interface RayConfig {
     viewerMode: 'rods' | 'wave' | 'planes';
     minRayOpacity: number; // Minimum opacity for the dimmest visible rays (0..1)
     maxRayOpacity: number; // Maximum opacity for the brightest rays (0..1)
+    /** Color every ray segment by the polarization state of its E-field (a
+     *  polariscope-style view). Off by default — overrides the wavelength
+     *  color when on. */
+    colorByPolarization: boolean;
 }
 
 export const MIN_FORWARD_RAY_COUNT = 4;
@@ -55,6 +59,7 @@ export const DEFAULT_RAY_CONFIG: RayConfig = {
     viewerMode: 'rods',
     minRayOpacity: 0.33,
     maxRayOpacity: 1.0,
+    colorByPolarization: false,
 };
 
 // 1. Component List (The Scene Graph)
@@ -80,6 +85,23 @@ export enum PresetName {
 
 export type ViewMode = 'schematic' | 'realistic';
 export const viewModeAtom = atom<ViewMode>('schematic');
+
+/** Top-level app navigation: the splash welcome screen, or the editor itself. */
+export type AppRoute = 'splash' | 'editor';
+export const appRouteAtom = atom<AppRoute>('splash');
+
+/** Right-click / long-press context menu state. null when closed. */
+export interface ContextMenuState {
+    componentId: string;
+    x: number;
+    y: number;
+}
+export const contextMenuAtom = atom<ContextMenuState | null>(null);
+
+/** Component id being previewed by the context menu's submenu hover.
+ *  A separate atom from selection so it doesn't disturb the user's real
+ *  selection (which the drag/inspector flows depend on). */
+export const hoveredAlignmentTargetAtom = atom<string | null>(null);
 
 const INITIAL_TUTORIAL = createTutorialScene();
 
@@ -163,6 +185,17 @@ export const loadPresetAtom = atom(
         set(undoStackAtom, []); // Clear undo history on preset load
         set(activeZLevelAtom, 0); // Reset Z-level
         set(measurementAtom, { active: false, selectedId: null, measurements: [] });
+        // Clear ray caches from the previous preset before the new scene is
+        // installed. Without this, the visualizer keeps drawing the old beam
+        // bundle in the new scene until the first trace of the new components
+        // lands (and longer, for anything that consumes these atoms directly).
+        set(publishForwardRaysAtom, []);
+        set(publishReverseRaysAtom, []);
+        set(publishTrapBeamSegmentsAtom, []);
+        // Same story for detector viewers pinned by the previous preset: drop
+        // them so we don't render stale CardViewer / CameraViewer panels
+        // against components that are about to leave the scene.
+        set(pinnedViewersAtom, new Set());
 
         const factory = presetFactories.get(presetName);
         if (!factory) return;
@@ -301,13 +334,40 @@ export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
 // 6a. Forward ray paths — published whenever Solver 1 traces.  Other viewers
 // (e.g. SampleZoomViewer) read from this so they don't have to re-trace.
 export const forwardRaysAtom = atom<import('../physics/types').Ray[][]>([]);
+// High-churn ray payloads can be very large. Components that only need to
+// refresh from the latest snapshot should subscribe to the revision atom and
+// read the payload imperatively from the store.
+export const forwardRaysRevisionAtom = atom<number>(0);
+export const publishForwardRaysAtom = atom(
+    null,
+    (_get, set, rays: import('../physics/types').Ray[][]) => {
+        set(forwardRaysAtom, rays);
+        set(forwardRaysRevisionAtom, revision => revision + 1);
+    }
+);
 /** Reverse ray paths from Solver 3, published for SVG export and diagnostics. */
 export const reverseRaysAtom = atom<import('../physics/types').Ray[][]>([]);
+export const reverseRaysRevisionAtom = atom<number>(0);
+export const publishReverseRaysAtom = atom(
+    null,
+    (_get, set, rays: import('../physics/types').Ray[][]) => {
+        set(reverseRaysAtom, rays);
+        set(reverseRaysRevisionAtom, revision => revision + 1);
+    }
+);
 
 // Trap beam segments are published even when the global Solver-2 wave overlay
 // is hidden, so the optical-trap sample viewer can show diagnostics using the
 // same cached field that drives bead/colloid dynamics.
 export const trapBeamSegmentsAtom = atom<GaussianBeamSegment[][]>([]);
+export const trapBeamSegmentsRevisionAtom = atom<number>(0);
+export const publishTrapBeamSegmentsAtom = atom(
+    null,
+    (_get, set, segments: GaussianBeamSegment[][]) => {
+        set(trapBeamSegmentsAtom, segments);
+        set(trapBeamSegmentsRevisionAtom, revision => revision + 1);
+    }
+);
 
 // 7. Solver 3 render trigger — incrementing this value triggers a Solver 3 render
 export const solver3RenderTriggerAtom = atom<number>(0);
@@ -350,6 +410,9 @@ export const startTutorialStage2Atom = atom(
         set(componentsAtom, result.scene);
         set(presetDescriptionAtom, result.description || "");
         set(selectionAtom, []);
+        set(publishForwardRaysAtom, []);
+        set(publishReverseRaysAtom, []);
+        set(publishTrapBeamSegmentsAtom, []);
         set(pinnedViewersAtom, new Set());
         set(solver3RenderingAtom, false);
         set(scanAccumProgressAtom, 0);
@@ -372,6 +435,9 @@ export const loadSceneAtom = atom(
         set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
         set(selectionAtom, []);
         set(undoStackAtom, []); // Clear undo history on scene load
+        set(publishForwardRaysAtom, []);
+        set(publishReverseRaysAtom, []);
+        set(publishTrapBeamSegmentsAtom, []);
         set(animationPlayingAtom, false);
         set(animationSpeedAtom, 1.0);
         set(solver3RenderingAtom, false);

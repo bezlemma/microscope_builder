@@ -60,14 +60,15 @@ export const ControlsHelp: React.FC = () => {
 
                     <Section title="Navigate">
                         <Row keys="WASD / Arrows" action="Pan" />
-                        <Row keys="Shift + Left-drag" action="Pan" />
+                        <Row keys="Ctrl + Left-drag" action="Pan" />
                         <Row keys="Middle-drag" action="Pan" />
-                        <Row keys="Ctrl + Left-drag" action="Rotate 3D" />
+                        <Row keys="Shift + Left-drag" action="Rotate 3D" />
                         <Row keys="Scroll / [ ]" action="Zoom" />
                     </Section>
 
                     <Section title="Components">
                         <Row keys="Left-click" action="Select" />
+                        <Row keys="Right-click" action="Alignment menu" />
                         <Row keys="Shift + Click" action="Multi-select" />
                         <Row keys="Alt + Click" action="Snap to nearest hole" />
                         <Row keys="Drag" action="Move" />
@@ -75,11 +76,6 @@ export const ControlsHelp: React.FC = () => {
                         <Row keys="Q / E" action="Rotate ±15°" />
                         <Row keys="Delete" action="Remove" />
                         <Row keys="Escape" action="Deselect all" />
-                    </Section>
-
-                    <Section title="Solvers">
-                        <Row keys="2" action="Toggle Wave View" />
-                        <Row keys="3" action="Fire Backward Tracer" />
                     </Section>
 
                     <Section title="Edit">

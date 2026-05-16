@@ -5,7 +5,7 @@ import { Aperture } from '../components/Aperture';
 import { Mirror } from '../components/Mirror';
 import { Sample } from '../components/Sample';
 import { Solver3 } from '../Solver3';
-import { GaussianBeamSegment, initialQ } from '../Solver2';
+import { GaussianBeamSegment } from '../Solver2';
 import { Coherence, type HitRecord, type Ray } from '../types';
 import { createDefaultSolver3Backend } from '../solver3Host';
 import { createWasmPackedInteractionBackend } from '../solver3PackedInteraction';
@@ -36,22 +36,13 @@ import { createPackedFirstHitHintsFromWasm } from '../solver3FirstHitHints';
 import { createJsPackedCameraSamples, createPackedCameraSamplesFromWasm, PACKED_CAMERA_SAMPLE_STRIDE } from '../solver3Sampling';
 
 function makeSeg(start: Vector3, end: Vector3, direction: Vector3): GaussianBeamSegment {
-    const wavelength = 488e-9;
-    const wavelengthMm = wavelength * 1e3;
-    const waist = 2;
-    const q0 = initialQ(waist, wavelengthMm);
-    const len = start.distanceTo(end);
     return {
         start: start.clone(),
         end: end.clone(),
         direction: direction.clone().normalize(),
-        wavelength,
+        wavelength: 488e-9,
         power: 1.0,
-        qx_start: { ...q0 },
-        qx_end: { re: q0.re + len, im: q0.im },
-        qy_start: { ...q0 },
-        qy_end: { re: q0.re + len, im: q0.im },
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
         opticalPathLength: 0,
         refractiveIndex: 1.0,
         coherenceMode: Coherence.Coherent,
@@ -325,7 +316,7 @@ describe('Solver 3 wasm backend boundary', () => {
             direction: new Vector3(0, 0, 1),
             wavelength: 532e-9,
             intensity: 0.5,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 2,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Incoherent,

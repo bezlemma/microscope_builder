@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import { MOUSE, TOUCH, Vector3, Euler, Quaternion, OrthographicCamera, PerspectiveCamera } from 'three';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, rayConfigAtom, setBundleDataEnabledAtom, solver3RenderTriggerAtom, resetViewSignalAtom, zoomToComponentAtom, zoomToMeasurementAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom, uiLockedAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, selectionAtom, undoAtom, pushUndoAtom, resetViewSignalAtom, zoomToComponentAtom, zoomToMeasurementAtom, isOrthoAtom, cameraBlendAtom, mobileCameraModeAtom, isDraggingAtom, uiLockedAtom } from '../state/store';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { setGizmoOrientCallback } from './AxesWidget';
 
@@ -44,9 +44,6 @@ export const EditorControls: React.FC = () => {
     const uiLocked = useAtomValue(uiLockedAtom);
     const [, undo] = useAtom(undoAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
-    const [rayConfig] = useAtom(rayConfigAtom);
-    const [, setBundleDataEnabled] = useAtom(setBundleDataEnabledAtom);
-    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
     const setIsOrtho = useSetAtom(isOrthoAtom);
     const setCameraBlend = useSetAtom(cameraBlendAtom);
     const lastBlendRef = useRef(0);
@@ -416,20 +413,6 @@ export const EditorControls: React.FC = () => {
                 }
             }
 
-            // '2' key: toggle forward bundle data
-            if (e.key === '2') {
-                if (isInputFocused()) return;
-                e.preventDefault();
-                setBundleDataEnabled(!rayConfig.solver2Enabled);
-            }
-
-            // '3' key: fire Solver 3 (Calculate Emission and Image)
-            if (e.key === '3') {
-                if (isInputFocused()) return;
-                e.preventDefault();
-                setSolver3Trigger(prev => prev + 1);
-            }
-
             // WASD / RF / Arrows: add to pressed set for continuous movement
             if (wasdKeys.includes(e.key)) {
                 if (isInputFocused()) return;
@@ -489,7 +472,7 @@ export const EditorControls: React.FC = () => {
             window.removeEventListener('keyup', handleKeyUp);
             window.removeEventListener('blur', handleBlur);
         };
-    }, [setSelection, selection, components, setComponents, undo, pushUndo, rayConfig, setBundleDataEnabled, setSolver3Trigger, uiLocked]);
+    }, [setSelection, selection, components, setComponents, undo, pushUndo, uiLocked]);
 
     // ─── Auto-zoom to fit when preset changes or resetViewSignal fires ───
     useEffect(() => {
@@ -633,15 +616,15 @@ export const EditorControls: React.FC = () => {
 
             // Mouse mappings:
             //   Bare left-click     = reserved for object interaction (-1)
-            //   Ctrl + left-drag    = Rotate     |  Ctrl + middle-drag  = Rotate
-            //   Shift + left-drag   = Pan        |  Shift + middle-drag = Pan
+            //   Shift + left-drag   = Rotate    |  Shift + middle-drag = Rotate
+            //   Ctrl + left-drag    = Pan       |  Ctrl + middle-drag  = Pan (default)
             //   Middle-drag (bare)  = Pan
             //   Right-click         = reserved for context menu (-1)
             //   Scroll              = Zoom
             //   Left-hold + scroll  = Rotate selected part (handled separately)
             mouseButtons={{
-                LEFT: ctrlHeld ? MOUSE.ROTATE : (shiftHeld ? MOUSE.PAN : -1 as any),
-                MIDDLE: ctrlHeld ? MOUSE.ROTATE : MOUSE.PAN,
+                LEFT: shiftHeld ? MOUSE.ROTATE : (ctrlHeld ? MOUSE.PAN : -1 as any),
+                MIDDLE: shiftHeld ? MOUSE.ROTATE : MOUSE.PAN,
                 RIGHT: -1 as any
             }}
 

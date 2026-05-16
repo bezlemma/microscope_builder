@@ -26,15 +26,10 @@ describe('terminal Gaussian Packet synthesis', () => {
             wavelength: 532e-9,
             intensity: 1,
             powerWeight: 1,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0.3,
             coherenceMode: Coherence.Coherent,
-            sigmaU: 0.12,
-            sigmaV: 0.12,
-            curvatureRadiusU: Number.POSITIVE_INFINITY,
-            curvatureRadiusV: Number.POSITIVE_INFINITY,
-            packetStateMode: 'explicit' as const,
             sourceId: 'laser',
             sourceKind: 'laser',
             packetLaunchRigor: 'rigorous',
@@ -48,15 +43,10 @@ describe('terminal Gaussian Packet synthesis', () => {
             wavelength: 532e-9,
             intensity: 2,
             powerWeight: 2,
-            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+            polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
             opticalPathLength: 0,
             footprintRadius: 0.3,
             coherenceMode: Coherence.Coherent,
-            sigmaU: 0.12,
-            sigmaV: 0.12,
-            curvatureRadiusU: Number.POSITIVE_INFINITY,
-            curvatureRadiusV: Number.POSITIVE_INFINITY,
-            packetStateMode: 'explicit',
             sourceId: 'laser',
         });
 
@@ -85,7 +75,6 @@ describe('terminal Gaussian Packet synthesis', () => {
         expect(hit.localDirection?.z).toBeCloseTo(1, 9);
         expect(hit.ray.origin.z).toBeCloseTo(0, 9);
         expect(hit.ray.opticalPathLength).toBeCloseTo(10, 9);
-        expect(hit.ray.packetStateMode).toBe('explicit');
     });
 
     test('camera records terminal packet hits and clears them for each trace', () => {

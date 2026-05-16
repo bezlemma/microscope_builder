@@ -1,6 +1,6 @@
 import { Vector3, BufferGeometry, Float32BufferAttribute } from 'three';
 import { OpticalComponent } from '../Component';
-import { Ray, HitRecord, InteractionResult, childRay } from '../types';
+import { Ray, HitRecord, InteractionResult, childRay, reflectJones } from '../types';
 import { reflectVector } from '../math_solvers';
 
 /**
@@ -199,28 +199,19 @@ export class CurvedMirror extends OpticalComponent {
         // Reflect off the curved surface
         const reflectedDir = reflectVector(ray.direction, hit.normal);
 
-        // Mirror reflection: π phase shift
-        const polX = ray.polarization.x;
-        const polY = ray.polarization.y;
+        // Reflect with the proper incidence-plane physics (see Mirror.ts).
+        const newPolarization = reflectJones(
+            ray.polarization, ray.direction, hit.normal, reflectedDir,
+        );
 
         return {
             rays: [childRay(ray, {
                 origin: hit.point,
                 direction: reflectedDir,
-                polarization: {
-                    x: { re: -polX.re, im: -polX.im },
-                    y: { re: -polY.re, im: -polY.im }
-                },
+                polarization: newPolarization,
                 opticalPathLength: ray.opticalPathLength + hit.t
             })]
         };
-    }
-
-    /** Solver 2 transfer matrix for spherical-mirror focusing. */
-    getParaxialTransform(): [number, number, number, number] {
-        const R = this.radiusOfCurvature;
-        if (Math.abs(R) >= 1e8) return [1, 0, 0, 1]; // flat
-        return [1, 0, -2 / R, 1];
     }
 
     getApertureRadius(): number {

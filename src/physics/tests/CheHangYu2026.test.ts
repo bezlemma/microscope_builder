@@ -3,18 +3,14 @@ import { Vector3 } from 'three';
 
 import { createCheHangYu2026Scene } from '../../presets/CheHangYu2026';
 import { Solver1 } from '../Solver1';
-import { Solver3 } from '../Solver3';
 import { createSourceRays } from '../SourceRayFactory';
-import { AchromatDoublet } from '../components/AchromatDoublet';
-import { Blocker } from '../components/Blocker';
-import { DichroicMirror } from '../components/DichroicMirror';
-import { GalvoScanHead } from '../components/GalvoScanHead';
-import { IdealLens } from '../components/IdealLens';
-import { Laser } from '../components/Laser';
-import { PMT } from '../components/PMT';
-import { Sample } from '../components/Sample';
 import { SphericalLens } from '../components/SphericalLens';
-import { Coherence, Ray } from '../types';
+import { Card } from '../components/Card';
+import { Mirror } from '../components/Mirror';
+import { Laser } from '../components/Laser';
+import { PolarizingBeamSplitter } from '../components/PolarizingBeamSplitter';
+import { Waveplate } from '../components/Waveplate';
+import { Coherence, Ray, defaultTransversePolarization, jonesMagSq } from '../types';
 
 function centralLaserRay(laser: Laser): Ray {
     const direction = new Vector3(0, 0, 1).applyQuaternion(laser.rotation).normalize();
@@ -23,7 +19,7 @@ function centralLaserRay(laser: Laser): Ray {
         direction,
         wavelength: laser.wavelength * 1e-9,
         intensity: 1,
-        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 } },
+        polarization: defaultTransversePolarization(direction),
         opticalPathLength: 0,
         footprintRadius: laser.beamRadius,
         coherenceMode: Coherence.Coherent,
@@ -32,108 +28,143 @@ function centralLaserRay(laser: Laser): Ray {
     };
 }
 
-function traceLaserHitNames(scanX = 0, scanY = 0): string[] {
-    const { scene } = createCheHangYu2026Scene();
-    const laser = scene.find(c => c instanceof Laser) as Laser;
-    const galvos = scene.filter(c => c instanceof GalvoScanHead) as GalvoScanHead[];
-    const resonant = galvos.find(g => g.name.includes('Resonant'));
-    const slow = galvos.find(g => g.name.includes('Slow'));
-    expect(resonant).toBeDefined();
-    expect(slow).toBeDefined();
-    resonant!.scanX = scanX;
-    slow!.scanY = scanY;
-
-    const paths = new Solver1(scene).trace([centralLaserRay(laser)]);
-    const mainPath = paths[0] ?? [];
-    return mainPath
-        .map(ray => ray.interactionComponentId
+/** Of all the branches Solver 1 explores from one source ray, pick the one
+ *  that actually reached the named component — that's the doubler exit path. */
+function pathHitting(scene: ReturnType<typeof createCheHangYu2026Scene>['scene'], paths: Ray[][], name: string): string[] | null {
+    const namePaths = paths.map(path =>
+        path.map(ray => ray.interactionComponentId
             ? scene.find(c => c.id === ray.interactionComponentId)?.name
             : undefined)
-        .filter((name): name is string => !!name);
+            .filter((n): n is string => !!n)
+    );
+    return namePaths.find(names => names.some(n => n.includes(name))) ?? null;
 }
 
-describe('Che-Hang Yu 2026 preset', () => {
-    test('uses thick lens components instead of ideal lenses', () => {
-        const { scene } = createCheHangYu2026Scene();
+function finalPbsCardChild(scene: ReturnType<typeof createCheHangYu2026Scene>['scene'], paths: Ray[][]): Ray | null {
+    const pbs = scene.find(c => c instanceof PolarizingBeamSplitter) as PolarizingBeamSplitter;
+    for (const path of paths) {
+        for (let i = path.length - 2; i >= 1; i--) {
+            if (path[i].interactionComponentId !== pbs.id) continue;
+            const child = path[i + 1];
+            if (child.direction.y < -0.5) return child;
+        }
+    }
+    return null;
+}
 
-        expect(scene.some(component => component instanceof IdealLens)).toBe(false);
-        expect(scene.filter(component => component instanceof AchromatDoublet).length).toBeGreaterThanOrEqual(4);
-        expect(scene.filter(component => component instanceof SphericalLens).length).toBeGreaterThanOrEqual(2);
-        expect(scene.some(component => component instanceof Blocker && component.name === 'Post-Sample Beam Dump')).toBe(true);
+describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
+    test('contains the minimum hardware needed to demonstrate angle doubling', () => {
+        const { scene } = createCheHangYu2026Scene();
+        const lasers = scene.filter(c => c instanceof Laser);
+        const pbses = scene.filter(c => c instanceof PolarizingBeamSplitter);
+        const waveplates = scene.filter(c => c instanceof Waveplate);
+        const scanLenses = scene.filter(c => c instanceof SphericalLens);
+        const mirrors = scene.filter(c => c instanceof Mirror);
+        const cards = scene.filter(c => c instanceof Card);
+
+        expect(lasers.length).toBe(1);
+        expect(pbses.length).toBe(1);
+        expect(waveplates.length).toBe(1);          // just the λ/4 — no λ/2 needed now
+        expect(waveplates[0].waveplateMode).toBe('quarter');
+        expect(scanLenses.length).toBe(2);          // 4-f relay
+        expect(mirrors.length).toBe(2);             // resonant + slow scan mirrors
+        expect(cards.length).toBe(1);               // doubled-scan output
     });
 
-    test('uses a visible fluorescence surrogate with a matching dichroic', () => {
+    test('launches with polarization view and animation on', () => {
+        const result = createCheHangYu2026Scene();
+        expect(result.rayConfig?.colorByPolarization).toBe(true);
+        expect(result.animationPlaying).toBe(true);
+        // The animation drives both scan axes via mirror orientation directly.
+        const targets = (result.channels ?? []).map(ch => ch.property);
+        expect(targets).toContain('panAngle');
+        expect(targets).toContain('tiltAngle');
+    });
+
+    test('the laser beam bounces off the resonant scanner twice and exits to the card', () => {
         const { scene } = createCheHangYu2026Scene();
         const laser = scene.find(c => c instanceof Laser) as Laser;
-        const sample = scene.find(c => c instanceof Sample) as Sample;
-        const dichroic = scene.find(c => c instanceof DichroicMirror) as DichroicMirror;
+        const paths = new Solver1(scene).trace([centralLaserRay(laser)]);
 
-        expect(laser.wavelength).toBe(460);
-        expect(sample.getExcitationWavelength()).toBe(460);
-        expect(sample.getEmissionWavelength()).toBe(510);
-        expect(dichroic.spectralProfile.getTransmission(460)).toBeGreaterThan(0.9);
-        expect(dichroic.spectralProfile.getTransmission(510)).toBeLessThan(0.1);
+        const cardPath = pathHitting(scene, paths, 'Doubled-scan viewing card');
+        expect(cardPath).not.toBeNull();
+        // The headline trick: the resonant scanner shows up TWICE in the same path.
+        const resonantHits = cardPath!.filter(n => n.includes('Resonant Scanner')).length;
+        expect(resonantHits).toBe(2);
+        // Both scan lenses also appear twice (once each way through the relay).
+        expect(cardPath!.filter(n => n.includes('Scan Lens 1')).length).toBe(2);
+        expect(cardPath!.filter(n => n.includes('Scan Lens 2')).length).toBe(2);
+        // The λ/4 plate is traversed twice (forward + return).
+        expect(cardPath!.filter(n => n.includes('λ/4')).length).toBe(2);
     });
 
-    test('binds PMT raster axes to the resonant and slow scanners', () => {
-        const { scene, channels } = createCheHangYu2026Scene();
-        const pmt = scene.find(c => c instanceof PMT) as PMT;
-        const galvos = scene.filter(c => c instanceof GalvoScanHead) as GalvoScanHead[];
-        const resonant = galvos.find(g => g.name.includes('Resonant'))!;
-        const slow = galvos.find(g => g.name.includes('Slow'))!;
-        const scanChannels = channels ?? [];
+    test('any final PBS leakage branch is not marked as the main ray', () => {
+        const { scene } = createCheHangYu2026Scene();
+        const pbs = scene.find(c => c instanceof PolarizingBeamSplitter) as PolarizingBeamSplitter;
+        const paths = new Solver1(scene).trace(createSourceRays(scene, 32, 'full'));
 
-        expect(pmt.xAxisComponentId).toBe(resonant.id);
-        expect(pmt.xAxisProperty).toBe('scanX');
-        expect(pmt.yAxisComponentId).toBe(slow.id);
-        expect(pmt.yAxisProperty).toBe('scanY');
-        expect(scanChannels.some(ch => ch.targetId === resonant.id && ch.property === 'scanX')).toBe(true);
-        expect(scanChannels.some(ch => ch.targetId === slow.id && ch.property === 'scanY')).toBe(true);
-    });
+        const finalPbsChildren: { incoming: Ray; child: Ray }[] = [];
+        for (const path of paths) {
+            let pbsIndex = -1;
+            for (let i = 1; i < path.length - 1; i++) {
+                if (path[i].interactionComponentId === pbs.id) pbsIndex = i;
+            }
+            if (pbsIndex >= 0) {
+                finalPbsChildren.push({ incoming: path[pbsIndex], child: path[pbsIndex + 1] });
+            }
+        }
 
-    test('routes the central excitation beam through the objective before the sample', () => {
-        const names = traceLaserHitNames();
-        const objectiveIndex = names.findIndex(name => name.includes('Nikon 16'));
-        const sampleIndex = names.findIndex(name => name.includes('GCaMP6s'));
-        const dumpIndex = names.findIndex(name => name === 'Post-Sample Beam Dump');
-
-        expect(names).toContain('LSM54-1050 Scan Lens 1 (thick f=54)');
-        expect(names).toContain('LSM54-1050 Scan Lens 2 (thick f=54)');
-        expect(names).toContain('LSM54-1050 Imaging Scan Lens (thick f=54)');
-        expect(names).toContain('TTL200MP Tube Lens (thick f=200)');
-        expect(objectiveIndex).toBeGreaterThan(-1);
-        expect(sampleIndex).toBeGreaterThan(-1);
-        expect(dumpIndex).toBeGreaterThan(-1);
-        expect(objectiveIndex).toBeLessThan(sampleIndex);
-        expect(sampleIndex).toBeLessThan(dumpIndex);
-    });
-
-    test('single-axis scan extrema still reach the specimen', () => {
-        const halfAngle = (2.5 * Math.PI) / 180;
-        for (const [scanX, scanY] of [
-            [halfAngle, 0],
-            [-halfAngle, 0],
-            [0, halfAngle],
-            [0, -halfAngle],
-        ]) {
-            const names = traceLaserHitNames(scanX, scanY);
-            expect(names.some(name => name.includes('Nikon 16'))).toBe(true);
-            expect(names.some(name => name.includes('GCaMP6s'))).toBe(true);
+        const cardBranch = finalPbsChildren.find(({ child }) => child.direction.y < -0.9 && child.isMainRay === true);
+        const leakageBranch = finalPbsChildren.find(({ child }) => child.direction.x < -0.9);
+        expect(cardBranch).toBeDefined();
+        if (leakageBranch) {
+            expect(leakageBranch.child.isMainRay).toBe(false);
+            expect(leakageBranch.child.intensity / leakageBranch.incoming.intensity).toBeLessThan(1e-3);
         }
     });
 
-    test('PMT center pixel receives fluorescent signal', () => {
-        const { scene } = createCheHangYu2026Scene();
-        const pmt = scene.find(c => c instanceof PMT) as PMT;
-        pmt.samplesPerPixel = 4;
+    test('scan extrema still find the viewing card', () => {
+        const halfAngle = (5 * Math.PI) / 180; // ±5° mechanical, the preset's full range
+        for (const [scanX, scanY] of [
+            [halfAngle, 0],
+            [-halfAngle, 0],
+            [0, halfAngle * 0.5],
+            [0, -halfAngle * 0.5],
+        ]) {
+            const { scene } = createCheHangYu2026Scene();
+            const laser = scene.find(c => c instanceof Laser) as Laser;
+            const mirrors = scene.filter(c => c instanceof Mirror) as Mirror[];
+            const resonant = mirrors.find(m => m.name.includes('Resonant'))!;
+            const slow = mirrors.find(m => m.name.includes('Slow'))!;
+            resonant.panAngle = resonant.panAngle + scanX;
+            resonant.recomputeRotation();
+            slow.tiltAngle = scanY;
+            slow.recomputeRotation();
+            const paths = new Solver1(scene).trace([centralLaserRay(laser)]);
+            const cardPath = pathHitting(scene, paths, 'Doubled-scan viewing card');
+            expect(cardPath).not.toBeNull();
+        }
+    });
 
-        const beamSegments = new Solver1(scene)
-            .traceWithBeamSegments(createSourceRays(scene, 24, 'full'))
-            .beamSegments;
-        const pixel = new Solver3(scene, beamSegments).renderPMTPixel(pmt);
+    test('PBS513 transmitted output remains transverse and normalized through slow scan', () => {
+        const slowHalfAngle = (2.5 * Math.PI) / 180;
+        for (const slowScan of [-slowHalfAngle, 0, slowHalfAngle]) {
+            const { scene } = createCheHangYu2026Scene();
+            const laser = scene.find(c => c instanceof Laser) as Laser;
+            const slow = (scene.filter(c => c instanceof Mirror) as Mirror[])
+                .find(m => m.name.includes('Slow'))!;
 
-        expect(pixel.radiance).toBeGreaterThan(0.01);
-        expect(pixel.excitation).toBeGreaterThan(0.01);
-        expect(pixel.bestPath).not.toBeNull();
+            slow.tiltAngle = slowScan;
+            slow.recomputeRotation();
+
+            const cardChild = finalPbsCardChild(scene, new Solver1(scene).trace([centralLaserRay(laser)]));
+            expect(cardChild).not.toBeNull();
+            const p = cardChild!.polarization;
+            const d = cardChild!.direction;
+            const longitudinalRe = p.x.re * d.x + p.y.re * d.y + p.z.re * d.z;
+            const longitudinalIm = p.x.im * d.x + p.y.im * d.y + p.z.im * d.z;
+            expect(Math.hypot(longitudinalRe, longitudinalIm)).toBeLessThan(1e-6);
+            expect(jonesMagSq(p)).toBeCloseTo(1, 5);
+        }
     });
 });

@@ -300,8 +300,6 @@ export function adaptiveTerminalFieldWindow(
         totalWeight += weight;
         maxSigma = Math.max(
             maxSigma,
-            hit.ray.sigmaU ?? 0,
-            hit.ray.sigmaV ?? 0,
             (hit.ray.footprintRadius ?? 0) / Math.SQRT2,
         );
     }
@@ -334,10 +332,9 @@ export function synthesizeTerminalPoint(hits: TerminalPacketHit[], u: number, v:
         const power = Math.max(ray.powerWeight ?? ray.intensity, 0);
         if (power <= 0) continue;
 
-        const packetSigmaU = ray.sigmaU ?? (ray.footprintRadius / Math.SQRT2);
-        const packetSigmaV = ray.sigmaV ?? packetSigmaU;
-        const wx = Math.max(Math.SQRT2 * packetSigmaU, 0.001);
-        const wy = Math.max(Math.SQRT2 * packetSigmaV, 0.001);
+        const w = Math.max(ray.footprintRadius, 0.001);
+        const wx = w;
+        const wy = w;
         const du = u - hit.localPoint.x;
         const dv = v - hit.localPoint.y;
         const envelope = Math.exp(-((du * du) / (wx * wx) + (dv * dv) / (wy * wy)));
@@ -353,7 +350,18 @@ export function synthesizeTerminalPoint(hits: TerminalPacketHit[], u: number, v:
         const wavelengthMm = Math.max(ray.wavelength * 1e3, 1e-12);
         const phase = ray.phase ?? ((2 * Math.PI * ray.opticalPathLength) / wavelengthMm);
         const amplitude = Math.sqrt(density) * envelope;
-        const key = `${ray.sourceId ?? '__anonymous__'}:${Math.round(ray.wavelength * 1e12)}`;
+
+        // Bin coherent contributions by sourceId, wavelength, and the
+        // optical-path-length bin (size = coherence length L_c = λ²/Δλ).
+        // Rays in the same bin interfere; rays in different bins of the same
+        // source-and-wavelength add as intensities, mirroring how a finite-
+        // bandwidth source decoheres beamlets that drift out of step.
+        const bandwidthM = ray.bandwidth ?? 0;
+        const lcMm = bandwidthM > 0
+            ? (ray.wavelength * ray.wavelength / bandwidthM) * 1e3
+            : Number.POSITIVE_INFINITY;
+        const oplBin = Number.isFinite(lcMm) ? Math.floor(ray.opticalPathLength / lcMm) : 0;
+        const key = `${ray.sourceId ?? '__anonymous__'}:${Math.round(ray.wavelength * 1e12)}:${oplBin}`;
         const group = coherentGroups.get(key) ?? { re: 0, im: 0 };
         group.re += amplitude * Math.cos(phase);
         group.im += amplitude * Math.sin(phase);

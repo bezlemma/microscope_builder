@@ -47,14 +47,16 @@ export function createOpticalTrapScene(): OpticalComponent[] {
 
     // λ/2 + PBS form a power attenuator: rotating the HWP fast axis steers
     // power between the trap arm (transmitted P) and the beam dump (reflected
-    // S). Start slightly off zero so the dump path is visibly alive while
-    // >95% of the laser still reaches the trap.
-    const halfWave = new Waveplate('half', 12.5, Math.PI / 36, 'lambda/2 plate');
+    // S). The laser emits S-polarized (default transverse, perpendicular to the
+    // 45° PBS incidence plane), so a HWP at π/4 maps S→P → 100% to the trap.
+    // We sit just shy of π/4 so the dump path is visibly alive while >95% of
+    // the laser still reaches the trap.
+    const halfWave = new Waveplate('half', 12.5, Math.PI / 4 - Math.PI / 36, 'lambda/2 plate', 780);
     halfWave.setPosition(hole(C.E, 2).x, hole(C.E, 2).y, 0);
     halfWave.pointAlong(1, 0, 0);
     scene.push(halfWave);
 
-    const pbs = new PolarizingBeamSplitter(15, 2, "PBS cube");
+    const pbs = new PolarizingBeamSplitter(15, 2, "PBS plate");
     pbs.setPosition(hole(C.F, 2).x, hole(C.F, 2).y, 0);
     pbs.pointAlong(1, 1, 0);
     scene.push(pbs);

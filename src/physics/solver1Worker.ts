@@ -38,13 +38,10 @@ export interface SerializedBeamSegment {
     end: { x: number; y: number; z: number };
     direction: { x: number; y: number; z: number };
     wavelength: number;
+    bandwidth?: number;
     power: number;
     sourceId?: string;
     bundleKey?: string;
-    qx_start: GaussianBeamSegment['qx_start'];
-    qx_end: GaussianBeamSegment['qx_end'];
-    qy_start: GaussianBeamSegment['qy_start'];
-    qy_end: GaussianBeamSegment['qy_end'];
     footprintStart?: number;
     footprintEnd?: number;
     beamRadiusStart?: number;
@@ -59,21 +56,6 @@ function serializeRay(ray: Ray): SerializedRay {
     return {
         origin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         direction: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
-        majorAxis: ray.majorAxis
-            ? { x: ray.majorAxis.x, y: ray.majorAxis.y, z: ray.majorAxis.z }
-            : undefined,
-        majorLength: ray.majorLength,
-        tanAlpha: ray.tanAlpha,
-        eU: ray.eU,
-        eV: ray.eV,
-        sigmaU: ray.sigmaU,
-        sigmaV: ray.sigmaV,
-        curvatureRadiusU: ray.curvatureRadiusU,
-        curvatureRadiusV: ray.curvatureRadiusV,
-        packetQ: ray.packetQ,
-        packetStateMode: ray.packetStateMode,
-        transverseProfile: ray.transverseProfile,
-        transverseProfileOrder: ray.transverseProfileOrder,
         wavelength: ray.wavelength,
         bandwidth: ray.bandwidth,
         intensity: ray.intensity,
@@ -89,7 +71,6 @@ function serializeRay(ray: Ray): SerializedRay {
         sourcePosition: ray.sourcePosition
             ? { x: ray.sourcePosition.x, y: ray.sourcePosition.y, z: ray.sourcePosition.z }
             : undefined,
-        sourceCellArea: ray.sourceCellArea,
         isMainRay: ray.isMainRay,
         isBackward: ray.isBackward,
         polarization: ray.polarization,
@@ -118,13 +99,10 @@ function serializeBeamSegment(segment: GaussianBeamSegment): SerializedBeamSegme
         end: { x: segment.end.x, y: segment.end.y, z: segment.end.z },
         direction: { x: segment.direction.x, y: segment.direction.y, z: segment.direction.z },
         wavelength: segment.wavelength,
+        bandwidth: segment.bandwidth,
         power: segment.power,
         sourceId: segment.sourceId,
         bundleKey: segment.bundleKey,
-        qx_start: segment.qx_start,
-        qx_end: segment.qx_end,
-        qy_start: segment.qy_start,
-        qy_end: segment.qy_end,
         footprintStart: segment.footprintStart,
         footprintEnd: segment.footprintEnd,
         beamRadiusStart: segment.beamRadiusStart,
