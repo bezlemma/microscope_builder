@@ -43,11 +43,12 @@ export function createOpticalTrapScene(): OpticalComponent[] {
     laser.power = 120.0;
     laser.setPosition(hole(C.D, 2).x, hole(C.D, 2).y, 0);
     laser.pointAlong(1, 0, 0);
+    laser.polarizationAngle = 0;
     scene.push(laser);
 
     // λ/2 + PBS form a power attenuator: rotating the HWP fast axis steers
     // power between the trap arm (transmitted P) and the beam dump (reflected
-    // S). The laser emits S-polarized (default transverse, perpendicular to the
+    // S). The laser emits S-polarized (world +Z, perpendicular to the
     // 45° PBS incidence plane), so a HWP at π/4 maps S→P → 100% to the trap.
     // We sit just shy of π/4 so the dump path is visibly alive while >95% of
     // the laser still reaches the trap.

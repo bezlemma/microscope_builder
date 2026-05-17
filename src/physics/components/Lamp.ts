@@ -33,18 +33,20 @@ export function computeAdditiveOpacity(wavelengthsNm: number[]): number {
 }
 
 /**
- * Generate `N` evenly spaced wavelengths centred in the visible RGB-primary
- * band 460–620 nm. Odd N keeps a wavelength exactly at the 540 nm centre, which
- * is what makes the bundle look white when additively blended.
+ * Generate `N` visible wavelengths for a broadband lamp. Odd N keeps a
+ * wavelength near the 540 nm photopic peak, while the full default spread covers
+ * violet through red so dispersive optics can show an actual rainbow instead of
+ * only cyan/yellow endpoints.
  *   N = 1 → [540]
- *   N = 3 → [460, 540, 620]   (R/G/B primaries — what brightfield uses)
- *   N = 7 → [460, 487, 513, 540, 567, 593, 620]
+ *   N = 3 → [460, 540, 650]   (display-friendly B/G/R primaries)
+ *   N = 7 → [420, 460, 500, 540, 580, 620, 660]
  */
 export function generateLampSpectrum(N: number): number[] {
     const count = Math.max(1, Math.round(N));
     if (count === 1) return [540];
-    const minWl = 460;
-    const maxWl = 620;
+    if (count === 3) return [460, 540, 650];
+    const minWl = 420;
+    const maxWl = 660;
     const step = (maxWl - minWl) / (count - 1);
     return Array.from({ length: count }, (_, i) => minWl + i * step);
 }
@@ -128,4 +130,3 @@ export class Lamp extends OpticalComponent {
         return { rays: [] };
     }
 }
-

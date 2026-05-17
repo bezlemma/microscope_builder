@@ -106,16 +106,26 @@ function TableHoleMaterial({ size }: { size: number }) {
       // Distance from origin
       float distFromCenter = length((vUv - 0.5) * totalSize);
       
-      // Stark minimalist table surface: very dark blue-grey transparent glass
-      vec3 bgColor = vec3(0.02, 0.03, 0.04);
+      // Brushed dark metal table surface. Bright enough to read without the
+      // old Bloom pass, with subtle anisotropic grain like the previous look.
+      float grain = brushedNoise(pos);
+      float fineBrush = sin(pos.y * 1.9 + grain * 5.0) * 0.018
+                      + sin(pos.y * 7.5) * 0.006;
+      float broadBrush = sin(pos.y * 0.18) * 0.025;
+      vec3 metalBase = vec3(0.24, 0.28, 0.30);
+      vec3 bgColor = metalBase + vec3((grain - 0.5) * 0.075 + fineBrush + broadBrush);
+      bgColor *= 1.0 - smoothstep(900.0, 2600.0, distFromCenter) * 0.14;
+      bgColor = clamp(bgColor, vec3(0.10), vec3(0.42));
       
       // Glowing or deep holes
       vec3 holeColor = vec3(0.0, 0.0, 0.0);
       
       vec3 finalColor = mix(bgColor, holeColor, circle);
       
-      // Radial fade to transparent so it blends perfectly with the HTML background
-      float alpha = smoothstep(2000.0, 600.0, distFromCenter) * 0.6;
+      // Slight radial fade, but never all the way to invisible: this table is
+      // a working reference grid, not a decorative background.
+      float fade = smoothstep(2600.0, 800.0, distFromCenter);
+      float alpha = mix(0.36, 0.88, fade);
       
       gl_FragColor = vec4(finalColor, alpha);
     }

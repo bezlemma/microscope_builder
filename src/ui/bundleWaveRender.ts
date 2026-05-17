@@ -1,7 +1,10 @@
 import { Vector3 } from 'three';
 import { BundleEnvelopeSample, BundleWavePath, BundleWaveSegment } from './bundleView';
-import { JonesVector } from '../physics/types';
+import { JonesVector, jonesProject } from '../physics/types';
 
+const REFERENCE_WAVELENGTH = 550e-9;
+const DISPLAY_WAVELENGTH_BASE = 5.0;
+const ANIM_SPEED = 3.0;
 const WAVE_SAMPLES_PER_MM = 5;
 const MIN_WAVE_SAMPLES = 20;
 const MAX_WAVE_SAMPLES = 1200;
@@ -25,6 +28,29 @@ export interface WaveRenderSample {
 export interface WavePathRenderData {
     waveSamples: WaveRenderSample[];
     tickSamples: WaveRenderSample[];
+}
+
+export function fieldVectorForSample(sample: WaveRenderSample, time: number): Vector3 {
+    const eRight = jonesProject(sample.polarization, sample.right);
+    const eUp = jonesProject(sample.polarization, sample.up);
+    const rightAmp = Math.hypot(eRight.re, eRight.im);
+    const upAmp = Math.hypot(eUp.re, eUp.im);
+    const phiRight = Math.atan2(eRight.im, eRight.re);
+    const phiUp = Math.atan2(eUp.im, eUp.re);
+
+    const displayLambda = DISPLAY_WAVELENGTH_BASE * (sample.wavelength / REFERENCE_WAVELENGTH);
+    const k = (2 * Math.PI) / displayLambda;
+    const timeSign = sample.isBackward ? -1 : 1;
+    const phase = k * sample.opticalDistance - ANIM_SPEED * time * timeSign;
+
+    const eRightInstant = rightAmp * Math.cos(phase + phiRight);
+    const eUpInstant = upAmp * Math.cos(phase + phiUp);
+    const amplitudeNorm = Math.hypot(rightAmp, upAmp) || 1;
+    const amplitudeScale = sample.radius / amplitudeNorm;
+
+    return new Vector3()
+        .addScaledVector(sample.right, eRightInstant * amplitudeScale)
+        .addScaledVector(sample.up, eUpInstant * amplitudeScale);
 }
 
 function buildLocalFrame(direction: Vector3): { right: Vector3; up: Vector3 } {

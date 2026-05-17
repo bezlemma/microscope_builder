@@ -13,19 +13,18 @@ import type { GaussianBeamSegment } from '../../physics/Solver2';
 import {
     colloidTrapZonesBySample,
     createDragPreviewSourceRays,
-    DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS,
     traceForwardWithDependencyCache,
     type ForwardTraceCache,
 } from '../OpticalTable';
 
 describe('forward trace dependency cache', () => {
-    test('drag preview caps optical trap source rays', () => {
+    test('drag preview keeps the configured source ray set', () => {
         const scene = createOpticalTrapScene();
         const full = createSourceRays(scene, 500, 'full');
         const preview = createDragPreviewSourceRays(scene, 500);
 
         expect(full).toHaveLength(501);
-        expect(preview).toHaveLength(DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS + 1);
+        expect(preview).toHaveLength(full.length);
         expect(preview.some(ray => ray.isMainRay)).toBe(true);
     });
 

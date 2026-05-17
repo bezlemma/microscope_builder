@@ -8,6 +8,9 @@ export class Laser extends OpticalComponent {
     beamRadius: number = 2;   // mm (1/e² beam half-width)
     power: number = 1.0;      // Watts (optical output power)
     isOn: boolean = true;     // User-facing emission toggle; preserves configured power.
+    /** Linear polarization angle in the source's transverse local XY plane.
+     *  90 degrees maps to local +X, which is table-visible for the default +X beam. */
+    polarizationAngle: number = Math.PI / 2;
 
     private static readonly HOUSING = new Box3(
         new Vector3(-19, -20, -68),

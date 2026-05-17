@@ -54,15 +54,11 @@ import { serializeScene } from '../state/ubzSerializer';
 import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
 import type { SerializedBeamSegment, Solver1WorkerRequest, Solver1WorkerResponse } from '../physics/solver1Worker';
 
-export const DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS = 144;
-
 export function createDragPreviewSourceRays(
     components: OpticalComponent[],
     forwardRayCount: number,
 ): Ray[] {
-    const fullSourceRays = createSourceRays(components, forwardRayCount, 'full');
-    if (forwardRayCount <= DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS) return fullSourceRays;
-    return stablePreviewSourceRays(fullSourceRays, DRAG_FORWARD_PREVIEW_NON_MAIN_RAYS);
+    return createSourceRays(components, forwardRayCount, 'full');
 }
 
 /** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
@@ -784,8 +780,8 @@ export const OpticalTable: React.FC = () => {
     // Firing it 60×/s saturates the main thread so the GC never gets idle
     // time to keep up with the per-frame allocation churn — which is what
     // makes heavy presets (long beam paths, many rays) climb in memory until
-    // the tab OOMs. ~33 ms ≈ 30 Hz leaves headroom for GC and is still well
-    // above the perceptible threshold for the slow (seconds-long) scans.
+    // the tab OOMs. ~33 ms ≈ 30 Hz leaves headroom for GC while keeping the
+    // slow scan animations visually smooth.
     const lastAnimRetraceMsRef = useRef(0);
     const ANIM_RETRACE_MIN_INTERVAL_MS = 33;
 
@@ -1096,7 +1092,6 @@ export const OpticalTable: React.FC = () => {
                 for (const comp of components) {
                     if (comp instanceof Camera) comp.solver3Stale = true;
                 }
-                setSolver3Trigger(t => t + 1);
             }
             return;
         }
@@ -1487,7 +1482,9 @@ export const OpticalTable: React.FC = () => {
     const SOLVER3_WORKER_COUNT = (() => {
         if (typeof navigator === 'undefined') return 1;
         const cores = (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency ?? 2;
-        return Math.max(1, Math.min(8, cores - 1));
+        // Keep CPU headroom for synchronous forward tracing and pointer/UI work.
+        // Reverse tracing is progressive, so it can afford to use fewer cores.
+        return Math.max(1, Math.min(4, cores - 2));
     })();
     const solver3WorkersRef = useRef<Worker[]>([]);
     const solver3JobIdRef = useRef<number>(0);
@@ -1500,6 +1497,7 @@ export const OpticalTable: React.FC = () => {
     const workerCompleteRef = useRef<Set<number>>(new Set());
     const workerRayCountsRef = useRef<number[]>([]);
     const workerErrorRef = useRef(false);
+    const solver3ActiveWorkerCountRef = useRef(0);
 
     // Lazily spin up a pool of workers and wire the merging message handler.
     useEffect(() => {
@@ -1530,7 +1528,7 @@ export const OpticalTable: React.FC = () => {
                     // Stash this worker's latest snapshot for the camera.
                     let snapshots = workerAccumRef.current.get(msg.cameraId);
                     if (!snapshots) {
-                        snapshots = new Array(SOLVER3_WORKER_COUNT).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
+                        snapshots = new Array(Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
                         workerAccumRef.current.set(msg.cameraId, snapshots);
                     }
                     const dstX = camera.sensorResX;
@@ -1615,7 +1613,7 @@ export const OpticalTable: React.FC = () => {
                 } else if (msg.type === 'complete') {
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = msg.raysTraced;
-                    if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
+                    if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
                         setScanAccumProgress(1);
                         setSolver3Rendering(false);
                         if (workerErrorRef.current) haptic.error();
@@ -1626,7 +1624,7 @@ export const OpticalTable: React.FC = () => {
                     workerErrorRef.current = true;
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = 0;
-                    if (workerCompleteRef.current.size >= SOLVER3_WORKER_COUNT) {
+                    if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
                         setSolver3Rendering(false);
                         setScanAccumProgress(0);
                         haptic.error();
@@ -1651,6 +1649,8 @@ export const OpticalTable: React.FC = () => {
 
         const cameras = components.filter(c => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return;
+        const activeWorkerCount = isDragging ? 1 : workers.length;
+        solver3ActiveWorkerCountRef.current = activeWorkerCount;
 
         // Cancel any in-flight job on every worker, then assign a fresh id.
         const previousId = solver3JobIdRef.current;
@@ -1672,7 +1672,7 @@ export const OpticalTable: React.FC = () => {
         setScanAccumProgress(0);
 
         const sceneText = serializeScene(components);
-        for (let w = 0; w < workers.length; w++) {
+        for (let w = 0; w < activeWorkerCount; w++) {
             const request: MainToWorker = {
                 type: 'render',
                 jobId: newJobId,
@@ -1684,7 +1684,7 @@ export const OpticalTable: React.FC = () => {
                 solver2Enabled: rayConfig.solver2Enabled,
                 previewMode: isDragging,
                 workerId: w,
-                workerCount: workers.length,
+                workerCount: activeWorkerCount,
             };
             workers[w].postMessage(request);
         }
@@ -1697,13 +1697,19 @@ export const OpticalTable: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [solver3Trigger]);
 
-    // Re-render whenever drag state flips (drag start → preview mode, drag end → full quality).
+    // Dragging owns the CPU budget: during drag Solver-3 is re-kicked in
+    // one-worker preview mode; after release it reruns with the full pool.
     const lastDragRef = useRef(isDragging);
     useEffect(() => {
         if (lastDragRef.current === isDragging) return;
         lastDragRef.current = isDragging;
+        if (isDragging) {
+            for (const comp of components) {
+                if (comp instanceof Camera) comp.markSolver3Stale();
+            }
+        }
         setSolver3Trigger(t => t + 1);
-    }, [isDragging, setSolver3Trigger]);
+    }, [components, isDragging, setSolver3Trigger]);
 
     // ─── Effect 1b': rod-count sliders (forward or reverse) also kick a fresh reverse trace ───
     const reverseCountRef = useRef(clampedReversePathCount);
@@ -1959,7 +1965,7 @@ export const OpticalTable: React.FC = () => {
         let cancelled = false;
         const timeoutIds: number[] = [];
         const ownsRenderingState = !components.some(c => c instanceof Camera);
-        const workerCount = SOLVER3_WORKER_COUNT;
+        const workerCount = isDragging ? 1 : SOLVER3_WORKER_COUNT;
         const rasterWorkers: Worker[] = [];
         const serializableComponents = components.filter(c =>
             !c.isSubComponent || (c instanceof TrappedBead && Boolean(c.parentSampleId))
@@ -2159,7 +2165,7 @@ export const OpticalTable: React.FC = () => {
         };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pmtRasterRequestKey, scanAccumConfig.trigger]);
+    }, [pmtRasterRequestKey, scanAccumConfig.trigger, isDragging]);
 
     // ─── Effect 2: Cheap card beam profile sampling ───
     // Runs whenever ANY component changes (including card drags).
@@ -2403,7 +2409,6 @@ export const OpticalTable: React.FC = () => {
                 ensures components appear in front of beam lines. */}
             <RayVisualizer
                 paths={rays}
-                glowEnabled={rayConfig.solver2Enabled}
                 hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
                 minOpacity={rayConfig.minRayOpacity}
                 maxOpacity={rayConfig.maxRayOpacity}
@@ -2412,7 +2417,6 @@ export const OpticalTable: React.FC = () => {
             {solver3Paths.length > 0 && (
                 <RayVisualizer
                     paths={solver3Paths}
-                    glowEnabled={false}
                     noBloom={true}
                     hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
                     minOpacity={rayConfig.minRayOpacity}

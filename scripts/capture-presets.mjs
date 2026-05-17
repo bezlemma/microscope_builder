@@ -7,7 +7,7 @@
 // Or capture only specific presets:
 //   npm run capture-presets -- brightfield confocal
 //
-// Requires preserveDrawingBuffer:true on the R3F Canvas (already set in App.tsx).
+// Requires preserveDrawingBuffer:true in App.tsx capture mode.
 
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -77,7 +77,7 @@ try {
         console.log(`  canvas rect ${Math.round(rect.w)}x${Math.round(rect.h)} (backing ${rect.cw}x${rect.ch})`);
 
         // Force the canvas's drawing-buffer to be readable via toDataURL.
-        // This works because we enabled preserveDrawingBuffer in App.tsx.
+        // This works because capture mode enables preserveDrawingBuffer in App.tsx.
         const dataUrl = await page.evaluate(() => {
             const c = document.querySelector('canvas');
             try { return c.toDataURL('image/jpeg', 0.85); }

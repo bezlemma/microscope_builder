@@ -14,7 +14,7 @@ interface DraggableProps {
     children: React.ReactNode;
 }
 
-const MIN_INTERACTION_THICKNESS_MM = 5;
+const MIN_INTERACTION_THICKNESS_MM = 10;
 
 export const Draggable: React.FC<DraggableProps> = ({ component, children }) => {
     const [components, setComponents] = useAtom(componentsAtom);

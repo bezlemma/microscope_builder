@@ -39,13 +39,14 @@ export function createCheHangYu2026Scene(): PresetResult {
     // Vertical column at x = 20 carries laser, PBS, and the viewing card.
     // Horizontal arm at y = yArm carries the angle-doubling 4-f relay.
     const xCol = 20;
+    const yJunction = -12;
     const yArm = 36;
     const fScan = 54;       // mm — LSM54-1050 effective focal length
 
     // ── Laser ──
     // 1040 nm two-photon excitation source — matches the wavelength range the
     // paper's imaging arm runs at (Mai-Tai / InSight class systems for deeper
-    // tissue). Default polarization is perpendicular to propagation (world +Z),
+    // tissue). This preset launches world +Z polarization (laser setting 0°),
     // which is S-polarized for the 45° PBS in the XY plane → reflects upward
     // into the doubler arm. Sits a short way off the PBS so the housing
     // doesn't visually dwarf the rest of the unit. The laser wavelength is
@@ -53,24 +54,25 @@ export function createCheHangYu2026Scene(): PresetResult {
     // Polarization View the only thing the beam color reflects is the
     // polarization state, which is the whole point of the demo.
     const laser = new Laser('1040 nm 2P laser');
-    laser.setPosition(-50, 0, 0);
+    laser.setPosition(-50, yJunction, 0);
     laser.pointAlong(1, 0, 0);
     laser.wavelength = 1040;
     laser.beamRadius = 2.5;
     laser.power = 1.0;
+    laser.polarizationAngle = 0;
     scene.push(laser);
 
     // ── PBS at the junction ──
     // S-pol reflects up into the doubler; P-pol returning from the doubler
-    // transmits straight down to the viewing card. Oversized 3-inch aperture
+    // transmits straight down to the viewing card. Oversized 90 mm aperture
     // (much larger than a catalog PBS optic) so the doubled-scan exit
     // at the full ±5° mechanical resonant extreme — which leaves the second
     // mirror bounce at 4·5° = 20° optical and hits the PBS face at ~14 mm
     // off-center — has obvious visual margin to the rim. The actual coating
     // surface is a 45° internal plane; an undersized aperture made the
     // demo's beam look like it was grazing the edge.
-    const pbs = new PolarizingBeamSplitter(76.2, 2, 'PBS513 (S→up, P→down)');
-    pbs.setPosition(xCol, 0, 0);
+    const pbs = new PolarizingBeamSplitter(90, 2, 'PBS513 (S→up, P→down)');
+    pbs.setPosition(xCol, yJunction, 0);
     // n = normalize(d_in − d_out) = normalize((+1,0,0) − (0,+1,0))
     pbs.pointAlong(1, -1, 0);
     scene.push(pbs);
@@ -141,13 +143,14 @@ export function createCheHangYu2026Scene(): PresetResult {
     // Width chosen so the ±20° fan plus the lateral offset of the exit ray
     // at the PBS face (~10 mm at the extremes) clears the edge with margin.
     const card = new Card(140, 80, 'Doubled-scan viewing card');
-    const yCard = -80;
+    const yCard = yJunction - 80;
     card.setPosition(xCol, yCard, 0);
     // pointAlong(0,1,0) → card faces +Y (toward the PBS, which is above).
     card.pointAlong(0, 1, 0);
     // Phosphor afterglow on the inspector preview, so the swept scan leaves
     // a visible line instead of a flickering dot.
     card.persistTrail = true;
+    card.opaque = true;
     scene.push(card);
 
     // ── Animation ──

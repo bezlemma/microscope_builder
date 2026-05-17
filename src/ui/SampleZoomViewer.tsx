@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Line } from '@react-three/drei';
+import { Edges, OrbitControls, Line } from '@react-three/drei';
 import { useAtomValue, useStore } from 'jotai';
 import { Vector3, Euler } from 'three';
 import { defaultColloidColor, Sample } from '../physics/components/Sample';
@@ -100,22 +100,25 @@ const MiniView: React.FC<MiniViewProps> = ({
                             <>
                                 <mesh>
                                     <boxGeometry args={[flowCell.width, flowCell.height, flowCell.depth]} />
-                                    <meshPhysicalMaterial
-                                        color="#7fd8ff"
-                                        transmission={0.85}
+                                    <meshStandardMaterial
+                                        color="#8fa3b2"
                                         transparent
-                                        opacity={0.16}
-                                        roughness={0.05}
+                                        opacity={0.48}
+                                        roughness={0.32}
+                                        metalness={0.08}
                                         depthWrite={false}
                                     />
+                                    <Edges threshold={15} color="#0a0d10" />
                                 </mesh>
                                 <mesh position={[0, 0, -flowCell.depth / 2 - flowCell.glassThickness / 2]}>
                                     <boxGeometry args={[flowCell.width, flowCell.height, flowCell.glassThickness]} />
-                                    <meshPhysicalMaterial color="#d8f3ff" transmission={0.92} transparent opacity={0.24} roughness={0.02} depthWrite={false} />
+                                    <meshStandardMaterial color="#c7d6dd" transparent opacity={0.58} roughness={0.24} metalness={0.05} depthWrite={false} />
+                                    <Edges threshold={15} color="#0a0d10" />
                                 </mesh>
                                 <mesh position={[0, 0, flowCell.depth / 2 + flowCell.glassThickness / 2]}>
                                     <boxGeometry args={[flowCell.width, flowCell.height, flowCell.glassThickness]} />
-                                    <meshPhysicalMaterial color="#d8f3ff" transmission={0.92} transparent opacity={0.24} roughness={0.02} depthWrite={false} />
+                                    <meshStandardMaterial color="#c7d6dd" transparent opacity={0.58} roughness={0.24} metalness={0.05} depthWrite={false} />
+                                    <Edges threshold={15} color="#0a0d10" />
                                 </mesh>
                             </>
                         )}
@@ -175,7 +178,6 @@ const MiniView: React.FC<MiniViewProps> = ({
                 </group>
                 {orbit && (
                     <OrbitControls
-                        makeDefault
                         enablePan={false}
                         enableZoom={false}
                         enableRotate

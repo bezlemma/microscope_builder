@@ -120,6 +120,25 @@ function useDisposableGeometry<T extends BufferGeometry>(factory: () => T, deps:
     return geometry;
 }
 
+const GLASS_TRANSMISSION_3D = 0.03;
+const GLASS_OPACITY_3D = 0.98;
+const SELECTED_GLASS_TRANSMISSION_3D = 0.02;
+const SELECTED_GLASS_OPACITY_3D = 0.99;
+const FILTER_TRANSMISSION_3D = 0.12;
+const FILTER_OPACITY = 0.68;
+const DICHROIC_TRANSMISSION_3D = 0.1;
+const DICHROIC_OPACITY_2D = 0.82;
+const DICHROIC_OPACITY_3D = 0.86;
+const LENS_FLAT_OPACITY = 0.62;
+const SELECTED_LENS_FLAT_OPACITY = 0.7;
+const LENS_BODY_OPACITY = 0.92;
+const SELECTED_LENS_BODY_OPACITY = 0.96;
+
+function tiltedGlassOpacity(orthoOpacity: number, perspOpacity: number, blend: number): number {
+    const perspectiveWeight = Math.min(1, Math.max(0, blend) * 1.8);
+    return orthoOpacity + perspectiveWeight * (perspOpacity - orthoOpacity);
+}
+
 /**
  * Explicit rim outline for LatheGeometry-based lenses.
  * EdgesGeometry doesn't work well on curved lathe surfaces (picks up seam,
@@ -220,7 +239,15 @@ const WallWithHole = ({ wallSize, holeRadius, thickness, position, rotation, col
 
     return (
         <mesh position={position} rotation={rotation} geometry={geometry}>
-            <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
+            <meshStandardMaterial
+                color={color}
+                roughness={0.35}
+                metalness={0.18}
+                emissive="#28323a"
+                emissiveIntensity={0.22}
+                side={DoubleSide}
+            />
+            <EdgeOutline threshold={8} color="#000000" />
         </mesh>
     );
 };
@@ -597,13 +624,13 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
                 <cylinderGeometry args={[radius, radius, component.thickness, 64]} />
                 <meshPhysicalMaterial
-                    color="#eef1f5"
-                    metalness={0.35}
-                    roughness={0.18}
+                    color="#f4f8fb"
+                    metalness={0.92}
+                    roughness={0.07}
                     clearcoat={1.0}
-                    clearcoatRoughness={0.04}
-                    emissive="#c8d2dc"
-                    emissiveIntensity={0.4}
+                    clearcoatRoughness={0.02}
+                    emissive="#9da8b3"
+                    emissiveIntensity={0.16}
                     side={DoubleSide}
                 />
             </mesh>
@@ -689,13 +716,13 @@ export const PolygonScannerVisualizer = ({ component }: { component: PolygonScan
         >
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
-                    color="#d6dde4"
-                    metalness={0.8}
-                    roughness={0.18}
+                    color="#f4f8fb"
+                    metalness={0.92}
+                    roughness={0.07}
                     clearcoat={1.0}
-                    clearcoatRoughness={0.04}
-                    emissive="#6f7a84"
-                    emissiveIntensity={0.08}
+                    clearcoatRoughness={0.02}
+                    emissive="#9da8b3"
+                    emissiveIntensity={0.16}
                     side={DoubleSide}
                 />
             </mesh>
@@ -713,13 +740,13 @@ export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror 
         >
             <mesh geometry={geom} renderOrder={-1}>
                 <meshPhysicalMaterial
-                    color="#eef1f5"
-                    metalness={0.35}
-                    roughness={0.18}
+                    color="#f4f8fb"
+                    metalness={0.92}
+                    roughness={0.07}
                     clearcoat={1.0}
-                    clearcoatRoughness={0.04}
-                    emissive="#c8d2dc"
-                    emissiveIntensity={0.4}
+                    clearcoatRoughness={0.02}
+                    emissive="#9da8b3"
+                    emissiveIntensity={0.16}
                     side={DoubleSide}
                 />
             </mesh>
@@ -750,6 +777,7 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
                         depthWrite={false}
                         side={DoubleSide}
                     />
+                    <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
             {show3D && (
@@ -757,8 +785,8 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
                     <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                     <meshPhysicalMaterial
                         color={opticColor}
-                        transmission={blend * 0.95}
-                        opacity={0.5 * blend}
+                        transmission={blend * GLASS_TRANSMISSION_3D}
+                        opacity={GLASS_OPACITY_3D}
                         transparent
                         roughness={0.1 * (1 - blend)}
                         metalness={0}
@@ -769,6 +797,7 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
                         side={DoubleSide}
                         depthWrite={false}
                     />
+                    <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
         </group>
@@ -875,17 +904,21 @@ export const FilterVisualizer = ({ component }: { component: Filter }) => {
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
                 <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                 <meshPhysicalMaterial
                     color={tintColor}
-                    metalness={0.1}
-                    roughness={0.1}
+                    metalness={0}
+                    roughness={0.12}
+                    transmission={FILTER_TRANSMISSION_3D}
                     transparent={true}
-                    opacity={0.5}
+                    opacity={FILTER_OPACITY}
                     clearcoat={1.0}
                     clearcoatRoughness={0.05}
+                    side={DoubleSide}
+                    depthWrite={false}
                 />
+                <EdgeOutline threshold={15} color="#000000" />
             </mesh>
         </group>
     );
@@ -898,7 +931,6 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
     const [blend] = useAtom(cameraBlendAtom);
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
-    const flatOpacity = 0.5;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
@@ -911,10 +943,11 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
                     <meshBasicMaterial
                         color={tintColor}
                         transparent
-                        opacity={flatOpacity * (1 - blend)}
+                        opacity={DICHROIC_OPACITY_2D * (1 - blend)}
                         depthWrite={false}
                         side={DoubleSide}
                     />
+                    <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
             {show3D && (
@@ -922,8 +955,8 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
                     <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
                     <meshPhysicalMaterial
                         color={tintColor}
-                        transmission={blend * 0.95}
-                        opacity={0.5 * blend}
+                        transmission={blend * DICHROIC_TRANSMISSION_3D}
+                        opacity={DICHROIC_OPACITY_3D}
                         transparent
                         roughness={0.1 * (1 - blend)}
                         metalness={0}
@@ -934,6 +967,7 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
                         side={DoubleSide}
                         depthWrite={false}
                     />
+                    <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
         </group>
@@ -961,7 +995,7 @@ export const SampleChamberVisualizer = ({ component }: { component: SampleChambe
     const wt = component.wallThickness;
     const boreR = component.boreDiameter / 2;
     const half = s / 2;
-    const bodyColor = '#778899';
+    const bodyColor = '#8fa3b2';
 
     return (
         <group
@@ -1003,23 +1037,36 @@ export const WaveplateVisualizer = ({ component }: { component: Waveplate }) => 
         'polarizer': '#b8860b'
     };
     const color = modeColors[component.waveplateMode] || '#888';
+    const bodyOpacity = component.waveplateMode === 'polarizer' ? 0.62 : 0.5;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[r, r, 1.5, 32]} />
-                <meshStandardMaterial color={color} transparent opacity={0.7} roughness={0.3} />
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <cylinderGeometry args={[r, r, component.thickness, 32]} />
+                <meshPhysicalMaterial
+                    color={color}
+                    transparent
+                    opacity={bodyOpacity}
+                    transmission={0.08}
+                    roughness={0.18}
+                    metalness={0}
+                    ior={component.bulkIndex}
+                    thickness={0.4}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+                <EdgeOutline threshold={15} color="#000000" />
             </mesh>
             <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
                 <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
-                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
+                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} transparent opacity={0.75} side={DoubleSide} depthWrite={false} />
             </mesh>
             <mesh rotation={[0, Math.PI / 2, component.fastAxisAngle]}>
                 <ringGeometry args={[r * 0.75, r * 1.1, 12, 1, -Math.PI / 2 - Math.PI / 6, Math.PI / 3]} />
-                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} side={DoubleSide} />
+                <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.6} transparent opacity={0.75} side={DoubleSide} depthWrite={false} />
             </mesh>
         </group>
     );
@@ -1092,16 +1139,11 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     const lensEmissive = isSelected ? "#64ffda" : "#000000";
     const lensEmissiveIntensity = isSelected ? 0.15 : 0;
 
-    const targetTransmission = isSelected ? 0.85 : 0.95;
-    const transmission = blend * targetTransmission;
-    const orthoOpacity = isSelected ? 0.6 : 0.5;
-    const perspOpacity = isSelected ? 0.6 : 0.5;
-    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
-    const roughness = 0.1 * (1 - blend);
+    const opacity = isSelected ? SELECTED_LENS_BODY_OPACITY : LENS_BODY_OPACITY;
 
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
-    const flatOpacity = isSelected ? 0.6 : 0.5;
+    const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
 
     return (
         <group
@@ -1122,17 +1164,12 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
             )}
             {show3D && (
                 <mesh geometry={lensGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
-                    <meshPhysicalMaterial
+                    <meshStandardMaterial
                         color={lensColor}
-                        transmission={transmission}
-                        opacity={opacity * blend}
+                        opacity={opacity}
                         transparent
-                        roughness={roughness}
+                        roughness={0.18}
                         metalness={0}
-                        ior={component.ior || 1.5}
-                        thickness={0.5}
-                        attenuationColor="#aaddff"
-                        attenuationDistance={5}
                         side={DoubleSide}
                         depthWrite={false}
                         emissive={lensEmissive}
@@ -1174,15 +1211,10 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
     const lensColor = component.ior > 1.55 ? '#88ffee' : '#aaddff';
     const lensEmissive = isSelected ? '#64ffda' : '#000000';
     const lensEmissiveIntensity = isSelected ? 0.15 : 0;
-    const targetTransmission = isSelected ? 0.85 : 0.95;
-    const transmission = blend * targetTransmission;
-    const orthoOpacity = isSelected ? 0.6 : 0.5;
-    const perspOpacity = isSelected ? 0.6 : 0.5;
-    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
-    const roughness = 0.1 * (1 - blend);
+    const opacity = isSelected ? SELECTED_LENS_BODY_OPACITY : LENS_BODY_OPACITY;
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
-    const flatOpacity = isSelected ? 0.6 : 0.5;
+    const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
 
     return (
         <group
@@ -1203,17 +1235,12 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
             )}
             {show3D && (
                 <mesh geometry={lensGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
-                    <meshPhysicalMaterial
+                    <meshStandardMaterial
                         color={lensColor}
-                        transmission={transmission}
-                        opacity={opacity * blend}
+                        opacity={opacity}
                         transparent
-                        roughness={roughness}
+                        roughness={0.18}
                         metalness={0}
-                        ior={component.ior || 1.5}
-                        thickness={0.5}
-                        attenuationColor="#aaddff"
-                        attenuationDistance={5}
                         side={DoubleSide}
                         depthWrite={false}
                         emissive={lensEmissive}
@@ -1346,6 +1373,7 @@ export const IdealLensVisualizer = ({ component }: { component: IdealLens }) => 
 };
 
 export const CylindricalLensVisualizer = ({ component }: { component: CylindricalLens }) => {
+    const [blend] = useAtom(cameraBlendAtom);
     const geometry = useDisposableGeometry(() => {
         const segsY = 24;
         const segsX = 2;
@@ -1460,6 +1488,18 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
         geo.computeVertexNormals();
         return geo;
     }, [component.r1, component.r2, component.apertureRadius, component.width, component.thickness]);
+    const topDownGeometry = useDisposableGeometry(() => {
+        const halfW = component.width / 2;
+        const halfT = Math.max(component.thickness, 2) / 2;
+        const shape = new Shape();
+        shape.moveTo(-halfW, -halfT);
+        shape.lineTo(halfW, -halfT);
+        shape.lineTo(halfW, halfT);
+        shape.lineTo(-halfW, halfT);
+        shape.closePath();
+        return new ShapeGeometry(shape);
+    }, [component.width, component.thickness]);
+    const topDownOpacity = 0.98 * (1 - Math.min(1, blend * 1.25));
 
     return (
         <group
@@ -1467,23 +1507,29 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
+            {topDownOpacity > 0.01 && (
+                <mesh geometry={topDownGeometry} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                    <meshBasicMaterial
+                        color="#aaddff"
+                        transparent
+                        opacity={topDownOpacity}
+                        depthWrite={false}
+                        side={DoubleSide}
+                    />
+                    <EdgeOutline threshold={15} color="#000000" />
+                </mesh>
+            )}
             <mesh geometry={geometry}>
-                <meshPhysicalMaterial
+                <meshStandardMaterial
                     color="#aaddff"
-                    transmission={0.85}
-                    opacity={0.5}
+                    opacity={LENS_BODY_OPACITY}
                     transparent
-                    roughness={0.05}
+                    roughness={0.18}
                     metalness={0}
-                    ior={1.5168}
-                    thickness={1.0}
-                    attenuationColor="#aaddff"
-                    attenuationDistance={5}
                     side={DoubleSide}
-                    depthWrite={true}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
+                    depthWrite={false}
                 />
+                <EdgeOutline threshold={15} color="#000000" />
             </mesh>
         </group>
     );
@@ -1501,12 +1547,19 @@ export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
                     color="#ccffff"
-                    transmission={0.99}
-                    opacity={0.6}
+                    transmission={GLASS_TRANSMISSION_3D}
+                    opacity={GLASS_OPACITY_3D}
                     transparent
-                    roughness={0}
-                    side={2}
+                    roughness={0.03}
+                    metalness={0}
+                    ior={component.ior || 1.5}
+                    thickness={0.8}
+                    attenuationColor="#aaddff"
+                    attenuationDistance={6}
+                    side={DoubleSide}
                     depthWrite={false}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.02}
                 />
             </mesh>
         </group>
@@ -1525,9 +1578,9 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
 
     if (isGlass) {
         const glassColor = component.ior > 1.55 ? "#88ffee" : "#aaddff";
-        const targetTransmission = isSelected ? 0.85 : 0.95;
+        const targetTransmission = isSelected ? SELECTED_GLASS_TRANSMISSION_3D : GLASS_TRANSMISSION_3D;
         const orthoOpacity = isSelected ? 0.45 : 0.3;
-        const perspOpacity = isSelected ? 0.6 : 0.4;
+        const perspOpacity = isSelected ? SELECTED_GLASS_OPACITY_3D : GLASS_OPACITY_3D;
 
         return (
             <group
@@ -1539,7 +1592,7 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
                     <meshPhysicalMaterial
                         color={glassColor}
                         transmission={blend * targetTransmission}
-                        opacity={orthoOpacity + blend * (perspOpacity - orthoOpacity)}
+                        opacity={tiltedGlassOpacity(orthoOpacity, perspOpacity, blend)}
                         transparent
                         roughness={0.1 * (1 - blend)}
                         metalness={0}
@@ -1566,13 +1619,13 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
         >
             <mesh geometry={geometry}>
                 <meshPhysicalMaterial
-                    color="#d6dde4"
-                    metalness={blend * 0.85}
-                    roughness={0.18 + 0.3 * (1 - blend)}
-                    clearcoat={blend}
-                    clearcoatRoughness={0.04}
-                    emissive="#6f7a84"
-                    emissiveIntensity={0.08}
+                    color="#f4f8fb"
+                    metalness={0.9}
+                    roughness={0.07 + 0.16 * (1 - blend)}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.02}
+                    emissive="#8f9aa4"
+                    emissiveIntensity={0.12}
                     transparent
                     opacity={metalOrthoOpacity + blend * (metalPerspOpacity - metalOrthoOpacity)}
                     side={DoubleSide}
@@ -1816,24 +1869,13 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
     const lensEmissive = isSelected ? "#64ffda" : "#000000";
     const lensEmissiveIntensity = isSelected ? 0.15 : 0;
 
-    const maxIor = Math.max(component.ior1, component.ior2);
-    const targetTransmission = isSelected ? 0.85 : 0.95;
-    const transmission = blend * targetTransmission;
-    const orthoOpacity = isSelected ? 0.6 : 0.5;
-    const perspOpacity = isSelected ? 0.6 : 0.5;
-    const opacity = orthoOpacity + blend * (perspOpacity - orthoOpacity);
-    const roughness = 0.1 * (1 - blend);
+    const opacity = isSelected ? SELECTED_LENS_BODY_OPACITY : LENS_BODY_OPACITY;
 
     const matProps3D = {
-        transmission,
         opacity,
         transparent: true as const,
-        roughness,
+        roughness: 0.18,
         metalness: 0,
-        ior: maxIor,
-        thickness: 0.5,
-        attenuationColor: "#aaddff",
-        attenuationDistance: 5,
         depthWrite: false,
         emissive: lensEmissive,
         emissiveIntensity: lensEmissiveIntensity,
@@ -1842,7 +1884,7 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
 
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
-    const flatOpacity = isSelected ? 0.6 : 0.5;
+    const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
 
     return (
         <group
@@ -1863,10 +1905,10 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
             {show3D && (
                 <>
                     <mesh geometry={frontGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                        <meshPhysicalMaterial color={frontColor} {...matProps3D} opacity={opacity * blend} />
+                        <meshStandardMaterial color={frontColor} {...matProps3D} opacity={opacity} />
                     </mesh>
                     <mesh geometry={backGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
-                        <meshPhysicalMaterial color={backColor} {...matProps3D} opacity={opacity * blend} />
+                        <meshStandardMaterial color={backColor} {...matProps3D} opacity={opacity} />
                     </mesh>
                 </>
             )}

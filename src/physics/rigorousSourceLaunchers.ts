@@ -45,6 +45,9 @@ export function getLaunchRigor(component: { constructor: { name: string } }): La
 const DISPLAY_BANDWIDTH_SCALE = 1.2;
 const DISPLAY_MAX_FRACTION = 0.95;
 const DISPLAY_MIN_FRACTION = 0.08;
+const R2_ANGLE_ALPHA = 0.7548776662466927;
+const R2_RADIUS_ALPHA = 0.5698402909980532;
+const R2_ANGLE_OFFSET = 0.375;
 
 function displayFootprintRadius(beamRadius: number, packetCount: number): number {
     if (packetCount <= 1) return Math.max(beamRadius, 0.05);
@@ -89,11 +92,65 @@ function profileAmplitude(
     return Math.exp(-rSq / (w * w));
 }
 
+function sampleRotationalProfilePositions(
+    N: number,
+    beamRadius: number,
+    kind: 'gaussian' | 'flat' | 'superGaussian',
+): Array<{ x: number; y: number }> {
+    const requestedCount = Math.max(0, Math.floor(N));
+    if (requestedCount === 0) return [];
+
+    const radialBins = 2048;
+    const cdf = new Float64Array(radialBins);
+    let total = 0;
+    for (let i = 0; i < radialBins; i++) {
+        const r = ((i + 0.5) / radialBins) * beamRadius;
+        const amp = Math.max(0, profileAmplitude(kind, r, 0, beamRadius));
+        total += amp * amp * r;
+        cdf[i] = total;
+    }
+
+    const radialQuantile = (u: number): number => {
+        if (total <= 0) return Math.sqrt(u) * beamRadius;
+        const target = Math.max(0, Math.min(1, u)) * total;
+        let lo = 0;
+        let hi = radialBins - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (cdf[mid] < target) lo = mid + 1;
+            else hi = mid;
+        }
+        return ((lo + 0.5) / radialBins) * beamRadius;
+    };
+
+    const positions: Array<{ x: number; y: number }> = [];
+    const centerAmplitude = Math.max(0, profileAmplitude(kind, 0, 0, beamRadius));
+    if (centerAmplitude > 1e-12) {
+        positions.push({ x: 0, y: 0 });
+    }
+
+    for (let i = 0; positions.length < requestedCount; i++) {
+        const radiusU = (0.5 + i * R2_RADIUS_ALPHA) % 1;
+        const angleU = (R2_ANGLE_OFFSET + i * R2_ANGLE_ALPHA) % 1;
+        const r = radialQuantile(radiusU);
+        const theta = 2 * Math.PI * angleU;
+        positions.push({
+            x: r * Math.cos(theta),
+            y: r * Math.sin(theta),
+        });
+    }
+
+    return positions;
+}
+
 function sampleProfilePositions(
     N: number,
     beamRadius: number,
     profileFn: (x: number, y: number) => number,
 ): Array<{ x: number; y: number }> {
+    const requestedCount = Math.max(0, Math.floor(N));
+    if (requestedCount === 0) return [];
+
     const grid = 96;
     const pixelW = 2 * beamRadius / grid;
     const cellCount = grid * grid;
@@ -112,8 +169,14 @@ function sampleProfilePositions(
     }
 
     const positions: Array<{ x: number; y: number }> = [];
+    const centerAmplitude = Math.max(0, profileFn(0, 0));
+    const includeCenter = centerAmplitude > 1e-12;
+    if (includeCenter) {
+        positions.push({ x: 0, y: 0 });
+    }
+
     if (totalWeight <= 0) {
-        for (let i = 0; i < N; i++) {
+        for (let i = 0; positions.length < requestedCount; i++) {
             const r = Math.sqrt(haltonFrac(i, 2)) * beamRadius;
             const theta = 2 * Math.PI * haltonFrac(i, 3);
             positions.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) });
@@ -128,8 +191,8 @@ function sampleProfilePositions(
         cdf[i] = running;
     }
 
-    for (let i = 0; i < N; i++) {
-        const target = ((i + haltonFrac(i, 2)) / N) * totalWeight;
+    for (let i = 0; positions.length < requestedCount; i++) {
+        const target = haltonFrac(i, 2) * totalWeight;
         let lo = 0;
         let hi = cellCount - 1;
         while (lo < hi) {
@@ -186,9 +249,7 @@ export function launchRigorousLaser(params: {
 
     const N = Math.max(1, Math.floor(targetRayCount));
     const safeRadius = Math.max(beamRadius, 0.001);
-    const positions = sampleProfilePositions(N, safeRadius, (x, y) =>
-        profileAmplitude(intensityProfile, x, y, safeRadius)
-    );
+    const positions = sampleRotationalProfilePositions(N, safeRadius, intensityProfile);
     positions.sort((a, b) => (a.x * a.x + a.y * a.y) - (b.x * b.x + b.y * b.y));
     const displayFootprint = displayFootprintRadius(safeRadius, positions.length);
     const { right, up } = buildPerpBasis(direction);

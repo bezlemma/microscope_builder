@@ -63,6 +63,15 @@ function radialGaussianProfileError(rayCount: number): number {
     return Math.sqrt(squaredError / samples);
 }
 
+function sourcePositionKey(ray: Ray): string {
+    const position = ray.sourcePosition ?? ray.origin;
+    return [
+        position.x.toFixed(9),
+        position.y.toFixed(9),
+        position.z.toFixed(9),
+    ].join(',');
+}
+
 describe('SourceRayFactory', () => {
     test('conserves point and angular source power including the main ray', () => {
         const sources = [
@@ -150,6 +159,63 @@ describe('SourceRayFactory', () => {
         expect(rays.length).toBe(49);
         for (const ray of rays) {
             expect(ray.footprintRadius).toBeGreaterThan(0);
+        }
+    });
+
+    test('laser polarization angle is emitted in the source transverse frame', () => {
+        const laser = new Laser('Polarized laser');
+        laser.pointAlong(1, 0, 0);
+
+        const defaultTopVisible = createSourceRays([laser], 1, 'center')[0].polarization;
+        expect(defaultTopVisible.x.re).toBeCloseTo(0, 9);
+        expect(defaultTopVisible.y.re).toBeCloseTo(1, 9);
+        expect(defaultTopVisible.z.re).toBeCloseTo(0, 9);
+
+        laser.polarizationAngle = 0;
+        const outOfTable = createSourceRays([laser], 1, 'center')[0].polarization;
+        expect(outOfTable.x.re).toBeCloseTo(0, 9);
+        expect(outOfTable.y.re).toBeCloseTo(0, 9);
+        expect(outOfTable.z.re).toBeCloseTo(1, 9);
+
+        laser.polarizationAngle = Math.PI / 2;
+        const topVisible = createSourceRays([laser], 1, 'center')[0].polarization;
+        expect(topVisible.x.re).toBeCloseTo(0, 9);
+        expect(topVisible.y.re).toBeCloseTo(1, 9);
+        expect(topVisible.z.re).toBeCloseTo(0, 9);
+    });
+
+    test('laser launch samples are nested as ray count increases', () => {
+        const laser = new Laser('Nested laser');
+        laser.beamRadius = 2;
+        laser.pointAlong(1, 0, 0);
+
+        const counts = [32, 85, 92, 103, 116, 144, 157, 189, 1000];
+        const samplesByCount = counts.map(rayCount => createSourceRays([laser], rayCount, 'full')
+            .map(sourcePositionKey)
+            .sort());
+
+        for (let i = 1; i < samplesByCount.length; i++) {
+            const dense = new Set(samplesByCount[i]);
+            for (const key of samplesByCount[i - 1]) {
+                expect(dense.has(key)).toBe(true);
+            }
+        }
+    });
+
+    test('laser launch keeps table-visible transverse coverage at problematic counts', () => {
+        const laser = new Laser('Projected laser');
+        laser.beamRadius = 2;
+        laser.pointAlong(1, 0, 0);
+
+        for (const rayCount of [32, 85, 103, 116, 144, 189, 1000]) {
+            const rays = createSourceRays([laser], rayCount, 'full');
+            const yPositions = rays.map(ray => ray.origin.y);
+            const zPositions = rays.map(ray => ray.origin.z);
+            const yWidth = Math.max(...yPositions) - Math.min(...yPositions);
+            const zWidth = Math.max(...zPositions) - Math.min(...zPositions);
+
+            expect(yWidth).toBeGreaterThan(rayCount <= 32 ? 3.1 : 3.55);
+            expect(zWidth).toBeGreaterThan(rayCount <= 32 ? 3.1 : 3.55);
         }
     });
 

@@ -17,11 +17,7 @@ import {
     BundleWavePath,
     BundleWaveSegment,
 } from './bundleView';
-import { buildWavePathRenderData, WaveRenderSample } from './bundleWaveRender';
-
-const REFERENCE_WAVELENGTH = 550e-9;
-const DISPLAY_WAVELENGTH_BASE = 5.0;
-const ANIM_SPEED = 3.0;
+import { buildWavePathRenderData, fieldVectorForSample } from './bundleWaveRender';
 
 function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number } {
     const { r, g, b } = wavelengthToRGBnm(wavelengthMeters * 1e9);
@@ -39,35 +35,6 @@ function envelopeDisplayColor(wavelengthMeters: number, coherenceMode: Coherence
 function waveDisplayColor(wavelengthMeters: number): Color {
     const rgb = wavelengthToRGB(wavelengthMeters);
     return new Color(rgb.r, rgb.g, rgb.b);
-}
-
-function fieldVectorForSample(
-    sample: WaveRenderSample,
-    time: number
-): Vector3 {
-    const pol = sample.polarization;
-    const axAmp = Math.hypot(pol.x.re, pol.x.im);
-    const ayAmp = Math.hypot(pol.y.re, pol.y.im);
-    const phiX = Math.atan2(pol.x.im, pol.x.re);
-    const phiY = Math.atan2(pol.y.im, pol.y.re);
-
-    const displayLambda = DISPLAY_WAVELENGTH_BASE * (sample.wavelength / REFERENCE_WAVELENGTH);
-    const k = (2 * Math.PI) / displayLambda;
-    // For reverse-trace samples the segment chain runs camera→sample, so the
-    // unflipped phase would animate wave crests AWAY from the camera.  Flip
-    // the time term on those samples so crests propagate toward the camera —
-    // i.e. in the direction the actual photons would travel.
-    const timeSign = sample.isBackward ? -1 : 1;
-    const phase = k * sample.opticalDistance - ANIM_SPEED * time * timeSign;
-
-    const ex = axAmp * Math.cos(phase + phiX);
-    const ey = ayAmp * Math.cos(phase + phiY);
-    const amplitudeNorm = Math.hypot(axAmp, ayAmp) || 1;
-    const amplitudeScale = sample.radius / amplitudeNorm;
-
-    return new Vector3()
-        .addScaledVector(sample.right, ex * amplitudeScale)
-        .addScaledVector(sample.up, ey * amplitudeScale);
 }
 
 const BundleEnvelopeView: React.FC<{ bundle: BundleWaveSegment }> = ({ bundle }) => {

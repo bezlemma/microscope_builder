@@ -71,7 +71,19 @@ import { ControlsHelp } from './ui/ControlsHelp'
 import { ZLevelBar } from './ui/ZLevelBar'
 import { RailPlacementOverlay } from './ui/RailPlacementOverlay'
 import { AltSnapIndicator } from './ui/AltSnapIndicator'
-import { appRouteAtom, componentsAtom, loadPresetAtom, loadSceneAtom, PresetName, setBundleDataEnabledAtom, uiLockedAtom } from './state/store';
+import {
+  activePresetAtom,
+  animationPlayingAtom,
+  appRouteAtom,
+  componentsAtom,
+  isDraggingAtom,
+  loadPresetAtom,
+  loadSceneAtom,
+  PresetName,
+  rayConfigAtom,
+  setBundleDataEnabledAtom,
+  uiLockedAtom,
+} from './state/store';
 import { Splash } from './ui/Splash';
 import { loadSceneFromUrlHash } from './state/ubzSerializer';
 import { MobileActionBar } from './ui/MobileActionBar';
@@ -218,6 +230,106 @@ const CaptureFramer: React.FC = () => {
     }, 2200);
     return () => window.clearTimeout(id);
   }, [components, scene, set, size.width, size.height]);
+  return null;
+};
+
+const NAVIGATION_KEYS = new Set([
+  'w', 'W', 'a', 'A', 's', 'S', 'd', 'D', 'r', 'R', 'f', 'F',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '[', ']',
+]);
+
+/**
+ * R3F's default `frameloop="always"` redraws the full WebGL scene as fast as
+ * Chrome allows, even when the optical trace only changes at the throttled
+ * animation cadence. Demand rendering keeps idle frames at zero and explicitly
+ * drives frames only while something visible is moving.
+ */
+const DemandRenderHeartbeat: React.FC = () => {
+  const invalidate = useThree(state => state.invalidate);
+  const [animationPlaying] = useAtom(animationPlayingAtom);
+  const [rayConfig] = useAtom(rayConfigAtom);
+  const [isDragging] = useAtom(isDraggingAtom);
+  const [activePreset] = useAtom(activePresetAtom);
+  const pressedNavKeysRef = React.useRef(new Set<string>());
+  const transientUntilRef = React.useRef(0);
+
+  const tutorialPulseActive =
+    activePreset === PresetName.Tutorial || activePreset === PresetName.Tutorial2;
+  const waveViewActive = rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave';
+  const continuous = animationPlaying || isDragging || waveViewActive || tutorialPulseActive;
+
+  useEffect(() => {
+    const inputFocused = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = (el as HTMLElement).tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+
+    const bumpTransient = (durationMs = 900) => {
+      transientUntilRef.current = performance.now() + durationMs;
+      invalidate();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!NAVIGATION_KEYS.has(event.key) || inputFocused()) return;
+      pressedNavKeysRef.current.add(event.key);
+      bumpTransient(250);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      pressedNavKeysRef.current.delete(event.key);
+      pressedNavKeysRef.current.delete(event.key.toLowerCase());
+      pressedNavKeysRef.current.delete(event.key.toUpperCase());
+      bumpTransient(250);
+    };
+    const onPointer = () => bumpTransient(900);
+    const onWheel = () => bumpTransient(450);
+    const onBlur = () => {
+      pressedNavKeysRef.current.clear();
+      bumpTransient(100);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('pointermove', onPointer, true);
+    window.addEventListener('pointerup', onPointer, true);
+    window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    window.addEventListener('blur', onBlur);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('pointermove', onPointer, true);
+      window.removeEventListener('pointerup', onPointer, true);
+      window.removeEventListener('wheel', onWheel, true);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [invalidate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId = 0;
+
+    const tick = () => {
+      if (cancelled) return;
+      const now = performance.now();
+      const interacting =
+        pressedNavKeysRef.current.size > 0 || now < transientUntilRef.current;
+      if (continuous || interacting) {
+        invalidate();
+      }
+      timeoutId = window.setTimeout(tick, continuous ? 33 : interacting ? 16 : 120);
+    };
+
+    tick();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [continuous, invalidate]);
+
   return null;
 };
 
@@ -385,10 +497,14 @@ function App() {
           {/* Top-Down Engineering View - Orthographic, Z-up per PhysicsPlan.md */}
           <Canvas
             orthographic
-            dpr={[1, 2]}
-            // preserveDrawingBuffer lets scripts/capture-presets.mjs read the
-            // canvas via toDataURL() for the splash preset thumbnails.
-            gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
+            frameloop="demand"
+            dpr={[1, 1.5]}
+            // The live editor should not preserve the swap buffer: animated
+            // scenes redraw continuously, and retaining a readback-capable
+            // drawing buffer puts avoidable pressure on Chrome's compositor/GPU
+            // memory. Capture mode above keeps preserveDrawingBuffer enabled
+            // for scripts/capture-presets.mjs, where toDataURL() needs it.
+            gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
             camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}
             onCreated={(state) => { (window as unknown as { __r3f?: unknown }).__r3f = state; }}
           >
@@ -401,6 +517,7 @@ function App() {
               <StarrySky />
             </Environment>
 
+            <DemandRenderHeartbeat />
             <EditorControls />
             <SvgSceneExporter />
             {!uiLocked && <GlobalRotation />}
@@ -415,9 +532,6 @@ function App() {
             <OpticalTable />
             {!uiLocked && <AlignmentHoverHighlight />}
 
-            <EffectComposer>
-              <Bloom luminanceThreshold={1.0} mipmapBlur luminanceSmoothing={0.9} intensity={0.15} />
-            </EffectComposer>
           </Canvas>
         </CanvasErrorBoundary>
 

@@ -149,6 +149,7 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
         lines.push(`isOn = ${comp.isOn ? 'true' : 'false'}`);
+        lines.push(`polarizationAngle = ${fmt(comp.polarizationAngle)}`);
     } else if (comp instanceof Lamp) {
         lines.push(`beamRadius = ${fmt(comp.beamRadius)}`);
         lines.push(`power = ${fmt(comp.power)}`);
@@ -696,6 +697,7 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             c.beamRadius = num(props, 'beamRadius', num(props, 'beamWaist', 2));  // backward compat
             c.power = num(props, 'power', 1);
             c.isOn = bool(props, 'isOn', c.isOn);
+            c.polarizationAngle = num(props, 'polarizationAngle', c.polarizationAngle);
             return c;
         }
         case 'Lamp': {

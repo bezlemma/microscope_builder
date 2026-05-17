@@ -23,9 +23,6 @@ import {
     launchRigorousStructured,
 } from './rigorousSourceLaunchers';
 
-/** Ray counts per ring — outer ring is 24, inner rings are 12 each. */
-const FIRST_RING_COUNT = 24;
-const INNER_RING_COUNT = 12;
 const MAX_LAMP_SOURCE_POINTS = 32;
 function estimateBeamletFootprint(beamRadius: number, totalBeamlets: number): number {
     if (totalBeamlets <= 1) return Math.max(beamRadius, 0.05);
@@ -34,6 +31,19 @@ function estimateBeamletFootprint(beamRadius: number, totalBeamlets: number): nu
 
 function finiteNonNegative(value: number, fallback: number): number {
     return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function linearPolarizationFromSourceFrame(source: OpticalComponent, angleRad: number): Ray['polarization'] {
+    const u = new Vector3(1, 0, 0).applyQuaternion(source.rotation).normalize();
+    const v = new Vector3(0, 1, 0).applyQuaternion(source.rotation).normalize();
+    const e = u.multiplyScalar(Math.sin(angleRad))
+        .addScaledVector(v, Math.cos(angleRad))
+        .normalize();
+    return {
+        x: { re: e.x, im: 0 },
+        y: { re: e.y, im: 0 },
+        z: { re: e.z, im: 0 },
+    };
 }
 
 function lampSpectralWavelengths(lamp: Lamp): number[] {
@@ -52,6 +62,34 @@ function lampSpectralWavelengths(lamp: Lamp): number[] {
  */
 interface StructuredPattern { size: number; bits: Uint8Array; count: number; }
 const structuredPatternCache = new Map<string, StructuredPattern>();
+function rasterizeFallbackGlyph(char: string, size: number, bits: Uint8Array): number {
+    const glyph = (char || '?').toUpperCase();
+    if (glyph !== 'L') return 0;
+
+    const stroke = Math.max(1, Math.round(size * 0.16));
+    const left = Math.max(1, Math.round(size * 0.22));
+    const top = Math.max(0, Math.round(size * 0.1));
+    const bottom = Math.min(size - 1, Math.round(size * 0.88));
+    const footRight = Math.min(size - 1, Math.round(size * 0.72));
+    let count = 0;
+
+    const setPixel = (x: number, y: number) => {
+        const idx = y * size + x;
+        if (bits[idx]) return;
+        bits[idx] = 1;
+        count++;
+    };
+
+    for (let y = top; y <= bottom; y++) {
+        for (let x = left; x < left + stroke && x < size; x++) setPixel(x, y);
+    }
+    for (let y = bottom - stroke + 1; y <= bottom; y++) {
+        for (let x = left; x <= footRight; x++) setPixel(x, y);
+    }
+
+    return count;
+}
+
 function rasterizeStructuredPattern(char: string, size: number): StructuredPattern {
     const key = `${size}::${char}`;
     const cached = structuredPatternCache.get(key);
@@ -89,6 +127,10 @@ function rasterizeStructuredPattern(char: string, size: number): StructuredPatte
     }
 
     if (count === 0) {
+        count = rasterizeFallbackGlyph(char, size, bits);
+    }
+
+    if (count === 0) {
         // Fallback pattern: filled disk so the source still emits rays even in
         // environments without a canvas.
         const r2 = (size * 0.45) ** 2;
@@ -107,19 +149,6 @@ function rasterizeStructuredPattern(char: string, size: number): StructuredPatte
     return pattern;
 }
 
-
-/**
- * Snap a ray count to the nearest ring boundary so that all
- * rings are complete (no partial circles). Rounds up.
- * Valid values: 24, 36, 48, 60, 72, 84, 96, 108, 120, ...
- */
-export function snapToRingBoundary(n: number): number {
-    if (n <= FIRST_RING_COUNT) return FIRST_RING_COUNT;
-    // Round up to next multiple: first_ring + k * inner_ring
-    const excess = n - FIRST_RING_COUNT;
-    const k = Math.ceil(excess / INNER_RING_COUNT);
-    return FIRST_RING_COUNT + k * INNER_RING_COUNT;
-}
 
 export function stablePreviewSourceRays(sourceRays: Ray[], maxNonMainPerSource: number): Ray[] {
     if (maxNonMainPerSource <= 0) return sourceRays.filter(ray => ray.isMainRay);
@@ -168,8 +197,8 @@ export function stablePreviewSourceRays(sourceRays: Ray[], maxNonMainPerSource: 
  * Create source rays from all Lasers and Lamps in the scene.
  *
  * @param components  All scene components
- * @param rayCount    Number of marginal/fill rays per source
- * @param mode        'full' = center + ring rays; 'center' = center ray only
+ * @param rayCount    Number of sampled rays per source
+ * @param mode        'full' = full source packet set; 'center' = center ray only
  * @returns           Array of source rays ready for Solver 1
  */
 export function createSourceRays(
@@ -201,6 +230,7 @@ export function createSourceRays(
             sourceId: laser.id,
             sourceKind: 'laser',
             coherenceMode: Coherence.Coherent,
+            polarization: linearPolarizationFromSourceFrame(laser, laser.polarizationAngle),
         }).rays);
     }
 

@@ -23,6 +23,7 @@ describe('UBZ registered components', () => {
         laser.beamRadius = 0.75;
         laser.power = 120;
         laser.isOn = false;
+        laser.polarizationAngle = Math.PI / 6;
 
         const scene = deserializeScene(serializeScene([laser]));
         expect(scene[0]).toBeInstanceOf(Laser);
@@ -31,6 +32,7 @@ describe('UBZ registered components', () => {
         expect(loadedLaser.beamRadius).toBeCloseTo(0.75, 6);
         expect(loadedLaser.power).toBeCloseTo(120, 6);
         expect(loadedLaser.isOn).toBe(false);
+        expect(loadedLaser.polarizationAngle).toBeCloseTo(Math.PI / 6, 6);
     });
 
     test('round-trips card detector opacity', () => {

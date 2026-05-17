@@ -84,7 +84,6 @@ import { LensProfileEditor, supportsLensProfileEditor } from './LensProfileEdito
 import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
-import { snapToRingBoundary } from '../physics/SourceRayFactory';
 import { findMaxUnclippedScanHalfAngleDeg, measureChiefRayForScan } from '../physics/confocalScanDiagnostics';
 
 function clampValue(value: number, min: number, max: number): number {
@@ -113,13 +112,6 @@ function sliderPositionToCount(position: number, min: number, max: number): numb
     const maxLog = Math.log(max);
     const t = clamped / COUNT_SLIDER_STEPS;
     return Math.round(Math.exp(minLog + (maxLog - minLog) * t));
-}
-
-function stickyForwardRodCount(value: number): number {
-    const clamped = clampValue(value, MIN_FORWARD_RAY_COUNT, MAX_FORWARD_RAY_COUNT);
-    const nice = snapToRingBoundary(clamped);
-    const threshold = nice >= 24 ? 2 : 1;
-    return Math.abs(clamped - nice) <= threshold ? nice : clamped;
 }
 
 function formatMeasurementMm(value: number): string {
@@ -493,11 +485,32 @@ const SolverPanel: React.FC<{
         ? OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT
         : MIN_FORWARD_RAY_COUNT;
     const displayedForwardRayCount = clampValue(rayConfig.rayCount, forwardRayMin, MAX_FORWARD_RAY_COUNT);
+    const [rayCountText, setRayCountText] = React.useState(String(displayedForwardRayCount));
+    const [rayCountEditing, setRayCountEditing] = React.useState(false);
     // newVisualStyleAtom removed — new style is always on
 
     React.useEffect(() => {
         setTimelineSteps(String(scanConfig.steps));
     }, [scanConfig.steps]);
+
+    React.useEffect(() => {
+        if (!rayCountEditing) {
+            setRayCountText(String(displayedForwardRayCount));
+        }
+    }, [displayedForwardRayCount, rayCountEditing]);
+
+    const commitRayCountText = React.useCallback((rawValue: string) => {
+        const parsed = Number.parseInt(rawValue, 10);
+        const next = Number.isFinite(parsed)
+            ? clampValue(parsed, forwardRayMin, MAX_FORWARD_RAY_COUNT)
+            : displayedForwardRayCount;
+        setrayConfig({
+            ...rayConfig,
+            rayCount: next,
+        });
+        setRayCountText(String(next));
+        setRayCountEditing(false);
+    }, [displayedForwardRayCount, forwardRayMin, rayConfig, setrayConfig]);
 
     React.useEffect(() => {
         if (!activeOpacityHandle) return;
@@ -783,34 +796,30 @@ const SolverPanel: React.FC<{
                                 )}
                                 onChange={(e) => setrayConfig({
                                     ...rayConfig,
-                                    rayCount: stickyForwardRodCount(
-                                        sliderPositionToCount(parseInt(e.target.value), forwardRayMin, MAX_FORWARD_RAY_COUNT),
-                                    ),
+                                    rayCount: sliderPositionToCount(parseInt(e.target.value), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                 })}
                                 style={{ flex: 1, minWidth: 0 }}
                                 title="Approximate forward source rays per source"
                             />
                             <input
-                                type="number"
-                                min={forwardRayMin}
-                                max={MAX_FORWARD_RAY_COUNT}
-                                step={1}
-                                value={displayedForwardRayCount}
-                                onChange={(e) => setrayConfig({
-                                    ...rayConfig,
-                                    rayCount: clampValue(parseInt(e.target.value, 10) || displayedForwardRayCount, forwardRayMin, MAX_FORWARD_RAY_COUNT),
-                                })}
-                                onBlur={(e) => setrayConfig({
-                                    ...rayConfig,
-                                    rayCount: clampValue(parseInt(e.target.value || String(forwardRayMin), 10), forwardRayMin, MAX_FORWARD_RAY_COUNT),
-                                })}
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={rayCountText}
+                                onFocus={(e) => {
+                                    setRayCountEditing(true);
+                                    e.currentTarget.select();
+                                }}
+                                onChange={(e) => setRayCountText(e.target.value.replace(/[^\d]/g, ''))}
+                                onBlur={(e) => commitRayCountText(e.target.value)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
-                                        setrayConfig({
-                                            ...rayConfig,
-                                            rayCount: clampValue(parseInt((e.target as HTMLInputElement).value || String(forwardRayMin), 10), forwardRayMin, MAX_FORWARD_RAY_COUNT),
-                                        });
-                                        (e.target as HTMLInputElement).blur();
+                                        commitRayCountText((e.target as HTMLInputElement).value);
+                                        e.currentTarget.blur();
+                                    } else if (e.key === 'Escape') {
+                                        setRayCountText(String(displayedForwardRayCount));
+                                        setRayCountEditing(false);
+                                        e.currentTarget.blur();
                                     }
                                 }}
                                 style={{
@@ -821,7 +830,7 @@ const SolverPanel: React.FC<{
                                     borderRadius: '3px',
                                     padding: '1px 4px',
                                 }}
-                                title="Exact forward source rays per source. Slider sticks near symmetric shell counts."
+                                title="Exact forward source rays per source"
                             />
                         </div>
                     </div>
@@ -1397,6 +1406,7 @@ export const Inspector: React.FC = () => {
     const [localWavelength, setLocalWavelength] = useState<number>(532);
     const [localBeamRadius, setLocalBeamRadius] = useState<string>('2');
     const [localLaserPower, setLocalLaserPower] = useState<string>('0.1');
+    const [localLaserPolarizationAngle, setLocalLaserPolarizationAngle] = useState<string>('90');
     const [localLampPower, setLocalLampPower] = useState<string>('1');
     const [localSourcePointCount, setLocalSourcePointCount] = useState<string>('5');
     const [localEmitterRadius, setLocalEmitterRadius] = useState<string>('0.9');
@@ -1670,6 +1680,7 @@ export const Inspector: React.FC = () => {
                     setLocalWavelength(selectedComponent.wavelength);
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
                     setLocalLaserPower(String(selectedComponent.power));
+                    setLocalLaserPolarizationAngle(String(Math.round(selectedComponent.polarizationAngle * 180 / Math.PI * 100) / 100));
                 }
                 if (selectedComponent instanceof Lamp) {
                     setLocalBeamRadius(String(selectedComponent.beamRadius));
@@ -2068,6 +2079,7 @@ export const Inspector: React.FC = () => {
         if (!selectedComponent || !(selectedComponent instanceof Laser)) return;
         const radius = parseFloat(localBeamRadius);
         const power = parseFloat(localLaserPower);
+        const polAngleDeg = parseFloat(localLaserPolarizationAngle);
         if (isNaN(radius)) return;
 
         const newComponents = components.map(c => {
@@ -2075,6 +2087,7 @@ export const Inspector: React.FC = () => {
                 c.wavelength = localWavelength;
                 c.beamRadius = radius;
                 if (!isNaN(power) && power > 0) c.power = power;
+                if (Number.isFinite(polAngleDeg)) c.polarizationAngle = polAngleDeg * Math.PI / 180;
                 c.version++;
                 return c;
             }
@@ -4418,6 +4431,18 @@ export const Inspector: React.FC = () => {
                                 speed={0.1}
                                 min={0.01}
                                 max={100}
+                            />
+                        </div>
+                        <div style={{ marginTop: 10 }}>
+                            <ScrubInput
+                                label="Polarization"
+                                suffix="°"
+                                value={localLaserPolarizationAngle}
+                                onChange={setLocalLaserPolarizationAngle}
+                                onCommit={() => commitLaserParams()}
+                                speed={1}
+                                min={-180}
+                                max={180}
                             />
                         </div>
                     </div>

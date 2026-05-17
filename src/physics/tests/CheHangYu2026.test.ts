@@ -69,6 +69,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
         expect(scanLenses.length).toBe(2);          // 4-f relay
         expect(mirrors.length).toBe(2);             // resonant + slow scan mirrors
         expect(cards.length).toBe(1);               // doubled-scan output
+        expect(cards[0].opaque).toBe(true);         // imaging card absorbs rays
     });
 
     test('launches with polarization view and animation on', () => {

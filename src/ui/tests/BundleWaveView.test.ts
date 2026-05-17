@@ -6,7 +6,7 @@ import { createBeamExpanderScene } from '../../presets/beamExpander';
 import { createSourceRays } from '../../physics/SourceRayFactory';
 import { Solver1 } from '../../physics/Solver1';
 import { buildBundleWavePaths, buildBundleWaveSegments, buildBundleWaveSegmentsFromRayPaths } from '../bundleView';
-import { buildWavePathRenderData } from '../bundleWaveRender';
+import { buildWavePathRenderData, fieldVectorForSample } from '../bundleWaveRender';
 
 function makeSegment(overrides: Partial<GaussianBeamSegment>): GaussianBeamSegment {
     return {
@@ -338,6 +338,27 @@ describe('Bundle wave grouping', () => {
         expect(through.dot(new Vector3(1, -1, 0).normalize())).toBeLessThan(0.98);
         expect(beforePhaseStep).toBeCloseTo(1.0, 1);
         expect(afterPhaseStep).toBeCloseTo(1.5, 1);
+    });
+
+    test('wave renderer projects full 3D Jones vectors onto the local transverse frame', () => {
+        const sample = {
+            axisPoint: new Vector3(0, 0, 0),
+            right: new Vector3(0, 1, 0),
+            up: new Vector3(0, 0, 1),
+            radius: 1,
+            wavelength: 532e-9,
+            opticalDistance: 0,
+            polarization: {
+                x: { re: 0, im: 0 },
+                y: { re: 1, im: 0 },
+                z: { re: 0, im: 0 },
+            },
+            refractiveIndex: 1,
+        };
+        const field = fieldVectorForSample(sample, 0);
+
+        expect(Math.abs(field.y)).toBeGreaterThan(0.2);
+        expect(Math.abs(field.z)).toBeLessThan(1e-9);
     });
 
     test('groups reverse camera rays into detector-level bundles', () => {

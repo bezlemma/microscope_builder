@@ -28,6 +28,17 @@ export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ comp
         userSelect: 'none',
         textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
     };
+    const cardTextStyle: React.CSSProperties = label.includes('\n')
+        ? {
+            ...textStyle,
+            padding: '8px 10px',
+            borderRadius: 6,
+            border: '1px solid rgba(255,255,255,0.35)',
+            background: 'rgba(12, 16, 18, 0.88)',
+            boxShadow: '0 3px 12px rgba(0,0,0,0.35)',
+            textAlign: 'left',
+        }
+        : textStyle;
     const textHitWidth = Math.max(20, label.length * 5);
     const textHitHeight = Math.max(12, fontSize);
 
@@ -93,7 +104,7 @@ export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ comp
                     <meshBasicMaterial transparent opacity={0} depthWrite={false} side={DoubleSide} />
                 </mesh>
                 <Html center style={{ pointerEvents: 'none' }}>
-                    <div style={textStyle}>{label}</div>
+                    <div style={cardTextStyle}>{label}</div>
                 </Html>
             </group>
         );

@@ -641,8 +641,7 @@ export const EditorControls: React.FC = () => {
 
             minDistance={10}
             maxDistance={10000}
-            enableDamping={true}
-            dampingFactor={0.25}
+            enableDamping={false}
         />
     );
 };

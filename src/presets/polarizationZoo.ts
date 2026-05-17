@@ -2,6 +2,7 @@ import { OpticalComponent } from '../physics/Component';
 import { Laser } from '../physics/components/Laser';
 import { Card } from '../physics/components/Card';
 import { Waveplate } from '../physics/components/Waveplate';
+import { Annotation } from '../physics/components/Annotation';
 
 /**
  * Polarization Zoo — three classic polarization demonstrations.
@@ -9,13 +10,13 @@ import { Waveplate } from '../physics/components/Waveplate';
  * All beams travel along +X.
  *
  * Path 1 (y=80):  Half-Wave Plate Polarization Rotation
- *   Laser → Pol@0° → HWP@45° → Pol@90° → Card
+ *   Laser(90°) → Pol@0° → HWP@45° → Pol@90° → Card
  *
  * Path 2 (y=-20): Crossed Polarizers with λ/4 Waveplate
- *   Laser → Pol@0° → QWP@45° → Pol@90° → Card
+ *   Laser(90°) → Pol@0° → QWP@45° → Pol@90° → Card
  *
  * Path 3 (y=-120): Three-Polarizer Paradox
- *   Laser → Pol@0° → Pol@45° → Pol@90° → Card
+ *   Laser(90°) → Pol@0° → Pol@45° → Pol@90° → Card
  */
 export function createPolarizationZooScene(): OpticalComponent[] {
     const scene: OpticalComponent[] = [];
@@ -47,6 +48,7 @@ export function createPolarizationZooScene(): OpticalComponent[] {
     const hwpCard = new Card(20, 20, "HWP Card");
     hwpCard.setPosition(100, 80, 0);
     hwpCard.pointAlong(1, 0, 0);  // faces beam
+    hwpCard.opaque = true;
     scene.push(hwpCard);
 
     // ── Path 2: QWP Crossed Polarizers ──
@@ -76,6 +78,7 @@ export function createPolarizationZooScene(): OpticalComponent[] {
     const qwpCard = new Card(20, 20, "QWP Card");
     qwpCard.setPosition(100, -20, 0);
     qwpCard.pointAlong(1, 0, 0);  // faces beam
+    qwpCard.opaque = true;
     scene.push(qwpCard);
 
     // ── Path 3: Three-Polarizer Paradox ──
@@ -105,7 +108,19 @@ export function createPolarizationZooScene(): OpticalComponent[] {
     const tpCard = new Card(20, 20, "3-Pol Card");
     tpCard.setPosition(100, -120, 0);
     tpCard.pointAlong(1, 0, 0);  // faces beam
+    tpCard.opaque = true;
     scene.push(tpCard);
+
+    const note = new Annotation(
+        'text',
+        'Polarization Zoo Notes',
+        'HWP: lambda/2 at 45deg rotates linear polarization 90deg.\nQWP: lambda/4 at 45deg makes elliptical/circular light.\n3 polarizers: 45deg middle polarizer lets crossed polarizers pass.',
+        120,
+        12,
+        '#f2f4f8',
+    );
+    note.setPosition(-70, 145, 0.5);
+    scene.push(note);
 
     return scene;
 }

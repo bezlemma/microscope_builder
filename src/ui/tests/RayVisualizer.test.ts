@@ -1,19 +1,25 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    additivePacketOpacityScale,
+    batchedRegularRays,
+    buildPathDrawSegments,
     coherentBranchDisplayStyle,
     isMainRayPath,
+    opacityFromRelativeRange,
     openTailSuppressionExpired,
+    relativePathIntensity,
     shouldDrawPolarizationOpenTail,
     shouldDrawPolarizationPath,
     terminalVisualizationDistance,
 } from '../RayVisualizer';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
+import { createBeamExpanderScene } from '../../presets/beamExpander';
 import { Solver1 } from '../../physics/Solver1';
 import { createSourceRays } from '../../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../../physics/tableTrace';
 import { Blocker } from '../../physics/components/Blocker';
 import { Coherence, type Ray } from '../../physics/types';
-import { Vector3 } from 'three';
+import { AdditiveBlending, Vector3 } from 'three';
 
 function testRay(overrides: Partial<Ray>): Ray {
     return {
@@ -34,7 +40,146 @@ describe('RayVisualizer coherent branch display', () => {
         const dm2LeakageBranch = coherentBranchDisplayStyle(0.092, 0.4);
 
         expect(dm2LeakageBranch.opacity).toBeGreaterThan(0.2);
-        expect(dm2LeakageBranch.lineWidth).toBeGreaterThanOrEqual(1.5);
+        expect(dm2LeakageBranch.lineWidth).toBe(0.75);
+    });
+
+    test('opacity range maps the dimmest rendered ray to the left handle', () => {
+        expect(opacityFromRelativeRange(0.03, 0.03, 1, 0, 1)).toBe(0);
+        expect(opacityFromRelativeRange(1, 0.03, 1, 0, 1)).toBe(1);
+        expect(opacityFromRelativeRange(0.03, 0.03, 1, 0.33, 1)).toBeCloseTo(0.33, 6);
+    });
+
+    test('display intensity follows fractional loss, not source packet power', () => {
+        const sparsePath = [
+            testRay({ intensity: 0.1 }),
+            testRay({ intensity: 0.05 }),
+        ];
+        const densePath = [
+            testRay({ intensity: 0.001 }),
+            testRay({ intensity: 0.0005 }),
+        ];
+
+        expect(relativePathIntensity(sparsePath, sparsePath[1])).toBeCloseTo(0.5, 12);
+        expect(relativePathIntensity(densePath, densePath[1])).toBeCloseTo(0.5, 12);
+        expect(opacityFromRelativeRange(
+            relativePathIntensity(sparsePath, sparsePath[1]),
+            1e-3,
+            1,
+            0,
+            1,
+        )).toBeCloseTo(opacityFromRelativeRange(
+            relativePathIntensity(densePath, densePath[1]),
+            1e-3,
+            1,
+            0,
+            1,
+        ), 12);
+    });
+
+    test('batched ray opacity remains material alpha, not premultiplied color', () => {
+        const rendered = batchedRegularRays([{
+            key: 'dim-ray',
+            points: [new Vector3(0, 0, 0), new Vector3(1, 0, 0)],
+            color: { r: 1, g: 1, b: 1 },
+            opacity: 0.25,
+            lineWidth: 0.75,
+            dashed: false,
+            blending: AdditiveBlending,
+            renderOrder: 20,
+            depthWrite: false,
+            segments: true,
+            vertexColors: [[0, 1, 1], [0, 1, 1]],
+        }]);
+
+        expect(rendered.batches).toHaveLength(1);
+        expect(rendered.batches[0].opacity).toBeCloseTo(0.25, 12);
+        expect(rendered.batches[0].vertexColors[0]).toEqual([0, 1, 1]);
+    });
+
+    test('beam expander blue rays stay batched without dropping launch or lens segments', () => {
+        const visibleWidth = (values: number[]) => Math.max(...values) - Math.min(...values);
+
+        for (const rayCount of [32, 85, 103, 116, 1000]) {
+            const scene = createBeamExpanderScene();
+            const sourceRays = createSourceRays(scene, rayCount, 'full');
+            const paths = new Solver1(scene).trace(sourceRays)
+                .filter(path => Math.abs((path[0]?.wavelength ?? 0) - 490e-9) < 1e-15);
+            const firstSegments = paths.map(path => {
+                const shouldDrawOpenTail = isMainRayPath(path)
+                    || relativePathIntensity(path, path[path.length - 1]) >= 3e-2;
+                return buildPathDrawSegments(
+                    path,
+                    shouldDrawOpenTail,
+                    openTailSuppressionExpired(path),
+                )[0];
+            }).filter((segment): segment is NonNullable<typeof segment> => Boolean(segment));
+
+            expect(paths).toHaveLength(rayCount + 1);
+            expect(firstSegments).toHaveLength(rayCount + 1);
+            expect(firstSegments.every(segment => segment.ray.intensity > 0)).toBe(true);
+            expect(visibleWidth(firstSegments.map(segment => segment.start.y)))
+                .toBeGreaterThan(rayCount <= 32 ? 3.1 : 3.55);
+            expect(visibleWidth(firstSegments.map(segment => segment.end.y)))
+                .toBeGreaterThan(rayCount <= 32 ? 3.1 : 3.55);
+
+            const allSegments = paths.flatMap(path => {
+                const shouldDrawOpenTail = isMainRayPath(path)
+                    || relativePathIntensity(path, path[path.length - 1]) >= 3e-2;
+                return buildPathDrawSegments(
+                    path,
+                    shouldDrawOpenTail,
+                    openTailSuppressionExpired(path),
+                );
+            });
+
+            const rendered = batchedRegularRays(allSegments.map((segment, index) => ({
+                key: `blue-segment-${rayCount}-${index}`,
+                points: [segment.start, segment.end],
+                color: { r: 1, g: 1, b: 1 },
+                opacity: 1,
+                lineWidth: 0.75,
+                dashed: false,
+                blending: AdditiveBlending,
+                renderOrder: 20,
+                depthWrite: false,
+                segments: true,
+                vertexColors: [[0, 1, 1], [0, 1, 1]],
+            })));
+            const batchedSegmentCount = rendered.batches
+                .reduce((sum, batch) => sum + batch.points.length / 2, 0);
+            expect(batchedSegmentCount).toBe(allSegments.length);
+            expect(batchedSegmentCount).toBeGreaterThan((rayCount + 1) * 2);
+            expect(rendered.individual).toHaveLength(0);
+        }
+    });
+
+    test('source launch segments stay visible when a later segment is dim', () => {
+        const source = testRay({
+            origin: new Vector3(0, 0, 0),
+            intensity: 1,
+        });
+        const dimTerminal = testRay({
+            origin: new Vector3(10, 0, 0),
+            intensity: 1e-4,
+            interactionDistance: 5,
+        });
+        const path = [source, dimTerminal];
+        const segments = buildPathDrawSegments(path, false, false);
+
+        expect(relativePathIntensity(path, dimTerminal)).toBeLessThan(1e-3);
+        expect(segments).toHaveLength(2);
+        expect(segments[0].ray).toBe(source);
+        expect(relativePathIntensity(path, segments[0].ray)).toBe(1);
+    });
+
+    test('additive lamp packet opacity preserves wavelength energy as sampling increases', () => {
+        const defaultPacketCount = 17;
+        const densePacketCount = 151;
+
+        expect(additivePacketOpacityScale(defaultPacketCount, defaultPacketCount)).toBe(1);
+        expect(
+            additivePacketOpacityScale(densePacketCount, defaultPacketCount) * densePacketCount,
+        ).toBeCloseTo(defaultPacketCount, 12);
     });
 
     test('draws finite terminal absorber segments even when open tails are suppressed', () => {

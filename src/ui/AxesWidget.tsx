@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { GizmoHelper, GizmoViewport } from '@react-three/drei';
 import { Quaternion, Vector3 } from 'three';
 import { useIsMobile } from './useIsMobile';
@@ -87,6 +87,24 @@ function CameraSubscriber() {
     return null;
 }
 
+function GizmoControlsShim({ children }: { children: React.ReactNode }) {
+    const set = useThree(state => state.set);
+    const [ready, setReady] = React.useState(false);
+    const controlsRef = useRef({
+        minPolarAngle: 0,
+        target: new Vector3(0, 0, 0),
+        update: () => undefined,
+    });
+
+    React.useLayoutEffect(() => {
+        set({ controls: controlsRef.current as any });
+        setReady(true);
+        return () => set({ controls: null as any });
+    }, [set]);
+
+    return ready ? <>{children}</> : null;
+}
+
 /**
  * AxesWidget -- fixed-position 3D orientation gizmo in the bottom-right corner.
  *
@@ -119,13 +137,15 @@ export const AxesWidget: React.FC = () => {
             >
                 <CameraSubscriber />
                 <ambientLight intensity={0.8} />
-                <GizmoHelper alignment="center-center" margin={[50, 50]}>
-                    <GizmoViewport
-                        axisColors={['red', '#34D399', 'blue']}
-                        labelColor="white"
-                        hideNegativeAxes={false}
-                    />
-                </GizmoHelper>
+                <GizmoControlsShim>
+                    <GizmoHelper alignment="center-center" margin={[50, 50]}>
+                        <GizmoViewport
+                            axisColors={['red', '#34D399', 'blue']}
+                            labelColor="white"
+                            hideNegativeAxes={false}
+                        />
+                    </GizmoHelper>
+                </GizmoControlsShim>
             </Canvas>
         </div>
     );
