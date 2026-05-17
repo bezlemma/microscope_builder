@@ -90,16 +90,21 @@ function directCardHits(card: Card): DirectCardHit[] {
 function beamProfilesFromDirectHits(hits: DirectCardHit[]): BeamProfile[] {
     if (hits.length === 0) return [];
 
-    const byWavelength = new Map<number, DirectCardHit[]>();
+    const phaseBinRad = 0.05;
+    const byCoherentGroup = new Map<string, DirectCardHit[]>();
     for (const hit of hits) {
-        const key = Math.round(hit.ray.wavelength * 1e12);
-        const group = byWavelength.get(key);
+        const wavelengthMm = hit.ray.wavelength * 1e3;
+        const phase = Math.abs(wavelengthMm) > 1e-12
+            ? wrapPi((2 * Math.PI * hit.ray.opticalPathLength) / wavelengthMm)
+            : 0;
+        const key = `${Math.round(hit.ray.wavelength * 1e12)}:${Math.round(phase / phaseBinRad)}`;
+        const group = byCoherentGroup.get(key);
         if (group) group.push(hit);
-        else byWavelength.set(key, [hit]);
+        else byCoherentGroup.set(key, [hit]);
     }
 
     const profiles: BeamProfile[] = [];
-    for (const group of byWavelength.values()) {
+    for (const group of byCoherentGroup.values()) {
         let totalPower = 0;
         let meanU = 0;
         let meanV = 0;
@@ -332,6 +337,7 @@ function renderBufferToCanvas(
     height: number,
     mapping: DisplayMapping,
     reusableImageData?: ImageData,
+    normalizationMax?: number,
 ) {
     // Allocate a fresh ImageData only when no reusable one was provided (or
     // its size doesn't match). The phosphor path always provides one because
@@ -341,9 +347,11 @@ function renderBufferToCanvas(
         ? reusableImageData
         : ctx.createImageData(width, height);
     const data = imageData.data;
-    let maxValue = 0;
-    for (let i = 0; i < rgb.length; i++) {
-        maxValue = Math.max(maxValue, rgb[i]);
+    let maxValue = normalizationMax ?? 0;
+    if (normalizationMax === undefined) {
+        for (let i = 0; i < rgb.length; i++) {
+            maxValue = Math.max(maxValue, rgb[i]);
+        }
     }
     const norm = maxValue > 0 ? 1 / maxValue : 1;
     for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
@@ -583,6 +591,92 @@ function computeInterferenceSummary(profiles: BeamProfile[]): InterferenceSummar
     };
 }
 
+function drawCoherentProfiles(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    profiles: BeamProfile[],
+    viewport: DetectorViewport,
+    mapping: DisplayMapping,
+) {
+    const rgb = new Float32Array(width * height * 3);
+    const referenceRgb = new Float32Array(width * height * 3);
+    const viewExtentMm = viewport.extentMm;
+    const scaleX = viewExtentMm / width;
+    const scaleY = viewExtentMm / height;
+
+    const byWavelength = new Map<number, BeamProfile[]>();
+    for (const profile of profiles) {
+        if (profile.power <= 0 || profile.wx <= 0 || profile.wy <= 0) continue;
+        const key = Math.round(profile.wavelength * 1e12);
+        const group = byWavelength.get(key);
+        if (group) group.push(profile);
+        else byWavelength.set(key, [profile]);
+    }
+
+    for (const group of byWavelength.values()) {
+        if (group.length === 0) continue;
+        const wavelength = group[0].wavelength;
+        const wavelengthMm = wavelength * 1e3;
+        const k = Math.abs(wavelengthMm) > 1e-12 ? (2 * Math.PI) / wavelengthMm : 0;
+        const [r, g, b] = wavelengthRGB(wavelength);
+
+        for (let py = 0; py < height; py++) {
+            const v = viewport.centerV + (py + 0.5 - height / 2) * scaleY;
+            for (let px = 0; px < width; px++) {
+                const u = viewport.centerU + (px + 0.5 - width / 2) * scaleX;
+                let exRe = 0, exIm = 0;
+                let eyRe = 0, eyIm = 0;
+                let ezRe = 0, ezIm = 0;
+                let incoherentIntensity = 0;
+
+                for (const profile of group) {
+                    const du = u - (profile.centerU ?? 0);
+                    const dv = v - (profile.centerV ?? 0);
+                    const q = (du * du) / Math.max(profile.wx * profile.wx, 1e-12)
+                        + (dv * dv) / Math.max(profile.wy * profile.wy, 1e-12);
+                    if (q > 18) continue;
+
+                    const amplitude = Math.sqrt(Math.max(profile.power, 0)) * Math.exp(-q);
+                    incoherentIntensity += amplitude * amplitude;
+                    const tiltOpl = du * (profile.tiltU ?? 0) + dv * (profile.tiltV ?? 0);
+                    const phase = k * (profile.phase + tiltOpl);
+                    const c = Math.cos(phase) * amplitude;
+                    const s = Math.sin(phase) * amplitude;
+
+                    const { x, y, z } = profile.polarization;
+                    exRe += x.re * c - x.im * s;
+                    exIm += x.re * s + x.im * c;
+                    eyRe += y.re * c - y.im * s;
+                    eyIm += y.re * s + y.im * c;
+                    ezRe += z.re * c - z.im * s;
+                    ezIm += z.re * s + z.im * c;
+                }
+
+                const intensity = exRe * exRe + exIm * exIm
+                    + eyRe * eyRe + eyIm * eyIm
+                    + ezRe * ezRe + ezIm * ezIm;
+                const idx = (py * width + px) * 3;
+                referenceRgb[idx] += r * incoherentIntensity;
+                referenceRgb[idx + 1] += g * incoherentIntensity;
+                referenceRgb[idx + 2] += b * incoherentIntensity;
+                if (intensity <= 0) continue;
+                rgb[idx] += r * intensity;
+                rgb[idx + 1] += g * intensity;
+                rgb[idx + 2] += b * intensity;
+            }
+        }
+    }
+
+    let referenceMax = 0;
+    for (let i = 0; i < referenceRgb.length; i++) {
+        referenceMax = Math.max(referenceMax, referenceRgb[i]);
+    }
+
+    renderBufferToCanvas(ctx, rgb, width, height, mapping, undefined, referenceMax);
+    drawDetectorScaleBar(ctx, width, height, viewport.extentMm);
+}
+
 function fmtLength(deltaMm: number): string {
     const abs = Math.abs(deltaMm);
     if (abs >= 1) return `${deltaMm.toFixed(3)} mm`;
@@ -602,6 +696,9 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     const fallbackProfiles = useMemo(() => beamProfilesFromDirectHits(directHits), [directHits]);
     const profiles = card.beamProfiles.length > 0 ? card.beamProfiles : fallbackProfiles;
     const hasBeams = profiles.length > 0 || directHits.length > 0;
+    const interferenceProfiles = fallbackProfiles.length >= 2 ? fallbackProfiles : profiles;
+    const interference = hasBeams ? computeInterferenceSummary(interferenceProfiles) : null;
+    const useCoherentProfileRender = !!interference && interference.visibility >= 0.15 && interferenceProfiles.length >= 2;
 
     const canvasSize = compact ? 96 : 260;
     // Phosphor-trail cards keep the viewport pinned to the full card extent so
@@ -671,10 +768,17 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
             return;
         }
 
-        drawDirectHits(ctx, canvas.width, canvas.height, directHits, viewport, 'linear');
+        if (useCoherentProfileRender) {
+            drawCoherentProfiles(ctx, canvas.width, canvas.height, interferenceProfiles, viewport, 'linear');
+        } else {
+            drawDirectHits(ctx, canvas.width, canvas.height, directHits, viewport, 'linear');
+        }
     }, [
         directHits,
         hasBeams,
+        profiles,
+        interferenceProfiles,
+        useCoherentProfileRender,
         card,
         card.width,
         card.height,
@@ -700,7 +804,6 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
 
     // Beam moment summary
     const beamMoments = hasBeams ? computeBeamMoments(profiles) : null;
-    const interference = hasBeams ? computeInterferenceSummary(profiles) : null;
 
     const labelStyle: React.CSSProperties = { color: '#858585', fontSize: '11px' };
     const valueStyle: React.CSSProperties = { color: '#e0e0e0', fontSize: '12px', fontFamily: 'monospace' };

@@ -3,6 +3,8 @@ import { Vector3 } from 'three';
 import { createLensZooScene } from '../../presets/lensZoo';
 import { createMZInterferometerScene } from '../../presets/mzInterferometer';
 import { Blocker } from '../components/Blocker';
+import { Card } from '../components/Card';
+import { PupilMaskElement } from '../components/PupilMaskElement';
 import { Solver1 } from '../Solver1';
 import { createSourceRays } from '../SourceRayFactory';
 
@@ -57,5 +59,29 @@ describe('Preset orientation regressions', () => {
         const dumpHits = paths.filter(path => path.some(ray => ray.interactionComponentId === dump!.id));
 
         expect(dumpHits.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('Mach-Zehnder phase trim adds physical optical phase to one arm', () => {
+        const scene = createMZInterferometerScene();
+        const phaseTrim = scene.find((component): component is PupilMaskElement =>
+            component instanceof PupilMaskElement && component.name === 'Arm A Phase Trim',
+        );
+        const detector = scene.find((component): component is Card =>
+            component instanceof Card && component.name === 'MZ Detector',
+        );
+        expect(phaseTrim).toBeDefined();
+        expect(detector).toBeDefined();
+
+        phaseTrim!.ringPhaseShift = Math.PI;
+        phaseTrim!.rebuildMask();
+        new Solver1(scene).trace(createSourceRays(scene, 1, 'center'));
+
+        expect(detector!.hits).toHaveLength(2);
+        const [a, b] = detector!.hits;
+        const deltaOpl = Math.abs(a.ray.opticalPathLength - b.ray.opticalPathLength);
+        const halfWaveMm = a.ray.wavelength * 1e3 / 2;
+
+        expect(a.ray.intensity).toBeCloseTo(b.ray.intensity, 9);
+        expect(deltaOpl).toBeCloseTo(halfWaveMm, 9);
     });
 });

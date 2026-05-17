@@ -4,45 +4,21 @@ import { X } from 'lucide-react';
 import { activePresetAtom, presetDescriptionAtom } from '../state/store';
 import { useIsMobile } from './useIsMobile';
 
-const STORAGE_KEY = 'microscope-builder-dismissed-preset-tooltips';
-
-function readDismissedKeys(): Set<string> {
-    if (typeof window === 'undefined') return new Set();
-    try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []);
-    } catch {
-        return new Set();
-    }
-}
-
-function writeDismissedKeys(keys: Set<string>) {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...keys]));
-    } catch {
-        // Private browsing or storage-disabled contexts should still allow
-        // closing the tooltip for this session.
-    }
-}
-
 export const PresetTooltip: React.FC = () => {
     const activePreset = useAtomValue(activePresetAtom);
     const description = useAtomValue(presetDescriptionAtom);
     const isMobile = useIsMobile();
     const tooltipKey = useMemo(() => activePreset ?? 'custom-scene', [activePreset]);
-    const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => readDismissedKeys());
+    const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => new Set());
 
     if (!description || dismissedKeys.has(tooltipKey)) {
         return null;
     }
 
-    const dismissPermanently = () => {
+    const dismissForSession = () => {
         setDismissedKeys(prev => {
             const next = new Set(prev);
             next.add(tooltipKey);
-            writeDismissedKeys(next);
             return next;
         });
     };
@@ -90,7 +66,7 @@ export const PresetTooltip: React.FC = () => {
                     type="button"
                     title="Close tooltip"
                     aria-label="Close tooltip"
-                    onClick={dismissPermanently}
+                    onClick={dismissForSession}
                     style={iconButton}
                 >
                     <X size={14} />

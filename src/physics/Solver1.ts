@@ -35,6 +35,8 @@ interface BroadPhaseCandidate {
     nearT: number;
 }
 
+const MIN_RELATIVE_BRANCH_INTENSITY = 1e-9;
+
 export interface ForwardTraceResult {
     paths: Ray[][];
     beamSegments: GaussianBeamSegment[][];
@@ -309,7 +311,9 @@ export class Solver1 {
             nextRay.sourceId = currentRay.sourceId;
             nextRay.sourceKind = currentRay.sourceKind;
 
-            if (nextRay.intensity < 1e-6) {
+            const sourceIntensity = Math.max(currentPath[0]?.intensity ?? currentRay.intensity, 1e-30);
+            const relativeIntensity = nextRay.intensity / sourceIntensity;
+            if (relativeIntensity < MIN_RELATIVE_BRANCH_INTENSITY) {
                 currentPath.push(nextRay);
                 allPaths.push([...currentPath]);
                 currentPath.pop();

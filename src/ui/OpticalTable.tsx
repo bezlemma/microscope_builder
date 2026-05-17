@@ -712,6 +712,9 @@ export const OpticalTable: React.FC = () => {
     const setSolver3Rendering = useSetAtom(solver3RenderingAtom);
     // The solver-3 guard genuinely needs the live value, so this one subscribes.
     const [solver3Rendering] = useAtom(solver3RenderingAtom);
+    const solver3RenderingRef = useRef(solver3Rendering);
+    solver3RenderingRef.current = solver3Rendering;
+    const solver3DragPendingRef = useRef(false);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const setScanAccumProgress = useSetAtom(scanAccumProgressAtom);
     const setDrawnRayCounts = useSetAtom(drawnRayCountsAtom);
@@ -770,6 +773,7 @@ export const OpticalTable: React.FC = () => {
 
     // Guard ref: when true, scan accumulation is running — skip useFrame and Solver 1
     const scanAccumActiveRef = useRef(false);
+    const activeScanJobRef = useRef<ReturnType<typeof createScheduledRenderJob> | null>(null);
     const lastAnimationTimelineSignatureRef = useRef('');
     const timelineBakePendingSignatureRef = useRef('');
     const timelineReadySignatureRef = useRef('');
@@ -1055,6 +1059,9 @@ export const OpticalTable: React.FC = () => {
             }
         }
 
+        const sceneChanged = lastOpticsFingerprintRef.current !== opticsFingerprint;
+        lastOpticsFingerprintRef.current = opticsFingerprint;
+
         if (isDragging) {
             syncManagedTrapBeads(components);
             const makeForwardSourceRays = () => createDragPreviewSourceRays(components, clampedForwardRayCount);
@@ -1088,18 +1095,24 @@ export const OpticalTable: React.FC = () => {
             setRays(calculatedPaths);
             setForwardRays(calculatedPaths);
             solverPathsRef.current = calculatedPaths;
-            if (components.some(component => component instanceof Camera)) {
-                for (const comp of components) {
-                    if (comp instanceof Camera) comp.solver3Stale = true;
+            let hasCamera = false;
+            for (const comp of components) {
+                if (comp instanceof Camera) {
+                    comp.solver3Stale = true;
+                    hasCamera = true;
+                }
+            }
+            if (hasCamera && sceneChanged) {
+                solver3DragPendingRef.current = true;
+                if (!solver3RenderingRef.current) {
+                    solver3DragPendingRef.current = false;
+                    setSolver3Trigger(t => t + 1);
                 }
             }
             return;
         }
 
         syncManagedTrapBeads(components);
-        const sceneChanged = lastOpticsFingerprintRef.current !== opticsFingerprint;
-        lastOpticsFingerprintRef.current = opticsFingerprint;
-
 
         const cardsToReset = components.filter(c => c instanceof Card) as Card[];
         for (const card of cardsToReset) {
@@ -1498,6 +1511,40 @@ export const OpticalTable: React.FC = () => {
     const workerRayCountsRef = useRef<number[]>([]);
     const workerErrorRef = useRef(false);
     const solver3ActiveWorkerCountRef = useRef(0);
+    const lastSolver3InvalidationFingerprintRef = useRef(opticsFingerprint);
+
+    const cancelActiveSolver3Job = (clearPaths: boolean = false) => {
+        const previousId = solver3JobIdRef.current;
+        if (previousId <= 0) return;
+        for (const worker of solver3WorkersRef.current) {
+            worker.postMessage({ type: 'cancel', jobId: previousId } as MainToWorker);
+        }
+        solver3JobIdRef.current = previousId + 1;
+        workerAccumRef.current.clear();
+        workerCompleteRef.current.clear();
+        workerRayCountsRef.current = new Array(solver3WorkersRef.current.length).fill(0);
+        workerErrorRef.current = false;
+        solver3ActiveWorkerCountRef.current = 0;
+        solver3DragPendingRef.current = false;
+        setSolver3Rendering(false);
+        solver3RenderingRef.current = false;
+        setScanAccumProgress(0);
+        if (clearPaths) {
+            setSolver3Paths([]);
+            solver3PathsRef.current = [];
+        }
+    };
+
+    useEffect(() => {
+        if (lastSolver3InvalidationFingerprintRef.current === opticsFingerprint) return;
+        lastSolver3InvalidationFingerprintRef.current = opticsFingerprint;
+        // Timeline scan accumulation owns component mutation while it bakes; do
+        // not let those internal evaluate/restore steps cancel the scan job.
+        if (scanAccumActiveRef.current) return;
+        if (animPlaying && animator.channels.length > 0) return;
+        cancelActiveSolver3Job(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opticsFingerprint, animPlaying, animator.channels.length]);
 
     // Lazily spin up a pool of workers and wire the merging message handler.
     useEffect(() => {
@@ -1616,8 +1663,15 @@ export const OpticalTable: React.FC = () => {
                     if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
                         setScanAccumProgress(1);
                         setSolver3Rendering(false);
-                        if (workerErrorRef.current) haptic.error();
-                        else haptic.done();
+                        solver3RenderingRef.current = false;
+                        if (!isDraggingRef.current) {
+                            if (workerErrorRef.current) haptic.error();
+                            else haptic.done();
+                        }
+                        if (isDraggingRef.current && solver3DragPendingRef.current) {
+                            solver3DragPendingRef.current = false;
+                            window.setTimeout(() => setSolver3Trigger(t => t + 1), 0);
+                        }
                     }
                 } else if (msg.type === 'error') {
                     console.warn(`[Solver3 worker ${w}] `, msg.message);
@@ -1626,8 +1680,13 @@ export const OpticalTable: React.FC = () => {
                     workerRayCountsRef.current[w] = 0;
                     if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
                         setSolver3Rendering(false);
+                        solver3RenderingRef.current = false;
                         setScanAccumProgress(0);
-                        haptic.error();
+                        if (!isDraggingRef.current) haptic.error();
+                        if (isDraggingRef.current && solver3DragPendingRef.current) {
+                            solver3DragPendingRef.current = false;
+                            window.setTimeout(() => setSolver3Trigger(t => t + 1), 0);
+                        }
                     }
                 }
             };
@@ -1669,6 +1728,7 @@ export const OpticalTable: React.FC = () => {
         workerErrorRef.current = false;
 
         setSolver3Rendering(true);
+        solver3RenderingRef.current = true;
         setScanAccumProgress(0);
 
         const sceneText = serializeScene(components);
@@ -1707,6 +1767,8 @@ export const OpticalTable: React.FC = () => {
             for (const comp of components) {
                 if (comp instanceof Camera) comp.markSolver3Stale();
             }
+        } else {
+            solver3DragPendingRef.current = false;
         }
         setSolver3Trigger(t => t + 1);
     }, [components, isDragging, setSolver3Trigger]);
@@ -1753,6 +1815,15 @@ export const OpticalTable: React.FC = () => {
         document.addEventListener('visibilitychange', onVisibility);
         return () => document.removeEventListener('visibilitychange', onVisibility);
     }, [animPlaying, animator.channels.length, components, setSolver3Trigger]);
+
+    useEffect(() => {
+        return () => {
+            if (!activeScanJobRef.current) return;
+            activeScanJobRef.current.cancel(0);
+            activeScanJobRef.current = null;
+            timelineBakePendingSignatureRef.current = '';
+        };
+    }, [components, clampedForwardRayCount, clampedReversePathCount, rayConfig.solver2Enabled]);
 
     // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
     useEffect(() => {
@@ -1808,6 +1879,7 @@ export const OpticalTable: React.FC = () => {
             setProgress: setScanAccumProgress,
             totalSteps: steps,
         });
+        activeScanJobRef.current = job;
 
         type CameraTimelineState = {
             camera: Camera;
@@ -1862,6 +1934,9 @@ export const OpticalTable: React.FC = () => {
                 console.log(`[ScanAccum] Done. ${steps} timeline frames stored for ${cameraStates.length} camera(s).`);
                 timelineBakePendingSignatureRef.current = '';
                 job.finish(1);
+                if (activeScanJobRef.current === job) {
+                    activeScanJobRef.current = null;
+                }
                 for (const state of cameraStates) {
                     state.camera.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
                 }
@@ -1921,6 +1996,9 @@ export const OpticalTable: React.FC = () => {
                 timelineBakePendingSignatureRef.current = '';
             }
             job.cancel(0);
+            if (activeScanJobRef.current === job) {
+                activeScanJobRef.current = null;
+            }
         };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps

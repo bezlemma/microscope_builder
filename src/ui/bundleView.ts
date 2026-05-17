@@ -46,6 +46,7 @@ const DIRECTION_DOT_THRESHOLD = 0.85;
 const SPATIAL_LINK_SCALE = 6;
 const PATH_LINK_PADDING = 2;
 const ENVELOPE_PROFILE_SAMPLES = 25;
+const MIN_PATH_SEGMENT_RELATIVE_INTENSITY = 1e-9;
 
 interface SegmentCluster {
     direction: Vector3;
@@ -296,10 +297,11 @@ function rayEndPoint(ray: Ray): Vector3 | null {
 function buildReverseBranch(path: Ray[], pathIndex: number): GaussianBeamSegment[] {
     const branch: GaussianBeamSegment[] = [];
     const sourceId = normalizeReverseSourceId(path, pathIndex);
+    const sourceIntensity = Math.max(path[0]?.intensity ?? 0, 1e-30);
 
     for (let rayIndex = 0; rayIndex < path.length; rayIndex++) {
         const ray = path[rayIndex];
-        if (ray.intensity < 1e-6) break;
+        if (ray.intensity / sourceIntensity < MIN_PATH_SEGMENT_RELATIVE_INTENSITY) break;
 
         const fallbackRadius = Math.max(ray.footprintRadius || 0.05, 0.05);
         const previousRay = rayIndex > 0 ? path[rayIndex - 1] : undefined;

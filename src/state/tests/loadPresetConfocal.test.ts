@@ -7,6 +7,7 @@ import {
     componentsAtom,
     loadPresetAtom,
     PresetName,
+    presetDescriptionAtom,
     pushUndoAtom,
     pinnedViewersAtom,
     OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT,
@@ -121,6 +122,10 @@ describe('Confocal preset loading', () => {
         store.set(loadPresetAtom, PresetName.PolarizationZoo);
         expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
         expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
+        const description = store.get(presetDescriptionAtom);
+        expect(description).toContain('Jones-optics');
+        expect(description).toContain('half-wave plate');
+        expect(description).toContain('three-polarizer');
     });
 
     test('optical plane view raises the displayed ray count minimum', () => {

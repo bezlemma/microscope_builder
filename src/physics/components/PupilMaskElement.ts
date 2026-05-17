@@ -103,12 +103,16 @@ export class PupilMaskElement extends OpticalComponent {
         const opl = ray.opticalPathLength + hit.t;
         const amplitude = sample.transmission;
         const phase = sample.phase;
+        const wavelengthMm = ray.wavelength * 1e3;
+        const phaseOplOffset = Number.isFinite(wavelengthMm) && Math.abs(wavelengthMm) > 1e-12
+            ? (phase / (2 * Math.PI)) * wavelengthMm
+            : 0;
 
-        // Apply phase shift and amplitude to polarization via Jones matrix
-        const cosPhase = Math.cos(phase);
-        const sinPhase = Math.sin(phase);
-
+        // Apply phase shift and amplitude. A scalar pupil phase is an optical
+        // path phase, not a polarization change, so store it as equivalent OPL.
+        // Jones masks can still carry polarization-specific phase directly.
         let polarization = ray.polarization;
+        let opticalPathLength = opl + phaseOplOffset;
         if (sample.jones) {
             // Apply Jones matrix: E_out = J * E_in
             const [m00, m01, m10, m11] = sample.jones;
@@ -123,15 +127,17 @@ export class PupilMaskElement extends OpticalComponent {
                 im: (m10.re * ex.im + m10.im * ex.re + m11.re * ey.im + m11.im * ey.re),
             };
             polarization = { x: outX, y: outY, z: { re: ray.polarization.z.re, im: ray.polarization.z.im } };
+            opticalPathLength = opl;
         } else {
-            // Scalar phase: rotate all three components by the same complex phase factor.
+            // Keep the scalar phase in opticalPathLength; rotating the Jones
+            // vector as well would double-count coherent interference phase.
             const ex = ray.polarization.x;
             const ey = ray.polarization.y;
             const ez = ray.polarization.z;
             polarization = {
-                x: { re: ex.re * cosPhase - ex.im * sinPhase, im: ex.re * sinPhase + ex.im * cosPhase },
-                y: { re: ey.re * cosPhase - ey.im * sinPhase, im: ey.re * sinPhase + ey.im * cosPhase },
-                z: { re: ez.re * cosPhase - ez.im * sinPhase, im: ez.re * sinPhase + ez.im * cosPhase },
+                x: { re: ex.re, im: ex.im },
+                y: { re: ey.re, im: ey.im },
+                z: { re: ez.re, im: ez.im },
             };
         }
 
@@ -139,7 +145,7 @@ export class PupilMaskElement extends OpticalComponent {
             rays: [childRay(ray, {
                 origin: hit.point,
                 intensity: ray.intensity * amplitude * amplitude,
-                opticalPathLength: opl,
+                opticalPathLength,
                 polarization,
             })],
             passthrough: true,

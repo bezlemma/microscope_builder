@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { Laser } from '../components/Laser';
 import { Waveplate } from '../components/Waveplate';
 import { Card } from '../components/Card';
-import { Annotation } from '../components/Annotation';
 import { Solver1 } from '../Solver1';
 import { createSourceRays } from '../SourceRayFactory';
 import { createPolarizationZooScene } from '../../presets/polarizationZoo';
@@ -24,11 +23,6 @@ describe('Polarization Zoo preset', () => {
         const cards = scene.filter(component => component instanceof Card) as Card[];
         expect(cards).toHaveLength(3);
         expect(cards.every(card => card.opaque)).toBe(true);
-        const notes = scene.filter(component => component instanceof Annotation) as Annotation[];
-        expect(notes).toHaveLength(1);
-        expect(notes[0].text).toContain('lambda/2');
-        expect(notes[0].text).toContain('lambda/4');
-        expect(notes[0].text).toContain('45deg middle polarizer');
 
         const sourceRays = createSourceRays(scene, 1, 'center');
         const paths = new Solver1(scene).trace(sourceRays);

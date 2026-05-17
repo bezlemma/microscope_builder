@@ -435,7 +435,6 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
         displayWidth, displayHeight,
     ]);
 
-    const isStale = camera.solver3Stale;
     const minBound = normalizeMode === 'auto' ? stats.autoMin : stats.min;
     const maxBound = normalizeMode === 'auto' ? stats.autoMax : stats.max;
 
@@ -451,37 +450,28 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                 <span style={{ fontSize: '11px', color: '#aaa' }}>
                     {camera.sensorResX}x{camera.sensorResY}
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {hasScanFrames && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }}>
-                            <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={projection === 'avg'}
-                                    onChange={() => setProjection(projection === 'avg' ? 'none' : 'avg')}
-                                    style={{ margin: 0, cursor: 'pointer' }}
-                                />
-                                AVG
-                            </label>
-                            <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={projection === 'max'}
-                                    onChange={() => setProjection(projection === 'max' ? 'none' : 'max')}
-                                    style={{ margin: 0, cursor: 'pointer' }}
-                                />
-                                MAX
-                            </label>
-                        </div>
-                    )}
-                    <span style={{
-                        fontSize: '10px',
-                        color: isRendering ? '#007fff' : isStale ? '#ff8844' : '#44ff88',
-                        fontFamily: 'monospace',
-                    }}>
-                        {isRendering ? 'Tracing…' : isStale ? 'Updating…' : hasImage ? 'OK' : ''}
-                    </span>
-                </div>
+                {hasScanFrames && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }}>
+                        <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={projection === 'avg'}
+                                onChange={() => setProjection(projection === 'avg' ? 'none' : 'avg')}
+                                style={{ margin: 0, cursor: 'pointer' }}
+                            />
+                            AVG
+                        </label>
+                        <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={projection === 'max'}
+                                onChange={() => setProjection(projection === 'max' ? 'none' : 'max')}
+                                style={{ margin: 0, cursor: 'pointer' }}
+                            />
+                            MAX
+                        </label>
+                    </div>
+                )}
             </div>
 
             {/* Canvas with overlay buttons */}
@@ -557,7 +547,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                 )}
             </div>
 
-            {/* Black / White level sliders and stats panel */}
+            {/* Black / White level sliders */}
             {!isMobile && (
                 <div style={{
                 marginTop: '6px',
@@ -598,35 +588,6 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                     />
                     <div style={{ color: '#ddd', fontSize: '10px', fontFamily: 'monospace', textAlign: 'right' }}>
                         {whiteLevel.toExponential(2)}
-                    </div>
-                </div>
-
-                {/* Display stats */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '4px 12px',
-                    marginTop: '6px',
-                    paddingTop: '4px',
-                    borderTop: '1px solid #282828',
-                }}>
-                    <div>
-                        <div style={{ color: '#777', fontSize: '10px' }}>Channel</div>
-                        <div style={{ color: '#ddd', fontSize: '11px', fontFamily: 'monospace' }}>
-                            {imageChannelLabel(channel)}
-                        </div>
-                    </div>
-                    <div>
-                        <div style={{ color: '#777', fontSize: '10px' }}>Display</div>
-                        <div style={{ color: '#ddd', fontSize: '11px', fontFamily: 'monospace' }}>
-                            {displayMappingLabel(mapping)} / {normalizeMode}
-                        </div>
-                    </div>
-                    <div style={{ gridColumn: '1 / span 2' }}>
-                        <div style={{ color: '#777', fontSize: '10px' }}>Raw Range</div>
-                        <div style={{ color: '#ddd', fontSize: '11px', fontFamily: 'monospace' }}>
-                            {stats.min.toExponential(2)}..{stats.max.toExponential(2)}
-                        </div>
                     </div>
                 </div>
             </div>

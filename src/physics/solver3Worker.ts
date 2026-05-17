@@ -153,6 +153,8 @@ const MIN_CONVERGENCE_ROUNDS = 8;
 const STABLE_CONVERGENCE_ROUNDS = 3;
 const CONVERGENCE_RELATIVE_EPSILON = 0.003;
 const CONVERGENCE_ABSOLUTE_EPSILON = 1e-10;
+const MAX_CAMERA_PROGRESSIVE_ROUNDS = 32;
+const MAX_PREVIEW_PROGRESSIVE_ROUNDS = 1;
 
 /**
  * Rays are structured-cloneable once we strip Three.js Vector3 prototypes.
@@ -549,6 +551,10 @@ async function runJob(req: RenderRequest) {
         let pmtDone = pmts.length === 0;
         let completePosted = false;
 
+        const maxProgressiveRounds = req.previewMode
+            ? MAX_PREVIEW_PROGRESSIVE_ROUNDS
+            : MAX_CAMERA_PROGRESSIVE_ROUNDS;
+
         for (let round = 0; ; round++) {
             if (cancelledJobs.has(req.jobId)) return;
 
@@ -640,7 +646,8 @@ async function runJob(req: RenderRequest) {
             }
 
             const allCamerasConverged = accumulators.every(acc => acc.converged);
-            if (allCamerasConverged && pmtDone) {
+            const reachedRoundLimit = round + 1 >= maxProgressiveRounds;
+            if ((allCamerasConverged || reachedRoundLimit) && pmtDone) {
                 return;
             }
 

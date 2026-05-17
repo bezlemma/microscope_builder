@@ -2,7 +2,12 @@ import { OpticalComponent } from '../physics/Component';
 import { Laser } from '../physics/components/Laser';
 import { Card } from '../physics/components/Card';
 import { Waveplate } from '../physics/components/Waveplate';
-import { Annotation } from '../physics/components/Annotation';
+
+export const POLARIZATION_ZOO_DESCRIPTION =
+    'Polarization Zoo shows how simple Jones-optics elements change what reaches a crossed analyzer. ' +
+    'The half-wave plate row rotates linear polarization so light blocked by a crossed polarizer can pass. ' +
+    'The quarter-wave plate row turns linear light into elliptical/circular polarization, so only the analyzer-projected component survives. ' +
+    'The three-polarizer row demonstrates why adding a 45 degree polarizer between crossed polarizers can increase, not decrease, transmitted light.';
 
 /**
  * Polarization Zoo — three classic polarization demonstrations.
@@ -110,17 +115,6 @@ export function createPolarizationZooScene(): OpticalComponent[] {
     tpCard.pointAlong(1, 0, 0);  // faces beam
     tpCard.opaque = true;
     scene.push(tpCard);
-
-    const note = new Annotation(
-        'text',
-        'Polarization Zoo Notes',
-        'HWP: lambda/2 at 45deg rotates linear polarization 90deg.\nQWP: lambda/4 at 45deg makes elliptical/circular light.\n3 polarizers: 45deg middle polarizer lets crossed polarizers pass.',
-        120,
-        12,
-        '#f2f4f8',
-    );
-    note.setPosition(-70, 145, 0.5);
-    scene.push(note);
 
     return scene;
 }

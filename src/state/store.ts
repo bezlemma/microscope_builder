@@ -16,7 +16,7 @@ import { createBrightfieldScene } from '../presets/brightfield';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
 import { createPrismDebugScene } from '../presets/prismDebug';
-import { createPolarizationZooScene } from '../presets/polarizationZoo';
+import { createPolarizationZooScene, POLARIZATION_ZOO_DESCRIPTION } from '../presets/polarizationZoo';
 import { createMZInterferometerScene } from '../presets/mzInterferometer';
 import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
@@ -138,6 +138,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.PrismDebug, () => ({ scene: createPrismDebugScene() })],
     [PresetName.PolarizationZoo, () => ({
         scene: createPolarizationZooScene(),
+        description: POLARIZATION_ZOO_DESCRIPTION,
         rayConfig: { solver2Enabled: true, viewerMode: 'wave' },
     })],
     [PresetName.MZInterferometer, () => ({

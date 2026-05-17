@@ -101,13 +101,14 @@ export class DichroicMirror extends OpticalComponent {
         const opl = ray.opticalPathLength + hit.t;
         const rays: Ray[] = [];
 
-        // Threshold for spawning rays: must be physically significant (>1e-5).
-        // This prevents 'ghost' leakage from rays that are mathematically near-zero.
-        const minIntensity = 1e-5;
+        // Threshold branch existence by split fraction, not by absolute ray
+        // power. Per-ray power intentionally changes with the source sampling
+        // density; the optical behavior must not.
+        const minSplitFraction = 1e-9;
 
         // Transmitted ray
         const transmittedIntensity = ray.intensity * transmission;
-        if (transmittedIntensity > minIntensity) {
+        if (transmission > minSplitFraction) {
             rays.push(childRay(ray, {
                 origin: hit.point,
                 direction: ray.direction.clone(),
@@ -119,7 +120,7 @@ export class DichroicMirror extends OpticalComponent {
         // Reflected ray
         const reflection = 1.0 - transmission;
         const reflectedIntensity = ray.intensity * reflection;
-        if (reflectedIntensity > minIntensity) {
+        if (reflection > minSplitFraction) {
             const reflectedDir = reflectVector(ray.direction, hit.normal);
 
             // Proper incidence-plane reflection physics.

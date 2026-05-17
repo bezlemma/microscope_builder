@@ -89,20 +89,36 @@ function CameraSubscriber() {
 
 function GizmoControlsShim({ children }: { children: React.ReactNode }) {
     const set = useThree(state => state.set);
-    const [ready, setReady] = React.useState(false);
-    const controlsRef = useRef({
-        minPolarAngle: 0,
-        target: new Vector3(0, 0, 0),
-        update: () => undefined,
-    });
+    const activeControls = useThree(state => state.controls);
+    const controlsRef = useRef<{
+        minPolarAngle: number;
+        maxPolarAngle: number;
+        target: Vector3;
+        update: () => void;
+        getTarget: (target: Vector3) => Vector3;
+        setTarget: (x: number, y: number, z: number) => void;
+    } | null>(null);
+    if (!controlsRef.current) {
+        const target = new Vector3(0, 0, 0);
+        controlsRef.current = {
+            minPolarAngle: 0,
+            maxPolarAngle: Math.PI,
+            target,
+            update: () => undefined,
+            getTarget: (out: Vector3) => out.copy(target),
+            setTarget: (x: number, y: number, z: number) => {
+                target.set(x, y, z);
+            },
+        };
+    }
 
     React.useLayoutEffect(() => {
-        set({ controls: controlsRef.current as any });
-        setReady(true);
-        return () => set({ controls: null as any });
+        const controls = controlsRef.current as any;
+        set({ controls });
+        return () => set({ controls });
     }, [set]);
 
-    return ready ? <>{children}</> : null;
+    return activeControls ? <>{children}</> : null;
 }
 
 /**

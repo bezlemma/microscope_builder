@@ -15,7 +15,6 @@ import {
     startTutorialStage2Atom,
     tutorialStageAtom,
 } from '../state/store';
-import { Mirror } from '../physics/components/Mirror';
 import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import {
     copyTutorialCameraDetectorSettings,
@@ -28,7 +27,6 @@ import {
 
 const PULSE_Z_OFFSET = 12;
 const EMPTY_ARROW_POINTS: [number, number, number][] = [[0, 0, 0], [0, 0, 0]];
-const MZ_MIRROR_NUDGE_RAD = 0.1 * Math.PI / 180;
 const MZ_PHASE_NUDGE_RAD = Math.PI / 12;
 
 const PulseRing: React.FC<{
@@ -215,34 +213,12 @@ const TutorialOverlayContent: React.FC = () => {
             .lerp(screen.position, 0.64)
             .add(new Vector3(0, -30, 44));
     }, [components]);
-    const mzMirrorA = useMemo(
-        () => components.find((component): component is Mirror => component instanceof Mirror && component.name === 'Mirror A') ?? null,
-        [components],
-    );
-    const mzMirrorB = useMemo(
-        () => components.find((component): component is Mirror => component instanceof Mirror && component.name === 'Mirror B') ?? null,
-        [components],
-    );
     const mzPhaseTrim = useMemo(
         () => components.find((component): component is PupilMaskElement =>
             component instanceof PupilMaskElement && component.name === 'Arm A Phase Trim',
         ) ?? null,
         [components],
     );
-    const mzDetector = useMemo(
-        () => components.find(component => component.name === 'MZ Detector') ?? null,
-        [components],
-    );
-    const adjustMirrorPan = useCallback((id: string, delta: number) => {
-        pushUndo();
-        setComponents(prev => prev.map(component => {
-            if (component.id === id && component instanceof Mirror) {
-                component.panAngle += delta;
-                component.recomputeRotation();
-            }
-            return component;
-        }));
-    }, [pushUndo, setComponents]);
     const adjustPhaseTrim = useCallback((id: string, delta: number) => {
         pushUndo();
         setComponents(prev => prev.map(component => {
@@ -282,15 +258,14 @@ const TutorialOverlayContent: React.FC = () => {
     ]);
 
     if (isMZPreset) {
-        const calloutPosition = (mzDetector?.position ?? new Vector3(80, 80, 0))
+        const calloutPosition = (mzPhaseTrim?.position ?? new Vector3(-50, 80, 0))
             .clone()
-            .add(new Vector3(18, -54, 44));
+            .add(new Vector3(30, -42, 44));
 
         return (
             <group>
-                {mzMirrorA && <PulseRing position={mzMirrorA.position} radius={18} />}
-                {mzDetector && <PulseRing position={mzDetector.position} radius={20} color="#7efb62" />}
-                {mzMirrorA && <TutorialArrow from={calloutPosition} to={mzMirrorA.position} />}
+                {mzPhaseTrim && <PulseRing position={mzPhaseTrim.position} radius={16} />}
+                {mzPhaseTrim && <TutorialArrow from={calloutPosition} to={mzPhaseTrim.position} />}
                 <Html
                     position={[calloutPosition.x, calloutPosition.y, calloutPosition.z]}
                     center
@@ -298,32 +273,12 @@ const TutorialOverlayContent: React.FC = () => {
                     style={{ pointerEvents: 'none' }}
                 >
                     <div className="tutorial-callout compact mz-callout">
-                        <div className="tutorial-callout-title">Walk the interferometer</div>
+                        <div className="tutorial-callout-title">Set the interference phase</div>
                         <div className="tutorial-callout-body">
-                            Use the mirror twiddles to overlap the two spots on the detector, then step the phase trim to swing bright/dark.
+                            Step the phase plate by half a wave to move the detector from bright to dark.
                         </div>
                     </div>
                 </Html>
-                {mzMirrorA && (
-                    <FineNudgePanel
-                        position={mzMirrorA.position.clone().add(new Vector3(-31, 18, 34))}
-                        label="Mirror A"
-                        minusLabel="-"
-                        plusLabel="+"
-                        onMinus={() => adjustMirrorPan(mzMirrorA.id, -MZ_MIRROR_NUDGE_RAD)}
-                        onPlus={() => adjustMirrorPan(mzMirrorA.id, MZ_MIRROR_NUDGE_RAD)}
-                    />
-                )}
-                {mzMirrorB && (
-                    <FineNudgePanel
-                        position={mzMirrorB.position.clone().add(new Vector3(32, -20, 34))}
-                        label="Mirror B"
-                        minusLabel="-"
-                        plusLabel="+"
-                        onMinus={() => adjustMirrorPan(mzMirrorB.id, -MZ_MIRROR_NUDGE_RAD)}
-                        onPlus={() => adjustMirrorPan(mzMirrorB.id, MZ_MIRROR_NUDGE_RAD)}
-                    />
-                )}
                 {mzPhaseTrim && (
                     <FineNudgePanel
                         position={mzPhaseTrim.position.clone().add(new Vector3(0, 24, 34))}

@@ -76,7 +76,8 @@ function toVec3(v: { x: number; y: number; z: number }): Vector3 {
 }
 
 function lastVisibleRay(path: Ray[]): Ray | undefined {
-    const extinctIdx = path.findIndex(r => r.intensity < 1e-6);
+    const sourceIntensity = Math.max(path[0]?.intensity ?? 0, 1e-30);
+    const extinctIdx = path.findIndex(r => r.intensity / sourceIntensity < 1e-9);
     if (extinctIdx >= 0) return path[Math.max(0, extinctIdx - 1)];
     return path[path.length - 1];
 }
@@ -120,7 +121,7 @@ function rayVisualPoints(path: Ray[]): Vector3[] {
     let truncatedForVisualization = false;
 
     for (const ray of path) {
-        if (ray.intensity < 1e-6) break;
+        if (relativePathIntensity(path, ray) < 1e-9) break;
         if (ray.entryPoint) points.push(toVec3(ray.entryPoint));
         if (ray.internalPath) {
             for (const point of ray.internalPath) points.push(toVec3(point));

@@ -56,6 +56,7 @@ function toVec3(v: { x: number; y: number; z: number }): Vector3 {
 
 const MIN_DRAW_RELATIVE_INTENSITY = 1e-3;
 const POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY = 1e-6;
+const MIN_PATH_SEGMENT_RELATIVE_INTENSITY = 1e-9;
 const OPEN_TAIL_RELATIVE_INTENSITY = 3e-2;
 const LAMP_REFERENCE_PACKETS_PER_WAVELENGTH = 17;
 const MAX_SEGMENTS_PER_LINE_BATCH = 8192;
@@ -236,7 +237,7 @@ export function buildPathDrawSegments(
 
     for (let i = 0; i < path.length; i++) {
         const ray = path[i];
-        if (ray.intensity < 1e-6) break;
+        if (relativePathIntensity(path, ray) < MIN_PATH_SEGMENT_RELATIVE_INTENSITY) break;
 
         const rayOrigin = toVec3(ray.origin);
         if (ray.entryPoint) {
@@ -826,17 +827,11 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, noBloom = f
         if (colorByPolarization) {
             const polarizationPoints: Vector3[] = [];
             const polarizationColors: Array<[number, number, number]> = [];
-            let minSegmentRelative = Infinity;
-            let maxSegmentRelative = 0;
-            for (const segment of polarizationSegments) {
-                minSegmentRelative = Math.min(minSegmentRelative, segment.relativeIntensity);
-                maxSegmentRelative = Math.max(maxSegmentRelative, segment.relativeIntensity);
-            }
             for (const segment of polarizationSegments) {
                 const dim = opacityFromRelativeRange(
                     segment.relativeIntensity,
-                    minSegmentRelative,
-                    maxSegmentRelative,
+                    POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY,
+                    1,
                     minOpacity,
                     maxOpacity,
                 );

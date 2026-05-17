@@ -77,11 +77,13 @@ export class Filter extends OpticalComponent {
             ? Math.max(0, Math.min(1, rawT))
             : 0;
 
-        // Threshold for spawning rays: must be physically significant (>1e-5).
-        const minIntensity = 1e-5;
+        // Threshold branch existence by transmission fraction, not by absolute
+        // per-ray power. Per-ray power changes when the user changes the ray
+        // sampling count, but the filter physics must not.
+        const minTransmissionFraction = 1e-9;
 
         const transmittedIntensity = ray.intensity * transmission;
-        if (transmittedIntensity <= minIntensity) {
+        if (transmission <= minTransmissionFraction) {
             return { rays: [] };
         }
 

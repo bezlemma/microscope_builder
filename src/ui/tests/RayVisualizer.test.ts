@@ -172,6 +172,25 @@ describe('RayVisualizer coherent branch display', () => {
         expect(relativePathIntensity(path, segments[0].ray)).toBe(1);
     });
 
+    test('visual segment cutoff is relative to source power, not ray-count power', () => {
+        const path = [
+            testRay({
+                origin: new Vector3(0, 0, 0),
+                intensity: 1e-9,
+            }),
+            testRay({
+                origin: new Vector3(10, 0, 0),
+                intensity: 5e-12,
+                interactionDistance: 5,
+            }),
+        ];
+
+        const segments = buildPathDrawSegments(path, true, false);
+
+        expect(relativePathIntensity(path, path[1])).toBeCloseTo(0.005, 12);
+        expect(segments.length).toBeGreaterThanOrEqual(2);
+    });
+
     test('additive lamp packet opacity preserves wavelength energy as sampling increases', () => {
         const defaultPacketCount = 17;
         const densePacketCount = 151;
