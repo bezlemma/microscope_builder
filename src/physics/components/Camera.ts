@@ -24,6 +24,7 @@ export class Camera extends OpticalComponent {
     // Scan accumulation results — per-frame images for scrubbing
     scanFrames: Float32Array[] | null = null;       // Each frame's emission image
     scanExFrames: Float32Array[] | null = null;      // Each frame's excitation image
+    scanPaths: Ray[][][] | null = null;              // Each frame's reverse visualization paths
     scanFrameTimesMs: number[] | null = null;
     scanFrameCount: number = 0;
     scanCycleMs: number = 0;
@@ -61,6 +62,7 @@ export class Camera extends OpticalComponent {
     clearScanFrames(): void {
         this.scanFrames = null;
         this.scanExFrames = null;
+        this.scanPaths = null;
         this.scanFrameTimesMs = null;
         this.scanFrameCount = 0;
         this.scanCycleMs = 0;

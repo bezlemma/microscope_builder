@@ -68,6 +68,7 @@ export const ControlsHelp: React.FC = () => {
 
                     <Section title="Components">
                         <Row keys="Left-click" action="Select" />
+                        <Row keys="Empty-table drag" action="Box-select" />
                         <Row keys="Right-click" action="Alignment menu" />
                         <Row keys="Shift + Click" action="Multi-select" />
                         <Row keys="Alt + Click" action="Snap to nearest hole" />

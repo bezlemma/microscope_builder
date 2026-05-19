@@ -6,6 +6,7 @@ import { OpticalComponent } from '../physics/Component';
 import { Vector3, DoubleSide } from 'three';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Rail } from '../physics/components/Rail';
+import { Objective } from '../physics/components/Objective';
 import { useIsMobile } from './useIsMobile';
 import { useHaptic } from './useHaptic';
 
@@ -375,15 +376,73 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         setComponents(newComponents);
     };
 
-    // Selection highlight ring radius -- proportional to component bounds
-    const ringRadius = useMemo(() => {
+    const selectionHighlight = useMemo(() => {
         const b = component.bounds;
-        if (b) {
-            const size = b.max.clone().sub(b.min);
-            return Math.max(size.x, size.y, 15) * 0.7;
+        if (!b) {
+            return {
+                center: component.position.clone().add(new Vector3(0, 0, 0.5)),
+                radiusX: 15,
+                radiusY: 15,
+                rotationZ: 0,
+            };
         }
-        return 15;
-    }, [component.bounds]);
+
+        const min = b.min.clone();
+        const max = b.max.clone();
+        const size = max.clone().sub(min);
+        if (component instanceof Objective) {
+            const barrelDiameter = Math.max(size.x, size.y);
+            const objectiveFootprintLength = Math.max(size.z, barrelDiameter * 2.4);
+            max.z = min.z + objectiveFootprintLength;
+        }
+
+        const forward = new Vector3(0, 0, 1).applyQuaternion(component.rotation);
+        let axisX = forward.x;
+        let axisY = forward.y;
+        let axisLen = Math.hypot(axisX, axisY);
+        if (axisLen < 1e-6) {
+            const side = new Vector3(1, 0, 0).applyQuaternion(component.rotation);
+            axisX = side.x;
+            axisY = side.y;
+            axisLen = Math.hypot(axisX, axisY) || 1;
+        }
+        axisX /= axisLen;
+        axisY /= axisLen;
+        const perpX = -axisY;
+        const perpY = axisX;
+
+        let minU = Infinity;
+        let maxU = -Infinity;
+        let minV = Infinity;
+        let maxV = -Infinity;
+        for (const x of [min.x, max.x]) {
+            for (const y of [min.y, max.y]) {
+                for (const z of [min.z, max.z]) {
+                    const world = new Vector3(x, y, z).applyQuaternion(component.rotation).add(component.position);
+                    const u = world.x * axisX + world.y * axisY;
+                    const v = world.x * perpX + world.y * perpY;
+                    minU = Math.min(minU, u);
+                    maxU = Math.max(maxU, u);
+                    minV = Math.min(minV, v);
+                    maxV = Math.max(maxV, v);
+                }
+            }
+        }
+
+        const centerU = (minU + maxU) * 0.5;
+        const centerV = (minV + maxV) * 0.5;
+        const padding = component instanceof Objective ? 10 : 6;
+        return {
+            center: new Vector3(
+                centerU * axisX + centerV * perpX,
+                centerU * axisY + centerV * perpY,
+                component.position.z + 0.5,
+            ),
+            radiusX: Math.max((maxU - minU) * 0.5 + padding, 15),
+            radiusY: Math.max((maxV - minV) * 0.5 + padding, 15),
+            rotationZ: Math.atan2(axisY, axisX),
+        };
+    }, [component, component.bounds, component.position, component.rotation, component.version]);
 
     // Mobile tap-target radius — fingertips are ~10mm wide, and a thin mirror
     // / blocker / lens on the simulator's mm scale is way under that. Without
@@ -468,10 +527,11 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             {/* Selection highlight ring -- glowing torus on the table surface */}
             {isSelected && (
                 <mesh
-                    position={[component.position.x, component.position.y, component.position.z + 0.5]}
-                    rotation={[0, 0, 0]}
+                    position={[selectionHighlight.center.x, selectionHighlight.center.y, selectionHighlight.center.z]}
+                    rotation={[0, 0, selectionHighlight.rotationZ]}
+                    scale={[selectionHighlight.radiusX, selectionHighlight.radiusY, 1]}
                 >
-                    <torusGeometry args={[ringRadius, 0.5, 8, 48]} />
+                    <torusGeometry args={[1, 0.035, 8, 96]} />
                     <meshBasicMaterial
                         color="#64ffda"
                         transparent

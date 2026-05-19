@@ -84,10 +84,10 @@ describe("Aspheric sag math", () => {
 describe("AsphericLens construction", () => {
     test("default lens has expected paraxial focal length", () => {
         const lens = new AsphericLens({ name: "default" });
-        // Plano-asphere with R₁=13, R₂=∞, n=1.5168, t=4 → f ≈ R/(n−1) ≈ 25 mm.
-        // Thick-lens correction is small for this geometry.
+        // Plano-asphere with R₁=13, R₂=∞, n=1.5168 → f ≈ R/(n−1) ≈ 25 mm.
         expect(lens.focalLength).toBeGreaterThan(20);
         expect(lens.focalLength).toBeLessThan(30);
+        expect(lens.effectiveApertureRadius).toBeCloseTo(lens.apertureRadius, 6);
     });
 
     test("biconvex preset gives positive symmetric curvatures", () => {

@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
-import { applyDefaultPlacementOrientation, createComponentForType } from '../componentFactory';
+import { applyDefaultPlacementOrientation, createCatalogComponentForType, createComponentForType } from '../componentFactory';
+import { SphericalLens } from '../../physics/components/SphericalLens';
+import { AsphericLens } from '../../physics/components/AsphericLens';
+import { CylindricalLens } from '../../physics/components/CylindricalLens';
+import { AchromatDoublet } from '../../physics/components/AchromatDoublet';
+import { Objective } from '../../physics/components/Objective';
+import { PrismLens } from '../../physics/components/PrismLens';
 
 function forwardDirection(type: string): Vector3 {
     const component = createComponentForType(type);
@@ -95,5 +101,36 @@ describe('Component factory placement defaults', () => {
         expect(bead.diameter).toBeLessThanOrEqual(0.01);
         expect(bead.visualGlowRadius).toBeGreaterThan(bead.radius);
         expect(bead.visualGlowRadius).toBeLessThanOrEqual(0.015);
+    });
+
+    test('catalog-backed creation is explicit and leaves platonic defaults unchanged', () => {
+        const plain = createComponentForType('lens') as SphericalLens;
+        const catalog = createCatalogComponentForType('lens', 'thorlabs:LA1509-A') as SphericalLens;
+
+        expect(plain.catalog).toBeUndefined();
+        expect(plain.name).toBe('New Lens');
+        expect(catalog.catalog?.partId).toBe('thorlabs:LA1509-A');
+        expect(catalog.name).toBe('LA1509-A');
+        expect(catalog.apertureRadius).toBeCloseTo(12.7, 6);
+    });
+
+    test('catalog-backed creation supports generated non-spherical lens families', () => {
+        const asphere = createCatalogComponentForType('asphericLens', 'thorlabs:354060-A') as AsphericLens;
+        const cylinder = createCatalogComponentForType('cylindricalLens', 'thorlabs:LJ1821L1') as CylindricalLens;
+        const achromat = createCatalogComponentForType('achromatDoublet', 'thorlabs:AC254-200-A') as AchromatDoublet;
+        const objective = createCatalogComponentForType('objective', 'thorlabs:TL10X-2P') as Objective;
+        const prism = createCatalogComponentForType('prism', 'thorlabs:PS910') as PrismLens;
+
+        expect(asphere.catalog?.partId).toBe('thorlabs:354060-A');
+        expect(asphere.apertureRadius).toBeCloseTo(3.1625, 6);
+        expect(cylinder.catalog?.partId).toBe('thorlabs:LJ1821L1');
+        expect(cylinder.width).toBeCloseTo(50, 6);
+        expect(achromat.catalog?.partId).toBe('thorlabs:AC254-200-A');
+        expect(achromat.r1).toBeCloseTo(77.4, 6);
+        expect(objective.catalog?.partId).toBe('thorlabs:TL10X-2P');
+        expect(objective.NA).toBeCloseTo(0.5, 6);
+        expect(objective.diameter).toBeCloseTo(32, 6);
+        expect(prism.catalog?.partId).toBe('thorlabs:PS910');
+        expect(prism.vertices).toHaveLength(3);
     });
 });

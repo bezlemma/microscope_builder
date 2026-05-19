@@ -43,6 +43,7 @@ import { PrismLens } from '../physics/components/PrismLens';
 import { estimatePassiveColloidTrapZone } from '../physics/trapDiagnostics';
 
 import { RayVisualizer } from './RayVisualizer';
+import { RayOcclusionLayer } from './RayOcclusionLayer';
 
 import { BundleWaveVisualizer } from './BundleWaveVisualizer';
 import { OpticalPlaneVisualizer } from './OpticalPlaneVisualizer';
@@ -50,7 +51,7 @@ import { GaussianBeamSegment, segmentBeamEnvelopeRadii } from '../physics/Solver
 import { Solver3 } from '../physics/Solver3';
 import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../physics/tableTrace';
-import { serializeScene } from '../state/ubzSerializer';
+import { deserializeScene, serializeScene } from '../state/ubzSerializer';
 import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
 import type { SerializedBeamSegment, Solver1WorkerRequest, Solver1WorkerResponse } from '../physics/solver1Worker';
 
@@ -253,7 +254,56 @@ function timelineClockMsForStep(step: number, steps: number, cycleMs: number, ch
         : cycleMs * (step / (steps - 1));
 }
 
+function circularIndexDistance(a: number, b: number, steps: number): number {
+    const direct = Math.abs(a - b);
+    return Math.min(direct, steps - direct);
+}
+
+function addUniqueStep(order: number[], step: number, steps: number): void {
+    const clamped = Math.max(0, Math.min(steps - 1, Math.round(step)));
+    if (!order.includes(clamped)) order.push(clamped);
+}
+
+function scanSolveOrder(steps: number, channels: AnimationChannel[]): number[] {
+    if (steps <= 1) return [0];
+    const order: number[] = [];
+    const allRepeat = channels.every(channel => channel.repeat);
+    const usesSinusoidal = channels.some(channel => channel.easing === 'sinusoidal');
+
+    if (usesSinusoidal && allRepeat) {
+        addUniqueStep(order, 0, steps);
+        addUniqueStep(order, steps / 4, steps);
+        addUniqueStep(order, (3 * steps) / 4, steps);
+    } else {
+        addUniqueStep(order, (steps - 1) / 2, steps);
+        addUniqueStep(order, 0, steps);
+        addUniqueStep(order, steps - 1, steps);
+    }
+
+    while (order.length < steps) {
+        let bestStep = 0;
+        let bestDistance = -Infinity;
+        for (let step = 0; step < steps; step++) {
+            if (order.includes(step)) continue;
+            const nearest = order.reduce((minDistance, solvedStep) => {
+                const distance = allRepeat
+                    ? circularIndexDistance(step, solvedStep, steps)
+                    : Math.abs(step - solvedStep);
+                return Math.min(minDistance, distance);
+            }, Infinity);
+            if (nearest > bestDistance) {
+                bestDistance = nearest;
+                bestStep = step;
+            }
+        }
+        order.push(bestStep);
+    }
+
+    return order;
+}
+
 function animationTimelineSignature(components: OpticalComponent[], channels: AnimationChannel[]): string {
+    const animatedTargetIds = new Set(channels.map(channel => channel.targetId));
     const channelKey = channels
         .map(channel => [
             channel.id,
@@ -268,7 +318,9 @@ function animationTimelineSignature(components: OpticalComponent[], channels: An
         ].join(':'))
         .join('|');
     const staticKey = components
-        .map(component => `${component.id}:${component.version}`)
+        .map(component => animatedTargetIds.has(component.id)
+            ? `${component.id}:animated`
+            : `${component.id}:${component.version}`)
         .join('|');
     return `${channelKey}::${staticKey}`;
 }
@@ -679,24 +731,6 @@ export const OpticalTable: React.FC = () => {
     const [, setRayRenderRevision] = useState(0);
     const [, setBeamRenderRevision] = useState(0);
     const [, setSolver3RenderRevision] = useState(0);
-    const rays = solverPathsRef.current;
-    const beamSegments = beamSegsRef.current;
-    const solver3Paths = solver3PathsRef.current;
-    const setRays = (next: Ray[][]) => {
-        solverPathsRef.current = next;
-        setRayRenderRevision(revision => revision + 1);
-    };
-    const setBeamSegments = (next: GaussianBeamSegment[][]) => {
-        beamSegsRef.current = next;
-        setBeamRenderRevision(revision => revision + 1);
-    };
-    const setSolver3Paths = (next: Ray[][]) => {
-        solver3PathsRef.current = next;
-        setSolver3RenderRevision(revision => revision + 1);
-    };
-    const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
-    const [isDragging] = useAtom(isDraggingAtom);
-    const [uiLocked] = useAtom(uiLockedAtom);
     // Write-only handles: useSetAtom, NOT useAtom. `const [, setX] = useAtom(a)`
     // still SUBSCRIBES this fiber to `a`. forwardRays / reverseRays /
     // trapBeamSegments / the image-tick atoms are all reassigned on every
@@ -710,6 +744,25 @@ export const OpticalTable: React.FC = () => {
     const setTrapBeamSegments = useSetAtom(publishTrapBeamSegmentsAtom);
     const setCardImageTick = useSetAtom(cardImageTickAtom);
     const setSolver3Rendering = useSetAtom(solver3RenderingAtom);
+    const rays = solverPathsRef.current;
+    const beamSegments = beamSegsRef.current;
+    const solver3Paths = solver3PathsRef.current;
+    const setRays = (next: Ray[][]) => {
+        solverPathsRef.current = next;
+        setRayRenderRevision(revision => revision + 1);
+    };
+    const setBeamSegments = (next: GaussianBeamSegment[][]) => {
+        beamSegsRef.current = next;
+        setBeamRenderRevision(revision => revision + 1);
+    };
+    const setSolver3Paths = (next: Ray[][]) => {
+        solver3PathsRef.current = next;
+        setReverseRays(next);
+        setSolver3RenderRevision(revision => revision + 1);
+    };
+    const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [isDragging] = useAtom(isDraggingAtom);
+    const [uiLocked] = useAtom(uiLockedAtom);
     // The solver-3 guard genuinely needs the live value, so this one subscribes.
     const [solver3Rendering] = useAtom(solver3RenderingAtom);
     const solver3RenderingRef = useRef(solver3Rendering);
@@ -729,10 +782,6 @@ export const OpticalTable: React.FC = () => {
         setDrawnRayCounts({ forward: rays.length, reverse: solver3Paths.length });
     }, [rays.length, solver3Paths.length, setDrawnRayCounts]);
 
-    useEffect(() => {
-        setReverseRays(solver3Paths);
-    }, [solver3Paths, setReverseRays]);
-
     // Preset-switch ghost-ray cleanup: the worker-traced paths live in local
     // refs (`rays`, `beamSegments`, `solver3Paths`), so even though
     // loadPresetAtom clears the global ray atoms, this component still holds
@@ -748,9 +797,9 @@ export const OpticalTable: React.FC = () => {
     }, [activePreset]);
 
     // (Sample / SampleChamber zoom-viewer auto-pinning is preset-specific —
-    // see loadPresetAtom for OpenSPIM, which is the only preset where the
-    // ray-vs-sample geometry is the primary thing the user wants to watch.
-    // Other presets leave the user to pin manually.)
+    // see loadPresetAtom for the presets where the ray-vs-sample geometry is
+    // the primary thing the user wants to watch. Other presets leave the user
+    // to pin manually.)
 
     // ─── Animation System ───
     const [animator] = useAtom(animatorAtom);
@@ -777,6 +826,8 @@ export const OpticalTable: React.FC = () => {
     const lastAnimationTimelineSignatureRef = useRef('');
     const timelineBakePendingSignatureRef = useRef('');
     const timelineReadySignatureRef = useRef('');
+    const timelineBakeKickoffTimerRef = useRef<number | null>(null);
+    const lastTimelineReverseFrameRef = useRef('');
     const lastTrapRedrawMsRef = useRef(0);
     // Re-trace throttle: the animator clock advances every frame, but the
     // expensive cascade it triggers (re-render → full forward trace → rebuild
@@ -789,35 +840,50 @@ export const OpticalTable: React.FC = () => {
     const lastAnimRetraceMsRef = useRef(0);
     const ANIM_RETRACE_MIN_INTERVAL_MS = 33;
 
-    const currentAnimationTimelineSignature = (currentComponents: OpticalComponent[]): string => {
+    const timelineCamerasReady = (currentComponents: OpticalComponent[]): boolean => {
+        const cameras = currentComponents.filter(component => component instanceof Camera) as Camera[];
+        return cameras.length > 0 && cameras.every(camera =>
+            Boolean(camera.scanFrames && camera.scanPaths && camera.scanFrameCount > 0));
+    };
+
+    const publishTimelineReversePathsForClock = (clockMs: number, currentComponents: OpticalComponent[]) => {
+        const cameras = currentComponents.filter(component =>
+            component instanceof Camera &&
+            component.scanPaths &&
+            component.scanFrameCount > 0 &&
+            (component.scanFrameTimesMs?.length ?? 0) >= component.scanFrameCount,
+        ) as Camera[];
+        if (cameras.length === 0) return;
+
         const activeChannels = animator.channels.filter(channel =>
             currentComponents.some(component => component.id === channel.targetId),
         );
-        if (activeChannels.length === 0) return '';
-        if (!currentComponents.some(component => component instanceof Camera)) return '';
-        return animationTimelineSignature(currentComponents, activeChannels);
-    };
+        const cycleMs = activeChannels.length > 0 ? resolveAnimationCycleMs(activeChannels) : cameras[0].scanCycleMs;
+        const timelineMs = ((clockMs % cycleMs) + cycleMs) % cycleMs;
+        const pathFrames: Ray[][] = [];
+        const signatureParts: string[] = [];
 
-    const timelineCamerasReady = (currentComponents: OpticalComponent[]): boolean => {
-        const cameras = currentComponents.filter(component => component instanceof Camera) as Camera[];
-        return cameras.length > 0 && cameras.every(camera => Boolean(camera.scanFrames && camera.scanFrameCount > 0));
-    };
+        for (const camera of cameras) {
+            const frameTimes = camera.scanFrameTimesMs ?? [];
+            let frameIndex = 0;
+            for (let i = 0; i < camera.scanFrameCount; i++) {
+                if ((frameTimes[i] ?? 0) <= timelineMs) frameIndex = i;
+                else break;
+            }
+            signatureParts.push(`${camera.id}:${frameIndex}:${camera.scanFrameCount}`);
+            pathFrames.push(...(camera.scanPaths?.[frameIndex] ?? []));
+        }
 
-    const timelineOwnsCurrentAnimation = (currentComponents: OpticalComponent[]): boolean => {
-        const signature = currentAnimationTimelineSignature(currentComponents);
-        if (!signature) return false;
-        if (timelineBakePendingSignatureRef.current === signature) return true;
-        return timelineReadySignatureRef.current === signature && timelineCamerasReady(currentComponents);
+        const signature = signatureParts.join('|');
+        if (lastTimelineReverseFrameRef.current === signature) return;
+        lastTimelineReverseFrameRef.current = signature;
+        setSolver3Paths(pathFrames);
     };
 
     useFrame((_, delta) => {
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
         const { playing, speed } = animStateRef.current;
         if (!playing) return;
-        if (timelineOwnsCurrentAnimation(componentsRef.current)) {
-            animator.playing = false;
-            return;
-        }
         animator.playing = true;
         // The animator clock advances every frame (cheap — just mutates
         // component properties), but the re-render/re-trace it drives is
@@ -829,6 +895,7 @@ export const OpticalTable: React.FC = () => {
                 lastAnimRetraceMsRef.current = now;
                 // Force fingerprint recalculation by triggering a React re-render
                 setAnimTickRef.current(t => t + 1);
+                publishTimelineReversePathsForClock(animator.clockMs, componentsRef.current);
             }
         }
     });
@@ -846,7 +913,6 @@ export const OpticalTable: React.FC = () => {
     useFrame(() => {
         if (scanAccumActiveRef.current) return;
         const currentComponents = componentsRef.current;
-        if (animStateRef.current.playing && timelineOwnsCurrentAnimation(currentComponents)) return;
         const now = performance.now();
         let anyMoved = syncManagedTrapBeads(currentComponents);
         const trapBeamSegs = trapBeamSegsRef.current;
@@ -911,11 +977,30 @@ export const OpticalTable: React.FC = () => {
         if (!components.some(component => component instanceof Camera)) return;
 
         const signature = animationTimelineSignature(components, activeChannels);
-        if (timelineBakePendingSignatureRef.current === signature) return;
+        if (timelineBakePendingSignatureRef.current || activeScanJobRef.current || timelineBakeKickoffTimerRef.current !== null) return;
         if (timelineReadySignatureRef.current === signature && timelineCamerasReady(components)) return;
         timelineBakePendingSignatureRef.current = signature;
-        setScanAccumConfig(config => ({ steps: config.steps, trigger: config.trigger + 1 }));
-    }, [animPlaying, animator, components, opticsFingerprint, setScanAccumConfig]);
+        const kickoffTimer = window.setTimeout(() => {
+            if (timelineBakeKickoffTimerRef.current !== kickoffTimer) return;
+            timelineBakeKickoffTimerRef.current = null;
+            if (!animStateRef.current.playing) {
+                if (timelineBakePendingSignatureRef.current === signature) {
+                    timelineBakePendingSignatureRef.current = '';
+                }
+                return;
+            }
+            setScanAccumConfig(config => ({ steps: config.steps, trigger: config.trigger + 1 }));
+        }, 120);
+        timelineBakeKickoffTimerRef.current = kickoffTimer;
+        return () => {
+            if (timelineBakeKickoffTimerRef.current !== kickoffTimer) return;
+            window.clearTimeout(kickoffTimer);
+            timelineBakeKickoffTimerRef.current = null;
+            if (timelineBakePendingSignatureRef.current === signature) {
+                timelineBakePendingSignatureRef.current = '';
+            }
+        };
+    }, [animPlaying, animator, components, setScanAccumConfig]);
 
     const forwardTraceCacheRef = useRef<ForwardTraceCache | null>(null);
     const solver1WorkerRef = useRef<Worker | null>(null);
@@ -1029,16 +1114,16 @@ export const OpticalTable: React.FC = () => {
         solver1WorkerJobIdRef.current++;
     }, []);
 
-    const traceCenterBeamSegments = () => {
-        syncManagedTrapBeads(components);
+    const traceCenterBeamSegments = (traceComponents: OpticalComponent[] = components) => {
+        syncManagedTrapBeads(traceComponents);
         return traceStableTableOverlay(
-            components,
+            traceComponents,
             () => {
-                const solver1 = new Solver1(components);
+                const solver1 = new Solver1(traceComponents);
                 // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
                 // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
                 const sourceRays = stablePreviewSourceRays(
-                    createSourceRays(components, clampedForwardRayCount, 'full'),
+                    createSourceRays(traceComponents, clampedForwardRayCount, 'full'),
                     Math.max(8, Math.min(tracedForwardRayCount, 16)),
                 );
                 return solver1.traceWithBeamSegments(sourceRays).beamSegments;
@@ -1049,7 +1134,6 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         if (!components) return;
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
-        if (!isDragging && animPlaying && timelineOwnsCurrentAnimation(components)) return;
 
         if (!isDragging) {
             solver1WorkerPendingRef.current = null;
@@ -1456,6 +1540,7 @@ export const OpticalTable: React.FC = () => {
             // Check if scan results should be invalidated:
             // Only clear if a NON-ANIMATED component changed since scan completed
             let shouldClearScan = false;
+            const animatedTargetIds = new Set(animator.channels.map(channel => channel.targetId));
             for (const comp of components) {
                 if (comp instanceof Camera && (comp as Camera).scanFrames) {
                     const cam = comp as Camera;
@@ -1463,6 +1548,7 @@ export const OpticalTable: React.FC = () => {
                     if (snapshot) {
                         // Check if any component changed since the timeline bake.
                         for (const c of components) {
+                            if (animatedTargetIds.has(c.id)) continue;
                             const savedVersion = snapshot.get(c.id);
                             if (savedVersion === undefined || c.version !== savedVersion) {
                                 shouldClearScan = true;
@@ -1615,26 +1701,13 @@ export const OpticalTable: React.FC = () => {
                     // sample (clipping by the sample plane below).  Across N
                     // workers we'd grow the path reservoir N×; capping at the
                     // global limit (500) keeps memory bounded.
-                    const hydrated = msg.paths.map(rehydratePath);
-                    const sampleComp = currentComponents.find(c => c instanceof Sample) as Sample | undefined;
-                    const clipped: Ray[][] = hydrated.map(path => {
-                        if (!sampleComp || path.length === 0) return path;
-                        const sp = sampleComp.position;
-                        for (let i = 0; i < path.length; i++) {
-                            const r = path[i];
-                            const dx = sp.x - r.origin.x;
-                            const dy = sp.y - r.origin.y;
-                            const dz = sp.z - r.origin.z;
-                            const tProj = dx * r.direction.x + dy * r.direction.y + dz * r.direction.z;
-                            if (tProj < -0.001) return path.slice(0, i);
-                            const rayDist = r.interactionDistance ?? Infinity;
-                            if (tProj <= rayDist) {
-                                const clippedRay = { ...r, interactionDistance: tProj };
-                                return [...path.slice(0, i), clippedRay];
-                            }
-                        }
-                        return path;
-                    }).filter(path => path.length > 0);
+                    // Solver3 already returns sample-terminated visualization
+                    // paths. Re-clipping folded microscopes by projecting the
+                    // sample onto every segment can collapse the visible path
+                    // to a tiny stub near the camera.
+                    const clipped = msg.paths
+                        .map(rehydratePath)
+                        .filter(path => path.length > 0);
                     camera.solver3Image = merged;
                     camera.forwardImage = mergedEx;
                     const visiblePaths = clipped.length > 0 ? clipped : (camera.solver3Paths ?? []);
@@ -1693,6 +1766,12 @@ export const OpticalTable: React.FC = () => {
             worker.addEventListener('message', onMessage);
         }
         solver3WorkersRef.current = workers;
+        window.setTimeout(() => {
+            const currentComponents = componentsRefForSolver3.current;
+            if (currentComponents.some(component => component instanceof Camera)) {
+                setSolver3Trigger(trigger => trigger + 1);
+            }
+        }, 0);
         return () => {
             for (const w of workers) w.terminate();
             solver3WorkersRef.current = [];
@@ -1829,7 +1908,7 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         if (scanAccumConfig.trigger === 0) return; // Skip initial mount
         if (!components) return;
-        if (scanAccumActiveRef.current) return;
+        if (scanAccumActiveRef.current || activeScanJobRef.current) return;
 
         const cameras = components.filter(c => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return;
@@ -1847,6 +1926,15 @@ export const OpticalTable: React.FC = () => {
         lastAnimationTimelineSignatureRef.current = timelineSignature;
         timelineBakePendingSignatureRef.current = timelineSignature;
 
+        const renderComponents = deserializeScene(serializeScene(components));
+        const renderById = new Map<string, OpticalComponent>();
+        for (const component of renderComponents) renderById.set(component.id, component);
+        const renderActiveChannels = activeChannels.filter(ch => renderById.has(ch.targetId));
+        if (renderActiveChannels.length === 0) {
+            timelineBakePendingSignatureRef.current = '';
+            return;
+        }
+
         const activeWorkerJobId = solver3JobIdRef.current;
         if (activeWorkerJobId > 0) {
             for (const worker of solver3WorkersRef.current) {
@@ -1863,13 +1951,41 @@ export const OpticalTable: React.FC = () => {
         const frameTimesMs = Array.from({ length: steps }, (_, step) =>
             timelineClockMsForStep(step, steps, cycleMs, activeChannels),
         );
+        const scanStepOrder = scanSolveOrder(steps, activeChannels);
+        const solvedStepIndices: number[] = [];
+        const scanBakeStartDelayMs = 100;
+        const scanBakeStepDelayMs = 34;
+        const scanBakeTimeoutIds: number[] = [];
+        const scanBakeRafIds: number[] = [];
+        let job: ReturnType<typeof createScheduledRenderJob>;
+        const clearScheduledScanBakeSteps = () => {
+            for (const id of scanBakeTimeoutIds) window.clearTimeout(id);
+            scanBakeTimeoutIds.length = 0;
+            for (const id of scanBakeRafIds) window.cancelAnimationFrame(id);
+            scanBakeRafIds.length = 0;
+        };
+        const scheduleScanBakeStep = (callback: () => void, delayMs: number) => {
+            const timeoutId = window.setTimeout(() => {
+                const timeoutIndex = scanBakeTimeoutIds.indexOf(timeoutId);
+                if (timeoutIndex >= 0) scanBakeTimeoutIds.splice(timeoutIndex, 1);
+                if (job.isCancelled()) return;
+                const rafId = window.requestAnimationFrame(() => {
+                    const rafIndex = scanBakeRafIds.indexOf(rafId);
+                    if (rafIndex >= 0) scanBakeRafIds.splice(rafIndex, 1);
+                    if (!job.isCancelled()) callback();
+                });
+                scanBakeRafIds.push(rafId);
+            }, delayMs);
+            scanBakeTimeoutIds.push(timeoutId);
+        };
 
-        // Save the original property values for all animated channels
-        const savedValues = captureAnimatedValues(activeChannels, byId);
+        // The scan bake runs on a cloned scene, so the visible table can keep
+        // animating immediately instead of being stepped through the timeline.
+        const savedValues = captureAnimatedValues(renderActiveChannels, renderById);
 
         console.log(`[ScanAccum] Starting ${steps}-frame animation cycle (${activeChannels.length} channels, ${Math.round(cycleMs)} ms)`);
 
-        const job = createScheduledRenderJob({
+        job = createScheduledRenderJob({
             animator,
             savedValues,
             scanAccumActiveRef,
@@ -1878,37 +1994,97 @@ export const OpticalTable: React.FC = () => {
             setSolver3Rendering,
             setProgress: setScanAccumProgress,
             totalSteps: steps,
+            pauseAnimation: false,
+            blockLiveScene: false,
         });
         activeScanJobRef.current = job;
 
         type CameraTimelineState = {
             camera: Camera;
+            renderCamera: Camera;
             pixelCount: number;
-            frameEmissions: Float32Array[];
-            frameExcitations: Float32Array[];
+            frameEmissions: Array<Float32Array | null>;
+            frameExcitations: Array<Float32Array | null>;
+            framePaths: Array<Ray[][] | null>;
             accumulatedEmission: Float32Array;
             accumulatedExcitation: Float32Array;
             lastPaths: Ray[][];
         };
 
-        const cameraStates: CameraTimelineState[] = cameras.map(camera => {
+        const cameraStates: CameraTimelineState[] = [];
+        for (const camera of cameras) {
+            const renderCamera = renderById.get(camera.id);
+            if (!(renderCamera instanceof Camera)) continue;
             const pixelCount = camera.sensorResX * camera.sensorResY;
             camera.clearScanFrames();
-            return {
+            renderCamera.clearScanFrames();
+            cameraStates.push({
                 camera,
+                renderCamera,
                 pixelCount,
-                frameEmissions: [],
-                frameExcitations: [],
+                frameEmissions: Array<Float32Array | null>(steps).fill(null),
+                frameExcitations: Array<Float32Array | null>(steps).fill(null),
+                framePaths: Array<Ray[][] | null>(steps).fill(null),
                 accumulatedEmission: new Float32Array(pixelCount),
                 accumulatedExcitation: new Float32Array(pixelCount),
                 lastPaths: [],
-            };
-        });
+            });
+        }
+        if (cameraStates.length === 0) {
+            timelineBakePendingSignatureRef.current = '';
+            clearScheduledScanBakeSteps();
+            job.cancel(0);
+            activeScanJobRef.current = null;
+            return;
+        }
 
-        const runStep = (step: number) => {
+        const publishScanPlaybackFrame = (fallbackPaths: Ray[][]) => {
+            if (animStateRef.current.playing) {
+                lastTimelineReverseFrameRef.current = '';
+                publishTimelineReversePathsForClock(animator.clockMs, componentsRef.current);
+                return;
+            }
+            setSolver3Paths(fallbackPaths);
+            solver3PathsRef.current = fallbackPaths;
+        };
+
+        const publishProgressiveFrames = () => {
+            const orderedSolvedSteps = [...solvedStepIndices].sort((a, b) => frameTimesMs[a] - frameTimesMs[b]);
+            const completedFrameCount = Math.max(1, orderedSolvedSteps.length);
+            const visiblePaths: Ray[][] = [];
+            for (const state of cameraStates) {
+                const runningEmission = new Float32Array(state.pixelCount);
+                const runningExcitation = new Float32Array(state.pixelCount);
+                for (let i = 0; i < state.pixelCount; i++) {
+                    runningEmission[i] = state.accumulatedEmission[i] / completedFrameCount;
+                    runningExcitation[i] = state.accumulatedExcitation[i] / completedFrameCount;
+                }
+
+                const frameEmissions = orderedSolvedSteps.map(step =>
+                    state.frameEmissions[step] ?? new Float32Array(state.pixelCount));
+                const frameExcitations = orderedSolvedSteps.map(step =>
+                    state.frameExcitations[step] ?? new Float32Array(state.pixelCount));
+                const framePaths = orderedSolvedSteps.map(step => state.framePaths[step] ?? []);
+                state.camera.scanFrames = frameEmissions;
+                state.camera.scanExFrames = frameExcitations;
+                state.camera.scanPaths = framePaths;
+                state.camera.scanFrameTimesMs = orderedSolvedSteps.map(step => frameTimesMs[step]);
+                state.camera.scanFrameCount = frameEmissions.length;
+                state.camera.scanCycleMs = cycleMs;
+                state.camera.solver3Image = runningEmission;
+                state.camera.forwardImage = runningExcitation;
+                state.camera.solver3Paths = state.lastPaths;
+                state.camera.solver3Stale = false;
+                visiblePaths.push(...state.lastPaths);
+            }
+            publishScanPlaybackFrame(visiblePaths);
+            setCameraImageTick(t => t + 1);
+        };
+
+        const runStep = (orderIndex: number) => {
             if (job.isCancelled()) return;
 
-            if (step >= steps) {
+            if (orderIndex >= scanStepOrder.length) {
                 const visiblePaths: Ray[][] = [];
                 for (const state of cameraStates) {
                     for (let i = 0; i < state.pixelCount; i++) {
@@ -1916,8 +2092,11 @@ export const OpticalTable: React.FC = () => {
                         state.accumulatedExcitation[i] /= steps;
                     }
 
-                    state.camera.scanFrames = state.frameEmissions;
-                    state.camera.scanExFrames = state.frameExcitations;
+                    state.camera.scanFrames = state.frameEmissions.map(frame =>
+                        frame ?? new Float32Array(state.pixelCount));
+                    state.camera.scanExFrames = state.frameExcitations.map(frame =>
+                        frame ?? new Float32Array(state.pixelCount));
+                    state.camera.scanPaths = state.framePaths.map(paths => paths ?? []);
                     state.camera.scanFrameTimesMs = frameTimesMs;
                     state.camera.scanFrameCount = steps;
                     state.camera.scanCycleMs = cycleMs;
@@ -1928,8 +2107,7 @@ export const OpticalTable: React.FC = () => {
                     visiblePaths.push(...state.lastPaths);
                 }
 
-                setSolver3Paths(visiblePaths);
-                solver3PathsRef.current = visiblePaths;
+                publishScanPlaybackFrame(visiblePaths);
                 setCameraImageTick(t => t + 1);
                 console.log(`[ScanAccum] Done. ${steps} timeline frames stored for ${cameraStates.length} camera(s).`);
                 timelineBakePendingSignatureRef.current = '';
@@ -1944,57 +2122,64 @@ export const OpticalTable: React.FC = () => {
                 return;
             }
 
-            job.advanceStep(step);
+            const step = scanStepOrder[orderIndex];
+            job.advanceStep(orderIndex);
             const clockMs = frameTimesMs[step] ?? 0;
-            animator.evaluateAt(clockMs, components);
+            animator.evaluateAt(clockMs, renderComponents);
 
             try {
                 // ── Solver 1: Forward trace ──
-                const beamSegs = traceCenterBeamSegments();
+                const beamSegs = traceCenterBeamSegments(renderComponents);
 
                 // ── Solver 3: Backward render ──
-                const solver3 = new Solver3(components, beamSegs);
+                const solver3 = new Solver3(renderComponents, beamSegs);
+                const scanVisualizationPathCount = Math.max(16, Math.min(clampedReversePathCount, 64));
                 for (const state of cameraStates) {
-                    const result = solver3.render(state.camera, 8);
+                    const result = solver3.render(state.renderCamera, scanVisualizationPathCount);
                     const frameEm = new Float32Array(state.pixelCount);
                     const frameEx = new Float32Array(state.pixelCount);
                     frameEm.set(result.emissionImage.subarray(0, state.pixelCount));
                     if (result.excitationImage.length >= state.pixelCount) {
                         frameEx.set(result.excitationImage.subarray(0, state.pixelCount));
                     }
-                    state.frameEmissions.push(frameEm);
-                    state.frameExcitations.push(frameEx);
+                    state.frameEmissions[step] = frameEm;
+                    state.frameExcitations[step] = frameEx;
 
                     for (let i = 0; i < state.pixelCount; i++) {
                         state.accumulatedEmission[i] += frameEm[i];
                         state.accumulatedExcitation[i] += frameEx[i];
                     }
                     state.lastPaths = result.paths;
+                    state.framePaths[step] = result.paths;
                 }
             } catch (e) {
                 console.warn(`Scan accum step ${step} error:`, e);
                 for (const state of cameraStates) {
-                    state.frameEmissions.push(new Float32Array(state.pixelCount));
-                    state.frameExcitations.push(new Float32Array(state.pixelCount));
+                    state.frameEmissions[step] = new Float32Array(state.pixelCount);
+                    state.frameExcitations[step] = new Float32Array(state.pixelCount);
+                    state.framePaths[step] = [];
                 }
             }
 
-            // Restore properties before yielding — keeps rays stable on the optical table
-            job.restoreProperties();
+            solvedStepIndices.push(step);
+            publishProgressiveFrames();
 
-            job.reportProgress((step + 1) / steps);
+            job.reportProgress((orderIndex + 1) / steps);
 
-            // Schedule next step (yield to UI for progress update)
-            job.schedule(() => runStep(step + 1), 0);
+            // Leave a paint/input turn between off-screen frames so playback
+            // starts visibly instead of feeling like one long synchronous bake.
+            scheduleScanBakeStep(() => runStep(orderIndex + 1), scanBakeStepDelayMs);
         };
 
-        // Start step 0 after a brief delay (let UI update)
-        job.schedule(() => runStep(0), 50);
+        // Let the play click and live table animation paint before the first
+        // off-screen Solver3 frame starts.
+        scheduleScanBakeStep(() => runStep(0), scanBakeStartDelayMs);
 
         return () => {
             if (timelineBakePendingSignatureRef.current === timelineSignature) {
                 timelineBakePendingSignatureRef.current = '';
             }
+            clearScheduledScanBakeSteps();
             job.cancel(0);
             if (activeScanJobRef.current === job) {
                 activeScanJobRef.current = null;
@@ -2511,7 +2696,7 @@ export const OpticalTable: React.FC = () => {
 
             {!uiLocked && <TutorialOverlay />}
 
-            <group>
+            <RayOcclusionLayer>
                 {components.map(c => {
                     const visual = getComponentVisualizer(c);
 
@@ -2536,7 +2721,7 @@ export const OpticalTable: React.FC = () => {
                     }
                     return null;
                 })}
-            </group>
+            </RayOcclusionLayer>
         </group>
     );
 };

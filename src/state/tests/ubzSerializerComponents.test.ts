@@ -207,8 +207,8 @@ name = Legacy Sample
         expect(Number.isFinite(loaded.emitterRadius)).toBe(true);
         expect(loaded.beamRadius).toBeCloseTo(3, 6);
         expect(loaded.power).toBeCloseTo(1, 6);
-        expect(loaded.sourcePointCount).toBe(1);
-        expect(loaded.emitterRadius).toBeCloseTo(0, 6);
+        expect(loaded.sourcePointCount).toBe(3);
+        expect(loaded.emitterRadius).toBeCloseTo(0.9, 6);
         expect(loaded.spectralWavelengths).toEqual([550]);
     });
 

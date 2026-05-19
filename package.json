@@ -21,7 +21,14 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "capture-presets": "node scripts/capture-presets.mjs"
+    "capture-presets": "node scripts/capture-presets.mjs",
+    "catalog:thorlabs": "bun scripts/catalog/import-thorlabs-lenses.mjs",
+    "catalog:thorlabs:exact": "bun scripts/catalog/import-thorlabs-lenses.mjs --with-support-files",
+    "catalog:objective-mechanical": "bun scripts/catalog/build-objective-mechanical-assets.mjs",
+    "catalog:optical-geometries": "bun scripts/catalog/build-optical-geometry-assets.mjs",
+    "catalog:objective-edrawings": "bun scripts/catalog/extract-edrawings-objective-asset.mjs",
+    "catalog:objectives-edrawings": "bun scripts/catalog/import-objective-edrawings-assets.mjs",
+    "catalog:inspect-edrawings": "bun scripts/catalog/inspect-edrawings-model.mjs"
   },
   "module": "index.ts",
   "type": "module",

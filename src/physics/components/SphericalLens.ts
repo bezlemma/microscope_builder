@@ -24,16 +24,18 @@ export class SphericalLens extends OpticalComponent {
     public r2?: number;
 
     // Computed property for internal engine.
-    // When explicit R1/R2 are set, the focal length is derived from the
-    // thin-lens lensmaker equation 1/f = (n-1)(1/R1 - 1/R2) so the reported
-    // value matches the actual optical power. Otherwise, fall back to the
-    // legacy `curvature` default (f = 1/curvature for a symmetric lens).
+    // When explicit R1/R2 are set, derive the effective focal length from the
+    // thick-lens lensmaker equation in air. Otherwise, fall back to the legacy
+    // `curvature` default (f = 1/curvature for a symmetric lens).
     public get focalLength(): number {
         if (this.r1 !== undefined || this.r2 !== undefined) {
             const { R1, R2 } = this.getRadii();
             const invR1 = Math.abs(R1) > 1e8 ? 0 : 1 / R1;
             const invR2 = Math.abs(R2) > 1e8 ? 0 : 1 / R2;
-            const inv = (this.ior - 1) * (invR1 - invR2);
+            const thicknessTerm = invR1 !== 0 && invR2 !== 0
+                ? ((this.ior - 1) * this.thickness * invR1 * invR2) / this.ior
+                : 0;
+            const inv = (this.ior - 1) * (invR1 - invR2 + thicknessTerm);
             if (Math.abs(inv) < 1e-12) return 1000;
             return 1 / inv;
         }

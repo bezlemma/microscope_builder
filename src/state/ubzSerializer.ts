@@ -55,6 +55,7 @@ import { StructuredSource } from '../physics/components/StructuredSource';
 import { Annotation, type AnnotationKind } from '../physics/components/Annotation';
 import { SpectralProfile, ProfilePreset, ProfileBand } from '../physics/SpectralProfile';
 import type { ZernikeCoefficient } from '../physics/PupilFunction';
+import type { CatalogAttachment, CatalogVendor } from '../catalog/types';
 
 // ════════════════════════════════════════════════════════════
 //  SERIALIZE
@@ -92,6 +93,7 @@ export function serializeScene(components: OpticalComponent[]): string {
         // Rotation as Euler angles
         const euler = new Euler().setFromQuaternion(comp.rotation);
         lines.push(`rotation = ${fmt(euler.x)}, ${fmt(euler.y)}, ${fmt(euler.z)}`);
+        writeCatalogProps(comp, lines);
 
         // Component-specific properties
         writeComponentProps(comp, lines);
@@ -137,6 +139,27 @@ function unescapeTextValue(value: string): string {
         else result += next;
     }
     return result;
+}
+
+function writeCatalogProps(comp: OpticalComponent, lines: string[]): void {
+    const catalog = comp.catalog;
+    if (!catalog) return;
+    lines.push(`catalog.partId = ${escapeTextValue(catalog.partId)}`);
+    lines.push(`catalog.vendor = ${catalog.vendor}`);
+    lines.push(`catalog.sku = ${escapeTextValue(catalog.sku)}`);
+    lines.push(`catalog.title = ${escapeTextValue(catalog.title)}`);
+    lines.push(`catalog.productUrl = ${escapeTextValue(catalog.productUrl)}`);
+    lines.push(`catalog.snapshotVersion = ${escapeTextValue(catalog.snapshotVersion)}`);
+    lines.push(`catalog.attachedAt = ${escapeTextValue(catalog.attachedAt)}`);
+    lines.push(`catalog.confidence = ${catalog.confidence}`);
+    if (catalog.price) {
+        lines.push(`catalog.price.amount = ${fmt(catalog.price.amount)}`);
+        lines.push(`catalog.price.currency = ${catalog.price.currency}`);
+        lines.push(`catalog.price.quantity = ${fmt(catalog.price.quantity)}`);
+        lines.push(`catalog.price.region = ${escapeTextValue(catalog.price.region)}`);
+        lines.push(`catalog.price.checkedAt = ${escapeTextValue(catalog.price.checkedAt)}`);
+        lines.push(`catalog.price.sourceUrl = ${escapeTextValue(catalog.price.sourceUrl)}`);
+    }
 }
 
 function getTypeName(comp: OpticalComponent): string | null {
@@ -450,6 +473,7 @@ export function deserializeScene(text: string): OpticalComponent[] {
             const [x, y, z] = block.props['rotation'].split(',').map(s => parseFloat(s.trim()));
             comp.setRotation(x, y, z);
         }
+        comp.catalog = parseCatalogProps(block.props);
 
         components.push(comp);
         // DualGalvoScanHead is composite — its child mirrors must also be in the scene
@@ -533,6 +557,39 @@ function bool(props: PropMap, key: string, fallback: boolean): boolean {
     if (['true', '1', 'yes', 'on'].includes(value)) return true;
     if (['false', '0', 'no', 'off'].includes(value)) return false;
     return fallback;
+}
+
+function parseCatalogProps(props: PropMap): CatalogAttachment | undefined {
+    const partId = props['catalog.partId'];
+    const vendor = props['catalog.vendor'];
+    const sku = props['catalog.sku'];
+    if (!partId || !vendor || !sku) return undefined;
+
+    const amount = props['catalog.price.amount'] !== undefined
+        ? parseFloat(props['catalog.price.amount'])
+        : NaN;
+    const hasPrice = Number.isFinite(amount) && Boolean(props['catalog.price.currency']);
+
+    return {
+        partId: unescapeTextValue(partId),
+        vendor: vendor as CatalogVendor,
+        sku: unescapeTextValue(sku),
+        title: unescapeTextValue(str(props, 'catalog.title', sku)),
+        productUrl: unescapeTextValue(str(props, 'catalog.productUrl', '')),
+        snapshotVersion: unescapeTextValue(str(props, 'catalog.snapshotVersion', 'unknown')),
+        attachedAt: unescapeTextValue(str(props, 'catalog.attachedAt', '')),
+        confidence: str(props, 'catalog.confidence', 'approximate') as CatalogAttachment['confidence'],
+        price: hasPrice
+            ? {
+                amount,
+                currency: str(props, 'catalog.price.currency', 'USD'),
+                quantity: num(props, 'catalog.price.quantity', 1),
+                region: unescapeTextValue(str(props, 'catalog.price.region', 'US')),
+                checkedAt: unescapeTextValue(str(props, 'catalog.price.checkedAt', '')),
+                sourceUrl: unescapeTextValue(str(props, 'catalog.price.sourceUrl', '')),
+            }
+            : undefined,
+    };
 }
 
 function parseLampSpectralWavelengths(value: string | undefined): number[] | null {
@@ -764,9 +821,9 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             };
             return new AsphericLens({
                 name: str(props, 'name', 'Aspheric Lens'),
-                front: { R: num(props, 'r1', 13), k: num(props, 'k1', -0.7), A: parseArr('a1') },
+                front: { R: num(props, 'r1', 13), k: num(props, 'k1', -1), A: parseArr('a1') },
                 back: { R: num(props, 'r2', 1e9), k: num(props, 'k2', 0), A: parseArr('a2') },
-                apertureRadius: num(props, 'aperture', 12.7),
+                apertureRadius: num(props, 'aperture', 3),
                 thickness: num(props, 'thickness', 4),
                 ior: num(props, 'ior', 1.5168),
             });

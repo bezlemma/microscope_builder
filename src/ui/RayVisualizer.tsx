@@ -13,6 +13,7 @@ import {
 } from 'three';
 import { Ray, Coherence, polarizationToColor } from '../physics/types';
 import { wavelengthToRGB } from '../physics/spectral';
+import { RAY_RENDER_ORDER } from './renderOrder';
 
 type DisplayRGB = ReturnType<typeof wavelengthToRGB>;
 
@@ -32,20 +33,19 @@ function isThermalForDisplay(ray: Ray | undefined): boolean {
     return (ray.bandwidth ?? 0) > 0;
 }
 
-function coherentDisplayRGB(wavelengthMeters: number): DisplayRGB {
+export function coherentDisplayRGB(wavelengthMeters: number): DisplayRGB {
     const nm = wavelengthMeters * 1e9;
     const rgb = wavelengthToRGB(nm);
     if (!rgb.isVisible || nm < 700 || nm > 800) return rgb;
 
     // Far red is physically dim on an sRGB display. Lift it into a nicer
-    // single-line material color instead of rendering a second glow line per ray.
+    // single-line material color, but keep it red-only: tiny green/blue lifts
+    // accumulate to white when a dense coherent bundle uses additive blending.
     const edge = Math.max(0, Math.min(1, (nm - 700) / 100));
     const lift = 0.14 + 0.18 * edge;
     return {
         ...rgb,
         r: Math.min(1, rgb.r + (1 - rgb.r) * lift),
-        g: Math.min(1, rgb.g + lift * 0.25),
-        b: Math.min(1, rgb.b + lift * 0.12),
     };
 }
 
@@ -59,8 +59,8 @@ const POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY = 1e-6;
 const MIN_PATH_SEGMENT_RELATIVE_INTENSITY = 1e-9;
 const OPEN_TAIL_RELATIVE_INTENSITY = 3e-2;
 const LAMP_REFERENCE_PACKETS_PER_WAVELENGTH = 17;
+const MAX_LAMP_DISPLAY_PACKETS_PER_WAVELENGTH = 512;
 const MAX_SEGMENTS_PER_LINE_BATCH = 8192;
-const RAY_RENDER_ORDER = 20;
 const PHYSICAL_RAY_LINE_WIDTH = 0.75;
 
 function terminalBranchRay(path: Ray[]): Ray | undefined {
@@ -80,6 +80,21 @@ export function additivePacketOpacityScale(packetCount: number, referencePacketC
     if (!Number.isFinite(packetCount) || packetCount <= 0) return 1;
     const reference = Math.max(1, referencePacketCount);
     return Math.min(1, reference / Math.max(1, packetCount));
+}
+
+export function lampDisplayPacketCount(packetCount: number, displayLimit = MAX_LAMP_DISPLAY_PACKETS_PER_WAVELENGTH): number {
+    if (!Number.isFinite(packetCount) || packetCount <= 0) return 1;
+    return Math.max(1, Math.min(Math.floor(packetCount), Math.max(1, Math.floor(displayLimit))));
+}
+
+export function shouldDrawLampDisplayPath(
+    ordinal: number,
+    packetCount: number,
+    displayLimit = MAX_LAMP_DISPLAY_PACKETS_PER_WAVELENGTH,
+): boolean {
+    if (!Number.isFinite(packetCount) || packetCount <= displayLimit) return true;
+    const stride = Math.max(1, Math.ceil(packetCount / Math.max(1, displayLimit)));
+    return ordinal % stride === Math.floor(stride / 2);
 }
 
 export function relativePathIntensity(path: Ray[], ray: Ray | undefined): number {
@@ -107,6 +122,7 @@ export function opacityFromRelativeRange(
     maxRelativeIntensity: number,
     minOpacity: number,
     maxOpacity: number,
+    responsePower: number = 0.25,
 ): number {
     const minOut = Math.max(0, Math.min(1, minOpacity));
     const maxOut = Math.max(minOut, Math.min(1, maxOpacity));
@@ -114,12 +130,49 @@ export function opacityFromRelativeRange(
     const hi = Math.max(lo, Math.min(1, maxRelativeIntensity));
     if (hi - lo < 1e-12) return maxOut;
     const t = Math.max(0, Math.min(1, (relativeIntensity - lo) / (hi - lo)));
-    return minOut + Math.pow(t, 0.25) * (maxOut - minOut);
+    const power = Number.isFinite(responsePower) && responsePower > 0 ? responsePower : 0.25;
+    return minOut + Math.pow(t, power) * (maxOut - minOut);
+}
+
+export function polarizationOpacityFromRelativeRange(
+    relativeIntensity: number,
+    minOpacity: number,
+    maxOpacity: number,
+): number {
+    return opacityFromRelativeRange(
+        relativeIntensity,
+        POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY,
+        1,
+        minOpacity,
+        maxOpacity,
+        1,
+    );
 }
 
 function stableSegmentKey(start: Vector3, end: Vector3): string {
     const q = (v: number) => Math.round(v * 1e6);
     return `${q(start.x)},${q(start.y)},${q(start.z)}>${q(end.x)},${q(end.y)},${q(end.z)}`;
+}
+
+function stablePointKey(point: { x: number; y: number; z: number } | undefined): string {
+    if (!point) return 'unknown';
+    const q = (v: number) => Math.round(v * 1e6);
+    return `${q(point.x)},${q(point.y)},${q(point.z)}`;
+}
+
+function coherentSegmentDedupeKey(path: Ray[], segment: PathDrawSegment): string {
+    const source = path[0] ?? segment.ray;
+    const sourcePoint = source.sourcePosition ?? source.origin ?? segment.ray.sourcePosition ?? segment.ray.origin;
+    const sourceKey = source.sourceId ?? segment.ray.sourceId ?? 'source';
+    const kindKey = source.sourceKind ?? segment.ray.sourceKind ?? 'coherent';
+    const wavelength = source.wavelength ?? segment.ray.wavelength;
+    return [
+        sourceKey,
+        kindKey,
+        Math.round(wavelength * 1e12),
+        stablePointKey(sourcePoint),
+        stableSegmentKey(segment.start, segment.end),
+    ].join('|');
 }
 
 function nextPowerOfTwo(value: number): number {
@@ -566,7 +619,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, noBloom = f
         const lampSegmentsByWidth = new Map<number, Map<string, LampSegmentAccum>>();
         const lampWavelengthColors = new Map<string, Map<number, Pick<DisplayRGB, 'r' | 'g' | 'b'>>>();
         const lampWavelengthPathCounts = new Map<string, Map<number, number>>();
+        const lampWavelengthOrdinals = new Map<string, Map<number, number>>();
         const lampWhiteBalance = new Map<string, { r: number; g: number; b: number }>();
+        const seenCoherentSegments = new Set<string>();
 
         for (const { path, idx } of sortedPaths) {
             const first = path[0];
@@ -701,12 +756,18 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, noBloom = f
                 const baseColor = balance
                     ? { r: color.r * balance.r, g: color.g * balance.g, b: color.b * balance.b }
                     : color;
-                const densityScale = isLampRay
-                    ? additivePacketOpacityScale(
-                        lampWavelengthPathCounts.get(lampKey)?.get(wavelengthKey(path[0])) ?? 1,
-                    )
-                    : 1;
                 if (isLampRay && rgb.isVisible) {
+                    const wlKey = wavelengthKey(path[0]);
+                    const packetCount = lampWavelengthPathCounts.get(lampKey)?.get(wlKey) ?? 1;
+                    let ordinals = lampWavelengthOrdinals.get(lampKey);
+                    if (!ordinals) {
+                        ordinals = new Map();
+                        lampWavelengthOrdinals.set(lampKey, ordinals);
+                    }
+                    const ordinal = ordinals.get(wlKey) ?? 0;
+                    ordinals.set(wlKey, ordinal + 1);
+                    if (!isMain && !shouldDrawLampDisplayPath(ordinal, packetCount)) continue;
+                    const densityScale = additivePacketOpacityScale(lampDisplayPacketCount(packetCount));
                     for (const segment of pathSegments) {
                         const segmentRelative = relativePathIntensity(path, segment.ray);
                         if (segmentRelative < MIN_DRAW_RELATIVE_INTENSITY) continue;
@@ -766,6 +827,9 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, noBloom = f
             for (const segment of pathSegments) {
                 const segmentRelative = relativePathIntensity(path, segment.ray);
                 if (segmentRelative < MIN_DRAW_RELATIVE_INTENSITY) continue;
+                const dedupeKey = coherentSegmentDedupeKey(path, segment);
+                if (seenCoherentSegments.has(dedupeKey)) continue;
+                seenCoherentSegments.add(dedupeKey);
                 const currentSegmentIndex = segmentIndex++;
                 const segmentOpacity = opacityFromRelativeRange(
                     segmentRelative,
@@ -825,41 +889,31 @@ export const RayVisualizer: React.FC<RayVisualizerProps> = ({ paths, noBloom = f
         }
 
         if (colorByPolarization) {
-            const polarizationPoints: Vector3[] = [];
-            const polarizationColors: Array<[number, number, number]> = [];
+            let segmentIndex = 0;
             for (const segment of polarizationSegments) {
-                const dim = opacityFromRelativeRange(
+                const opacity = polarizationOpacityFromRelativeRange(
                     segment.relativeIntensity,
-                    POLARIZATION_MIN_DRAW_RELATIVE_INTENSITY,
-                    1,
                     minOpacity,
                     maxOpacity,
                 );
+                if (opacity <= 0.001) continue;
                 const c: [number, number, number] = [
-                    segment.color.r * dim,
-                    segment.color.g * dim,
-                    segment.color.b * dim,
+                    segment.color.r,
+                    segment.color.g,
+                    segment.color.b,
                 ];
-                polarizationPoints.push(segment.start, segment.end);
-                polarizationColors.push(c, c);
-            }
-            if (polarizationPoints.length >= 2) {
                 regularRays.push({
-                    key: 'pol-segments',
-                    points: polarizationPoints,
+                    key: `pol-segment-${segmentIndex++}`,
+                    points: [segment.start, segment.end],
                     color: { r: 1, g: 1, b: 1 },
-                    // Per-segment vertex-color scaling maps the dimmest
-                    // rendered polarization segment to minOpacity and the
-                    // brightest to maxOpacity, while keeping this as one
-                    // stable WebGL line object.
-                    opacity: 1,
+                    opacity,
                     lineWidth: PHYSICAL_RAY_LINE_WIDTH,
                     dashed: false,
-                    blending: AdditiveBlending,
+                    blending: NormalBlending,
                     renderOrder: RAY_RENDER_ORDER,
                     depthWrite: false,
                     segments: true,
-                    vertexColors: polarizationColors,
+                    vertexColors: [c, c],
                 });
             }
         }

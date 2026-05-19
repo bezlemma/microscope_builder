@@ -18,7 +18,9 @@ import {
 } from '../store';
 import { PMT } from '../../physics/components/PMT';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
+import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
 import { Card } from '../../physics/components/Card';
+import { Camera } from '../../physics/components/Camera';
 import { Sample } from '../../physics/components/Sample';
 import { SampleChamber } from '../../physics/components/SampleChamber';
 import { QPD } from '../../physics/components/QPD';
@@ -63,6 +65,9 @@ describe('Confocal preset loading', () => {
 
             store.set(loadPresetAtom, PresetName.Tutorial2);
             expect(replacedUrl).toBe('/builder#preset=tutorial2');
+
+            store.set(loadPresetAtom, PresetName.ObliquePlaneMicroscope);
+            expect(replacedUrl).toBe('/builder#preset=oblique-plane-light-sheet');
         } finally {
             if (previousWindow === undefined) {
                 delete (globalThis as any).window;
@@ -103,9 +108,38 @@ describe('Confocal preset loading', () => {
         store.set(loadPresetAtom, PresetName.OpticalTrap);
 
         const rayConfig = store.get(rayConfigAtom);
-        expect(rayConfig.rayCount).toBe(500);
+        expect(rayConfig.rayCount).toBe(200);
         expect(rayConfig.minRayOpacity).toBe(0);
         expect(rayConfig.maxRayOpacity).toBeCloseTo(0.4, 6);
+    });
+
+    test('oblique plane light sheet pins the camera viewer only', () => {
+        const store = createStore();
+
+        store.set(loadPresetAtom, PresetName.ObliquePlaneMicroscope);
+
+        const components = store.get(componentsAtom);
+        const cameras = components.filter((component): component is Camera => component instanceof Camera);
+        const samples = components.filter(
+            (component): component is Sample | SampleChamber =>
+                component instanceof Sample || component instanceof SampleChamber,
+        );
+        const scanHead = components.find((component): component is GalvoScanHead => component instanceof GalvoScanHead);
+        expect(cameras.length).toBeGreaterThan(0);
+        expect(samples.length).toBeGreaterThan(0);
+        expect(scanHead).toBeDefined();
+        expect(store.get(presetDescriptionAtom)).toBe('');
+        expect(cameras.every(camera => store.get(pinnedViewersAtom).has(camera.id))).toBe(true);
+        expect(samples.some(sample => store.get(pinnedViewersAtom).has(sample.id))).toBe(false);
+        expect(store.get(animatorAtom).channels.some(channel =>
+            channel.targetId === scanHead!.id && channel.property === 'scanX',
+        )).toBe(true);
+        const rayConfig = store.get(rayConfigAtom);
+        expect(rayConfig.rayCount).toBe(36);
+        expect(rayConfig.minRayOpacity).toBeCloseTo(0.10, 6);
+        expect(rayConfig.maxRayOpacity).toBeCloseTo(0.75, 6);
+        expect(store.get(scanAccumTriggerAtom).steps).toBe(8);
+        expect(cameras.every(camera => camera.sensorResX === 16 && camera.sensorResY === 16)).toBe(true);
     });
 
     test('interferometer and polarization demos open in wave view', () => {

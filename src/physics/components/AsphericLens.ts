@@ -135,7 +135,7 @@ function maxValidRadius(
     return apertureRadius;
 }
 
-const DEFAULT_FRONT: AsphericSurfaceParams = { R: 13, k: -0.7, A: [] };
+const DEFAULT_FRONT: AsphericSurfaceParams = { R: 13, k: -1, A: [] };
 const DEFAULT_BACK: AsphericSurfaceParams = { R: 1e9, k: 0, A: [] };
 
 /**
@@ -226,7 +226,7 @@ export class AsphericLens extends OpticalComponent {
         this.k2 = config.back?.k ?? DEFAULT_BACK.k;
         this.A1 = (config.front?.A ?? DEFAULT_FRONT.A).slice();
         this.A2 = (config.back?.A ?? DEFAULT_BACK.A).slice();
-        this.apertureRadius = config.apertureRadius ?? 12.7;
+        this.apertureRadius = config.apertureRadius ?? 3;
         this.thickness = config.thickness ?? 4;
         this.ior = config.ior ?? 1.5168;
         this.recomputeBounds();

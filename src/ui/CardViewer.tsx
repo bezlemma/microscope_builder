@@ -693,10 +693,14 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     const phosphorImageDataRef = useRef<ImageData | null>(null);
     const [cardImageTick] = useAtom(cardImageTickAtom);
     const directHits = useMemo(() => directCardHits(card), [card, cardImageTick]);
-    const fallbackProfiles = useMemo(() => beamProfilesFromDirectHits(directHits), [directHits]);
-    const profiles = card.beamProfiles.length > 0 ? card.beamProfiles : fallbackProfiles;
+    const directProfiles = useMemo(() => beamProfilesFromDirectHits(directHits), [directHits]);
+    const profiles = card.beamProfiles.length > 0 ? card.beamProfiles : directProfiles;
+    // Direct card hits are the authoritative power sum. `beamProfiles` may be a
+    // main-ray Gaussian envelope used for display, so do not use it to report
+    // split-beam power when the card actually intercepted traced rays.
+    const powerProfiles = directProfiles.length > 0 ? directProfiles : profiles;
     const hasBeams = profiles.length > 0 || directHits.length > 0;
-    const interferenceProfiles = fallbackProfiles.length >= 2 ? fallbackProfiles : profiles;
+    const interferenceProfiles = directProfiles.length >= 2 ? directProfiles : profiles;
     const interference = hasBeams ? computeInterferenceSummary(interferenceProfiles) : null;
     const useCoherentProfileRender = !!interference && interference.visibility >= 0.15 && interferenceProfiles.length >= 2;
 
@@ -777,6 +781,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
         directHits,
         hasBeams,
         profiles,
+        powerProfiles,
         interferenceProfiles,
         useCoherentProfileRender,
         card,
@@ -788,7 +793,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
         cardImageTick,
     ]);
 
-    const primary = hasBeams ? profiles[0] : null;
+    const primary = hasBeams ? (powerProfiles[0] ?? profiles[0]) : null;
     const beamStr = primary
         ? `${(primary.wx * 2).toFixed(2)} x ${(primary.wy * 2).toFixed(2)} mm`
         : '--';
@@ -796,14 +801,14 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     // Per-wavelength power breakdown
     const wavelengthPowers = new Map<number, number>();
     let totalPower = 0;
-    for (const p of profiles) {
+    for (const p of powerProfiles) {
         const key = Math.round(p.wavelength * 1e12); // round to avoid float key issues
         wavelengthPowers.set(key, (wavelengthPowers.get(key) ?? 0) + p.power);
         totalPower += p.power;
     }
 
     // Beam moment summary
-    const beamMoments = hasBeams ? computeBeamMoments(profiles) : null;
+    const beamMoments = hasBeams ? computeBeamMoments(powerProfiles) : null;
 
     const labelStyle: React.CSSProperties = { color: '#858585', fontSize: '11px' };
     const valueStyle: React.CSSProperties = { color: '#e0e0e0', fontSize: '12px', fontFamily: 'monospace' };
@@ -967,7 +972,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                                     <div style={labelStyle}>Beam Groups</div>
                                     <div style={valueStyle}>{beamMoments.groupCount}</div>
                                 </div>
-                                {profiles.length === 1 && (
+                                {powerProfiles.length === 1 && (
                                     <>
                                         <div>
                                             <div style={labelStyle}>1/e{'\u00B2'} Major</div>

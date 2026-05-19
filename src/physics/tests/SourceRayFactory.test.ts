@@ -257,6 +257,22 @@ describe('SourceRayFactory', () => {
         }
     });
 
+    test('lamp full mode distributes the requested ray budget across bands and source points', () => {
+        const lamp = new Lamp('Budgeted lamp');
+        lamp.spectralWavelengths = [500, 600];
+        lamp.sourcePointCount = 3;
+        lamp.emitterRadius = 1;
+
+        const rays = createSourceRays([lamp], 120, 'full');
+        const sourceIds = new Set(rays.map(ray => ray.sourceId));
+
+        expect(rays).toHaveLength(120);
+        expect(sourceIds.size).toBe(6);
+
+        const sparse = createSourceRays([lamp], 4, 'full');
+        expect(sparse).toHaveLength(6);
+    });
+
     test('zero-power lamp emits zero-intensity rays', () => {
         const lamp = new Lamp('Dark lamp');
         lamp.power = 0;
@@ -273,7 +289,11 @@ describe('SourceRayFactory', () => {
         lamp.spectralWavelengths = [];
 
         const rays = createSourceRays([lamp], 4, 'full');
-        expect(new Set(rays.map(ray => ray.sourceId))).toEqual(new Set([`${lamp.id}_550nm`]));
+        expect(new Set(rays.map(ray => ray.sourceId))).toEqual(new Set([
+            `${lamp.id}_550nm_pt0`,
+            `${lamp.id}_550nm_pt1`,
+            `${lamp.id}_550nm_pt2`,
+        ]));
         expect(rays.reduce((sum, ray) => sum + ray.intensity, 0)).toBeCloseTo(2, 6);
 
         const beamSegments = new Solver1([lamp]).traceWithBeamSegments(rays).beamSegments;

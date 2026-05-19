@@ -11,22 +11,55 @@ import {
     Redo2,
     X,
     Ruler,
+    PackageSearch,
+    FileUp,
 } from 'lucide-react';
 
 import { useAtom } from 'jotai';
-import { appRouteAtom, loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom } from '../state/store';
+import { appRouteAtom, loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom, pendingCatalogPlacementAtom, activeZLevelAtom, pushUndoAtom } from '../state/store';
 import { downloadUbz, openUbzFilePicker, generateSceneUrl } from '../state/ubzSerializer';
 import { useIsMobile, useIsLandscape } from './useIsMobile';
+import { BomPanel } from './BomPanel';
+import { catalogPartsForPaletteType } from '../catalog/catalog';
+import type { CatalogPart } from '../catalog/types';
+import { prefetchCatalogGeometryForPart } from '../catalog/catalogGeometryAssets';
+import { CatalogPartChooser } from './CatalogPartChooser';
+import { decodePrescriptionBytes, importOpticFromText } from '../catalog/opticsImporter';
+import { applyDefaultPlacementOrientation } from './componentFactory';
+import { AsphericLens } from '../physics/components/AsphericLens';
+import { AchromatDoublet } from '../physics/components/AchromatDoublet';
+import type { OpticalComponent } from '../physics/Component';
 
 // ─── Draggable component item ─────────────────────────────────────────
 
 
-const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: string, label: string, icon: any, onDragStarted?: () => void }) => {
+const DraggableItem = ({
+    type,
+    label,
+    icon: Icon,
+    onDragStarted,
+    catalogMode,
+    onCatalogClick,
+}: {
+    type: string;
+    label: string;
+    icon: any;
+    onDragStarted?: () => void;
+    catalogMode?: boolean;
+    onCatalogClick?: (type: string, label: string) => void;
+}) => {
     const isMobile = useIsMobile();
     const [hovered, setHovered] = useState(false);
     const [dragging, setDragging] = useState(false);
+    const catalogParts = catalogPartsForPaletteType(type);
+    const hasCatalogParts = catalogParts.length > 0;
+    const opensCatalog = Boolean(catalogMode && hasCatalogParts);
     const active = hovered || dragging;
     const handleDragStart = (e: React.DragEvent) => {
+        if (opensCatalog) {
+            e.preventDefault();
+            return;
+        }
         setDragging(true);
         e.dataTransfer.setData('componentType', type);
         e.dataTransfer.effectAllowed = 'copy';
@@ -35,10 +68,20 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
 
     return (
         <div
-            draggable
+            draggable={!opensCatalog}
             data-component-type={type}
+            data-catalog-mode={opensCatalog ? 'true' : 'false'}
             onDragStart={handleDragStart}
             onDragEnd={() => setDragging(false)}
+            onPointerDown={(event) => {
+                if (!opensCatalog) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onCatalogClick?.(type, label);
+            }}
+            onClick={() => {
+                if (opensCatalog) onCatalogClick?.(type, label);
+            }}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
             style={{
@@ -47,7 +90,7 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
                 padding: isMobile ? '4px 6px 4px 16px' : '6px 12px 6px 24px',
                 margin: isMobile ? '1px 0' : '2px 0',
                 backgroundColor: active ? '#303842' : '#252525',
-                cursor: 'grab',
+                cursor: opensCatalog ? 'pointer' : 'grab',
                 border: `1px solid ${active ? '#4b6b7a' : 'transparent'}`,
                 borderRadius: '4px',
                 transition: 'all 0.15s ease',
@@ -60,6 +103,9 @@ const DraggableItem = ({ type, label, icon: Icon, onDragStarted }: { type: strin
         >
             <Icon size={isMobile ? 11 : 14} style={{ marginRight: isMobile ? '5px' : '8px', color: active ? '#9dfdeb' : '#64ffda', flexShrink: 0 }} />
             <span style={{ fontWeight: 400 }}>{label}</span>
+            {opensCatalog && (
+                <PackageSearch size={isMobile ? 10 : 12} style={{ marginLeft: 'auto', color: active ? '#bffdf2' : '#7a8a91', flexShrink: 0 }} />
+            )}
         </div>
     );
 };
@@ -205,12 +251,16 @@ const ComponentGroupSection = ({
     group,
     isOpen,
     onToggle,
-    onDragStarted
+    onDragStarted,
+    catalogMode,
+    onCatalogClick,
 }: {
     group: ComponentGroup;
     isOpen: boolean;
     onToggle: () => void;
     onDragStarted?: () => void;
+    catalogMode?: boolean;
+    onCatalogClick?: (type: string, label: string) => void;
 }) => {
     const GroupIcon = group.icon;
     const isMobile = useIsMobile();
@@ -291,6 +341,8 @@ const ComponentGroupSection = ({
                         label={item.label}
                         icon={item.icon}
                         onDragStarted={onDragStarted}
+                        catalogMode={catalogMode}
+                        onCatalogClick={onCatalogClick}
                     />
                 ))}
             </div>
@@ -298,23 +350,48 @@ const ComponentGroupSection = ({
     );
 };
 
+function placementTypeForImportedOptic(component: OpticalComponent): string {
+    if (component instanceof AsphericLens) return 'asphericLens';
+    if (component instanceof AchromatDoublet) return 'achromatDoublet';
+    return 'lens';
+}
+
+async function pickOpticFile(): Promise<File | null> {
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.zmx,.zemax,.seq,.len,.dat,.txt,.csv,.tsv,.json,.zos,.zar,.zip,.step,.stp,.iges,.igs,.sat,.sldprt,.prt,.x_t,.zof';
+        input.onchange = () => resolve(input.files?.[0] ?? null);
+        input.click();
+    });
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────
 
 export const Sidebar: React.FC = () => {
     const [activePreset] = useAtom(activePresetAtom);
     const [, loadPreset] = useAtom(loadPresetAtom);
     const [, setAppRoute] = useAtom(appRouteAtom);
-    const [components] = useAtom(componentsAtom);
+    const [components, setComponents] = useAtom(componentsAtom);
     const [, loadScene] = useAtom(loadSceneAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
     const [, setZoomTo] = useAtom(zoomToComponentAtom);
     const [measurement, setMeasurement] = useAtom(measurementAtom);
     const [, setZoomToMeasurement] = useAtom(zoomToMeasurementAtom);
     const [, requestSvgExport] = useAtom(svgExportRequestAtom);
+    const [pendingCatalogPlacement, setPendingCatalogPlacement] = useAtom(pendingCatalogPlacementAtom);
+    const [activeZ] = useAtom(activeZLevelAtom);
+    const [, pushUndo] = useAtom(pushUndoAtom);
     const [openGroup, setOpenGroup] = useState<string | null>(null);
     const [sceneOpen, setSceneOpen] = useState(false);
     const [openPresetCat, setOpenPresetCat] = useState<string | null>(null);
     const [shareLabel, setShareLabel] = useState('Share');
+    const [catalogMode, setCatalogMode] = useState(false);
+    const [catalogChooser, setCatalogChooser] = useState<{
+        componentType: string;
+        label: string;
+        parts: CatalogPart[];
+    } | null>(null);
     const _isLandscape = useIsLandscape();
     void _isLandscape;
 
@@ -326,6 +403,34 @@ export const Sidebar: React.FC = () => {
 
     const handleToggle = (groupName: string) => {
         setOpenGroup(prev => prev === groupName ? null : groupName);
+    };
+
+    const handleCatalogClick = (componentType: string, label: string) => {
+        const parts = catalogPartsForPaletteType(componentType);
+        if (parts.length === 0) return;
+        setCatalogChooser({ componentType, label, parts });
+    };
+
+    const handleImportOptic = async () => {
+        try {
+            const file = await pickOpticFile();
+            if (!file) return;
+            const text = decodePrescriptionBytes(await file.arrayBuffer(), file.name);
+            const imported = importOpticFromText(text, file.name);
+            const component = imported.component;
+            component.setPosition(0, 0, activeZ);
+            applyDefaultPlacementOrientation(component, placementTypeForImportedOptic(component));
+            pushUndo();
+            setComponents(prev => [...prev, component]);
+            setSelection([component.id]);
+            setZoomTo(component.id);
+            if (imported.prescription.warnings.length > 0) {
+                console.warn('Imported optic warnings:', imported.prescription.warnings);
+            }
+        } catch (error) {
+            console.error('Optic import failed:', error);
+            window.alert(error instanceof Error ? error.message : 'Could not import optic file.');
+        }
     };
 
     // Auto-close sidebar on mobile after selecting a preset
@@ -613,15 +718,95 @@ export const Sidebar: React.FC = () => {
                             );
                         })()}
                     </button>
-                    <h3 style={{
-                        color: '#fff',
-                        marginBottom: '12px',
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        letterSpacing: '0.5px'
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        marginBottom: 10,
                     }}>
-                        Components
-                    </h3>
+                        <h3 style={{
+                            color: '#fff',
+                            margin: 0,
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px'
+                        }}>
+                            Components
+                        </h3>
+                        <button
+                            type="button"
+                            aria-pressed={catalogMode}
+                            title="Catalog parts"
+                            onClick={() => setCatalogMode(active => !active)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                padding: isMobile ? '4px 6px' : '5px 8px',
+                                borderRadius: 999,
+                                border: `1px solid ${catalogMode ? 'rgba(100,255,218,0.58)' : '#3a3a3a'}`,
+                                background: catalogMode ? 'rgba(100,255,218,0.14)' : '#222',
+                                color: catalogMode ? '#dffdf8' : '#999',
+                                cursor: 'pointer',
+                                fontFamily: 'var(--ui-font)',
+                                fontSize: isMobile ? 10 : 11,
+                                fontWeight: 700,
+                            }}
+                        >
+                            <PackageSearch size={isMobile ? 10 : 12} />
+                            Catalog
+                        </button>
+                    </div>
+
+                    {pendingCatalogPlacement && (
+                        <div
+                            draggable
+                            onDragStart={(event) => {
+                                event.dataTransfer.setData('componentType', pendingCatalogPlacement.componentType);
+                                event.dataTransfer.setData('catalogPartId', pendingCatalogPlacement.catalogPartId);
+                                event.dataTransfer.effectAllowed = 'copy';
+                            }}
+                            style={{
+                                marginBottom: 10,
+                                padding: '7px 8px',
+                                border: '1px solid rgba(100,255,218,0.36)',
+                                borderRadius: 6,
+                                background: 'rgba(100,255,218,0.08)',
+                                color: '#dffdf8',
+                                fontSize: isMobile ? 10 : 11,
+                                lineHeight: 1.35,
+                                cursor: 'grab',
+                            }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    Place {pendingCatalogPlacement.label}
+                                </span>
+                                <button
+                                    type="button"
+                                    aria-label="Cancel catalog placement"
+                                    onClick={() => setPendingCatalogPlacement(null)}
+                                    style={{
+                                        marginLeft: 'auto',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: 18,
+                                        height: 18,
+                                        border: '1px solid transparent',
+                                        borderRadius: 4,
+                                        background: 'transparent',
+                                        color: '#9bb1b8',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                    }}
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                            <div style={{ color: '#7e9198', marginTop: 3 }}>Drag this item or click the table to place it.</div>
+                        </div>
+                    )}
 
                     <div style={{ marginBottom: '16px' }}>
                         {COMPONENT_GROUPS.map(group => (
@@ -631,6 +816,8 @@ export const Sidebar: React.FC = () => {
                                 isOpen={openGroup === group.name}
                                 onToggle={() => handleToggle(group.name)}
                                 onDragStarted={isMobile ? () => setMobileOpen(false) : undefined}
+                                catalogMode={catalogMode}
+                                onCatalogClick={handleCatalogClick}
                             />
                         ))}
                     </div>
@@ -791,6 +978,8 @@ export const Sidebar: React.FC = () => {
                             })}
                         </div>
                     </div>
+
+                    <BomPanel components={components} isMobile={isMobile} />
                 </div>
 
                 {/* Save / Load / Share buttons — hidden on mobile because file
@@ -898,6 +1087,27 @@ export const Sidebar: React.FC = () => {
                         >
                             SVG
                         </button>
+                        <button
+                            onClick={handleImportOptic}
+                            title="Import a Zemax/support optic file"
+                            style={{
+                                flex: 1,
+                                padding: '8px 0',
+                                background: '#2a2a2a',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#363636'; e.currentTarget.style.borderColor = '#666'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2a2a2a'; e.currentTarget.style.borderColor = '#444'; }}
+                        >
+                            <FileUp size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+                            Optic
+                        </button>
                     </div>
                 </div>
                 )}
@@ -937,6 +1147,11 @@ export const Sidebar: React.FC = () => {
                             active={activePreset === PresetName.Confocal}
                             onClick={() => handlePresetClick(PresetName.Confocal)}
                         />
+                        <PresetButton
+                            label="Oblique Plane Light Sheet"
+                            active={activePreset === PresetName.ObliquePlaneMicroscope}
+                            onClick={() => handlePresetClick(PresetName.ObliquePlaneMicroscope)}
+                        />
 
                     </PresetCategory>
 
@@ -966,6 +1181,11 @@ export const Sidebar: React.FC = () => {
                             label="Optical Trap"
                             active={activePreset === PresetName.OpticalTrap}
                             onClick={() => handlePresetClick(PresetName.OpticalTrap)}
+                        />
+                        <PresetButton
+                            label="Prism Recombination"
+                            active={activePreset === PresetName.PrismRecombination}
+                            onClick={() => handlePresetClick(PresetName.PrismRecombination)}
                         />
                     </PresetCategory>
 
@@ -1020,6 +1240,25 @@ export const Sidebar: React.FC = () => {
                     </PresetCategory>
                 </div>
             </div>
+
+            {catalogChooser && (
+                <CatalogPartChooser
+                    title={`Choose ${catalogChooser.label}`}
+                    componentType={catalogChooser.componentType}
+                    parts={catalogChooser.parts}
+                    onCancel={() => setCatalogChooser(null)}
+                    onConfirm={(part) => {
+                        prefetchCatalogGeometryForPart(part);
+                        setPendingCatalogPlacement({
+                            componentType: catalogChooser.componentType,
+                            catalogPartId: part.id,
+                            label: `${part.vendor.toUpperCase()} ${part.sku}`,
+                        });
+                        setCatalogChooser(null);
+                        if (isMobile) setMobileOpen(false);
+                    }}
+                />
+            )}
         </>
     );
 };

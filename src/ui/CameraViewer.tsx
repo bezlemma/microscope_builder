@@ -293,6 +293,41 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
         : `${frameIndex + 1}/${camera.scanFrameCount}`;
 
     const playbackStartRef = useRef<number | null>(null);
+    const scanStackSignatureRef = useRef('');
+    const wasAnimPlayingRef = useRef(animPlaying);
+
+    useEffect(() => {
+        const stackSignature = hasScanFrames
+            ? `${camera.id}:${camera.scanCycleMs}:${camera.scanFrameCount}`
+            : `${camera.id}:none`;
+        if (scanStackSignatureRef.current === stackSignature) return;
+        scanStackSignatureRef.current = stackSignature;
+        playbackStartRef.current = null;
+
+        if (!hasScanFrames) {
+            setFrameIndex(0);
+            return;
+        }
+
+        setFrameIndex(prev => {
+            if (animPlaying) return Math.min(prev, camera.scanFrameCount - 1);
+            return Math.floor((camera.scanFrameCount - 1) / 2);
+        });
+    }, [animPlaying, camera.id, camera.scanCycleMs, camera.scanFrameCount, hasScanFrames]);
+
+    useEffect(() => {
+        const wasPlaying = wasAnimPlayingRef.current;
+        wasAnimPlayingRef.current = animPlaying;
+        if (!hasScanFrames) return;
+
+        if (animPlaying && !wasPlaying) {
+            setProjection('none');
+            setFrameIndex(0);
+            playbackStartRef.current = performance.now();
+        } else if (!animPlaying && wasPlaying) {
+            playbackStartRef.current = null;
+        }
+    }, [animPlaying, hasScanFrames]);
 
     useEffect(() => {
         if (!hasScanFrames || !animPlaying || projection !== 'none' || camera.scanCycleMs <= 0) {

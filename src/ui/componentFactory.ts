@@ -41,6 +41,7 @@ import { AOD } from '../physics/components/AOD';
 import { Annotation } from '../physics/components/Annotation';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { SpectralProfile } from '../physics/SpectralProfile';
+import { applyCatalogPartToComponent, applyCatalogPartToComponentWithLazyGeometry, findCatalogPart } from '../catalog/catalog';
 
 const FOLD_MIRROR_NORMAL = [Math.SQRT1_2, -Math.SQRT1_2, 0] as const;
 
@@ -167,6 +168,20 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'arrowAnnotation') return new Annotation('arrow', 'Arrow', '', 60);
     if (type === 'curvedArrowAnnotation') return new Annotation('curvedArrow', 'Curved Arrow', '', 60);
     return null;
+}
+
+export function createCatalogComponentForType(type: string, catalogPartId: string): OpticalComponent | null {
+    const component = createComponentForType(type);
+    const part = findCatalogPart(catalogPartId);
+    if (!component || !part) return null;
+    return applyCatalogPartToComponent(component, part) ? component : null;
+}
+
+export async function createCatalogComponentForTypeAsync(type: string, catalogPartId: string): Promise<OpticalComponent | null> {
+    const component = createComponentForType(type);
+    const part = findCatalogPart(catalogPartId);
+    if (!component || !part) return null;
+    return await applyCatalogPartToComponentWithLazyGeometry(component, part) ? component : null;
 }
 
 /**

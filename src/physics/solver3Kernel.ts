@@ -70,12 +70,16 @@ function materializeReservoirPaths(reservoir: PathBundleReservoir): Ray[][] {
     return allPaths;
 }
 
-function buildSampleTerminatedPath(path: Ray[], rayAtSample: Ray, samplePoint: Vector3): Ray[] {
+function buildSampleTerminatedPath(path: Ray[], rayAtSample: Ray, samplePoint: Vector3, sampleDistance?: number): Ray[] {
+    const distanceAlongRay = sampleDistance ?? Math.max(
+        0,
+        samplePoint.clone().sub(rayAtSample.origin).dot(rayAtSample.direction),
+    );
     const terminalRay = childRay(rayAtSample, {
         origin: samplePoint.clone(),
         direction: rayAtSample.direction.clone(),
         intensity: rayAtSample.intensity,
-        opticalPathLength: rayAtSample.opticalPathLength + (rayAtSample.interactionDistance ?? 0),
+        opticalPathLength: rayAtSample.opticalPathLength + distanceAlongRay,
         terminationPoint: samplePoint.clone(),
     });
     return [...path, terminalRay];
@@ -517,10 +521,6 @@ export class Solver3Kernel {
                 }
                 const midT = chordLength > 0 ? weightedT / chordLength : 0;
                 throughput *= Math.exp(-sample.absorption * chordLength);
-                if (!visualPathAtSample) {
-                    visualPathAtSample = buildSampleTerminatedPath(path, currentRay, nearestHit.point);
-                }
-
                 // Single chord traversal that accumulates BOTH the mean excitation
                 // intensity (for the excitation channel of the image) and the
                 // fluorescence contribution (for the emission channel) per sample.
@@ -543,6 +543,8 @@ export class Solver3Kernel {
                 let excitationSum = 0;
                 let excitationSamples = 0;
                 let fluorescenceSum = 0;
+                let fluorescenceWeightedT = 0;
+                let fluorescenceWeight = 0;
                 for (const segment of chordSegments) {
                     const segLen = segment.tEnd - segment.tStart;
                     if (segLen <= 0) continue;
@@ -560,6 +562,10 @@ export class Solver3Kernel {
                         segRadianceSum += intensity;
                         excitationSum += intensity;
                         excitationSamples++;
+                        if (doesFluoresce && intensity > 0) {
+                            fluorescenceWeightedT += t * intensity;
+                            fluorescenceWeight += intensity;
+                        }
                     }
                     if (doesFluoresce) {
                         fluorescenceSum += segRadianceSum * invNumSamples * sample.fluorescenceEfficiency * emitsAtThisWl * segLen;
@@ -570,6 +576,14 @@ export class Solver3Kernel {
                 }
                 if (doesFluoresce) {
                     fluorescenceRadiance += fluorescenceSum * throughput;
+                }
+                if (!visualPathAtSample) {
+                    const visualT = fluorescenceWeight > 0
+                        ? fluorescenceWeightedT / fluorescenceWeight
+                        : (chordLength > 0 ? midT : nearestT);
+                    const visualPoint = currentRay.origin.clone()
+                        .add(currentRay.direction.clone().multiplyScalar(visualT));
+                    visualPathAtSample = buildSampleTerminatedPath(path, currentRay, visualPoint, visualT);
                 }
 
                 const volumeBounds = sample.getVolumeIntersection(currentRay);

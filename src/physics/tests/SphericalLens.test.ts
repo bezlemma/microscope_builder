@@ -227,4 +227,10 @@ describe("SphericalLens", () => {
             expect(Math.sign(testLens.focalLength)).toBe(sign);
         }
     });
+
+    test("explicit spherical catalog lenses report thick-lens effective focal length", () => {
+        const lb5766 = new SphericalLens(1 / 15, 6.3506, 5.6, "LB5766", 12.1, -12.1, 1.4338);
+
+        expect(lb5766.focalLength).toBeCloseTo(15, 1);
+    });
 });

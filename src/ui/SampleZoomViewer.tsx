@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Edges, OrbitControls, Line } from '@react-three/drei';
 import { useAtomValue, useStore } from 'jotai';
 import { Vector3, Euler } from 'three';
@@ -7,13 +7,28 @@ import { defaultColloidColor, Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { Camera as OpticCamera } from '../physics/components/Camera';
 import { TrappedBead } from '../physics/components/TrappedBead';
-import { cameraImageTickAtom, componentsAtom, forwardRaysAtom, forwardRaysRevisionAtom } from '../state/store';
+import {
+    cameraImageTickAtom,
+    componentsAtom,
+    forwardRaysAtom,
+    forwardRaysRevisionAtom,
+    reverseRaysAtom,
+    reverseRaysRevisionAtom,
+} from '../state/store';
 import { wavelengthToCSS } from '../physics/spectral';
 import type { Ray } from '../physics/types';
 
 interface SampleZoomViewerProps {
     sample: Sample | SampleChamber;
     size?: number;
+}
+
+interface ViewerSegment {
+    points: [number, number, number][];
+    color: string;
+    lineWidth?: number;
+    opacity?: number;
+    renderOrder?: number;
 }
 
 interface MiniViewProps {
@@ -26,7 +41,7 @@ interface MiniViewProps {
     specimenSpheres: RenderSphere[];
     flowCell: FlowCellRender | null;
     trapBeads: RenderSphere[];
-    segments: { points: [number, number, number][]; color: string }[];
+    segments: ViewerSegment[];
     focus: { x: number; y: number; z: number };
 }
 
@@ -58,6 +73,18 @@ function colloidColor(index: number, fallback?: string): string {
         : defaultColloidColor(index);
 }
 
+const LookAtSample: React.FC<{ position: [number, number, number]; up: [number, number, number] }> = ({ position, up }) => {
+    const { camera } = useThree();
+    useEffect(() => {
+        camera.position.set(position[0], position[1], position[2]);
+        camera.up.set(up[0], up[1], up[2]);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+        camera.updateMatrixWorld();
+    }, [camera, position[0], position[1], position[2], up[0], up[1], up[2]]);
+    return null;
+};
+
 const MiniView: React.FC<MiniViewProps> = ({
     label,
     cellSize,
@@ -87,6 +114,7 @@ const MiniView: React.FC<MiniViewProps> = ({
                 camera={{ position: cameraPos, up: upVec, fov: 35, near: 0.05, far: 200 }}
                 style={{ width: '100%', height: '100%' }}
             >
+                <LookAtSample position={cameraPos} up={upVec} />
                 <ambientLight intensity={0.95} />
                 <hemisphereLight args={['#ffffff', '#444855', 0.6]} />
                 <pointLight position={[10, 10, 10]} intensity={0.7} />
@@ -170,9 +198,12 @@ const MiniView: React.FC<MiniViewProps> = ({
                             key={idx}
                             points={seg.points}
                             color={seg.color}
-                            lineWidth={1.2}
+                            lineWidth={seg.lineWidth ?? 1.8}
                             transparent
-                            opacity={0.95}
+                            opacity={seg.opacity ?? 0.95}
+                            depthTest={false}
+                            depthWrite={false}
+                            renderOrder={seg.renderOrder ?? 0}
                         />
                     ))}
                 </group>
@@ -372,8 +403,9 @@ const TrapCloseupViewer: React.FC<{
  * how forward / reverse rays hit and exit the specimen in real time as they
  * adjust upstream optics.  The viewer reads the same `forwardRaysAtom`
  * snapshot that drives the main scene when its lightweight revision counter
- * changes, plus any reverse paths cached on Camera components, so it stays in
- * sync without re-tracing or subscribing to full Ray[][] payloads.
+ * changes, plus the same reverse-ray snapshot that drives the main table
+ * overlay, so it stays in sync without re-tracing or subscribing to full
+ * Ray[][] payloads.
  *
  * Layout: 2×2 grid — three orthogonal axis views (X, Y, Z) and one
  * perspective 3D view in the corner.  All four cells render the same
@@ -382,10 +414,10 @@ const TrapCloseupViewer: React.FC<{
 export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size = 240 }) => {
     const components = useAtomValue(componentsAtom);
     const forwardRaysRevision = useAtomValue(forwardRaysRevisionAtom);
-    // Reverse paths live on Camera instances and are mutated in place when
-    // camera-done messages arrive (the components atom isn't reassigned), so
-    // the segments memo wouldn't otherwise re-run.  cameraImageTickAtom bumps
-    // on every camera-done, which gives us the trigger we need.
+    const reverseRaysRevision = useAtomValue(reverseRaysRevisionAtom);
+    // Reverse paths are published through a lightweight revision counter; the
+    // fallback Camera path cache is still mutated in place by camera renders, so
+    // cameraImageTickAtom keeps that older path current as well.
     const cameraImageTick = useAtomValue(cameraImageTickAtom);
     const store = useStore();
     const hasTrapBeads = components.some(c => c instanceof TrappedBead);
@@ -473,41 +505,139 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     // Forward + reverse ray segments in world coords.  No AABB pre-cull — the
     // tight camera frustum drops everything off-screen.
     const segments = useMemo(() => {
-        type Seg = { points: [number, number, number][]; color: string };
-        const out: Seg[] = [];
+        const out: ViewerSegment[] = [];
         if (showTrapCloseup) return out;
         const forwardRays = store.get(forwardRaysAtom);
+        const excitationWavelengthNm = sample instanceof Sample ? sample.getExcitationWavelength() : null;
+        const isExcitationPath = (path: Ray[]) => {
+            if (!excitationWavelengthNm || path.length === 0) return true;
+            return Math.abs(path[0].wavelength * 1e9 - excitationWavelengthNm) <= 45;
+        };
+        const excitationForwardRays = sample instanceof Sample
+            ? forwardRays.filter(isExcitationPath)
+            : forwardRays;
+        const reverseStemLength = flowCell
+            ? Math.max(flowCell.width, flowCell.height, flowCell.depth) * 0.8
+            : 1.35;
+        const isSampleChamber = sample instanceof SampleChamber;
+        const forwardLineWidth = isSampleChamber ? 1.2 : 3.2;
+        const forwardOpacity = isSampleChamber ? 0.95 : 1;
+        const reverseLineWidth = isSampleChamber ? 1.2 : 0.95;
+        const reverseOpacity = isSampleChamber ? 0.95 : 0.32;
 
-        const trace = (paths: Ray[][]) => {
-            for (const path of paths) {
+        const trace = (paths: Ray[][], forceReverse = false) => {
+            const stride = forceReverse
+                ? Math.max(1, Math.ceil(paths.length / 64))
+                : 1;
+            for (let pathIndex = 0; pathIndex < paths.length; pathIndex += stride) {
+                const path = paths[pathIndex];
                 if (path.length === 0) continue;
                 const wl = path[0].wavelength * 1e9;
-                const color = wavelengthToCSS(wl);
+                const isReverse = forceReverse || path.some(r => r.isBackward || r.sourceId?.startsWith('solver3_'));
+                const color = isReverse && !isSampleChamber ? '#ff3f52' : wavelengthToCSS(wl);
+                const lineWidth = isReverse ? reverseLineWidth : forwardLineWidth;
+                const opacity = isReverse ? reverseOpacity : forwardOpacity;
+                const renderOrder = isReverse ? 2 : 8;
+                const last = path[path.length - 1];
+                const lastDist = last.interactionDistance ?? 0;
+                const terminationPoint = last.terminationPoint
+                    ? new Vector3(last.terminationPoint.x, last.terminationPoint.y, last.terminationPoint.z)
+                    : null;
+                const fallbackTip = lastDist > 0
+                    ? new Vector3(last.origin.x, last.origin.y, last.origin.z).add(
+                        new Vector3(last.direction.x, last.direction.y, last.direction.z).multiplyScalar(lastDist),
+                    )
+                    : new Vector3(last.origin.x, last.origin.y, last.origin.z);
+                const terminalTip = terminationPoint ?? fallbackTip;
+                if (isReverse && sample instanceof Sample && !isSampleChamber) {
+                    const dir = new Vector3(last.direction.x, last.direction.y, last.direction.z).normalize();
+                    const markerLength = flowCell
+                        ? Math.max(0.02, Math.min(0.18, Math.max(flowCell.width, flowCell.height, flowCell.depth) * 0.035))
+                        : 0.18;
+                    const localStart = terminalTip.clone().addScaledVector(dir, -markerLength * 0.5);
+                    const localEnd = terminalTip.clone().addScaledVector(dir, markerLength * 0.5);
+                    out.push({
+                        points: [[localStart.x, localStart.y, localStart.z], [localEnd.x, localEnd.y, localEnd.z]],
+                        color,
+                        lineWidth: 1.6,
+                        opacity: 0.8,
+                        renderOrder: 14,
+                    });
+                    continue;
+                }
                 let prev: Vector3 | null = null;
                 for (let i = 0; i < path.length; i++) {
                     const r = path[i];
                     const here = new Vector3(r.origin.x, r.origin.y, r.origin.z);
                     if (prev) {
-                        out.push({ points: [[prev.x, prev.y, prev.z], [here.x, here.y, here.z]], color });
+                        out.push({ points: [[prev.x, prev.y, prev.z], [here.x, here.y, here.z]], color, lineWidth, opacity, renderOrder });
                     }
                     prev = here;
                 }
-                const last = path[path.length - 1];
-                const lastDist = last.interactionDistance ?? 0;
-                if (lastDist > 0 && prev) {
-                    const tip = prev.clone().add(
-                        new Vector3(last.direction.x, last.direction.y, last.direction.z).multiplyScalar(lastDist),
-                    );
-                    out.push({ points: [[prev.x, prev.y, prev.z], [tip.x, tip.y, tip.z]], color });
+                if (terminalTip && prev) {
+                    out.push({ points: [[prev.x, prev.y, prev.z], [terminalTip.x, terminalTip.y, terminalTip.z]], color, lineWidth, opacity, renderOrder });
+                }
+                if (isReverse && terminalTip && !isSampleChamber) {
+                    const dir = new Vector3(last.direction.x, last.direction.y, last.direction.z).normalize();
+                    const localStart = terminalTip.clone().addScaledVector(dir, -reverseStemLength);
+                    const localEnd = terminalTip.clone().addScaledVector(dir, reverseStemLength * 0.12);
+                    out.push({
+                        points: [[localStart.x, localStart.y, localStart.z], [localEnd.x, localEnd.y, localEnd.z]],
+                        color,
+                        lineWidth: lineWidth + 0.25,
+                        opacity: Math.min(0.78, opacity + 0.12),
+                        renderOrder,
+                    });
                 }
             }
         };
-        trace(forwardRays);
-        for (const c of components) {
-            if (c instanceof OpticCamera && c.solver3Paths) trace(c.solver3Paths);
+        const reverseRays = store.get(reverseRaysAtom);
+        if (reverseRays.length > 0) {
+            trace(reverseRays, true);
+        } else {
+            for (const c of components) {
+                if (c instanceof OpticCamera && c.solver3Paths) trace(c.solver3Paths, true);
+            }
+        }
+        trace(excitationForwardRays);
+        if (sample instanceof Sample && !isSampleChamber) {
+            const addExcitationChords = (sheetPaths: Ray[][]): number => {
+                let chordCount = 0;
+                const stride = Math.max(1, Math.ceil(sheetPaths.length / 160));
+                for (let pathIndex = 0; pathIndex < sheetPaths.length; pathIndex += stride) {
+                    const path = sheetPaths[pathIndex];
+                    if (!path || path.length === 0) continue;
+                    const wavelengthNm = path[0].wavelength * 1e9;
+                    const color = wavelengthNm >= 450 && wavelengthNm <= 510
+                        ? '#00f7ff'
+                        : wavelengthToCSS(wavelengthNm);
+                    for (const ray of path) {
+                        const chords = sample.computeChordSegments(ray);
+                        if (chords.length === 0) continue;
+                        const origin = new Vector3(ray.origin.x, ray.origin.y, ray.origin.z);
+                        const dir = new Vector3(ray.direction.x, ray.direction.y, ray.direction.z);
+                        for (const chord of chords) {
+                            const pad = flowCell ? 0 : 0.35;
+                            const p0 = origin.clone().addScaledVector(dir, Math.max(0, chord.tStart - pad));
+                            const p1 = origin.clone().addScaledVector(dir, chord.tEnd + pad);
+                            out.push({
+                                points: [[p0.x, p0.y, p0.z], [p1.x, p1.y, p1.z]],
+                                color,
+                                lineWidth: 3.6,
+                                opacity: 0.95,
+                                renderOrder: 30,
+                            });
+                            chordCount++;
+                        }
+                    }
+                }
+                return chordCount;
+            };
+
+            addExcitationChords(excitationForwardRays);
         }
         return out;
-    }, [components, focus.x, focus.y, focus.z, cameraImageTick, forwardRaysRevision, showTrapCloseup, store]);
+    }, [components, focus.x, focus.y, focus.z, cameraImageTick, flowCell, forwardRaysRevision, reverseRaysRevision, sample, showTrapCloseup, store]);
 
     const tickRef = useRef(0);
     useEffect(() => { tickRef.current++; }, [sample.version]);
@@ -516,9 +646,29 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
     // small gutter between cells.
     const gutter = 2;
     const cellSize = (size - gutter) / 2;
+    const fitRadius = useMemo(() => {
+        const specimenRadius = flowCell
+            ? Math.max(flowCell.width, flowCell.height, flowCell.depth + 2 * flowCell.glassThickness) * 0.5
+            : 0.72;
+        const fitLimit = flowCell
+            ? Math.max(flowCell.width, flowCell.height, flowCell.depth + 2 * flowCell.glassThickness) * 1.6
+            : 1.2;
+        const maxRadius = flowCell ? Infinity : 0.88;
+        let radius = specimenRadius;
+        for (const seg of segments) {
+            for (const [x, y, z] of seg.points) {
+                const dx = x - focus.x;
+                const dy = y - focus.y;
+                const dz = z - focus.z;
+                const d = Math.hypot(dx, dy, dz);
+                if (d <= fitLimit) radius = Math.max(radius, d);
+            }
+        }
+        return Math.min(radius, maxRadius);
+    }, [flowCell, focus.x, focus.y, focus.z, segments]);
     const camDist = flowCell
-        ? Math.max(3.5, Math.max(flowCell.width, flowCell.height) * 1.35)
-        : 2.5;
+        ? Math.max(3.5, fitRadius / Math.tan(35 * Math.PI / 360) * 1.08)
+        : Math.max(1.9, fitRadius / Math.tan(35 * Math.PI / 360) * 0.98);
 
     // Camera positions for the axis-locked panes.  All look at world origin
     // (after the outer -focus translate that centres the sample).  "X axis"

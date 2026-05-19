@@ -4,10 +4,14 @@ import {
     batchedRegularRays,
     buildPathDrawSegments,
     coherentBranchDisplayStyle,
+    coherentDisplayRGB,
     isMainRayPath,
+    lampDisplayPacketCount,
     opacityFromRelativeRange,
     openTailSuppressionExpired,
     relativePathIntensity,
+    polarizationOpacityFromRelativeRange,
+    shouldDrawLampDisplayPath,
     shouldDrawPolarizationOpenTail,
     shouldDrawPolarizationPath,
     terminalVisualizationDistance,
@@ -41,6 +45,14 @@ describe('RayVisualizer coherent branch display', () => {
 
         expect(dm2LeakageBranch.opacity).toBeGreaterThan(0.2);
         expect(dm2LeakageBranch.lineWidth).toBe(0.75);
+    });
+
+    test('far-red coherent color stays red-only under additive overdraw', () => {
+        const rgb = coherentDisplayRGB(780e-9);
+
+        expect(rgb.r).toBeGreaterThan(0.5);
+        expect(rgb.g).toBe(0);
+        expect(rgb.b).toBe(0);
     });
 
     test('opacity range maps the dimmest rendered ray to the left handle', () => {
@@ -94,6 +106,11 @@ describe('RayVisualizer coherent branch display', () => {
         expect(rendered.batches).toHaveLength(1);
         expect(rendered.batches[0].opacity).toBeCloseTo(0.25, 12);
         expect(rendered.batches[0].vertexColors[0]).toEqual([0, 1, 1]);
+    });
+
+    test('polarization opacity can suppress PBS-scale leakage without dimming the main branch', () => {
+        expect(polarizationOpacityFromRelativeRange(3e-5, 0, 1)).toBeLessThan(0.001);
+        expect(polarizationOpacityFromRelativeRange(1, 0, 1)).toBe(1);
     });
 
     test('beam expander blue rays stay batched without dropping launch or lens segments', () => {
@@ -199,6 +216,19 @@ describe('RayVisualizer coherent branch display', () => {
         expect(
             additivePacketOpacityScale(densePacketCount, defaultPacketCount) * densePacketCount,
         ).toBeCloseTo(defaultPacketCount, 12);
+    });
+
+    test('lamp display caps high-density wavelength packets without using the cap as trace physics', () => {
+        const densePacketCount = 2857;
+        const displayed = Array.from({ length: densePacketCount }, (_, ordinal) =>
+            shouldDrawLampDisplayPath(ordinal, densePacketCount)
+        ).filter(Boolean).length;
+
+        expect(lampDisplayPacketCount(114)).toBe(114);
+        expect(lampDisplayPacketCount(densePacketCount)).toBe(512);
+        expect(displayed).toBeLessThanOrEqual(512);
+        expect(additivePacketOpacityScale(lampDisplayPacketCount(densePacketCount)))
+            .toBeGreaterThan(additivePacketOpacityScale(densePacketCount));
     });
 
     test('draws finite terminal absorber segments even when open tails are suppressed', () => {

@@ -34,7 +34,7 @@ import { RodPropertiesPanel } from './RodPropertiesPanel';
 import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
 import { Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
-import { AsphericLens, AsphericPreset, ASPHERE_MAX_TERMS } from '../physics/components/AsphericLens';
+import { AsphericLens } from '../physics/components/AsphericLens';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Mirror } from '../physics/components/Mirror';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
@@ -81,6 +81,8 @@ import { CameraViewer } from './CameraViewer';
 import { PMTViewer } from './PMTViewer';
 import { QPDViewer } from './QPDViewer';
 import { LensProfileEditor, supportsLensProfileEditor } from './LensProfileEditor';
+import { LensFamilyDesigner } from './LensFamilyDesigner';
+import { SphericalLensDesigner } from './SphericalLensDesigner';
 import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
@@ -123,6 +125,33 @@ function formatMeasurementMm(value: number): string {
 
 function formatSignedMeasurementMm(value: number): string {
     return `${value >= 0 ? '+' : '-'}${formatMeasurementMm(Math.abs(value))}`;
+}
+
+function cylindricalParaxialFocalLength(lens: CylindricalLens): number {
+    const flat1 = Math.abs(lens.r1) >= 1e8;
+    const flat2 = Math.abs(lens.r2) >= 1e8;
+    const invR1 = flat1 ? 0 : 1 / lens.r1;
+    const invR2 = flat2 ? 0 : 1 / lens.r2;
+    const thickTerm = flat1 || flat2 ? 0 : ((lens.ior - 1) ** 2 * lens.thickness) / (lens.ior * lens.r1 * lens.r2);
+    const invF = (lens.ior - 1) * (invR1 - invR2) + thickTerm;
+    return Math.abs(invF) < 1e-12 ? 1e6 : 1 / invF;
+}
+
+function setCylindricalParaxialFocalLength(lens: CylindricalLens, focalLength: number): void {
+    if (!Number.isFinite(focalLength) || Math.abs(focalLength) < 1e-6) return;
+    const a = lens.ior - 1;
+    if (Math.abs(a) < 1e-9) return;
+    const flatBack = Math.abs(lens.r2) >= 1e8;
+    const invR2 = flatBack ? 0 : 1 / lens.r2;
+    const thickTermScale = flatBack ? 0 : (a * a * lens.thickness) / (lens.ior * lens.r2);
+    const denom = a + thickTermScale;
+    const inv = 1 / focalLength + a * invR2;
+    if (Math.abs(denom) < 1e-12 || Math.abs(inv) < 1e-12) return;
+    const candidate = denom / inv;
+    const minR = lens.apertureRadius * 1.05;
+    lens.r1 = Math.abs(candidate) < minR && Math.abs(candidate) < 1e8
+        ? Math.sign(candidate || 1) * minR
+        : candidate;
 }
 
 function measurementSegmentStats(a: MeasurementPoint, b: MeasurementPoint) {
@@ -778,7 +807,7 @@ const SolverPanel: React.FC<{
 
                     <div style={{ marginTop: 4 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ color: '#aaa', fontSize: '10px' }}>Rays per source</span>
+                            <span style={{ color: '#aaa', fontSize: '10px' }}>Total rays/source</span>
                             <span style={{ color: '#777', fontSize: '10px' }}>
                                 {displayedForwardRayCount}
                             </span>
@@ -799,7 +828,7 @@ const SolverPanel: React.FC<{
                                     rayCount: sliderPositionToCount(parseInt(e.target.value), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                 })}
                                 style={{ flex: 1, minWidth: 0 }}
-                                title="Approximate forward source rays per source"
+                                title="Approximate total forward source rays"
                             />
                             <input
                                 type="text"
@@ -830,7 +859,7 @@ const SolverPanel: React.FC<{
                                     borderRadius: '3px',
                                     padding: '1px 4px',
                                 }}
-                                title="Exact forward source rays per source"
+                                title="Exact total forward source rays"
                             />
                         </div>
                     </div>
@@ -977,7 +1006,7 @@ const SolverPanel: React.FC<{
                                 <span style={{ fontSize: '10px', color: '#888', fontFamily: 'monospace' }}>
                                     {isRendering
                                         ? `Image tracing… ${Math.round(scanProgress * 100)}%`
-                                        : `${drawnRayCounts.forward} forward · ${drawnRayCounts.reverse} reverse rays drawn`}
+                                        : `${drawnRayCounts.forward} forward · ${drawnRayCounts.reverse} reverse rays traced`}
                                 </span>
                             </div>
                         </div>
@@ -1130,6 +1159,20 @@ const DualGalvoControls: React.FC<{
     };
     return (
         <>
+            <div style={{
+                marginBottom: 8,
+                padding: '7px 8px',
+                border: '1px solid #b33a3a',
+                borderRadius: 4,
+                background: 'rgba(92, 20, 20, 0.55)',
+                color: '#ffb4b4',
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.35,
+                textTransform: 'uppercase',
+            }}>
+                Warning: use this only as a two-mirror X/Y scan head. For a single animated surface, use a Mirror with Galvo Scan instead.
+            </div>
             {/* Pan (scanX) row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                 <span style={{ fontSize: '10px', color: '#888', minWidth: '26px' }}>Pan</span>
@@ -1341,24 +1384,6 @@ export const Inspector: React.FC = () => {
 
     const [localBlockerDiameter, setLocalBlockerDiameter] = useState<string>('20');
     const [localBlockerThickness, setLocalBlockerThickness] = useState<string>('5');
-    const [localRadius, setLocalRadius] = useState<string>('0');
-    const [localFocal, setLocalFocal] = useState<string>('0');
-    const [localR1, setLocalR1] = useState<string>('0');
-    const [localR2, setLocalR2] = useState<string>('0');
-    const [localThickness, setLocalThickness] = useState<string>('0');
-    const [localIor, setLocalIor] = useState<string>('1.5');
-    const [localLensType, setLocalLensType] = useState<string>('biconvex');
-
-    const [localAsphPreset, setLocalAsphPreset] = useState<string>('plano-asphere-collimator');
-    const [localAsphR1, setLocalAsphR1] = useState<string>('13');
-    const [localAsphR2, setLocalAsphR2] = useState<string>('Infinity');
-    const [localAsphK1, setLocalAsphK1] = useState<string>('-0.7');
-    const [localAsphK2, setLocalAsphK2] = useState<string>('0');
-    const [localAsphA1, setLocalAsphA1] = useState<string[]>([]);
-    const [localAsphA2, setLocalAsphA2] = useState<string[]>([]);
-    const [localAsphAperture, setLocalAsphAperture] = useState<string>('12.7');
-    const [localAsphThickness, setLocalAsphThickness] = useState<string>('4');
-    const [localAsphIor, setLocalAsphIor] = useState<string>('1.5168');
 
 
     const [localIdealFocal, setLocalIdealFocal] = useState<string>('50');
@@ -1408,8 +1433,9 @@ export const Inspector: React.FC = () => {
     const [localLaserPower, setLocalLaserPower] = useState<string>('0.1');
     const [localLaserPolarizationAngle, setLocalLaserPolarizationAngle] = useState<string>('90');
     const [localLampPower, setLocalLampPower] = useState<string>('1');
-    const [localSourcePointCount, setLocalSourcePointCount] = useState<string>('5');
+    const [localSourcePointCount, setLocalSourcePointCount] = useState<string>('3');
     const [localEmitterRadius, setLocalEmitterRadius] = useState<string>('0.9');
+    const [localLampSpectralCount, setLocalLampSpectralCount] = useState<string>('7');
 
     // Diffuser state
     const [localDiffuserDiameter, setLocalDiffuserDiameter] = useState<string>('25.4');
@@ -1437,9 +1463,10 @@ export const Inspector: React.FC = () => {
     const [localAODMaxAngle, setLocalAODMaxAngle] = useState<string>('50');
 
     // Cylindrical Lens
+    const [localCylFocal, setLocalCylFocal] = useState<string>('50');
     const [localCylR1, setLocalCylR1] = useState<string>('40');
     const [localCylR2, setLocalCylR2] = useState<string>('1e9');
-    const [localCylAperture, setLocalCylAperture] = useState<string>('12');
+    const [localCylAperture, setLocalCylAperture] = useState<string>('24');
     const [localCylWidth, setLocalCylWidth] = useState<string>('24');
     const [localCylThickness, setLocalCylThickness] = useState<string>('3');
     const [localCylIor, setLocalCylIor] = useState<string>('1.5168');
@@ -1592,41 +1619,6 @@ export const Inspector: React.FC = () => {
                     setLocalBlockerDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
                     setLocalBlockerThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
-                if (selectedComponent instanceof SphericalLens) {
-                    setLocalRadius(String(selectedComponent.apertureRadius));
-                    const f = selectedComponent.curvature !== 0 ? 1 / selectedComponent.curvature : 0;
-                    setLocalFocal(String(Math.round(f * 100) / 100));
-                    setLocalThickness(String(selectedComponent.thickness));
-                    setLocalIor(String(selectedComponent.ior));
-
-
-                    if (typeof selectedComponent.getLensType === 'function') {
-                        setLocalLensType(selectedComponent.getLensType());
-                    }
-
-
-                    if (typeof selectedComponent.getRadii === 'function') {
-                        const radii = selectedComponent.getRadii();
-                        setLocalR1(Math.abs(radii.R1) >= 1e6 ? "Infinity" : String(Math.round(radii.R1 * 100) / 100));
-                        setLocalR2(Math.abs(radii.R2) >= 1e6 ? "Infinity" : String(Math.round(radii.R2 * 100) / 100));
-                    } else {
-                        const R = f !== 0 ? (2 * (selectedComponent.ior - 1)) * f : 1e9;
-                        setLocalR1(String(Math.round(R * 100) / 100));
-                        setLocalR2(String(Math.round(-R * 100) / 100));
-                    }
-                }
-                if (selectedComponent instanceof AsphericLens) {
-                    const a = selectedComponent;
-                    setLocalAsphR1(Math.abs(a.r1) >= 1e6 ? 'Infinity' : String(Math.round(a.r1 * 100) / 100));
-                    setLocalAsphR2(Math.abs(a.r2) >= 1e6 ? 'Infinity' : String(Math.round(a.r2 * 100) / 100));
-                    setLocalAsphK1(String(a.k1));
-                    setLocalAsphK2(String(a.k2));
-                    setLocalAsphA1(a.A1.map(x => x.toExponential(3)));
-                    setLocalAsphA2(a.A2.map(x => x.toExponential(3)));
-                    setLocalAsphAperture(String(a.apertureRadius));
-                    setLocalAsphThickness(String(a.thickness));
-                    setLocalAsphIor(String(a.ior));
-                }
                 if (selectedComponent instanceof IdealLens) {
                     setLocalIdealFocal(String(Math.round(selectedComponent.focalLength * 100) / 100));
                     setLocalIdealAperture(String(Math.round(selectedComponent.apertureRadius * 100) / 100));
@@ -1687,6 +1679,7 @@ export const Inspector: React.FC = () => {
                     setLocalLampPower(String(selectedComponent.power));
                     setLocalSourcePointCount(String(selectedComponent.sourcePointCount));
                     setLocalEmitterRadius(String(selectedComponent.emitterRadius));
+                    setLocalLampSpectralCount(String(selectedComponent.spectralCount));
                 }
                 if (selectedComponent instanceof PointSourceBase) {
                     setLocalWavelength(selectedComponent.wavelength);
@@ -1717,9 +1710,10 @@ export const Inspector: React.FC = () => {
                     setLocalAODMaxAngle(String(Math.round(selectedComponent.maxAngle * 1000 * 100) / 100));
                 }
                 if (selectedComponent instanceof CylindricalLens) {
+                    setLocalCylFocal(String(Math.round(cylindricalParaxialFocalLength(selectedComponent) * 100) / 100));
                     setLocalCylR1(Math.abs(selectedComponent.r1) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.r1 * 100) / 100));
                     setLocalCylR2(Math.abs(selectedComponent.r2) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.r2 * 100) / 100));
-                    setLocalCylAperture(String(Math.round(selectedComponent.apertureRadius * 100) / 100));
+                    setLocalCylAperture(String(Math.round(selectedComponent.apertureRadius * 200) / 100));
                     setLocalCylWidth(String(Math.round(selectedComponent.width * 100) / 100));
                     setLocalCylThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                     setLocalCylIor(String(selectedComponent.ior));
@@ -1860,17 +1854,10 @@ export const Inspector: React.FC = () => {
         setComponents(newComponents);
     };
 
-    const commitGeometry = (param: 'width' | 'height' | 'radius' | 'focal' | 'r1' | 'r2' | 'thickness' | 'ior', valueStr: string) => {
+    const commitGeometry = (param: 'width' | 'height', valueStr: string) => {
         if (!selectedComponent) return;
 
-
-        let val: number;
-        if (valueStr.toLowerCase() === 'infinity') {
-            val = 1e9;
-        } else {
-            val = parseFloat(valueStr);
-        }
-
+        const val = parseFloat(valueStr);
         if (isNaN(val)) return;
 
         const newComponents = components.map(c => {
@@ -1878,40 +1865,6 @@ export const Inspector: React.FC = () => {
 
                 if (param === 'width' && 'width' in c) (c as any).width = val;
                 if (param === 'height' && 'height' in c) (c as any).height = val;
-                if (param === 'radius' && c instanceof SphericalLens) c.apertureRadius = val;
-                if (param === 'focal' && c instanceof SphericalLens) {
-                    if (Math.abs(val) > 0.001) c.curvature = 1 / val;
-                    else c.curvature = 0;
-                    // Reset r1/r2 to undefined so focal length takes precedence/recalculates
-                    c.r1 = undefined;
-                    c.r2 = undefined;
-                }
-                if (param === 'thickness' && c instanceof SphericalLens) {
-                    c.thickness = Math.max(0.1, val);
-                }
-                if (param === 'ior' && c instanceof SphericalLens) {
-                    c.ior = Math.max(1.0, Math.min(3.0, val));
-                }
-                if (param === 'r1' && c instanceof SphericalLens) {
-                    const minR = c.apertureRadius * 1.05;
-                    c.r1 = Math.abs(val) < minR ? Math.sign(val) * minR : val;
-                    if (c.r2 === undefined) {
-                        const old = c.getRadii();
-                        c.r2 = old.R2;
-                    }
-                }
-                if (param === 'r2' && c instanceof SphericalLens) {
-                    const minR = c.apertureRadius * 1.05;
-                    c.r2 = Math.abs(val) < minR ? Math.sign(val) * minR : val;
-                    if (c.r1 === undefined) {
-                        const old = c.getRadii();
-                        c.r1 = old.R1;
-                    }
-                }
-                // Invalidate cached physics mesh so it rebuilds with new parameters
-                if (c instanceof SphericalLens) {
-                    c.invalidateMesh();
-                }
                 return c; // Mutable update inside map, but we trigger re-render via setComponents
             }
             return c;
@@ -2102,7 +2055,13 @@ export const Inspector: React.FC = () => {
         const power = parseFloat(localLampPower);
         const sourcePoints = parseInt(localSourcePointCount);
         const emitterR = parseFloat(localEmitterRadius);
+        const spectralCount = parseInt(localLampSpectralCount);
         if (!Number.isFinite(radius) || radius < 0) return;
+        let snappedSpectralCount: number | null = null;
+        if (Number.isFinite(spectralCount) && spectralCount >= 1) {
+            snappedSpectralCount = Math.max(1, Math.round(spectralCount));
+            if (snappedSpectralCount % 2 === 0) snappedSpectralCount += 1;
+        }
 
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Lamp) {
@@ -2112,11 +2071,13 @@ export const Inspector: React.FC = () => {
                     c.sourcePointCount = Math.min(32, Math.round(sourcePoints));
                 }
                 if (Number.isFinite(emitterR) && emitterR >= 0) c.emitterRadius = emitterR;
+                if (snappedSpectralCount !== null) c.spectralCount = Math.min(31, snappedSpectralCount);
                 c.version++;
                 return c;
             }
             return c;
         });
+        if (snappedSpectralCount !== null) setLocalLampSpectralCount(String(Math.min(31, snappedSpectralCount)));
         setComponents([...newComponents]);
     };
 
@@ -3309,7 +3270,27 @@ export const Inspector: React.FC = () => {
                         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Cylindrical Lens</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                             <ScrubInput
-                                label="R1"
+                                label="Focal Len"
+                                suffix="mm"
+                                value={localCylFocal}
+                                onChange={setLocalCylFocal}
+                                onCommit={(v: string) => {
+                                    const val = parseFloat(v);
+                                    if (!Number.isFinite(val)) return;
+                                    const newComponents = components.map(c => {
+                                        if (c.id === selection[0] && c instanceof CylindricalLens) {
+                                            setCylindricalParaxialFocalLength(c, val);
+                                            c.invalidateMesh();
+                                            return c;
+                                        }
+                                        return c;
+                                    });
+                                    setComponents([...newComponents]);
+                                }}
+                                speed={1.0}
+                            />
+                            <ScrubInput
+                                label="Front R"
                                 suffix="mm"
                                 value={localCylR1}
                                 onChange={setLocalCylR1}
@@ -3337,7 +3318,7 @@ export const Inspector: React.FC = () => {
                                 allowInfinity
                             />
                             <ScrubInput
-                                label="R2"
+                                label="Back R"
                                 suffix="mm"
                                 value={localCylR2}
                                 onChange={setLocalCylR2}
@@ -3364,7 +3345,7 @@ export const Inspector: React.FC = () => {
                                 allowInfinity
                             />
                             <ScrubInput
-                                label="Aperture"
+                                label="Height"
                                 suffix="mm"
                                 value={localCylAperture}
                                 onChange={setLocalCylAperture}
@@ -3386,7 +3367,7 @@ export const Inspector: React.FC = () => {
                                             while (maxAperture > 1 && sagAt(c.r1, maxAperture) + sagAt(c.r2, maxAperture) > c.thickness * 0.95) {
                                                 maxAperture *= 0.95;
                                             }
-                                            c.apertureRadius = Math.min(val, maxAperture);
+                                            c.apertureRadius = Math.min(val / 2, maxAperture);
                                             c.invalidateMesh();
                                             return c;
                                         }
@@ -3395,8 +3376,8 @@ export const Inspector: React.FC = () => {
                                     setComponents([...newComponents]);
                                 }}
                                 speed={0.5}
-                                min={1}
-                                max={100}
+                                min={2}
+                                max={200}
                             />
                             <ScrubInput
                                 label="Width"
@@ -3465,6 +3446,7 @@ export const Inspector: React.FC = () => {
                                 step={0.001}
                             />
                         </div>
+                        <LensProfileEditor component={selectedComponent} />
                     </div>
                 )}
 
@@ -3557,356 +3539,49 @@ export const Inspector: React.FC = () => {
                                     setComponents([...newC]);
                                 }} speed={0.005} min={1.0} max={3.0} step={0.001} title="Element 2 refractive index" />
                         </div>
+                        <LensProfileEditor component={selectedComponent} />
                     </div>
                 )}
 
                 {isLens && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        {/* Lens Type Selector */}
-                        <div style={{ marginBottom: 10 }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Lens Type</label>
-                            <select
-                                value={localLensType}
-                                onChange={(e) => {
-                                    const type = e.target.value;
-                                    setLocalLensType(type);
-                                    if (selectedComponent instanceof SphericalLens) {
-                                        const newComponents = components.map(c => {
-                                            if (c.id === selection[0] && c instanceof SphericalLens) {
-                                                c.setFromLensType(type);
-                                                c.invalidateMesh();
-                                                return c;
-                                            }
-                                            return c;
-                                        });
-                                        setComponents([...newComponents]);
+                        <SphericalLensDesigner
+                            lens={selectedComponent as SphericalLens}
+                            onMutate={(mutate) => {
+                                const newComponents = components.map(c => {
+                                    if (c.id === selection[0] && c instanceof SphericalLens) {
+                                        mutate(c);
+                                        return c;
                                     }
-                                }}
-                                style={{ ...inputStyle, cursor: 'pointer' }}
-                            >
-                                <option value="biconvex">Biconvex</option>
-                                <option value="plano-convex">Plano-Convex</option>
-                                <option value="convex-plano">Convex-Plano</option>
-                                <option value="meniscus-pos">Meniscus (+)</option>
-                                <option value="plano-concave">Plano-Concave</option>
-                                <option value="concave-plano">Concave-Plano</option>
-                                <option value="biconcave">Biconcave</option>
-                                <option value="meniscus-neg">Meniscus (−)</option>
-                            </select>
-                        </div>
-
-                        {/* Primary Controls — all scrubbable */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
-                            <ScrubInput
-                                label="Focal Len"
-                                suffix="mm"
-                                value={localFocal}
-                                onChange={setLocalFocal}
-                                onCommit={(v) => commitGeometry('focal', v)}
-                                speed={1.0}
-                            />
-                            <ScrubInput
-                                label="Aperture"
-                                suffix="mm"
-                                value={localRadius}
-                                onChange={setLocalRadius}
-                                onCommit={(v) => commitGeometry('radius', v)}
-                                speed={0.5}
-                                min={1}
-                                max={200}
-                            />
-                            <ScrubInput
-                                label="Thickness"
-                                suffix="mm"
-                                value={localThickness}
-                                onChange={setLocalThickness}
-                                onCommit={(v) => commitGeometry('thickness', v)}
-                                speed={0.2}
-                                min={0.1}
-                                max={100}
-                            />
-                            <ScrubInput
-                                label="IoR"
-                                value={localIor}
-                                onChange={setLocalIor}
-                                onCommit={(v) => commitGeometry('ior', v)}
-                                speed={0.005}
-                                min={1.0}
-                                max={3.0}
-                                step={0.001}
-                                title="Index of Refraction (1.0 = air, 1.5 = BK7, 1.7 = Lanthanum Crown)"
-                            />
-                        </div>
-
-                        {/* Surface Radii — scrubbable */}
-                        <div style={{ borderTop: '1px solid #333', paddingTop: 8 }}>
-                            <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 6 }}>Surface Radii (drag labels ↔ to scrub)</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                <ScrubInput
-                                    label="R1 (Front)"
-                                    suffix="mm"
-                                    value={localR1}
-                                    onChange={setLocalR1}
-                                    onCommit={(v) => commitGeometry('r1', v)}
-                                    speed={2.0}
-                                    allowInfinity
-                                    title="+ = Convex, − = Concave, 'Infinity' = Flat"
-                                />
-                                <ScrubInput
-                                    label="R2 (Back)"
-                                    suffix="mm"
-                                    value={localR2}
-                                    onChange={setLocalR2}
-                                    onCommit={(v) => commitGeometry('r2', v)}
-                                    speed={2.0}
-                                    allowInfinity
-                                    title="− = Convex, + = Concave, 'Infinity' = Flat"
-                                />
-                            </div>
-                        </div>
+                                    return c;
+                                });
+                                setComponents([...newComponents]);
+                            }}
+                            onEditStart={pushUndo}
+                        />
                     </div>
                 )}
 
                 {/* Old PrismLens panel removed — unified under isPolygonOptic above */}
 
-                {isAsphericLens && (() => {
-                    const updateAsph = (mutate: (a: AsphericLens) => void) => {
-                        const newC = components.map(c => {
-                            if (c.id === selection[0] && c instanceof AsphericLens) {
-                                mutate(c);
-                                c.invalidateMesh();
-                                return c;
-                            }
-                            return c;
-                        });
-                        setComponents([...newC]);
-                    };
-                    const parseR = (s: string): number => {
-                        if (s.toLowerCase() === 'infinity') return 1e9;
-                        if (s.toLowerCase() === '-infinity') return -1e9;
-                        return parseFloat(s);
-                    };
-                    const parseFiniteFloat = (s: string): number | null => {
-                        const v = parseFloat(s);
-                        return isNaN(v) ? null : v;
-                    };
-                    const commitR = (side: 1 | 2, s: string) => {
-                        const v = parseR(s);
-                        if (isNaN(v)) return;
-                        updateAsph(a => {
-                            const minR = a.apertureRadius * 1.05;
-                            const clamped = Math.abs(v) < minR && Math.abs(v) < 1e8
-                                ? Math.sign(v || 1) * minR : v;
-                            if (side === 1) a.r1 = clamped; else a.r2 = clamped;
-                        });
-                    };
-                    const commitK = (side: 1 | 2, s: string) => {
-                        const v = parseFiniteFloat(s);
-                        if (v === null) return;
-                        updateAsph(a => { if (side === 1) a.k1 = v; else a.k2 = v; });
-                    };
-                    const commitA = (side: 1 | 2, idx: number, s: string) => {
-                        const v = parseFiniteFloat(s);
-                        if (v === null) return;
-                        updateAsph(a => {
-                            const arr = side === 1 ? a.A1 : a.A2;
-                            while (arr.length <= idx) arr.push(0);
-                            arr[idx] = v;
-                        });
-                    };
-                    const addTerm = (side: 1 | 2) => {
-                        updateAsph(a => {
-                            const arr = side === 1 ? a.A1 : a.A2;
-                            if (arr.length < ASPHERE_MAX_TERMS) arr.push(0);
-                        });
-                        if (side === 1) setLocalAsphA1(prev => [...prev, '0.000e+0']);
-                        else setLocalAsphA2(prev => [...prev, '0.000e+0']);
-                    };
-                    const removeTerm = (side: 1 | 2, idx: number) => {
-                        updateAsph(a => {
-                            const arr = side === 1 ? a.A1 : a.A2;
-                            arr.splice(idx, 1);
-                        });
-                        if (side === 1) setLocalAsphA1(prev => prev.filter((_, i) => i !== idx));
-                        else setLocalAsphA2(prev => prev.filter((_, i) => i !== idx));
-                    };
-                    const ASPH_LABELS = ['A₄', 'A₆', 'A₈', 'A₁₀', 'A₁₂', 'A₁₄'];
-                    const ASPH_UNITS = ['mm⁻³', 'mm⁻⁵', 'mm⁻⁷', 'mm⁻⁹', 'mm⁻¹¹', 'mm⁻¹³'];
-
-                    const SurfaceBlock = ({
-                        side, label, R, k, terms,
-                        setR, setK,
-                    }: {
-                        side: 1 | 2; label: string;
-                        R: string; k: string; terms: string[];
-                        setR: (s: string) => void;
-                        setK: (s: string) => void;
-                    }) => (
-                        <div style={{ borderTop: '1px solid #333', paddingTop: 10, marginTop: 10 }}>
-                            <label style={{ fontSize: '11px', color: '#888', display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                                {label}
-                            </label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
-                                <ScrubInput
-                                    label={side === 1 ? 'R₁' : 'R₂'}
-                                    suffix="mm"
-                                    value={R}
-                                    onChange={setR}
-                                    onCommit={(v) => commitR(side, v)}
-                                    speed={2.0}
-                                    allowInfinity
-                                    title={side === 1
-                                        ? '+ = Convex, − = Concave, Infinity = Flat'
-                                        : '− = Convex, + = Concave, Infinity = Flat'}
-                                />
-                                <ScrubInput
-                                    label={side === 1 ? 'k₁ (conic)' : 'k₂ (conic)'}
-                                    value={k}
-                                    onChange={setK}
-                                    onCommit={(v) => commitK(side, v)}
-                                    speed={0.005}
-                                    step={0.001}
-                                    title="0 = sphere, −1 = parabola, < −1 hyperbola, (−1, 0) prolate, > 0 oblate"
-                                />
-                            </div>
-                            {terms.length > 0 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-                                    {terms.map((val, i) => (
-                                        <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'end', gap: 6 }}>
-                                            <span style={{ fontSize: '11px', color: '#888', minWidth: 26, paddingBottom: 8 }}>{ASPH_LABELS[i]}</span>
-                                            <ScrubInput
-                                                label={ASPH_UNITS[i]}
-                                                value={val}
-                                                onChange={(s) => {
-                                                    if (side === 1) setLocalAsphA1(prev => prev.map((p, j) => j === i ? s : p));
-                                                    else setLocalAsphA2(prev => prev.map((p, j) => j === i ? s : p));
-                                                }}
-                                                onCommit={(s) => commitA(side, i, s)}
-                                                speed={1e-8}
-                                                step={1e-12}
-                                                title={`Coefficient on r^${(i + 1) * 2 + 2}`}
-                                            />
-                                            <button
-                                                onClick={() => removeTerm(side, i)}
-                                                title="Remove this aspheric term"
-                                                style={{
-                                                    background: 'transparent',
-                                                    border: '1px solid #444',
-                                                    color: '#888',
-                                                    width: 22, height: 22,
-                                                    borderRadius: 4,
-                                                    cursor: 'pointer',
-                                                    fontSize: 12,
-                                                    lineHeight: 1,
-                                                    marginBottom: 1,
-                                                }}
-                                            >−</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            {terms.length < ASPHERE_MAX_TERMS && (
-                                <button
-                                    onClick={() => addTerm(side)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: '1px dashed #444',
-                                        color: '#888',
-                                        padding: '4px 8px',
-                                        width: '100%',
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        fontSize: 11,
-                                    }}
-                                >+ Add {ASPH_LABELS[terms.length]}</button>
-                            )}
-                        </div>
-                    );
-
-                    return (
-                        <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                            <div style={{ marginBottom: 10 }}>
-                                <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Preset</label>
-                                <select
-                                    value={localAsphPreset}
-                                    onChange={(e) => {
-                                        const preset = e.target.value as AsphericPreset;
-                                        setLocalAsphPreset(preset);
-                                        updateAsph(a => a.setFromPreset(preset));
-                                    }}
-                                    style={{ ...inputStyle, cursor: 'pointer' }}
-                                >
-                                    <option value="plano-asphere-collimator">Plano-Asphere Collimator</option>
-                                    <option value="best-form-asphere">Best-Form Asphere</option>
-                                    <option value="biconvex-asphere">Biconvex Asphere</option>
-                                    <option value="meniscus-asphere">Meniscus Asphere</option>
-                                    <option value="schmidt-corrector">Schmidt Corrector Plate</option>
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 4 }}>
-                                <ScrubInput
-                                    label="Aperture"
-                                    suffix="mm"
-                                    value={localAsphAperture}
-                                    onChange={setLocalAsphAperture}
-                                    onCommit={(v) => {
-                                        const val = parseFloat(v);
-                                        if (isNaN(val) || val <= 0) return;
-                                        updateAsph(a => { a.apertureRadius = val; });
-                                    }}
-                                    speed={0.5}
-                                    min={1}
-                                    max={200}
-                                />
-                                <ScrubInput
-                                    label="Thickness"
-                                    suffix="mm"
-                                    value={localAsphThickness}
-                                    onChange={setLocalAsphThickness}
-                                    onCommit={(v) => {
-                                        const val = parseFloat(v);
-                                        if (isNaN(val) || val < 0.1) return;
-                                        updateAsph(a => { a.thickness = val; });
-                                    }}
-                                    speed={0.2}
-                                    min={0.1}
-                                    max={100}
-                                />
-                                <ScrubInput
-                                    label="IoR"
-                                    value={localAsphIor}
-                                    onChange={setLocalAsphIor}
-                                    onCommit={(v) => {
-                                        const val = parseFloat(v);
-                                        if (isNaN(val) || val < 1 || val > 3) return;
-                                        updateAsph(a => { a.ior = val; });
-                                    }}
-                                    speed={0.005}
-                                    min={1.0}
-                                    max={3.0}
-                                    step={0.001}
-                                    title="Index of refraction"
-                                />
-                            </div>
-
-                            <SurfaceBlock
-                                side={1} label="Front Surface (S₁)"
-                                R={localAsphR1} k={localAsphK1} terms={localAsphA1}
-                                setR={setLocalAsphR1} setK={setLocalAsphK1}
-                            />
-                            <SurfaceBlock
-                                side={2} label="Back Surface (S₂)"
-                                R={localAsphR2} k={localAsphK2} terms={localAsphA2}
-                                setR={setLocalAsphR2} setK={setLocalAsphK2}
-                            />
-
-                            <div style={{ fontSize: '10px', color: '#555', marginTop: 8, lineHeight: 1.4 }}>
-                                z(r) = c·r²/(1+√(1−(1+k)c²r²)) + Σ Aᵢ·r^(2i+2). Conic and aspheric terms vanish at r=0, so paraxial focal length depends only on R₁, R₂ and IoR.
-                            </div>
-                        </div>
-                    );
-                })()}
+                {isAsphericLens && selectedComponent instanceof AsphericLens && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
+                        <LensFamilyDesigner
+                            component={selectedComponent}
+                            onEditStart={pushUndo}
+                            onMutate={(mutate) => {
+                                const newComponents = components.map(c => {
+                                    if (c.id === selection[0] && c instanceof AsphericLens) {
+                                        mutate(c);
+                                        return c;
+                                    }
+                                    return c;
+                                });
+                                setComponents([...newComponents]);
+                            }}
+                        />
+                    </div>
+                )}
 
                 {isIdealLens && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
@@ -4485,6 +4160,18 @@ export const Inspector: React.FC = () => {
                                 max={32}
                             />
                             <ScrubInput
+                                label="Spectrum Bands"
+                                suffix=""
+                                value={localLampSpectralCount}
+                                onChange={setLocalLampSpectralCount}
+                                onCommit={() => commitLampParams()}
+                                speed={1}
+                                min={1}
+                                max={31}
+                            />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                            <ScrubInput
                                 label="Emitter Radius"
                                 suffix="mm"
                                 value={localEmitterRadius}
@@ -4494,9 +4181,6 @@ export const Inspector: React.FC = () => {
                                 min={0}
                                 max={50}
                             />
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#666', marginTop: 6 }}>
-                            13-band spectrum (340–820 nm)
                         </div>
                     </div>
                 )}
@@ -6375,7 +6059,7 @@ export const Inspector: React.FC = () => {
 
 
                 {/* Card Viewer: beam cross-section + polarization */}
-                {supportsLensProfileEditor(selectedComponent) && (
+                {!isLens && !isAsphericLens && !isCylindrical && !isAchromatDoublet && supportsLensProfileEditor(selectedComponent) && (
                     <LensProfileEditor component={selectedComponent} />
                 )}
 

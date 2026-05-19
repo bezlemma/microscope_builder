@@ -12,6 +12,11 @@ import { AnimationChannel, generateChannelId } from '../PropertyAnimator';
  * The scan head itself has no optical interaction — it only positions/orients
  * its child mirrors and provides a visual housing.
  *
+ * WARNING FOR PRESET AUTHORS: do not use DualGalvoScanHead as a convenient
+ * single animated mirror. It is only for a coupled two-mirror X/Y scan head.
+ * For one steering or scan surface, create a normal Mirror and animate its
+ * panAngle or tiltAngle.
+ *
  * LOCAL COORDINATE FRAME (when oriented with pointAlong):
  *   local +Z = beam propagation direction (world forward)
  *   local +Y = world +Z (upward, toward Mirror 2)

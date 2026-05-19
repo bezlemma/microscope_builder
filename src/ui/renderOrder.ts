@@ -1,0 +1,2 @@
+export const RAY_RENDER_ORDER = 20;
+export const RAY_OCCLUSION_RENDER_ORDER = RAY_RENDER_ORDER + 1;

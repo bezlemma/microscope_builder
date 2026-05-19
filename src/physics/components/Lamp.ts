@@ -39,13 +39,13 @@ export function computeAdditiveOpacity(wavelengthsNm: number[]): number {
  * only cyan/yellow endpoints.
  *   N = 1 → [540]
  *   N = 3 → [460, 540, 650]   (display-friendly B/G/R primaries)
- *   N = 7 → [420, 460, 500, 540, 580, 620, 660]
+ *   N = 7 → [415, 455.8, 496.7, 537.5, 578.3, 619.2, 660]
  */
 export function generateLampSpectrum(N: number): number[] {
     const count = Math.max(1, Math.round(N));
     if (count === 1) return [540];
     if (count === 3) return [460, 540, 650];
-    const minWl = 420;
+    const minWl = 415;
     const maxWl = 660;
     const step = (maxWl - minWl) / (count - 1);
     return Array.from({ length: count }, (_, i) => minWl + i * step);
@@ -65,8 +65,8 @@ export function generateLampSpectrum(N: number): number[] {
 export class Lamp extends OpticalComponent {
     beamRadius: number = 3;       // mm (1/e² beam half-width)
     power: number = 1.0;          // Watts (total optical output power)
-    sourcePointCount: number = 1; // Number of source points (for extended sources)
-    emitterRadius: number = 0;    // Physical emitter radius (mm)
+    sourcePointCount: number = 3; // Number of source points (for extended sources)
+    emitterRadius: number = 0.9;  // Physical emitter radius (mm)
 
     // Discrete wavelengths to emit, in nm. Initialised by the constructor from
     // the default `spectralCount`; can be reassigned directly to override.

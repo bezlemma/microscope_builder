@@ -2,6 +2,7 @@ import { Matrix4, Vector3, Quaternion, Box3, Euler } from 'three';
 import { Ray, HitRecord, InteractionResult } from './types';
 import { cleanVec } from './math_solvers';
 import { v4 as uuidv4 } from 'uuid';
+import type { CatalogAttachment } from '../catalog/types';
 
 function rayLocalBoundsNearT(
     ox: number, oy: number, oz: number,
@@ -109,6 +110,9 @@ export abstract class OpticalComponent implements Surface {
     /** True if this is a ghost component. Ghost components serve as visual reference markers
      *  and are ignored by all ray tracers and wave solvers. */
     isGhost?: boolean;
+
+    /** Optional vendor catalog identity used by the BoM and catalog-backed inspector. */
+    catalog?: CatalogAttachment;
 
     /** Tracks last version for which matrices were computed (dirty-flag). */
     private _matrixVersion: number = -1;

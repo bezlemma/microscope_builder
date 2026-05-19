@@ -4,6 +4,22 @@ import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { evaluateZernikeAberrationWaves, type PupilFunction } from '../PupilFunction';
 
 export type ImmersionMediumKind = 'air' | 'oil' | 'water' | 'silicone' | 'custom';
+export type ObjectiveMechanicalStyle = 'standard' | 'snout';
+
+export interface ObjectiveMechanicalMetrics {
+    a: number;
+    bodyR: number;
+    zFront: number;
+    zBack: number;
+    zTaperStart: number;
+    zTaperEnd: number;
+    opticalFrontRadius: number;
+    frontRadius: number;
+    barrelLength: number;
+    snoutLength: number;
+    snoutCutOffset: number;
+    snoutCutAngle: number;
+}
 
 /**
  * Objective — Aplanatic Phase Surface (Ideal Microscope Objective)
@@ -56,6 +72,11 @@ export class Objective extends OpticalComponent {
     workingDistance: number;
     tubeLensFocal: number;
     diameter: number;           // Physical barrel diameter (mm) — for visual sizing, independent of NA
+    mechanicalStyle: ObjectiveMechanicalStyle;
+    snoutRadius: number;        // Front mechanical radius for the AMS-AGY-style nose
+    snoutLength: number;        // Axial length of the narrow nose before the shoulder
+    snoutCutOffset: number;     // D-cut plane offset from the optical axis
+    snoutCutAngle: number;      // D-cut normal direction in the local XY pupil plane
 
     // Derived (recomputed on parameter change)
     focalLength: number;
@@ -76,6 +97,11 @@ export class Objective extends OpticalComponent {
         workingDistance = 10.0,
         tubeLensFocal = 200,
         diameter = 20,
+        mechanicalStyle = 'standard',
+        snoutRadius = 4,
+        snoutLength = 16,
+        snoutCutOffset = 2,
+        snoutCutAngle = 0,
         name = 'Objective',
     }: {
         NA?: number;
@@ -84,6 +110,11 @@ export class Objective extends OpticalComponent {
         workingDistance?: number;
         tubeLensFocal?: number;
         diameter?: number;
+        mechanicalStyle?: ObjectiveMechanicalStyle;
+        snoutRadius?: number;
+        snoutLength?: number;
+        snoutCutOffset?: number;
+        snoutCutAngle?: number;
         name?: string;
     } = {}) {
         super(name);
@@ -93,6 +124,11 @@ export class Objective extends OpticalComponent {
         this.workingDistance = workingDistance;
         this.tubeLensFocal = tubeLensFocal;
         this.diameter = diameter;
+        this.mechanicalStyle = mechanicalStyle;
+        this.snoutRadius = snoutRadius;
+        this.snoutLength = snoutLength;
+        this.snoutCutOffset = snoutCutOffset;
+        this.snoutCutAngle = snoutCutAngle;
 
         // Derive
         this.focalLength = tubeLensFocal / magnification;
@@ -134,25 +170,60 @@ export class Objective extends OpticalComponent {
         this.recalculate();
     }
 
-    private _updateBounds(): void {
+    getMechanicalMetrics(): ObjectiveMechanicalMetrics {
         const f = this.focalLength;
         const wd = this.workingDistance;
         const a = this.apertureRadius;
-        
-        // Match the bounding cylinder from intersect() and visualizer
         const bodyR = Math.max(a + 1, this.diameter / 2);
+
         const parfocalDistance = 35;
         const zFront = -f + wd;
         const zBack = Math.max(-f + parfocalDistance, zFront + 20);
 
-        // Bounds must cover the physical cylinder AND the optical Abbe sphere (starts at -f)
+        const opticalFrontRadius = this.getOpticalFrontRadius();
+        const standardFrontRadius = this.getFrontRadius();
+        const frontRadius = this.mechanicalStyle === 'snout'
+            ? Math.max(standardFrontRadius, this.snoutRadius)
+            : standardFrontRadius;
+
+        const rawSnoutLength = this.mechanicalStyle === 'snout'
+            ? Math.max(0, this.snoutLength)
+            : 0;
+        const zTaperStart = this.mechanicalStyle === 'snout'
+            ? Math.min(zBack, zFront + rawSnoutLength)
+            : zFront;
+        const remainingBodyLength = Math.max(0, zBack - zTaperStart);
+        const zTaperEnd = zTaperStart + Math.min(15, remainingBodyLength * 0.6);
+        const snoutLength = Math.max(0, zTaperStart - zFront);
+        const snoutCutOffset = Math.max(0, Math.min(this.snoutCutOffset, frontRadius * 0.98));
+
+        return {
+            a,
+            bodyR,
+            zFront,
+            zBack,
+            zTaperStart,
+            zTaperEnd,
+            opticalFrontRadius,
+            frontRadius,
+            barrelLength: zBack - zFront,
+            snoutLength,
+            snoutCutOffset,
+            snoutCutAngle: this.snoutCutAngle,
+        };
+    }
+
+    private _updateBounds(): void {
+        const metrics = this.getMechanicalMetrics();
+
+        // Bounds must cover the physical barrel AND the optical Abbe sphere (starts at -f)
         // AND the principal plane (z=0.01)
-        const minZ = Math.min(-f, zFront);
-        const maxZ = Math.max(0.01, zBack);
+        const minZ = Math.min(-this.focalLength, metrics.zFront);
+        const maxZ = Math.max(0.01, metrics.zBack);
 
         this.bounds.set(
-            new Vector3(-bodyR, -bodyR, minZ),
-            new Vector3(bodyR, bodyR, maxZ)
+            new Vector3(-metrics.bodyR, -metrics.bodyR, minZ),
+            new Vector3(metrics.bodyR, metrics.bodyR, maxZ)
         );
     }
 

@@ -112,6 +112,10 @@ interface ScheduledRenderJobOptions {
     onDetailedProgress?: (progress: RenderJobProgress) => void;
     /** Total number of steps for this job (enables step tracking). */
     totalSteps?: number;
+    /** False lets the live table animation continue while this job renders an off-screen scene. */
+    pauseAnimation?: boolean;
+    /** False prevents this job from blocking live-frame tracing. */
+    blockLiveScene?: boolean;
 }
 
 export function captureAnimatedValues(
@@ -142,6 +146,8 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
         setProgress,
         onDetailedProgress,
         totalSteps: totalStepsOption,
+        pauseAnimation = true,
+        blockLiveScene = true,
     } = options;
 
     const savedPlaying = animStateRef.current.playing;
@@ -152,9 +158,11 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
     let currentStep = 0;
     const totalSteps = totalStepsOption ?? 0;
 
-    scanAccumActiveRef.current = true;
-    setAnimPlaying(false);
-    animator.playing = false;
+    if (blockLiveScene) scanAccumActiveRef.current = true;
+    if (pauseAnimation) {
+        setAnimPlaying(false);
+        animator.playing = false;
+    }
     setSolver3Rendering(true);
     setProgress(0);
 
@@ -179,10 +187,10 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
         if (closed) return;
         closed = true;
         restoreProperties();
-        scanAccumActiveRef.current = false;
+        if (blockLiveScene) scanAccumActiveRef.current = false;
         setSolver3Rendering(false);
         emitProgress(progress);
-        if (savedPlaying) {
+        if (pauseAnimation && savedPlaying) {
             setAnimPlaying(true);
         }
     };

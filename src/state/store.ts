@@ -16,11 +16,13 @@ import { createBrightfieldScene } from '../presets/brightfield';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
 import { createPrismDebugScene } from '../presets/prismDebug';
+import { createPrismRecombinationScene } from '../presets/prismRecombination';
 import { createPolarizationZooScene, POLARIZATION_ZOO_DESCRIPTION } from '../presets/polarizationZoo';
 import { createMZInterferometerScene } from '../presets/mzInterferometer';
 import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
 import { createConfocalScene } from '../presets/confocal';
+import { createObliquePlaneMicroscopeScene } from '../presets/obliquePlaneMicroscope';
 import { createBlankScene } from '../presets/blank';
 import { createOpticalTrapScene } from '../presets/opticalTrap';
 import { createTutorialMicroscopeScene, createTutorialScene } from '../presets/tutorial';
@@ -72,11 +74,13 @@ export enum PresetName {
     Brightfield = "Brightfield",
     LensZoo = "Lens Zoo",
     PrismDebug = "Prism Debug",
+    PrismRecombination = "Prism Recombination",
     PolarizationZoo = "Polarization Zoo",
     MZInterferometer = "MZ Interferometer",
     EpiFluorescence = "Epi-Fluorescence",
     OpenSPIM = "OpenSPIM Lightsheet",
     Confocal = "Confocal Scanning",
+    ObliquePlaneMicroscope = "Oblique Plane Light Sheet",
     OpticalTrap = "Optical Trap",
     Tutorial = "Tutorial",
     Tutorial2 = "Tutorial 2",
@@ -114,6 +118,14 @@ export const tutorialStageAtom = atom<TutorialStage>(1);
 
 export const componentsAtom = atom<OpticalComponent[]>(INITIAL_TUTORIAL.scene);
 
+export interface PendingCatalogPlacement {
+    componentType: string;
+    catalogPartId: string;
+    label: string;
+}
+
+export const pendingCatalogPlacementAtom = atom<PendingCatalogPlacement | null>(null);
+
 /** Normalized preset result — all presets produce this shape. */
 export interface PresetResult {
     scene: OpticalComponent[];
@@ -121,6 +133,8 @@ export interface PresetResult {
     channels?: import('../physics/PropertyAnimator').AnimationChannel[];
     animationPlaying?: boolean;
     animationSpeed?: number;
+    /** Optional timeline render frame count for animated camera/PMT presets. */
+    scanSteps?: number;
     /** Optional full ray-display override for presets with special visibility needs. */
     rayConfig?: Partial<RayConfig>;
     /** Override the forward (rod-tracer) ray-per-source count when this preset
@@ -136,6 +150,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.Brightfield, () => ({ scene: createBrightfieldScene() })],
     [PresetName.LensZoo, () => ({ scene: createLensZooScene() })],
     [PresetName.PrismDebug, () => ({ scene: createPrismDebugScene() })],
+    [PresetName.PrismRecombination, () => createPrismRecombinationScene()],
     [PresetName.PolarizationZoo, () => ({
         scene: createPolarizationZooScene(),
         description: POLARIZATION_ZOO_DESCRIPTION,
@@ -148,9 +163,10 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
+    [PresetName.ObliquePlaneMicroscope, () => createObliquePlaneMicroscopeScene()],
     [PresetName.OpticalTrap, () => ({
         scene: createOpticalTrapScene(),
-        rayCount: 500,
+        rayCount: 200,
         rayConfig: { minRayOpacity: 0, maxRayOpacity: 0.4 },
     })],
     [PresetName.Tutorial, () => createTutorialScene()],
@@ -210,6 +226,9 @@ export const loadPresetAtom = atom(
         if (result.rayConfig) {
             set(rayConfigAtom, prev => ({ ...prev, ...result.rayConfig }));
         }
+        if (result.scanSteps !== undefined) {
+            set(scanAccumTriggerAtom, prev => ({ steps: result.scanSteps!, trigger: prev.trigger }));
+        }
 
         const animator = get(animatorAtom);
         animator.clearAll();
@@ -244,16 +263,17 @@ export const loadPresetAtom = atom(
         const qpds = result.scene.filter((c): c is QPD => c instanceof QPD);
         const hasImageDetector = cameras.length > 0 || pmts.length > 0;
         const hasDetector = hasImageDetector || qpds.length > 0 || cards.length > 0;
-        const shouldPinSampleView = presetName === PresetName.OpenSPIM || presetName === PresetName.OpticalTrap;
+        const shouldPinSampleView =
+            presetName === PresetName.OpenSPIM ||
+            presetName === PresetName.OpticalTrap;
         if (hasDetector || shouldPinSampleView) {
             const pinned = new Set(get(pinnedViewersAtom));
             for (const card of cards) pinned.add(card.id);
             for (const cam of cameras) pinned.add(cam.id);
             for (const pmt of pmts) pinned.add(pmt.id);
             for (const qpd of qpds) pinned.add(qpd.id);
-            // OpenSPIM and Optical Trap both need the local sample view to
-            // make the core interaction legible: light-sheet placement for
-            // OpenSPIM, bead capture inside the flow cell for Optical Trap.
+            // OpenSPIM and Optical Trap need the local sample view to make
+            // the core interaction legible.
             if (shouldPinSampleView) {
                 for (const comp of result.scene) {
                     if (comp instanceof Sample || comp instanceof SampleChamber) {

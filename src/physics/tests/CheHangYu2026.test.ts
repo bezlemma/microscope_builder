@@ -52,6 +52,29 @@ function finalPbsCardChild(scene: ReturnType<typeof createCheHangYu2026Scene>['s
     return null;
 }
 
+function finalPbsBranchPowers(scene: ReturnType<typeof createCheHangYu2026Scene>['scene'], paths: Ray[][]): { transmitted: number; reflected: number } {
+    const pbs = scene.find(c => c instanceof PolarizingBeamSplitter) as PolarizingBeamSplitter;
+    let transmitted = 0;
+    let reflected = 0;
+    for (const path of paths) {
+        let pbsIndex = -1;
+        for (let i = 1; i < path.length - 1; i++) {
+            if (path[i].interactionComponentId === pbs.id) pbsIndex = i;
+        }
+        if (pbsIndex < 0) continue;
+        const isReturnPass = path
+            .slice(0, pbsIndex)
+            .some(ray => ray.interactionComponentId
+                && scene.find(c => c.id === ray.interactionComponentId)?.name.includes('λ/4'));
+        if (!isReturnPass) continue;
+
+        const child = path[pbsIndex + 1];
+        if (child.direction.y < -0.5) transmitted += child.intensity;
+        else if (child.direction.x < -0.5) reflected += child.intensity;
+    }
+    return { transmitted, reflected };
+}
+
 describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
     test('contains the minimum hardware needed to demonstrate angle doubling', () => {
         const { scene } = createCheHangYu2026Scene();
@@ -166,6 +189,32 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
             const longitudinalIm = p.x.im * d.x + p.y.im * d.y + p.z.im * d.z;
             expect(Math.hypot(longitudinalRe, longitudinalIm)).toBeLessThan(1e-6);
             expect(jonesMagSq(p)).toBeCloseTo(1, 5);
+        }
+    });
+
+    test('PBS513 return pass remains mostly transmitted across scan extrema', () => {
+        const resonantHalfAngle = (5 * Math.PI) / 180;
+        const slowHalfAngle = (2.5 * Math.PI) / 180;
+        for (const [scanX, scanY] of [
+            [0, 0],
+            [resonantHalfAngle, slowHalfAngle],
+            [resonantHalfAngle, -slowHalfAngle],
+            [-resonantHalfAngle, slowHalfAngle],
+            [-resonantHalfAngle, -slowHalfAngle],
+        ]) {
+            const { scene } = createCheHangYu2026Scene();
+            const mirrors = scene.filter(c => c instanceof Mirror) as Mirror[];
+            const resonant = mirrors.find(m => m.name.includes('Resonant'))!;
+            const slow = mirrors.find(m => m.name.includes('Slow'))!;
+            resonant.panAngle += scanX;
+            resonant.recomputeRotation();
+            slow.tiltAngle = scanY;
+            slow.recomputeRotation();
+
+            const powers = finalPbsBranchPowers(scene, new Solver1(scene).trace(createSourceRays(scene, 32, 'full')));
+            const total = powers.transmitted + powers.reflected;
+            expect(total).toBeGreaterThan(0.9);
+            expect(powers.reflected / total).toBeLessThan(0.05);
         }
     });
 });

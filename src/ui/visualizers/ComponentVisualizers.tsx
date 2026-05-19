@@ -5,11 +5,12 @@
  * Grouped here to keep OpticalTable.tsx focused on the solver/render loop.
  */
 import React, { useMemo, useState, useRef, useCallback, useContext, createContext } from 'react';
-import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry } from 'three';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry, Box3, Matrix4, Object3D, Mesh, LineBasicMaterial, LineSegments, MeshStandardMaterial, Material } from 'three';
 import { useAtom } from 'jotai';
 import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom, uiLockedAtom } from '../../state/store';
 import { Text, Edges, Line } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
+import { STLLoader, VRMLLoader } from 'three-stdlib';
 import { OpticalComponent } from '../../physics/Component';
 import { Mirror } from '../../physics/components/Mirror';
 import { SphericalLens } from '../../physics/components/SphericalLens';
@@ -51,6 +52,8 @@ import { PointSourceBase } from '../../physics/components/PointSourceBase';
 import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
 import { TrappedBead } from '../../physics/components/TrappedBead';
+import { findCatalogPart } from '../../catalog/catalog';
+import { mechanicalVisualAssetForCatalogPart, type CatalogMechanicalVisualAsset } from '../../catalog/mechanicalVisualAssets';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
@@ -133,6 +136,28 @@ const LENS_FLAT_OPACITY = 0.62;
 const SELECTED_LENS_FLAT_OPACITY = 0.7;
 const LENS_BODY_OPACITY = 0.92;
 const SELECTED_LENS_BODY_OPACITY = 0.96;
+const OBJECTIVE_MECHANICAL_OPACITY = 0.46;
+
+interface EDrawingsBodyMesh {
+    id: number;
+    name?: string;
+    color?: { r: number; g: number; b: number };
+    lineColor?: { r: number; g: number; b: number };
+    sourceOpacity?: number;
+    bounding?: {
+        min: { x: number; y: number; z: number };
+        max: { x: number; y: number; z: number };
+    };
+    vertexCount?: number;
+    positions: number[];
+    normals?: number[];
+    lines?: number[];
+}
+
+interface EDrawingsMechanicalAsset {
+    schema: 'edrawings-hoops-body-mesh-v1';
+    bodies: EDrawingsBodyMesh[];
+}
 
 function tiltedGlassOpacity(orthoOpacity: number, perspOpacity: number, blend: number): number {
     const perspectiveWeight = Math.min(1, Math.max(0, blend) * 1.8);
@@ -476,10 +501,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
     );
 };
 
-export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
-    const [selection] = useAtom(selectionAtom);
-    const isSelected = selection.includes(component.id);
-
+function objectiveVisualMetrics(component: Objective) {
     const f = component.focalLength;
     const a = component.apertureRadius;
     const wd = component.workingDistance;
@@ -494,6 +516,352 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
     const frontRadius = component.getFrontRadius();
     const barrelLength = zBack - zFront;
 
+    return {
+        a,
+        bodyR,
+        zFront,
+        zBack,
+        zTaperEnd,
+        opticalFrontRadius,
+        frontRadius,
+        barrelLength,
+    };
+}
+
+function disposeMaterial(material: Material | Material[]): void {
+    if (Array.isArray(material)) {
+        for (const item of material) item.dispose();
+    } else {
+        material.dispose();
+    }
+}
+
+function disposeObject3D(object: Object3D): void {
+    object.traverse((child) => {
+        const renderable = child as Mesh | LineSegments;
+        if (!renderable.isMesh && renderable.type !== 'LineSegments') return;
+        renderable.geometry?.dispose();
+        if (renderable.material) disposeMaterial(renderable.material);
+    });
+}
+
+function cloneRenderableObject(source: Object3D): Object3D {
+    const object = source.clone(true);
+    object.traverse((child) => {
+        const renderable = child as Mesh | LineSegments;
+        if (!renderable.isMesh && renderable.type !== 'LineSegments') return;
+        if (renderable.geometry) renderable.geometry = renderable.geometry.clone();
+        if (Array.isArray(renderable.material)) renderable.material = renderable.material.map(material => material.clone());
+        else if (renderable.material) renderable.material = renderable.material.clone();
+    });
+    return object;
+}
+
+function standardizeMechanicalMaterials(object: Object3D): void {
+    object.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh) return;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const converted = materials.map((material) => {
+            const source = material as Material & { color?: { getHex: () => number } };
+            return new MeshStandardMaterial({
+                color: source.color?.getHex() ?? 0x24272c,
+                metalness: 0.28,
+                roughness: 0.48,
+                side: DoubleSide,
+                transparent: true,
+                opacity: OBJECTIVE_MECHANICAL_OPACITY,
+                depthWrite: false,
+            });
+        });
+        mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
+        mesh.renderOrder = 2;
+    });
+}
+
+function colorHexFromRgb(color: EDrawingsBodyMesh['color']): number {
+    const r = Math.max(0, Math.min(255, Math.round(color?.r ?? 36)));
+    const g = Math.max(0, Math.min(255, Math.round(color?.g ?? 39)));
+    const b = Math.max(0, Math.min(255, Math.round(color?.b ?? 44)));
+    return (r << 16) | (g << 8) | b;
+}
+
+function objectiveMaterialOpacityForBody(body: EDrawingsBodyMesh): number {
+    const color = body.color;
+    const r = color?.r ?? 36;
+    const g = color?.g ?? 39;
+    const b = color?.b ?? 44;
+    const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+    const brightness = (r + g + b) / 3;
+    if (b > r + 15 && b > g + 8) return 0.32;
+    if (saturation > 80) return 0.68;
+    if (brightness < 24) return 0.56;
+    return OBJECTIVE_MECHANICAL_OPACITY;
+}
+
+function objectiveMaterialMetalnessForBody(body: EDrawingsBodyMesh): number {
+    const color = body.color;
+    const r = color?.r ?? 36;
+    const g = color?.g ?? 39;
+    const b = color?.b ?? 44;
+    const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+    if (b > r + 15 && b > g + 8) return 0.04;
+    return saturation < 40 ? 0.45 : 0.18;
+}
+
+function buildEdrawingsMechanicalObject(asset: EDrawingsMechanicalAsset): Object3D {
+    const object = new Object3D();
+    object.name = 'edrawings-mechanical-asset';
+    for (const body of asset.bodies) {
+        if (!body.positions || body.positions.length < 9) continue;
+        const geometry = new BufferGeometry();
+        geometry.setAttribute('position', new Float32BufferAttribute(body.positions, 3));
+        if (body.normals && body.normals.length === body.positions.length) {
+            geometry.setAttribute('normal', new Float32BufferAttribute(body.normals, 3));
+        } else {
+            geometry.computeVertexNormals();
+        }
+        const color = colorHexFromRgb(body.color);
+        const material = new MeshStandardMaterial({
+            color,
+            metalness: objectiveMaterialMetalnessForBody(body),
+            roughness: 0.42,
+            side: DoubleSide,
+            transparent: true,
+            opacity: objectiveMaterialOpacityForBody(body),
+            depthWrite: false,
+        });
+        const mesh = new Mesh(geometry, material);
+        mesh.name = body.name ? `${body.name}-${body.id}` : `body-${body.id}`;
+        mesh.userData.edrawingsBodyId = body.id;
+        mesh.renderOrder = 2;
+        object.add(mesh);
+
+        if (body.lines && body.lines.length >= 6) {
+            const lineGeometry = new BufferGeometry();
+            lineGeometry.setAttribute('position', new Float32BufferAttribute(body.lines, 3));
+            const lineMaterial = new LineBasicMaterial({
+                color: colorHexFromRgb(body.lineColor ?? { r: 0, g: 0, b: 0 }),
+                transparent: true,
+                opacity: 0.78,
+                depthWrite: false,
+                depthTest: true,
+                toneMapped: false,
+            });
+            const lineSegments = new LineSegments(lineGeometry, lineMaterial);
+            lineSegments.name = body.name ? `${body.name}-${body.id}-lines` : `body-${body.id}-lines`;
+            lineSegments.userData.edrawingsBodyId = body.id;
+            lineSegments.renderOrder = 4;
+            object.add(lineSegments);
+        }
+    }
+    return object;
+}
+
+function useMechanicalAssetObject(asset: CatalogMechanicalVisualAsset): { object: Object3D | null; failed: boolean } {
+    const [state, setState] = useState<{ object: Object3D | null; failed: boolean }>({ object: null, failed: false });
+    const url = assetUrl(asset.url);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        const controller = new AbortController();
+        setState(previous => {
+            if (previous.object) disposeObject3D(previous.object);
+            return { object: null, failed: false };
+        });
+
+        if (asset.format === 'edrawings-json') {
+            fetch(url, { signal: controller.signal })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Could not load ${url}`);
+                    return response.json() as Promise<EDrawingsMechanicalAsset>;
+                })
+                .then(json => {
+                    const object = buildEdrawingsMechanicalObject(json);
+                    if (cancelled) {
+                        disposeObject3D(object);
+                        return;
+                    }
+                    setState({ object, failed: false });
+                })
+                .catch(error => {
+                    if (!cancelled && error?.name !== 'AbortError') setState({ object: null, failed: true });
+                });
+
+            return () => {
+                cancelled = true;
+                controller.abort();
+            };
+        }
+
+        const loader = asset.format === 'wrl' ? new VRMLLoader() : new STLLoader();
+        loader.load(
+            url,
+            (loaded) => {
+                let object: Object3D;
+                if (asset.format === 'stl') {
+                    const geometry = loaded as BufferGeometry;
+                    geometry.computeVertexNormals();
+                    object = new Mesh(geometry, new MeshStandardMaterial({
+                        color: 0x24272c,
+                        metalness: 0.38,
+                        roughness: 0.42,
+                        side: DoubleSide,
+                        transparent: true,
+                        opacity: OBJECTIVE_MECHANICAL_OPACITY,
+                        depthWrite: false,
+                    }));
+                    object.renderOrder = 2;
+                } else {
+                    object = loaded as Object3D;
+                    standardizeMechanicalMaterials(object);
+                }
+                if (cancelled) {
+                    disposeObject3D(object);
+                    return;
+                }
+                setState({ object, failed: false });
+            },
+            undefined,
+            () => {
+                if (!cancelled) setState({ object: null, failed: true });
+            },
+        );
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
+    }, [asset.format, url]);
+
+    React.useEffect(() => {
+        const object = state.object;
+        return () => {
+            if (object) disposeObject3D(object);
+        };
+    }, [state.object]);
+
+    return state;
+}
+
+function assetUrl(url: string): string {
+    if (/^(https?:|blob:|data:)/i.test(url)) return url;
+    const base = import.meta.env.BASE_URL || '/';
+    return `${base.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+}
+
+function dominantAxis(box: Box3): 'x' | 'y' | 'z' {
+    const size = box.getSize(new Vector3());
+    if (size.x >= size.y && size.x >= size.z) return 'x';
+    if (size.y >= size.x && size.y >= size.z) return 'y';
+    return 'z';
+}
+
+function shortestAxis(box: Box3): 'x' | 'y' | 'z' {
+    const size = box.getSize(new Vector3());
+    if (size.x <= size.y && size.x <= size.z) return 'x';
+    if (size.y <= size.x && size.y <= size.z) return 'y';
+    return 'z';
+}
+
+function rotationToLocalZ(axis: 'x' | 'y' | 'z'): Matrix4 {
+    if (axis === 'x') return new Matrix4().makeRotationY(-Math.PI / 2);
+    if (axis === 'y') return new Matrix4().makeRotationX(Math.PI / 2);
+    return new Matrix4().identity();
+}
+
+type CatalogMechanicalComponent = Objective | SphericalLens | AsphericLens | CylindricalLens | AchromatDoublet;
+
+function targetMechanicalDiameter(component: CatalogMechanicalComponent): number {
+    if (component instanceof Objective) return Math.max(objectiveVisualMetrics(component).bodyR * 2, 0.01);
+    if (component instanceof CylindricalLens) return Math.max(component.width, component.apertureRadius * 2, 0.01);
+    return Math.max(component.apertureRadius * 2, 0.01);
+}
+
+function importedUnitScale(size: Vector3, targetDiameter: number): number {
+    const maxSize = Math.max(size.x, size.y, size.z);
+    if (!Number.isFinite(maxSize) || maxSize <= 1e-9) return 1;
+    if (maxSize < Math.max(1, targetDiameter) * 0.1) return 1000;
+    if (maxSize > Math.max(1, targetDiameter) * 100) return 0.001;
+    return 1;
+}
+
+function normalizeLensMechanicalObject(source: Object3D, component: Exclude<CatalogMechanicalComponent, Objective>): Object3D {
+    const object = cloneRenderableObject(source);
+    let box = new Box3().setFromObject(object);
+    if (box.isEmpty()) return object;
+
+    object.applyMatrix4(rotationToLocalZ(shortestAxis(box)));
+    object.updateMatrixWorld(true);
+    box = new Box3().setFromObject(object);
+    if (box.isEmpty()) return object;
+
+    const size = box.getSize(new Vector3());
+    const targetDiameter = targetMechanicalDiameter(component);
+    const unitScale = importedUnitScale(size, targetDiameter);
+    if (unitScale !== 1) {
+        object.applyMatrix4(new Matrix4().makeScale(unitScale, unitScale, unitScale));
+        object.updateMatrixWorld(true);
+        box = new Box3().setFromObject(object);
+        if (box.isEmpty()) return object;
+    }
+
+    const scaledSize = box.getSize(new Vector3());
+    const radialDiameter = Math.max(scaledSize.x, scaledSize.y);
+    if (radialDiameter < targetDiameter * 0.35 || radialDiameter > targetDiameter * 3.5) {
+        const scale = targetDiameter / Math.max(radialDiameter, 1e-6);
+        object.applyMatrix4(new Matrix4().makeScale(scale, scale, scale));
+        object.updateMatrixWorld(true);
+        box = new Box3().setFromObject(object);
+        if (box.isEmpty()) return object;
+    }
+
+    const center = box.getCenter(new Vector3());
+    object.applyMatrix4(new Matrix4().makeTranslation(-center.x, -center.y, -center.z));
+    object.updateMatrixWorld(true);
+    return object;
+}
+
+function normalizeObjectiveMechanicalObject(source: Object3D, component: Objective): Object3D {
+    const object = cloneRenderableObject(source);
+
+    let box = new Box3().setFromObject(object);
+    if (box.isEmpty()) return object;
+
+    object.applyMatrix4(rotationToLocalZ(dominantAxis(box)));
+    object.applyMatrix4(new Matrix4().makeScale(1, 1, -1));
+    object.updateMatrixWorld(true);
+    box = new Box3().setFromObject(object);
+    if (box.isEmpty()) return object;
+    const preCenter = box.getCenter(new Vector3());
+    object.applyMatrix4(new Matrix4().makeTranslation(-preCenter.x, -preCenter.y, 0));
+    object.updateMatrixWorld(true);
+    box = new Box3().setFromObject(object);
+    if (box.isEmpty()) return object;
+
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const rawDiameter = Math.max(size.x, size.y);
+    const metrics = objectiveVisualMetrics(component);
+    const targetDiameter = Math.max(metrics.bodyR * 2, 0.01);
+    const scale = rawDiameter > 1e-6 ? targetDiameter / rawDiameter : 1;
+
+    object.applyMatrix4(new Matrix4().makeTranslation(-center.x, -center.y, -box.min.z));
+    object.applyMatrix4(new Matrix4().makeScale(scale, scale, scale));
+    object.applyMatrix4(new Matrix4().makeTranslation(0, 0, metrics.zFront));
+    object.updateMatrixWorld(true);
+    return object;
+}
+
+function normalizeCatalogMechanicalObject(source: Object3D, component: CatalogMechanicalComponent): Object3D {
+    if (component instanceof Objective) return normalizeObjectiveMechanicalObject(source, component);
+    return normalizeLensMechanicalObject(source, component);
+}
+
+const ObjectiveGenericBody: React.FC<{
+    component: Objective;
+    metrics: ReturnType<typeof objectiveVisualMetrics>;
+}> = ({ component, metrics }) => {
     const getObjectiveBandColor = (mag: number) => {
         if (mag <= 4) return '#ff0000';
         if (mag <= 10) return '#ffd700';
@@ -505,33 +873,29 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
 
     const lathePoints = React.useMemo(() => {
         const pts = [];
-        pts.push(new Vector2(opticalFrontRadius, zFront));
-        pts.push(new Vector2(frontRadius, zFront));
-        if (zTaperEnd > zFront) pts.push(new Vector2(bodyR, zTaperEnd));
-        if (zBack > zTaperEnd) pts.push(new Vector2(bodyR, zBack));
-        pts.push(new Vector2(a, zBack));
-        if (zBack > 0 && zFront < 0) pts.push(new Vector2(a, 0));
-        pts.push(new Vector2(opticalFrontRadius, zFront));
+        pts.push(new Vector2(metrics.opticalFrontRadius, metrics.zFront));
+        pts.push(new Vector2(metrics.frontRadius, metrics.zFront));
+        if (metrics.zTaperEnd > metrics.zFront) pts.push(new Vector2(metrics.bodyR, metrics.zTaperEnd));
+        if (metrics.zBack > metrics.zTaperEnd) pts.push(new Vector2(metrics.bodyR, metrics.zBack));
+        pts.push(new Vector2(metrics.a, metrics.zBack));
+        if (metrics.zBack > 0 && metrics.zFront < 0) pts.push(new Vector2(metrics.a, 0));
+        pts.push(new Vector2(metrics.opticalFrontRadius, metrics.zFront));
         return pts;
-    }, [opticalFrontRadius, zFront, frontRadius, bodyR, zTaperEnd, zBack, a]);
+    }, [metrics]);
 
     return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+        <>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                <cylinderGeometry args={[a, a, 0.5, 32]} />
+                <cylinderGeometry args={[metrics.a, metrics.a, 0.5, 32]} />
                 <meshBasicMaterial color="#b388ff" transparent opacity={0.3} side={DoubleSide} depthWrite={false}/>
             </mesh>
-            <mesh position={[0, 0, (zFront + 0.01) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                <cylinderGeometry args={[a, opticalFrontRadius, Math.abs(zFront - 0.01), 32, 1, true]} />
+            <mesh position={[0, 0, (metrics.zFront + 0.01) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                <cylinderGeometry args={[metrics.a, metrics.opticalFrontRadius, Math.abs(metrics.zFront - 0.01), 32, 1, true]} />
                 <meshStandardMaterial color="#88ccff" transparent opacity={0.15} depthWrite={false} roughness={0.1} side={DoubleSide} />
             </mesh>
-            {wd > 0.1 && (
-                <mesh position={[0, 0, (-f + zFront) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
-                    <cylinderGeometry args={[frontRadius, 0.1, wd, 32]} />
+            {component.workingDistance > 0.1 && (
+                <mesh position={[0, 0, (-component.focalLength + metrics.zFront) / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                    <cylinderGeometry args={[metrics.frontRadius, 0.1, component.workingDistance, 32]} />
                     <meshBasicMaterial color="#00ffcc" transparent opacity={0.15} wireframe={false} depthWrite={false} />
                 </mesh>
             )}
@@ -539,17 +903,67 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
                 <latheGeometry args={[lathePoints, 32]} />
                 <meshStandardMaterial color="#222222" roughness={0.8} metalness={0.2} side={DoubleSide} transparent opacity={0.5} depthWrite={false} />
             </mesh>
-            <mesh position={[0, 0, zTaperEnd + 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
-                <cylinderGeometry args={[bodyR + 0.1, bodyR + 0.1, 3, 32, 1, true]} />
+            <mesh position={[0, 0, metrics.zTaperEnd + 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                <cylinderGeometry args={[metrics.bodyR + 0.1, metrics.bodyR + 0.1, 3, 32, 1, true]} />
                 <meshStandardMaterial color={getObjectiveBandColor(component.magnification)} transparent opacity={0.8} depthWrite={false} roughness={0.3} side={DoubleSide} />
             </mesh>
-            <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[bodyR * 1.5, bodyR * 1.5, barrelLength + 10, 8]} />
+        </>
+    );
+};
+
+const CatalogMechanicalBody: React.FC<{
+    component: CatalogMechanicalComponent;
+    asset: CatalogMechanicalVisualAsset;
+    fallback: React.ReactNode;
+}> = ({ component, asset, fallback }) => {
+    const { object, failed } = useMechanicalAssetObject(asset);
+    const normalizedObject = React.useMemo(() => {
+        if (!object) return null;
+        return normalizeCatalogMechanicalObject(object, component);
+    }, [component, component.version, object]);
+
+    React.useEffect(() => {
+        return () => {
+            if (normalizedObject) disposeObject3D(normalizedObject);
+        };
+    }, [normalizedObject]);
+
+    if (!object || failed || !normalizedObject) return <>{fallback}</>;
+
+    return (
+        <primitive object={normalizedObject} />
+    );
+};
+
+function catalogMechanicalAssetForComponent(component: CatalogMechanicalComponent): CatalogMechanicalVisualAsset | null {
+    const catalogPart = component.catalog ? findCatalogPart(component.catalog.partId) : null;
+    return mechanicalVisualAssetForCatalogPart(catalogPart);
+}
+
+export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
+    const metrics = objectiveVisualMetrics(component);
+    const catalogPart = component.catalog ? findCatalogPart(component.catalog.partId) : null;
+    const mechanicalAsset = mechanicalVisualAssetForCatalogPart(catalogPart);
+    const genericBody = <ObjectiveGenericBody component={component} metrics={metrics} />;
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
+            <mesh position={[0, 0, (metrics.zFront + metrics.zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[metrics.bodyR * 1.5, metrics.bodyR * 1.5, metrics.barrelLength + 10, 8]} />
                 <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} colorWrite={false} />
             </mesh>
-            {isSelected && (
-                <mesh position={[0, 0, (zFront + zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                    <cylinderGeometry args={[bodyR * 1.15, bodyR * 1.15, barrelLength + 2, 32]} />
+            {isSelected && !mechanicalAsset && (
+                <mesh position={[0, 0, (metrics.zFront + metrics.zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[metrics.bodyR * 1.15, metrics.bodyR * 1.15, metrics.barrelLength + 2, 32]} />
                     <meshBasicMaterial color="#b388ff" transparent opacity={0.3} wireframe />
                 </mesh>
             )}
@@ -1144,13 +1558,9 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
     const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {show2D && (
                 <mesh geometry={lensFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
                     <meshBasicMaterial
@@ -1178,6 +1588,18 @@ export const LensVisualizer = ({ component }: { component: SphericalLens }) => {
                 </mesh>
             )}
             <LensRimOutline profilePoints={profilePoints} aperture={aperture} />
+        </>
+    );
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1215,13 +1637,9 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
     const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {show2D && (
                 <mesh geometry={lensFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
                     <meshBasicMaterial
@@ -1249,6 +1667,18 @@ export const AsphericLensVisualizer = ({ component }: { component: AsphericLens 
                 </mesh>
             )}
             <LensRimOutline profilePoints={profilePoints} aperture={aperture} />
+        </>
+    );
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1500,13 +1930,9 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
         return new ShapeGeometry(shape);
     }, [component.width, component.thickness]);
     const topDownOpacity = 0.98 * (1 - Math.min(1, blend * 1.25));
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {topDownOpacity > 0.01 && (
                 <mesh geometry={topDownGeometry} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
                     <meshBasicMaterial
@@ -1519,7 +1945,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
                     <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
-            <mesh geometry={geometry}>
+            <mesh geometry={geometry} renderOrder={2}>
                 <meshStandardMaterial
                     color="#aaddff"
                     opacity={LENS_BODY_OPACITY}
@@ -1531,6 +1957,18 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
                 />
                 <EdgeOutline threshold={15} color="#000000" />
             </mesh>
+        </>
+    );
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1885,13 +2323,9 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
     const flatOpacity = isSelected ? SELECTED_LENS_FLAT_OPACITY : LENS_FLAT_OPACITY;
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {show2D && (
                 <>
                     <mesh geometry={frontFlatGeo} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
@@ -1913,6 +2347,18 @@ export const AchromatDoubletVisualizer = ({ component }: { component: AchromatDo
                 </>
             )}
             <DoubletOutline component={component} frontProfile={frontProfile} backProfile={backProfile} />
+        </>
+    );
+
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };

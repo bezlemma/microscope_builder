@@ -1,49 +1,228 @@
-import React from 'react';
-import { DoubleSide } from 'three';
+import React, { useMemo, useRef, useState } from 'react';
+import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
-import { selectionAtom, selectedRodAtom } from '../state/store';
+import {
+  componentsAtom,
+  measurementAtom,
+  pendingCatalogPlacementAtom,
+  railPlacementAtom,
+  selectedRodAtom,
+  selectionAtom,
+  uiLockedAtom,
+} from '../state/store';
+import { useIsMobile } from './useIsMobile';
+import {
+  selectedComponentIdsInTableRect,
+  tableSelectionRectFromPoints,
+  type TableSelectionRect,
+} from './marqueeSelection';
+
+type MarqueePoint = { x: number; y: number };
+
+interface MarqueeDrag {
+  pointerId: number;
+  start: MarqueePoint;
+  current: MarqueePoint;
+  screenStart: { x: number; y: number };
+  active: boolean;
+}
+
+const MARQUEE_THRESHOLD_PX = 4;
+
+function marqueePlaneGeometry(rect: TableSelectionRect): BufferGeometry {
+  const width = Math.max(0.001, rect.maxX - rect.minX);
+  const height = Math.max(0.001, rect.maxY - rect.minY);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([
+    -width / 2, -height / 2, 0,
+    width / 2, -height / 2, 0,
+    width / 2, height / 2, 0,
+    -width / 2, height / 2, 0,
+  ], 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  return geometry;
+}
+
+function marqueeOutlineGeometry(rect: TableSelectionRect): BufferGeometry {
+  const width = Math.max(0.001, rect.maxX - rect.minX);
+  const height = Math.max(0.001, rect.maxY - rect.minY);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([
+    -width / 2, -height / 2, 0,
+    width / 2, -height / 2, 0,
+    width / 2, -height / 2, 0,
+    width / 2, height / 2, 0,
+    width / 2, height / 2, 0,
+    -width / 2, height / 2, 0,
+    -width / 2, height / 2, 0,
+    -width / 2, -height / 2, 0,
+  ], 3));
+  return geometry;
+}
 
 export const InfiniteTable: React.FC = () => {
+  const [components] = useAtom(componentsAtom);
   const [, setSelection] = useAtom(selectionAtom);
   const [, setSelectedRod] = useAtom(selectedRodAtom);
+  const [measurement] = useAtom(measurementAtom);
+  const [railPlacement] = useAtom(railPlacementAtom);
+  const [pendingCatalogPlacement] = useAtom(pendingCatalogPlacementAtom);
+  const [uiLocked] = useAtom(uiLockedAtom);
+  const isMobile = useIsMobile();
+  const [marquee, setMarquee] = useState<MarqueeDrag | null>(null);
+  const ignoreNextClick = useRef(false);
   // A very large plane to simulate infinity
   const size = 10000;
 
+  const marqueeEnabled = !uiLocked
+    && !isMobile
+    && !measurement.active
+    && !measurement.selectedId
+    && !railPlacement.active
+    && !pendingCatalogPlacement;
+
+  const selectInsideMarquee = (start: MarqueePoint, current: MarqueePoint) => {
+    const rect = tableSelectionRectFromPoints(start, current);
+    setSelection(selectedComponentIdsInTableRect(components, rect));
+    setSelectedRod(null);
+  };
+
+  const handlePointerDown = (event: any) => {
+    if (!marqueeEnabled) return;
+    const pointerType = event.nativeEvent?.pointerType ?? event.pointerType ?? 'mouse';
+    const button = event.nativeEvent?.button ?? event.button ?? 0;
+    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+    if (pointerType !== 'mouse' || button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+
+    event.stopPropagation();
+    const start = { x: event.point.x, y: event.point.y };
+    setMarquee({
+      pointerId,
+      start,
+      current: start,
+      screenStart: {
+        x: event.nativeEvent?.clientX ?? event.clientX ?? 0,
+        y: event.nativeEvent?.clientY ?? event.clientY ?? 0,
+      },
+      active: false,
+    });
+    try { event.target.setPointerCapture(pointerId); } catch { /* pointer capture is best-effort */ }
+  };
+
+  const handlePointerMove = (event: any) => {
+    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+    if (!marquee || pointerId !== marquee.pointerId) return;
+    event.stopPropagation();
+
+    const screenX = event.nativeEvent?.clientX ?? event.clientX ?? marquee.screenStart.x;
+    const screenY = event.nativeEvent?.clientY ?? event.clientY ?? marquee.screenStart.y;
+    const dx = screenX - marquee.screenStart.x;
+    const dy = screenY - marquee.screenStart.y;
+    const active = marquee.active || dx * dx + dy * dy >= MARQUEE_THRESHOLD_PX * MARQUEE_THRESHOLD_PX;
+    const current = { x: event.point.x, y: event.point.y };
+
+    setMarquee({ ...marquee, current, active });
+    if (active) selectInsideMarquee(marquee.start, current);
+  };
+
+  const handlePointerUp = (event: any) => {
+    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+    if (!marquee || pointerId !== marquee.pointerId) return;
+    event.stopPropagation();
+    try { event.target.releasePointerCapture(pointerId); } catch { /* noop */ }
+
+    if (marquee.active) {
+      selectInsideMarquee(marquee.start, { x: event.point.x, y: event.point.y });
+      ignoreNextClick.current = true;
+    }
+    setMarquee(null);
+  };
+
   // Click handler: clear both component and rod selection on empty-space click.
-  const handleClick = () => {
+  const handleClick = (event: any) => {
+    if (ignoreNextClick.current) {
+      ignoreNextClick.current = false;
+      event.stopPropagation();
+      return;
+    }
+    if (uiLocked) return;
     setSelection([]);
     setSelectedRod(null);
   };
 
-  return (
-    <mesh
-      position={[0, 0, -42]} // Shifted down so components at Z=0 are 42mm above table (ORCA height)
-      receiveShadow
-      onClick={handleClick}
-      userData={{ svgExport: 'skip' }}
-    >
-      {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
-      <planeGeometry args={[size, size]} />
-      <meshStandardMaterial
-        color="#333"
-        roughness={0.8}
-        metalness={0.2}
-      >
-        {/* We use a texture or just relying on mapping? 
-            Writing a full custom shader material is cleaner for the holes.
-            Let's switch to shaderMaterial or use an alphaMap. 
-            Actually, for simplicity and standard material lighting, 
-            let's just make a CanvasTexture or DataTexture and repeat it.
-        */}
-      </meshStandardMaterial>
+  const marqueeRect = marquee?.active
+    ? tableSelectionRectFromPoints(marquee.start, marquee.current)
+    : null;
+  const marqueeFillGeometry = useMemo(
+    () => marqueeRect ? marqueePlaneGeometry(marqueeRect) : null,
+    [marqueeRect?.minX, marqueeRect?.maxX, marqueeRect?.minY, marqueeRect?.maxY],
+  );
+  const marqueeBorderGeometry = useMemo(
+    () => marqueeRect ? marqueeOutlineGeometry(marqueeRect) : null,
+    [marqueeRect?.minX, marqueeRect?.maxX, marqueeRect?.minY, marqueeRect?.maxY],
+  );
+  const marqueeCenter = marqueeRect
+    ? [(marqueeRect.minX + marqueeRect.maxX) / 2, (marqueeRect.minY + marqueeRect.maxY) / 2, -38] as const
+    : null;
 
-      {/* 
-         Better approach for "Holes":
-         A GridHelper is lines.
-         Texture is best.
-      */}
-      <TableHoleMaterial size={size} />
-    </mesh>
+  return (
+    <>
+      <mesh
+        position={[0, 0, -42]} // Shifted down so components at Z=0 are 42mm above table (ORCA height)
+        receiveShadow
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={handleClick}
+        userData={{ svgExport: 'skip' }}
+      >
+        {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
+        <planeGeometry args={[size, size]} />
+        <meshStandardMaterial
+          color="#333"
+          roughness={0.8}
+          metalness={0.2}
+        >
+          {/* We use a texture or just relying on mapping?
+              Writing a full custom shader material is cleaner for the holes.
+              Let's switch to shaderMaterial or use an alphaMap.
+              Actually, for simplicity and standard material lighting,
+              let's just make a CanvasTexture or DataTexture and repeat it.
+          */}
+        </meshStandardMaterial>
+
+        {/*
+           Better approach for "Holes":
+           A GridHelper is lines.
+           Texture is best.
+        */}
+        <TableHoleMaterial size={size} />
+      </mesh>
+
+      {marqueeRect && marqueeCenter && marqueeFillGeometry && marqueeBorderGeometry && (
+        <group position={marqueeCenter} userData={{ svgExport: 'skip' }}>
+          <mesh geometry={marqueeFillGeometry}>
+            <meshBasicMaterial
+              color="#64ffda"
+              transparent
+              opacity={0.16}
+              depthWrite={false}
+              side={DoubleSide}
+              toneMapped={false}
+            />
+          </mesh>
+          <lineSegments geometry={marqueeBorderGeometry}>
+            <lineBasicMaterial
+              color="#dffcf6"
+              transparent
+              opacity={0.88}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </lineSegments>
+        </group>
+      )}
+    </>
   );
 };
 

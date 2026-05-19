@@ -87,6 +87,21 @@ function lampSpectralWavelengths(lamp: Lamp): number[] {
     return wavelengths.length > 0 ? wavelengths : [550];
 }
 
+function lampEffectiveSourcePointCount(lamp: Lamp): number {
+    const sourcePointCount = Math.min(
+        32,
+        Math.max(1, Math.round(Number.isFinite(lamp.sourcePointCount) ? lamp.sourcePointCount : 1)),
+    );
+    const emitterRadius = Number.isFinite(lamp.emitterRadius) ? Math.max(0, lamp.emitterRadius) : 0;
+    return emitterRadius > 0 ? sourcePointCount : 1;
+}
+
+function lampSourceKey(lamp: Lamp, wavelengthNm: number, sourcePointIndex: number, sourcePointCount: number): string {
+    return sourcePointCount > 1
+        ? `${lamp.id}_${wavelengthNm}nm_pt${sourcePointIndex}`
+        : `${lamp.id}_${wavelengthNm}nm`;
+}
+
 export class Solver1 {
     maxDepth: number = 32;
     scene: OpticalComponent[];
@@ -341,9 +356,14 @@ export class Solver1 {
 
             if (component instanceof Lamp) {
                 const spectralWavelengths = lampSpectralWavelengths(component);
-                const spectralCount = spectralWavelengths.length;
+                const sourcePointCount = lampEffectiveSourcePointCount(component);
                 for (const wavelengthNm of spectralWavelengths) {
-                    targets.set(`${component.id}_${wavelengthNm}nm`, component.power / spectralCount);
+                    for (let pointIndex = 0; pointIndex < sourcePointCount; pointIndex++) {
+                        targets.set(
+                            lampSourceKey(component, wavelengthNm, pointIndex, sourcePointCount),
+                            (component.power / spectralWavelengths.length) / sourcePointCount,
+                        );
+                    }
                 }
             }
         }
@@ -368,8 +388,15 @@ export class Solver1 {
 
             if (component instanceof Lamp) {
                 radii.set(component.id, component.beamRadius);
+                const sourcePointCount = lampEffectiveSourcePointCount(component);
                 for (const wavelengthNm of lampSpectralWavelengths(component)) {
                     radii.set(`${component.id}_${wavelengthNm}nm`, component.beamRadius);
+                    for (let pointIndex = 0; pointIndex < sourcePointCount; pointIndex++) {
+                        radii.set(
+                            lampSourceKey(component, wavelengthNm, pointIndex, sourcePointCount),
+                            component.beamRadius,
+                        );
+                    }
                 }
             }
         }

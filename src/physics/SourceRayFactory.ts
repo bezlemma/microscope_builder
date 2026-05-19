@@ -33,6 +33,15 @@ function finiteNonNegative(value: number, fallback: number): number {
     return Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
 
+function distributedGroupRayCount(totalRayBudget: number, groupCount: number, groupIndex: number): number {
+    const requested = Math.max(1, Math.floor(totalRayBudget));
+    const groups = Math.max(1, Math.floor(groupCount));
+    if (requested <= groups) return 1;
+    const base = Math.floor(requested / groups);
+    const remainder = requested % groups;
+    return base + (groupIndex < remainder ? 1 : 0);
+}
+
 function linearPolarizationFromSourceFrame(source: OpticalComponent, angleRad: number): Ray['polarization'] {
     const u = new Vector3(1, 0, 0).applyQuaternion(source.rotation).normalize();
     const v = new Vector3(0, 1, 0).applyQuaternion(source.rotation).normalize();
@@ -265,17 +274,20 @@ export function createSourceRays(
                 .addScaledVector(up, Math.sin(phi) * radius);
         };
 
+        const lampGroupCount = spectralWavelengths.length * effectiveSourcePoints;
+        let lampGroupIndex = 0;
+
         for (const wavelengthNm of spectralWavelengths) {
             const wavelength = wavelengthNm * 1e-9;
             const defaultRays = Math.max(1, rayCount);
-            const totalRays = mode === 'full'
-                ? (defaultRays >= 16 ? Math.max(1, Math.floor(defaultRays / 2)) : defaultRays)
-                : 0;
-            const rayDirectionsPerPoint = mode === 'full' ? 1 + totalRays : 1;
             const sourcePointPower = (lampPower / spectralWavelengths.length) / effectiveSourcePoints;
 
             for (let sourcePointIndex = 0; sourcePointIndex < effectiveSourcePoints; sourcePointIndex++) {
                 const origin = sourceOrigin(sourcePointIndex);
+                const rayDirectionsPerPoint = mode === 'full'
+                    ? distributedGroupRayCount(defaultRays, lampGroupCount, lampGroupIndex)
+                    : 1;
+                lampGroupIndex++;
                 // Each (wavelength, emitter point) sub-bundle gets its own
                 // sourceId. Beamlets that share a sourceId are internally
                 // coherent (modulo the L_c cutoff inside Solver 2); different

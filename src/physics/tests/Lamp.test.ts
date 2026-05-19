@@ -3,7 +3,12 @@ import { generateLampSpectrum } from '../components/Lamp';
 
 describe('Lamp spectrum generation', () => {
     test('default broadband sampling covers violet through red for prism dispersion', () => {
-        expect(generateLampSpectrum(7)).toEqual([420, 460, 500, 540, 580, 620, 660]);
+        const spectrum = generateLampSpectrum(7);
+
+        expect(spectrum).toHaveLength(7);
+        expect(spectrum[0]).toBe(415);
+        expect(spectrum[3]).toBeCloseTo(537.5, 12);
+        expect(spectrum[6]).toBe(660);
     });
 
     test('three-line lamps use blue, green, and red display primaries', () => {
