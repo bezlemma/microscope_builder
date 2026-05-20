@@ -20,6 +20,7 @@ import { BeamSplitter } from './components/BeamSplitter';
 import { DichroicMirror } from './components/DichroicMirror';
 import { SampleChamber } from './components/SampleChamber';
 import { Filter } from './components/Filter';
+import { OpticalWindow } from './components/OpticalWindow';
 import { Camera } from './components/Camera';
 import { Sample } from './components/Sample';
 import { Objective } from './components/Objective';
@@ -43,7 +44,6 @@ import { AOD } from './components/AOD';
 import { QPD } from './components/QPD';
 import { Rail } from './components/Rail';
 import { MediumVolume } from './components/MediumVolume';
-import { PupilMaskElement } from './components/PupilMaskElement';
 import { PointSource2D } from './components/PointSource2D';
 import { PointSource3D } from './components/PointSource3D';
 import { ConeSource3D } from './components/ConeSource3D';
@@ -75,6 +75,7 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['DichroicMirror',  { ctor: DichroicMirror }],
     ['SampleChamber',   { ctor: SampleChamber }],
     ['Filter',          { ctor: Filter }],
+    ['OpticalWindow',   { ctor: OpticalWindow }],
     ['Camera',          { ctor: Camera }],
     ['Sample',          { ctor: Sample }],
     ['Objective',       { ctor: Objective }],
@@ -98,7 +99,6 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['QPD',             { ctor: QPD }],
     ['Rail',            { ctor: Rail }],
     ['MediumVolume',    { ctor: MediumVolume }],
-    ['PupilMaskElement', { ctor: PupilMaskElement }],
     // Source variants (must appear before any parent class checks; they're leaf classes)
     ['PointSource2D',   { ctor: PointSource2D }],
     ['PointSource3D',   { ctor: PointSource3D }],

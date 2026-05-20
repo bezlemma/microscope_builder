@@ -5,12 +5,23 @@ import {
     componentsAtom,
     loadPresetAtom,
     PresetName,
+    rayConfigAtom,
     startTutorialStage2Atom,
     tutorialStageAtom,
 } from '../store';
 import { Camera } from '../../physics/components/Camera';
 
 describe('Tutorial preset loading', () => {
+    test('Tutorial starts with the dense ray default', () => {
+        const store = createStore();
+
+        expect(store.get(activePresetAtom)).toBe(PresetName.Tutorial);
+        expect(store.get(rayConfigAtom).rayCount).toBe(200);
+
+        store.set(loadPresetAtom, PresetName.Tutorial);
+        expect(store.get(rayConfigAtom).rayCount).toBe(200);
+    });
+
     test('the tutorial completion action switches to the Tutorial 2 preset', () => {
         const store = createStore();
 

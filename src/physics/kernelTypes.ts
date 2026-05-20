@@ -34,7 +34,7 @@ export interface KernelTraceComponent {
     };
     /** Clear-aperture radius (mm) exposed for detector importance sampling.
      *  Zero (or undefined) means the detector sampler falls back to a generic
-     *  target disc. Set for Aperture / SlitAperture / PupilMaskElement so
+     *  target disc. Set for Aperture / SlitAperture so
      *  PMT backward rays correctly aim at the actual pinhole. */
     openingRadius?: number;
     chkIntersection(ray: Ray, maxDistance?: number): HitRecord | null;

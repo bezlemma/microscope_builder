@@ -94,6 +94,7 @@ export function createTutorialScene(): PresetResult {
 
     return {
         scene,
+        rayCount: 200,
         description:
             "Drag the mirrors to make a beam expander. The prism then splits the white light into a rainbow on the screen. Try adding components from the left bar, or explore the other presets.",
     };

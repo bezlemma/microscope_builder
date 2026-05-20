@@ -4,20 +4,37 @@ import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Objective } from '../physics/components/Objective';
 import { PrismLens } from '../physics/components/PrismLens';
+import { Mirror } from '../physics/components/Mirror';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { Filter } from '../physics/components/Filter';
+import { SpectralProfile } from '../physics/SpectralProfile';
 import type { OpticalComponent } from '../physics/Component';
 import { Vector3 } from 'three';
 import { THORLABS_GENERATED_CATALOG } from './thorlabsGeneratedCatalog';
+import { THORLABS_GENERATED_FOLD_OPTICS_CATALOG } from './thorlabsGeneratedFoldOpticsCatalog';
+import { THORLABS_GENERATED_FILTERS_CATALOG } from './thorlabsGeneratedFiltersCatalog';
 import { THORLABS_SEED_CATALOG } from './thorlabsSeedCatalog';
+import { ASI_SEED_CATALOG } from './asiSeedCatalog';
 import type { CatalogAttachment, CatalogFile, CatalogPart, CatalogComponentType } from './types';
 import { resolveCatalogPartGeometry } from './catalogGeometryAssets';
 
-export const CATALOG_SNAPSHOT_VERSION = 'thorlabs-optics-2026-05-19';
+export const CATALOG_SNAPSHOT_VERSION = 'optics-catalog-2026-05-20';
 
-const GENERATED_PART_IDS = new Set(THORLABS_GENERATED_CATALOG.map(part => part.id));
+const GENERATED_PART_IDS = new Set([
+    ...THORLABS_GENERATED_CATALOG.map(part => part.id),
+    ...THORLABS_GENERATED_FOLD_OPTICS_CATALOG.map(part => part.id),
+    ...THORLABS_GENERATED_FILTERS_CATALOG.map(part => part.id),
+]);
 
 const RAW_CATALOG_PARTS: CatalogPart[] = [
     ...THORLABS_GENERATED_CATALOG,
+    ...THORLABS_GENERATED_FOLD_OPTICS_CATALOG,
+    ...THORLABS_GENERATED_FILTERS_CATALOG,
     ...THORLABS_SEED_CATALOG.filter(part => !GENERATED_PART_IDS.has(part.id)),
+    ...ASI_SEED_CATALOG,
 ];
 
 function numericSpec(part: CatalogPart, key: string): number | undefined {
@@ -88,6 +105,12 @@ export function componentCatalogType(component: OpticalComponent): CatalogCompon
     if (component instanceof AchromatDoublet) return 'achromatDoublet';
     if (component instanceof Objective) return 'objective';
     if (component instanceof PrismLens) return 'prism';
+    if (component instanceof CurvedMirror) return 'curvedMirror';
+    if (component instanceof DichroicMirror) return 'dichroic';
+    if (component instanceof PolarizingBeamSplitter) return 'polarizingBeamSplitter';
+    if (component instanceof BeamSplitter) return 'beamSplitter';
+    if (component instanceof Filter) return 'filter';
+    if (component instanceof Mirror) return 'mirror';
     return 'unknown';
 }
 
@@ -99,6 +122,12 @@ export function catalogComponentTypeForPaletteType(type: string): CatalogCompone
         case 'achromatDoublet': return 'achromatDoublet';
         case 'objective': return 'objective';
         case 'prism': return 'prism';
+        case 'mirror': return 'mirror';
+        case 'curvedMirror': return 'curvedMirror';
+        case 'beamSplitter': return 'beamSplitter';
+        case 'polarizingBeamSplitter': return 'polarizingBeamSplitter';
+        case 'dichroic': return 'dichroic';
+        case 'filter': return 'filter';
         default: return 'unknown';
     }
 }
@@ -216,6 +245,21 @@ function angleProfileDifference(a: readonly [number, number][], b: readonly [num
     return total / (anglesA.length * 180);
 }
 
+function catalogFaceDiameter(part: CatalogPart): number | undefined {
+    const normalized = part.normalized;
+    if (!('diameterMm' in normalized) && !('widthMm' in normalized) && !('heightMm' in normalized)) return undefined;
+    if ('diameterMm' in normalized && typeof normalized.diameterMm === 'number') return normalized.diameterMm;
+    const width = 'widthMm' in normalized ? normalized.widthMm : undefined;
+    const height = 'heightMm' in normalized ? normalized.heightMm : undefined;
+    if (typeof width === 'number' && typeof height === 'number') return Math.max(width, height);
+    return width ?? height;
+}
+
+function catalogThickness(part: CatalogPart): number | undefined {
+    const normalized = part.normalized;
+    return 'thicknessMm' in normalized ? normalized.thicknessMm : undefined;
+}
+
 export function scoreCatalogPartAgainstDesignComponent(component: OpticalComponent, part: CatalogPart): number {
     if (component instanceof SphericalLens) return scoreCatalogPartAgainstSphericalLens(component, part);
 
@@ -285,6 +329,61 @@ export function scoreCatalogPartAgainstDesignComponent(component: OpticalCompone
             0.8 * angleProfileDifference(component.vertices, params.verticesMm) +
             0.6 * relativeDifference(component.ior, params.ior) +
             0.8 * relativeDifference(component.numFaces, params.verticesMm.length)
+        );
+    }
+
+    if (component instanceof CurvedMirror) {
+        if (part.normalized.kind !== 'curvedMirror') return Number.POSITIVE_INFINITY;
+        return (
+            2.0 * relativeDifference(component.diameter, part.normalized.diameterMm) +
+            1.8 * relativeDifference(component.radiusOfCurvature, part.normalized.radiusOfCurvatureMm) +
+            0.6 * relativeDifference(component.thickness, part.normalized.thicknessMm)
+        );
+    }
+
+    if (component instanceof Mirror) {
+        if (part.normalized.kind !== 'mirror') return Number.POSITIVE_INFINITY;
+        return (
+            2.0 * relativeDifference(component.diameter, catalogFaceDiameter(part)) +
+            0.6 * relativeDifference(component.thickness, catalogThickness(part))
+        );
+    }
+
+    if (component instanceof DichroicMirror) {
+        if (part.normalized.kind !== 'dichroic') return Number.POSITIVE_INFINITY;
+        return (
+            2.0 * relativeDifference(component.diameter, catalogFaceDiameter(part)) +
+            0.6 * relativeDifference(component.thickness, part.normalized.thicknessMm) +
+            1.2 * relativeDifference(component.spectralProfile.cutoffNm, part.normalized.cutoffWavelengthNm)
+        );
+    }
+
+    if (component instanceof PolarizingBeamSplitter) {
+        if (part.normalized.kind !== 'polarizingBeamSplitter') return Number.POSITIVE_INFINITY;
+        return (
+            2.0 * relativeDifference(component.diameter, catalogFaceDiameter(part)) +
+            0.6 * relativeDifference(component.thickness, part.normalized.thicknessMm)
+        );
+    }
+
+    if (component instanceof BeamSplitter) {
+        if (part.normalized.kind !== 'beamSplitter') return Number.POSITIVE_INFINITY;
+        return (
+            2.0 * relativeDifference(component.diameter, catalogFaceDiameter(part)) +
+            0.6 * relativeDifference(component.thickness, part.normalized.thicknessMm) +
+            0.8 * relativeDifference(component.splitRatio, part.normalized.splitRatio)
+        );
+    }
+
+    if (component instanceof Filter) {
+        if (part.normalized.kind !== 'filter') return Number.POSITIVE_INFINITY;
+        const targetBand = component.spectralProfile.bands[0];
+        return (
+            2.0 * relativeDifference(component.diameter, catalogFaceDiameter(part)) +
+            0.6 * relativeDifference(component.thickness, part.normalized.thicknessMm) +
+            1.4 * relativeDifference(component.spectralProfile.cutoffNm, part.normalized.cutoffWavelengthNm) +
+            1.4 * relativeDifference(targetBand?.center, part.normalized.centerWavelengthNm) +
+            0.8 * relativeDifference(targetBand?.width, part.normalized.bandwidthNm)
         );
     }
 
@@ -420,6 +519,103 @@ function applyPrismPart(component: PrismLens, part: CatalogPart): boolean {
     return true;
 }
 
+function normalizedApertureDiameter(part: CatalogPart): number | undefined {
+    const faceDiameter = catalogFaceDiameter(part);
+    return faceDiameter !== undefined && Number.isFinite(faceDiameter) && faceDiameter > 0 ? faceDiameter : undefined;
+}
+
+function updateCircularPlateBounds(component: { diameter: number; thickness: number; bounds: OpticalComponent['bounds'] }): void {
+    const r = component.diameter / 2;
+    component.bounds.set(
+        new Vector3(-r, -r, -component.thickness / 2),
+        new Vector3(r, r, component.thickness / 2),
+    );
+}
+
+function applyMirrorPart(component: Mirror, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'mirror') return false;
+    component.name = part.sku;
+    component.diameter = normalizedApertureDiameter(part) ?? component.diameter;
+    component.thickness = part.normalized.thicknessMm;
+    updateCircularPlateBounds(component);
+    return true;
+}
+
+function applyCurvedMirrorPart(component: CurvedMirror, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'curvedMirror') return false;
+    component.name = part.sku;
+    component.diameter = part.normalized.diameterMm;
+    component.thickness = part.normalized.thicknessMm;
+    component.radiusOfCurvature = part.normalized.radiusOfCurvatureMm;
+    updateCircularPlateBounds(component);
+    component.invalidateMesh();
+    return true;
+}
+
+function applyBeamSplitterPart(component: BeamSplitter, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'beamSplitter') return false;
+    component.name = part.sku;
+    component.diameter = normalizedApertureDiameter(part) ?? component.diameter;
+    component.thickness = part.normalized.thicknessMm;
+    component.splitRatio = part.normalized.splitRatio ?? component.splitRatio;
+    updateCircularPlateBounds(component);
+    return true;
+}
+
+function applyPolarizingBeamSplitterPart(component: PolarizingBeamSplitter, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'polarizingBeamSplitter') return false;
+    component.name = part.sku;
+    component.diameter = normalizedApertureDiameter(part) ?? component.diameter;
+    component.thickness = part.normalized.thicknessMm;
+    updateCircularPlateBounds(component);
+    return true;
+}
+
+function applyDichroicPart(component: DichroicMirror, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'dichroic') return false;
+    component.name = part.sku;
+    component.diameter = normalizedApertureDiameter(part) ?? component.diameter;
+    component.thickness = part.normalized.thicknessMm;
+    if (part.normalized.cutoffWavelengthNm) {
+        component.spectralProfile = new SpectralProfile(part.normalized.filterKind, part.normalized.cutoffWavelengthNm);
+    }
+    updateCircularPlateBounds(component);
+    return true;
+}
+
+function spectralProfileFromFilterPart(part: CatalogPart): SpectralProfile {
+    if (part.normalized.kind !== 'filter') return new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]);
+    const params = part.normalized;
+    if (params.filterKind === 'bandpass') {
+        const center = params.centerWavelengthNm ?? params.cutoffWavelengthNm ?? 525;
+        const width = params.bandwidthNm ?? 50;
+        return new SpectralProfile('bandpass', center, [{ center, width }], 6);
+    }
+    if (params.filterKind === 'multiband') {
+        const center = params.centerWavelengthNm ?? params.cutoffWavelengthNm ?? 525;
+        const width = params.bandwidthNm ?? 50;
+        return new SpectralProfile('multiband', center, [{ center, width }], 6);
+    }
+    return new SpectralProfile(
+        params.filterKind,
+        params.cutoffWavelengthNm ?? params.centerWavelengthNm ?? 500,
+        params.centerWavelengthNm && params.bandwidthNm
+            ? [{ center: params.centerWavelengthNm, width: params.bandwidthNm }]
+            : undefined,
+        6,
+    );
+}
+
+function applyFilterPart(component: Filter, part: CatalogPart): boolean {
+    if (part.normalized.kind !== 'filter') return false;
+    component.name = part.sku;
+    component.diameter = normalizedApertureDiameter(part) ?? component.diameter;
+    component.thickness = part.normalized.thicknessMm;
+    component.spectralProfile = spectralProfileFromFilterPart(part);
+    updateCircularPlateBounds(component);
+    return true;
+}
+
 export function applyCatalogPartToComponent(component: OpticalComponent, part: CatalogPart): boolean {
     let applied = false;
     if (component instanceof SphericalLens) applied = applySphericalLensPart(component, part);
@@ -428,6 +624,12 @@ export function applyCatalogPartToComponent(component: OpticalComponent, part: C
     else if (component instanceof AchromatDoublet) applied = applyAchromatPart(component, part);
     else if (component instanceof Objective) applied = applyObjectivePart(component, part);
     else if (component instanceof PrismLens) applied = applyPrismPart(component, part);
+    else if (component instanceof CurvedMirror) applied = applyCurvedMirrorPart(component, part);
+    else if (component instanceof DichroicMirror) applied = applyDichroicPart(component, part);
+    else if (component instanceof PolarizingBeamSplitter) applied = applyPolarizingBeamSplitterPart(component, part);
+    else if (component instanceof BeamSplitter) applied = applyBeamSplitterPart(component, part);
+    else if (component instanceof Filter) applied = applyFilterPart(component, part);
+    else if (component instanceof Mirror) applied = applyMirrorPart(component, part);
 
     if (applied) {
         component.catalog = makeCatalogAttachment(part);
@@ -461,15 +663,22 @@ export function summarizeBom(components: OpticalComponent[]): BomSummary {
     for (const component of components) {
         const catalog = component.catalog;
         if (!catalog || component.isGhost || component.isSubComponent) continue;
+        const price = catalog.price ?? findCatalogPart(catalog.partId)?.price;
+        const linePart = price && !catalog.price ? { ...catalog, price } : catalog;
         const line = grouped.get(catalog.partId) ?? {
-            part: catalog,
+            part: linePart,
             quantity: 0,
             componentNames: [],
-            unitPrice: catalog.price?.amount,
-            currency: catalog.price?.currency,
+            unitPrice: price?.amount,
+            currency: price?.currency,
         };
         line.quantity += 1;
         line.componentNames.push(component.name);
+        if (line.unitPrice === undefined && price) {
+            line.part = linePart;
+            line.unitPrice = price.amount;
+            line.currency = price.currency;
+        }
         if (line.unitPrice !== undefined) line.totalPrice = line.unitPrice * line.quantity;
         grouped.set(catalog.partId, line);
     }

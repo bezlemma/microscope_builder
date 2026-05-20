@@ -7,6 +7,12 @@ import { CylindricalLens } from '../../physics/components/CylindricalLens';
 import { AchromatDoublet } from '../../physics/components/AchromatDoublet';
 import { Objective } from '../../physics/components/Objective';
 import { PrismLens } from '../../physics/components/PrismLens';
+import { Mirror } from '../../physics/components/Mirror';
+import { CurvedMirror } from '../../physics/components/CurvedMirror';
+import { BeamSplitter } from '../../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../../physics/components/PolarizingBeamSplitter';
+import { DichroicMirror } from '../../physics/components/DichroicMirror';
+import { Filter } from '../../physics/components/Filter';
 
 function forwardDirection(type: string): Vector3 {
     const component = createComponentForType(type);
@@ -23,6 +29,7 @@ describe('Component factory placement defaults', () => {
             'aperture',
             'slitAperture',
             'filter',
+            'opticalWindow',
             'halfWavePlate',
             'quarterWavePlate',
             'polarizer',
@@ -103,6 +110,10 @@ describe('Component factory placement defaults', () => {
         expect(bead.visualGlowRadius).toBeLessThanOrEqual(0.015);
     });
 
+    test('pupil masks are not exposed as generic draggable polarization components', () => {
+        expect(createComponentForType('pupilMask')).toBeNull();
+    });
+
     test('catalog-backed creation is explicit and leaves platonic defaults unchanged', () => {
         const plain = createComponentForType('lens') as SphericalLens;
         const catalog = createCatalogComponentForType('lens', 'thorlabs:LA1509-A') as SphericalLens;
@@ -132,5 +143,27 @@ describe('Component factory placement defaults', () => {
         expect(objective.diameter).toBeCloseTo(32, 6);
         expect(prism.catalog?.partId).toBe('thorlabs:PS910');
         expect(prism.vertices).toHaveLength(3);
+    });
+
+    test('catalog-backed creation supports generated mirror and splitter families', () => {
+        const mirror = createCatalogComponentForType('mirror', 'thorlabs:PF10-03-P01') as Mirror;
+        const curved = createCatalogComponentForType('curvedMirror', 'thorlabs:CM254-050-P01') as CurvedMirror;
+        const splitter = createCatalogComponentForType('beamSplitter', 'thorlabs:BS013') as BeamSplitter;
+        const pbs = createCatalogComponentForType('polarizingBeamSplitter', 'thorlabs:PBS513') as PolarizingBeamSplitter;
+        const dichroic = createCatalogComponentForType('dichroic', 'thorlabs:DMLP505') as DichroicMirror;
+        const filter = createCatalogComponentForType('filter', 'thorlabs:FBH850-10') as Filter;
+
+        expect(mirror.catalog?.partId).toBe('thorlabs:PF10-03-P01');
+        expect(mirror.diameter).toBeCloseTo(25.4, 6);
+        expect(curved.catalog?.partId).toBe('thorlabs:CM254-050-P01');
+        expect(curved.radiusOfCurvature).toBeCloseTo(100, 6);
+        expect(splitter.catalog?.partId).toBe('thorlabs:BS013');
+        expect(splitter.thickness).toBeCloseTo(2, 6);
+        expect(pbs.catalog?.partId).toBe('thorlabs:PBS513');
+        expect(pbs.diameter).toBeCloseTo(50.8, 6);
+        expect(dichroic.catalog?.partId).toBe('thorlabs:DMLP505');
+        expect(dichroic.spectralProfile.cutoffNm).toBeCloseTo(505, 6);
+        expect(filter.catalog?.partId).toBe('thorlabs:FBH850-10');
+        expect(filter.spectralProfile.bands[0].center).toBeCloseTo(850, 6);
     });
 });

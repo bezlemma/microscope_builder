@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { findCatalogPart } from '../catalog';
+import { CATALOG_PARTS, findCatalogPart } from '../catalog';
 import {
     mechanicalModelSourceForCatalogPart,
     mechanicalVisualAssetForCatalogPart,
@@ -8,7 +8,7 @@ import {
 } from '../mechanicalVisualAssets';
 
 describe('catalog mechanical visual assets', () => {
-    test('objectives expose STEP as source CAD but only render converted assets', () => {
+    test('catalog parts expose STEP as source CAD but render converted assets', () => {
         const part = findCatalogPart('thorlabs:TL10X-2P');
         expect(part?.componentType).toBe('objective');
 
@@ -24,6 +24,82 @@ describe('catalog mechanical visual assets', () => {
             expect(['wrl', 'stl', 'edrawings-json']).toContain(visualAsset.format);
             expect(visualAsset.url).toContain('/catalog/mechanical/objectives/');
         }
+    });
+
+    test('ASI AMS-AGY v1 uses the vendor STEP-derived snout objective mesh', () => {
+        const part = findCatalogPart('asi:54-10-5');
+        expect(part?.componentType).toBe('objective');
+
+        const stepSource = stepMechanicalModelSourceForCatalogPart(part);
+        expect(stepSource?.kind).toBe('step');
+        expect(stepSource?.url).toContain('54-10-5');
+
+        const visualAsset = mechanicalVisualAssetForCatalogPart(part);
+        expect(visualAsset?.format).toBe('wrl');
+        expect(visualAsset?.url).toBe('/catalog/mechanical/objectives/asi-54-10-5-ams-agy-v1.wrl');
+
+        const assetText = readFileSync(new URL('../../../public/catalog/mechanical/objectives/asi-54-10-5-ams-agy-v1.wrl', import.meta.url), 'utf8');
+        expect(assetText).toContain('#VRML');
+        expect(assetText).toContain('Shape');
+    });
+
+    test('mounted spherical lenses can render converted vendor mechanical assets', () => {
+        const part = findCatalogPart('thorlabs:LB1471-A-ML');
+        expect(part?.componentType).toBe('sphericalLens');
+
+        const stepSource = stepMechanicalModelSourceForCatalogPart(part);
+        expect(stepSource?.kind).toBe('step');
+        expect(stepSource?.url).toContain('lb1471-a-ml');
+
+        const visualAsset = mechanicalVisualAssetForCatalogPart(part);
+        expect(visualAsset?.format).toBe('wrl');
+        expect(visualAsset?.url).toBe('/catalog/mechanical/lenses/lb1471-a-ml.wrl');
+
+        const assetText = readFileSync(new URL('../../../public/catalog/mechanical/lenses/lb1471-a-ml.wrl', import.meta.url), 'utf8');
+        expect(assetText).toContain('#VRML');
+        expect(assetText).toContain('Shape');
+    });
+
+    test('all STEP-backed lens catalog parts have converted mechanical visual assets', () => {
+        const lensTypes = new Set(['sphericalLens', 'asphericLens', 'cylindricalLens', 'achromatDoublet']);
+        const stepBackedLensParts = CATALOG_PARTS.filter(part =>
+            lensTypes.has(part.componentType) &&
+            stepMechanicalModelSourceForCatalogPart(part)
+        );
+
+        expect(stepBackedLensParts.length).toBeGreaterThan(3_000);
+        const missing = stepBackedLensParts
+            .filter(part => !mechanicalVisualAssetForCatalogPart(part))
+            .map(part => part.sku);
+        expect(missing).toEqual([]);
+    });
+
+    test('STEP-backed fold optics have converted mechanical visual assets', () => {
+        const foldTypes = new Set(['mirror', 'curvedMirror', 'beamSplitter', 'polarizingBeamSplitter', 'dichroic']);
+        const stepBackedFoldParts = CATALOG_PARTS.filter(part =>
+            foldTypes.has(part.componentType) &&
+            stepMechanicalModelSourceForCatalogPart(part)
+        );
+
+        expect(stepBackedFoldParts.length).toBeGreaterThan(700);
+        for (const partId of [
+            'thorlabs:PF10-03-P01',
+            'thorlabs:CCM1-P01',
+            'thorlabs:CM254-050-P01',
+            'thorlabs:BS013',
+            'thorlabs:PBS513',
+            'thorlabs:DMLP505',
+        ]) {
+            const part = findCatalogPart(partId);
+            const visualAsset = mechanicalVisualAssetForCatalogPart(part);
+            expect(visualAsset?.format).toBe('wrl');
+            expect(visualAsset?.url).toContain('/catalog/mechanical/fold-optics/');
+        }
+
+        const missing = stepBackedFoldParts
+            .filter(part => !mechanicalVisualAssetForCatalogPart(part))
+            .map(part => part.sku);
+        expect(missing).toEqual([]);
     });
 
     test('TL10X-2P eDrawing visual asset preserves imported linework', () => {

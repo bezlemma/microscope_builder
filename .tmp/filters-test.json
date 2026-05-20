@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-05-20T12:56:33.224Z",
+  "vendor": "thorlabs",
+  "source": "public Thorlabs GraphQL family pages under supported fold-optic categories",
+  "starts": [
+    "newgrouppage9.cfm?objectgroup_id=1860"
+  ],
+  "diagnostics": [
+    {
+      "slug": "newgrouppage9.cfm?objectgroup_id=1860",
+      "depth": 0,
+      "error": "Unable to connect. Is the computer able to access the url?"
+    }
+  ],
+  "supportDiagnostics": [],
+  "parts": []
+}

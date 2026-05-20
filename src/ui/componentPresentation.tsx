@@ -24,13 +24,13 @@ import { SampleChamber } from '../physics/components/SampleChamber';
 import { Diffuser } from '../physics/components/Diffuser';
 import { DoubleSlit } from '../physics/components/DoubleSlit';
 import { Filter } from '../physics/components/Filter';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { PMT } from '../physics/components/PMT';
 import { GalvoScanHead } from '../physics/components/GalvoScanHead';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { MediumVolume } from '../physics/components/MediumVolume';
 import { Rail } from '../physics/components/Rail';
 import { PointSource2D } from '../physics/components/PointSource2D';
@@ -66,7 +66,7 @@ import {
     LensVisualizer,
     MirrorVisualizer,
     PMTVisualizer,
-    PupilMaskVisualizer,
+    OpticalWindowVisualizer,
     PolygonOpticVisualizer,
     SampleChamberVisualizer,
     SampleVisualizer,
@@ -100,6 +100,7 @@ export interface ComponentCapabilities {
     isAperture: boolean;
     isSlitAperture: boolean;
     isFilter: boolean;
+    isOpticalWindow: boolean;
     isDichroic: boolean;
     isCylindrical: boolean;
     isCurvedMirror: boolean;
@@ -114,7 +115,6 @@ export interface ComponentCapabilities {
     isPMT: boolean;
     isCamera: boolean;
     isAchromatDoublet: boolean;
-    isPupilMask: boolean;
     isMediumVolume: boolean;
     isPointSource2D: boolean;
     isPointSource3D: boolean;
@@ -166,13 +166,13 @@ const VISUALIZER_ENTRIES: VisualizerEntry[] = [
     { matches: (component) => component instanceof FaradayIsolator, render: (component) => <FaradayIsolatorVisualizer component={component as FaradayIsolator} /> },
     { matches: (component) => component instanceof AOD, render: (component) => <AODVisualizer component={component as AOD} /> },
     { matches: (component) => component instanceof Waveplate, render: (component) => <WaveplateVisualizer component={component as Waveplate} /> },
-    { matches: (component) => component instanceof PupilMaskElement, render: (component) => <PupilMaskVisualizer component={component as PupilMaskElement} /> },
     { matches: (component) => component instanceof BeamSplitter, render: (component) => <BeamSplitterVisualizer component={component as BeamSplitter} /> },
-    { matches: (component) => component instanceof PolarizingBeamSplitter, render: (component) => <BeamSplitterVisualizer component={component as unknown as BeamSplitter} /> },
+    { matches: (component) => component instanceof PolarizingBeamSplitter, render: (component) => <BeamSplitterVisualizer component={component as PolarizingBeamSplitter} /> },
     { matches: (component) => component instanceof DoubleSlit, render: (component) => <DoubleSlitVisualizer component={component as DoubleSlit} /> },
     { matches: (component) => component instanceof SlitAperture, render: (component) => <SlitApertureVisualizer component={component as SlitAperture} /> },
     { matches: (component) => component instanceof Aperture, render: (component) => <ApertureVisualizer component={component as Aperture} /> },
     { matches: (component) => component instanceof Diffuser, render: (component) => <DiffuserVisualizer component={component as Diffuser} /> },
+    { matches: (component) => component instanceof OpticalWindow, render: (component) => <OpticalWindowVisualizer component={component as OpticalWindow} /> },
     { matches: (component) => component instanceof Filter, render: (component) => <FilterVisualizer component={component as Filter} /> },
     { matches: (component) => component instanceof MediumVolume, render: (component) => <MediumVolumeVisualizer component={component as MediumVolume} /> },
     { matches: (component) => component instanceof DichroicMirror, render: (component) => <DichroicVisualizer component={component as DichroicMirror} /> },
@@ -207,6 +207,7 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
     const isAperture = component instanceof Aperture;
     const isSlitAperture = component instanceof SlitAperture;
     const isFilter = component instanceof Filter;
+    const isOpticalWindow = component instanceof OpticalWindow;
     const isDichroic = component instanceof DichroicMirror;
     const isCylindrical = component instanceof CylindricalLens;
     const isCurvedMirror = component instanceof CurvedMirror;
@@ -220,7 +221,6 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
     const isPMT = component instanceof PMT;
     const isCamera = component instanceof Camera;
     const isAchromatDoublet = component instanceof AchromatDoublet;
-    const isPupilMask = component instanceof PupilMaskElement;
     const isMediumVolume = component instanceof MediumVolume;
     const isPointSource2D = component instanceof PointSource2D;
     const isPointSource3D = component instanceof PointSource3D;
@@ -249,6 +249,7 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
         isAperture,
         isSlitAperture,
         isFilter,
+        isOpticalWindow,
         isDichroic,
         isCylindrical,
         isCurvedMirror,
@@ -263,7 +264,6 @@ export function getComponentCapabilities(component: OpticalComponent | null | un
         isPMT,
         isCamera,
         isAchromatDoublet,
-        isPupilMask,
         isMediumVolume,
         isPointSource2D,
         isPointSource3D,

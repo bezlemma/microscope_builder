@@ -23,6 +23,7 @@ import { createEpiFluorescenceScene } from '../presets/epiFluorescence';
 import { createOpenSPIMScene } from '../presets/openSPIM';
 import { createConfocalScene } from '../presets/confocal';
 import { createObliquePlaneMicroscopeScene } from '../presets/obliquePlaneMicroscope';
+import { createSnoutyLightSheetScene } from '../presets/snoutyLightSheet';
 import { createBlankScene } from '../presets/blank';
 import { createOpticalTrapScene } from '../presets/opticalTrap';
 import { createTutorialMicroscopeScene, createTutorialScene } from '../presets/tutorial';
@@ -81,6 +82,7 @@ export enum PresetName {
     OpenSPIM = "OpenSPIM Lightsheet",
     Confocal = "Confocal Scanning",
     ObliquePlaneMicroscope = "Oblique Plane Light Sheet",
+    SnoutyLightSheet = "Snouty Light Sheet",
     OpticalTrap = "Optical Trap",
     Tutorial = "Tutorial",
     Tutorial2 = "Tutorial 2",
@@ -164,6 +166,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
     [PresetName.Confocal, () => createConfocalScene()],
     [PresetName.ObliquePlaneMicroscope, () => createObliquePlaneMicroscopeScene()],
+    [PresetName.SnoutyLightSheet, () => createSnoutyLightSheetScene()],
     [PresetName.OpticalTrap, () => ({
         scene: createOpticalTrapScene(),
         rayCount: 200,
@@ -306,7 +309,8 @@ export const opticalPlaneInspectorClearSignalAtom = atom<number>(0);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
-    ...DEFAULT_RAY_CONFIG
+    ...DEFAULT_RAY_CONFIG,
+    rayCount: INITIAL_TUTORIAL.rayCount ?? DEFAULT_RAY_CONFIG.rayCount,
 });
 
 export const resetRayConfigAtom = atom(

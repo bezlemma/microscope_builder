@@ -392,7 +392,10 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         const size = max.clone().sub(min);
         if (component instanceof Objective) {
             const barrelDiameter = Math.max(size.x, size.y);
-            const objectiveFootprintLength = Math.max(size.z, barrelDiameter * 2.4);
+            const minimumFootprint = component.mechanicalStyle === 'snout'
+                ? barrelDiameter * 1.35
+                : barrelDiameter * 1.8;
+            const objectiveFootprintLength = Math.max(size.z, minimumFootprint);
             max.z = min.z + objectiveFootprintLength;
         }
 
@@ -431,7 +434,9 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
 
         const centerU = (minU + maxU) * 0.5;
         const centerV = (minV + maxV) * 0.5;
-        const padding = component instanceof Objective ? 10 : 6;
+        const padding = component instanceof Objective
+            ? (component.mechanicalStyle === 'snout' ? 4 : 6)
+            : 6;
         return {
             center: new Vector3(
                 centerU * axisX + centerV * perpX,

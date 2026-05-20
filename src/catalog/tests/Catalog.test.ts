@@ -5,6 +5,12 @@ import { CylindricalLens } from '../../physics/components/CylindricalLens';
 import { AchromatDoublet } from '../../physics/components/AchromatDoublet';
 import { Objective } from '../../physics/components/Objective';
 import { PrismLens } from '../../physics/components/PrismLens';
+import { Mirror } from '../../physics/components/Mirror';
+import { CurvedMirror } from '../../physics/components/CurvedMirror';
+import { BeamSplitter } from '../../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../../physics/components/PolarizingBeamSplitter';
+import { DichroicMirror } from '../../physics/components/DichroicMirror';
+import { Filter } from '../../physics/components/Filter';
 import { deserializeScene, serializeScene } from '../../state/ubzSerializer';
 import {
     applyCatalogPartToComponent,
@@ -47,6 +53,7 @@ describe('vendor catalog integration', () => {
         expect(compatibleCatalogParts(doublet).map(part => part.id)).toContain('thorlabs:AC254-200-A');
         expect(compatibleCatalogParts(new Objective()).map(part => part.id)).toContain('thorlabs:TL10X-2P');
         expect(compatibleCatalogParts(new PrismLens()).map(part => part.id)).toContain('thorlabs:PS910');
+        expect(compatibleCatalogParts(new Filter()).map(part => part.id)).toContain('thorlabs:FBH850-10');
     });
 
     test('palette catalog lookup only exposes catalog-backed component families', () => {
@@ -63,11 +70,26 @@ describe('vendor catalog integration', () => {
         expect(catalogPartsForPaletteType('objective').length).toBeGreaterThanOrEqual(6);
         expect(catalogPartsForPaletteType('prism').map(part => part.id)).toContain('thorlabs:PS910');
         expect(catalogPartsForPaletteType('prism').length).toBeGreaterThan(25);
+        expect(catalogPartsForPaletteType('mirror').map(part => part.id)).toContain('thorlabs:PF10-03-P01');
+        expect(catalogPartsForPaletteType('mirror').length).toBeGreaterThan(80);
+        expect(catalogPartsForPaletteType('mirror').map(part => part.id)).toContain('thorlabs:CCM1-P01');
+        expect(catalogPartsForPaletteType('mirror').some(part => part.specs.mounting?.value === 'Mounted')).toBe(true);
+        expect(catalogPartsForPaletteType('mirror').map(part => part.id)).not.toContain('thorlabs:MPD119-P01');
+        expect(catalogPartsForPaletteType('curvedMirror').map(part => part.id)).toContain('thorlabs:CM254-050-P01');
+        expect(catalogPartsForPaletteType('curvedMirror').length).toBeGreaterThan(150);
+        expect(catalogPartsForPaletteType('beamSplitter').map(part => part.id)).toContain('thorlabs:BS013');
+        expect(catalogPartsForPaletteType('beamSplitter').length).toBeGreaterThan(200);
+        expect(catalogPartsForPaletteType('polarizingBeamSplitter').map(part => part.id)).toContain('thorlabs:PBS513');
+        expect(catalogPartsForPaletteType('polarizingBeamSplitter').length).toBeGreaterThan(50);
+        expect(catalogPartsForPaletteType('dichroic').map(part => part.id)).toContain('thorlabs:DMLP505');
+        expect(catalogPartsForPaletteType('dichroic').length).toBeGreaterThan(150);
+        expect(catalogPartsForPaletteType('filter').map(part => part.id)).toContain('thorlabs:FBH850-10');
+        expect(catalogPartsForPaletteType('filter').map(part => part.id)).toContain('thorlabs:FELH0500');
+        expect(catalogPartsForPaletteType('filter').length).toBeGreaterThan(450);
         expect(catalogPartsForPaletteType('idealLens')).toEqual([]);
-        expect(catalogPartsForPaletteType('mirror')).toEqual([]);
     });
 
-    test('catalog includes the generated Thorlabs lens families without duplicate part ids', () => {
+    test('catalog includes the generated Thorlabs optics families without duplicate part ids', () => {
         const partIds = CATALOG_PARTS.map(part => part.id);
         expect(new Set(partIds).size).toBe(partIds.length);
 
@@ -91,6 +113,46 @@ describe('vendor catalog integration', () => {
             expect(part?.normalized.kind).toBe(type);
             expect(part?.files.some(file => file.role === 'opticalPrescription')).toBe(true);
         }
+
+        const expectedFoldOptics = [
+            { id: 'thorlabs:PF10-03-P01', type: 'mirror' },
+            { id: 'thorlabs:CCM1-P01', type: 'mirror' },
+            { id: 'thorlabs:CM254-050-P01', type: 'curvedMirror' },
+            { id: 'thorlabs:BS013', type: 'beamSplitter' },
+            { id: 'thorlabs:PBS513', type: 'polarizingBeamSplitter' },
+            { id: 'thorlabs:DMLP505', type: 'dichroic' },
+            { id: 'thorlabs:FBH850-10', type: 'filter' },
+        ] as const;
+        for (const { id, type } of expectedFoldOptics) {
+            const part = findCatalogPart(id);
+            expect(part?.componentType).toBe(type);
+            expect(part?.normalized.kind).toBe(type);
+            expect(part?.files.some(file => file.role === 'mechanicalModel')).toBe(true);
+        }
+    });
+
+    test('ASI snout objective carries the extracted Zemax black-box envelope', () => {
+        const part = findCatalogPart('asi:54-10-5');
+        expect(part).not.toBeNull();
+        expect(part?.normalized.kind).toBe('objective');
+        if (part?.normalized.kind !== 'objective') return;
+
+        expect(part.files.filter(file => file.kind === 'opticStudio' && file.role === 'opticalPrescription')).toHaveLength(2);
+        expect(part.files.some(file => file.url.includes('AMS-AGY_v1_54-10-5_RevB_forward.zar'))).toBe(true);
+        expect(part.specs.zemaxModel?.value).toContain('black-box');
+        const coreLength = part.specs.zemaxBlackBoxCoreLength?.value;
+        expect(typeof coreLength).toBe('number');
+        if (typeof coreLength === 'number') expect(coreLength).toBeCloseTo(25.322594113995482, 9);
+        expect(part.specs.tipGlass?.value).toBe('S-LAM2');
+
+        const envelope = part.normalized.zemaxEnvelope;
+        expect(envelope?.model).toBe('zemaxBlackBoxEnvelope');
+        expect(envelope?.entrancePupilDiameterMm).toBeCloseTo(10, 6);
+        expect(envelope?.wavelengthRangeNm).toEqual([450, 700]);
+        const fieldPoints = envelope?.fieldPointsMm ?? [];
+        expect(fieldPoints[fieldPoints.length - 1]).toBeCloseTo(0.075, 6);
+        expect(envelope?.blackBoxSurfaces.map(surface => surface.fileName)).toEqual(['SOCC.ZBB', 'Rev V.10.ZBB']);
+        expect(envelope?.notes?.some(note => note.includes('not recoverable'))).toBe(true);
     });
 
     test('applies generated Thorlabs asphere, cylindrical, achromat, objective, and prism geometry', () => {
@@ -187,6 +249,76 @@ describe('vendor catalog integration', () => {
         expect(prism.catalog?.partId).toBe('thorlabs:PS910');
     });
 
+    test('applies generated Thorlabs mirror, curved mirror, splitter, PBS, and dichroic geometry', () => {
+        const mirror = new Mirror();
+        const mirrorPart = findCatalogPart('thorlabs:PF10-03-P01');
+        expect(mirrorPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(mirror, mirrorPart!)).toBe(true);
+        expect(mirror.name).toBe('PF10-03-P01');
+        expect(mirror.diameter).toBeCloseTo(25.4, 6);
+        expect(mirror.thickness).toBeCloseTo(6, 6);
+        expect(mirror.catalog?.partId).toBe('thorlabs:PF10-03-P01');
+
+        const mountedMirror = new Mirror();
+        const mountedMirrorPart = findCatalogPart('thorlabs:CCM1-P01');
+        expect(mountedMirrorPart).not.toBeNull();
+        expect(mountedMirrorPart!.specs.mounting?.value).toBe('Mounted');
+        expect(applyCatalogPartToComponent(mountedMirror, mountedMirrorPart!)).toBe(true);
+        expect(mountedMirror.name).toBe('CCM1-P01');
+        expect(mountedMirror.diameter).toBeCloseTo(25, 6);
+        expect(mountedMirror.catalog?.partId).toBe('thorlabs:CCM1-P01');
+
+        const curved = new CurvedMirror();
+        const curvedPart = findCatalogPart('thorlabs:CM254-050-P01');
+        expect(curvedPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(curved, curvedPart!)).toBe(true);
+        expect(curved.name).toBe('CM254-050-P01');
+        expect(curved.diameter).toBeCloseTo(25.4, 6);
+        expect(curved.thickness).toBeCloseTo(6, 6);
+        expect(curved.radiusOfCurvature).toBeCloseTo(100, 6);
+        expect(curved.catalog?.partId).toBe('thorlabs:CM254-050-P01');
+
+        const splitter = new BeamSplitter();
+        const splitterPart = findCatalogPart('thorlabs:BS013');
+        expect(splitterPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(splitter, splitterPart!)).toBe(true);
+        expect(splitter.name).toBe('BS013');
+        expect(splitter.thickness).toBeCloseTo(2, 6);
+        expect(splitter.catalog?.partId).toBe('thorlabs:BS013');
+
+        const pbs = new PolarizingBeamSplitter();
+        const pbsPart = findCatalogPart('thorlabs:PBS513');
+        expect(pbsPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(pbs, pbsPart!)).toBe(true);
+        expect(pbs.name).toBe('PBS513');
+        expect(pbs.diameter).toBeCloseTo(50.8, 6);
+        expect(pbs.thickness).toBeCloseTo(50.8, 6);
+        expect(pbs.catalog?.partId).toBe('thorlabs:PBS513');
+
+        const dichroic = new DichroicMirror();
+        const dichroicPart = findCatalogPart('thorlabs:DMLP505');
+        expect(dichroicPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(dichroic, dichroicPart!)).toBe(true);
+        expect(dichroic.name).toBe('DMLP505');
+        expect(dichroic.diameter).toBeCloseTo(25.4, 6);
+        expect(dichroic.thickness).toBeCloseTo(1.1, 6);
+        expect(dichroic.spectralProfile.preset).toBe('longpass');
+        expect(dichroic.spectralProfile.cutoffNm).toBeCloseTo(505, 6);
+        expect(dichroic.catalog?.partId).toBe('thorlabs:DMLP505');
+
+        const filter = new Filter();
+        const filterPart = findCatalogPart('thorlabs:FBH850-10');
+        expect(filterPart).not.toBeNull();
+        expect(applyCatalogPartToComponent(filter, filterPart!)).toBe(true);
+        expect(filter.name).toBe('FBH850-10');
+        expect(filter.diameter).toBeCloseTo(25, 6);
+        expect(filter.thickness).toBeCloseTo(3.5, 6);
+        expect(filter.spectralProfile.preset).toBe('bandpass');
+        expect(filter.spectralProfile.bands[0].center).toBeCloseTo(850, 6);
+        expect(filter.spectralProfile.bands[0].width).toBeCloseTo(10, 6);
+        expect(filter.catalog?.partId).toBe('thorlabs:FBH850-10');
+    });
+
     test('steep catalog lenses use edge thickness to derive a physical modeled aperture', () => {
         const part = findCatalogPart('thorlabs:LB5766');
         expect(part).not.toBeNull();
@@ -196,6 +328,15 @@ describe('vendor catalog integration', () => {
         expect(part!.specs.diameter?.value).toBeCloseTo(25.4, 6);
         expect(part!.normalized.apertureRadiusMm).toBeCloseTo(6.3498, 3);
         expect(part!.specs.modeledApertureDiameter?.value).toBeCloseTo(12.6996, 3);
+    });
+
+    test('generated Thorlabs catalog parts carry cached price snapshots for BoM totals', () => {
+        const lensPart = findCatalogPart('thorlabs:LA1509-A');
+        const filterPart = findCatalogPart('thorlabs:FBH850-10');
+        expect(lensPart?.price?.amount).toBeGreaterThan(0);
+        expect(lensPart?.price?.currency).toBe('USD');
+        expect(filterPart?.price?.amount).toBeGreaterThan(0);
+        expect(filterPart?.price?.currency).toBe('USD');
     });
 
     test('catalog attachment survives UBZ save/load and appears in BoM', () => {
@@ -212,6 +353,23 @@ describe('vendor catalog integration', () => {
         const bom = summarizeBom([lens, loaded[0]]);
         expect(bom.lines).toHaveLength(1);
         expect(bom.lines[0].quantity).toBe(2);
+        expect(bom.lines[0].unitPrice).toBe(part!.price!.amount);
+        expect(bom.lines[0].totalPrice).toBeCloseTo(part!.price!.amount * 2, 6);
+        expect(bom.totalByCurrency[part!.price!.currency]).toBeCloseTo(part!.price!.amount * 2, 6);
+    });
+
+    test('BoM totals use current catalog prices for older attachments without cached prices', () => {
+        const lens = new SphericalLens(1 / 50, 15, 4, 'test lens');
+        const part = findCatalogPart('thorlabs:LA1509-A');
+        expect(part?.price).toBeDefined();
+        applyCatalogPartToComponent(lens, part!);
+        delete lens.catalog!.price;
+
+        const bom = summarizeBom([lens]);
+
+        expect(bom.lines).toHaveLength(1);
+        expect(bom.lines[0].unitPrice).toBe(part!.price!.amount);
+        expect(bom.lines[0].totalPrice).toBeCloseTo(part!.price!.amount, 6);
     });
 
     test('spherical catalog matching ranks parts by the designed lens geometry', () => {

@@ -166,7 +166,6 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
             { type: 'polygonScanner', label: 'Polygon Scanner', icon: Square },
             { type: 'dualGalvoScanHead', label: 'Dual Galvo Scan Head', icon: Square },
-            { type: 'aod', label: 'Acousto-Optic Deflector', icon: Square },
         ]
     },
     {
@@ -177,8 +176,22 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
             { type: 'halfWavePlate', label: 'λ/2 Plate', icon: Circle },
             { type: 'quarterWavePlate', label: 'λ/4 Plate', icon: Circle },
             { type: 'polarizer', label: 'Linear Polarizer', icon: Box },
-            { type: 'pupilMask', label: 'Pupil Mask', icon: Circle },
-            { type: 'faradayIsolator', label: 'Faraday Isolator', icon: Box },
+        ]
+    },
+    {
+        name: 'Windows / Plates',
+        icon: Square,
+        color: '#9bd5ff',
+        items: [
+            { type: 'opticalWindow', label: 'Optical Window', icon: Circle },
+            { type: 'halfWavePlate', label: 'λ/2 Plate', icon: Circle },
+            { type: 'quarterWavePlate', label: 'λ/4 Plate', icon: Circle },
+            { type: 'polarizer', label: 'Linear Polarizer', icon: Box },
+            { type: 'filter', label: 'Filter', icon: Square },
+            { type: 'diffuser', label: 'Diffuser', icon: Square },
+            { type: 'beamSplitter', label: 'Beam Splitter', icon: Square },
+            { type: 'polarizingBeamSplitter', label: 'Polarizing Beam Splitter', icon: Square },
+            { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
         ]
     },
     {
@@ -222,6 +235,9 @@ const COMPONENT_GROUPS: ComponentGroup[] = [
         color: '#81ecec',
         items: [
             { type: 'filter', label: 'Filter', icon: Square },
+            { type: 'dichroic', label: 'Dichroic Mirror', icon: Square },
+            { type: 'beamSplitter', label: 'Beam Splitter', icon: Square },
+            { type: 'polarizingBeamSplitter', label: 'Polarizing Beam Splitter', icon: Square },
             { type: 'diffuser', label: 'Diffuser', icon: Square },
         ]
     },
@@ -1151,6 +1167,11 @@ export const Sidebar: React.FC = () => {
                             label="Oblique Plane Light Sheet"
                             active={activePreset === PresetName.ObliquePlaneMicroscope}
                             onClick={() => handlePresetClick(PresetName.ObliquePlaneMicroscope)}
+                        />
+                        <PresetButton
+                            label="Snouty Light Sheet"
+                            active={activePreset === PresetName.SnoutyLightSheet}
+                            onClick={() => handlePresetClick(PresetName.SnoutyLightSheet)}
                         />
 
                     </PresetCategory>

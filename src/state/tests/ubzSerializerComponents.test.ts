@@ -8,6 +8,7 @@ import { ConeSource3D } from '../../physics/components/ConeSource3D';
 import { Lamp } from '../../physics/components/Lamp';
 import { Laser } from '../../physics/components/Laser';
 import { Objective } from '../../physics/components/Objective';
+import { OpticalWindow } from '../../physics/components/OpticalWindow';
 import { PointSource2D } from '../../physics/components/PointSource2D';
 import { QPD } from '../../physics/components/QPD';
 import { Sample } from '../../physics/components/Sample';
@@ -139,6 +140,11 @@ name = Legacy Sample
         objective.immersionMediumKind = 'oil';
         objective.coverslipThickness = 0.13;
         objective.fieldNumber = 26.5;
+        objective.mechanicalStyle = 'snout';
+        objective.snoutRadius = 4.2;
+        objective.snoutLength = 18;
+        objective.snoutCutOffset = 2.1;
+        objective.snoutCutAngle = 0.25;
         objective.pupil = {
             aberrations: {
                 referenceWavelengthNm: 550,
@@ -158,6 +164,11 @@ name = Legacy Sample
         expect(loaded.immersionMediumKind).toBe('oil');
         expect(loaded.coverslipThickness).toBeCloseTo(0.13, 6);
         expect(loaded.fieldNumber).toBeCloseTo(26.5, 6);
+        expect(loaded.mechanicalStyle).toBe('snout');
+        expect(loaded.snoutRadius).toBeCloseTo(4.2, 6);
+        expect(loaded.snoutLength).toBeCloseTo(18, 6);
+        expect(loaded.snoutCutOffset).toBeCloseTo(2.1, 6);
+        expect(loaded.snoutCutAngle).toBeCloseTo(0.25, 6);
         expect(loaded.pupilRadius).toBeCloseTo(loaded.apertureRadius, 6);
         expect(loaded.pupil?.aberrations?.referenceWavelengthNm).toBeCloseTo(550, 6);
         expect(loaded.pupil?.aberrations?.coefficients).toEqual([
@@ -250,6 +261,36 @@ name = Legacy Sample
         expect(loaded.thickness).toBeCloseTo(14, 6);
         expect(loaded.bounds.min.z).toBeCloseTo(-7, 6);
         expect(loaded.bounds.max.z).toBeCloseTo(7, 6);
+    });
+
+    test('round-trips optical window plate settings and migrates legacy pupil-mask phase trims', () => {
+        const window = new OpticalWindow(12.7, 5, 1.458, 'Compensation Plate', 0.998);
+        window.exteriorRefractiveIndex = 1.33;
+        window.opticalPathOffsetMm = 0.0001;
+
+        const scene = deserializeScene(serializeScene([window]));
+        expect(scene).toHaveLength(1);
+        expect(scene[0]).toBeInstanceOf(OpticalWindow);
+        const loaded = scene[0] as OpticalWindow;
+        expect(loaded.diameter).toBeCloseTo(12.7, 6);
+        expect(loaded.thickness).toBeCloseTo(5, 6);
+        expect(loaded.refractiveIndex).toBeCloseTo(1.458, 6);
+        expect(loaded.exteriorRefractiveIndex).toBeCloseTo(1.33, 6);
+        expect(loaded.surfaceTransmission).toBeCloseTo(0.998, 6);
+        expect(loaded.opticalPathOffsetMm).toBeCloseTo(0.0001, 9);
+
+        const migrated = deserializeScene([
+            '[PupilMaskElement]',
+            'name = Arm A Phase Trim',
+            'radius = 12',
+            'thickness = 1',
+            'ringTransmission = 1',
+            'ringPhaseShift = 3.141592653589793',
+        ].join('\n'));
+        expect(migrated[0]).toBeInstanceOf(OpticalWindow);
+        expect((migrated[0] as OpticalWindow).name).toBe('Arm A Phase Trim');
+        expect((migrated[0] as OpticalWindow).diameter).toBeCloseTo(24, 6);
+        expect((migrated[0] as OpticalWindow).opticalPathOffsetMm).toBeCloseTo(532e-6 / 2, 12);
     });
 
     test('round-trips colloid flow-cell sample variant and QPD backstop leakage', () => {

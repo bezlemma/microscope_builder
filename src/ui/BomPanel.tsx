@@ -10,6 +10,9 @@ export const BomPanel: React.FC<{
     const [open, setOpen] = useState(false);
     const summary = useMemo(() => summarizeBom(components), [components]);
     const count = summary.lines.reduce((total, line) => total + line.quantity, 0);
+    const totalLabel = Object.entries(summary.totalByCurrency)
+        .map(([currency, total]) => `${currency} ${total.toFixed(2)}`)
+        .join(' + ');
     const maxHeight = summary.lines.length === 0 ? 34 : Math.min(260, 34 + summary.lines.length * 74);
 
     if (count === 0) return null;
@@ -55,6 +58,17 @@ export const BomPanel: React.FC<{
                 }}>
                     BoM ({count})
                 </span>
+                {totalLabel && (
+                    <span style={{
+                        marginLeft: 'auto',
+                        color: '#64ffda',
+                        fontSize: isMobile ? 9 : 11,
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                    }}>
+                        {totalLabel}
+                    </span>
+                )}
             </div>
 
             <div style={{

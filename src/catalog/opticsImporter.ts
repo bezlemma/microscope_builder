@@ -16,6 +16,9 @@ export type PrescriptionFormat =
 export interface PrescriptionSurface {
     index: number;
     type?: string;
+    comment?: string;
+    isStop?: boolean;
+    isBlackBox?: boolean;
     radiusMm: number;
     thicknessToNextMm?: number;
     glass?: string;
@@ -29,6 +32,12 @@ export interface OpticalPrescription {
     format: PrescriptionFormat;
     name: string;
     surfaces: PrescriptionSurface[];
+    allSurfaces?: PrescriptionSurface[];
+    blackBoxSurfaces?: PrescriptionSurface[];
+    entrancePupilDiameterMm?: number;
+    objectNumericalAperture?: number;
+    wavelengthsNm?: number[];
+    fieldYValues?: number[];
     warnings: string[];
 }
 
@@ -94,6 +103,8 @@ const GLASS_IOR = new Map<string, number>([
 interface ZemaxSurfaceScratch {
     index: number;
     type?: string;
+    comment?: string;
+    isStop?: boolean;
     curvature?: number;
     radiusMm?: number;
     thicknessToNextMm?: number;
@@ -213,12 +224,41 @@ function zemaxParamPower(surfaceType: string | undefined, parmIndex: number): nu
     return 2 * parmIndex + 2;
 }
 
+function cleanZemaxComment(tokens: string[]): string | undefined {
+    const value = tokens.join(' ').trim();
+    if (!value) return undefined;
+    return value.replace(/^"|"$/g, '');
+}
+
+function zemaxScratchToSurface(surface: ZemaxSurfaceScratch, unitScaleMm: number): PrescriptionSurface {
+    const type = surface.type?.trim();
+    const isBlackBox = type?.toUpperCase() === 'BLACKBOX';
+    return {
+        index: surface.index,
+        ...(type ? { type } : {}),
+        ...(surface.comment ? { comment: surface.comment } : {}),
+        ...(surface.isStop ? { isStop: true } : {}),
+        ...(isBlackBox ? { isBlackBox: true } : {}),
+        radiusMm: surface.radiusMm ?? radiusFromCurvature(surface.curvature, unitScaleMm),
+        thicknessToNextMm: surface.thicknessToNextMm,
+        glass: surface.glass,
+        ior: surface.ior,
+        semiDiameterMm: surface.semiDiameterMm,
+        conic: surface.conic,
+        evenAsphereTerms: surface.evenAsphereTerms.length > 0 ? [...surface.evenAsphereTerms] : undefined,
+    };
+}
+
 function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescription {
     const warnings: string[] = [];
     const surfaces: ZemaxSurfaceScratch[] = [];
     let current: ZemaxSurfaceScratch | null = null;
     let unitScaleMm = 1;
     let mappedZemaxParams = false;
+    let entrancePupilDiameterMm: number | undefined;
+    let objectNumericalAperture: number | undefined;
+    let fieldYValues: number[] | undefined;
+    const wavelengthsNm: number[] = [];
 
     const commit = () => {
         if (current) surfaces.push(current);
@@ -238,6 +278,32 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
             continue;
         }
 
+        if (command === 'ENPD') {
+            const value = parseFiniteNumber(tokens[1]);
+            if (value !== undefined) entrancePupilDiameterMm = value * unitScaleMm;
+            continue;
+        }
+
+        if (command === 'OBNA') {
+            objectNumericalAperture = parseFiniteNumber(tokens[1]);
+            continue;
+        }
+
+        if (command === 'WAVM') {
+            const wavelengthUm = parseFiniteNumber(tokens[2]);
+            if (wavelengthUm !== undefined) wavelengthsNm.push(wavelengthUm * 1000);
+            continue;
+        }
+
+        if (command === 'YFLN') {
+            const values = tokens.slice(1)
+                .map(parseFiniteNumber)
+                .filter((value): value is number => value !== undefined)
+                .map(value => value * unitScaleMm);
+            if (values.length > 0) fieldYValues = values;
+            continue;
+        }
+
         if (command === 'SURF') {
             commit();
             const index = Math.trunc(parseNumberToken(tokens[1]) ?? surfaces.length);
@@ -253,6 +319,10 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
 
         if (command === 'TYPE') {
             current.type = tokens.slice(1).join(' ');
+        } else if (command === 'COMM') {
+            current.comment = cleanZemaxComment(tokens.slice(1));
+        } else if (command === 'STOP') {
+            current.isStop = true;
         } else if (command === 'CURV') {
             current.curvature = parseNumberToken(tokens[1]);
             current.radiusMm = radiusFromCurvature(current.curvature, unitScaleMm);
@@ -308,25 +378,27 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
             surface.curvature !== undefined ||
             surface.glass !== undefined ||
             surface.conic !== undefined ||
-            surface.evenAsphereTerms.length > 0
+            surface.evenAsphereTerms.length > 0 ||
+            surface.type?.toUpperCase() === 'BLACKBOX' ||
+            surface.isStop
         ));
+    const allSurfaces = physical.map(surface => zemaxScratchToSurface(surface, unitScaleMm));
+    const blackBoxSurfaces = allSurfaces.filter(surface => surface.isBlackBox);
+
+    if (blackBoxSurfaces.length > 0) {
+        const names = blackBoxSurfaces
+            .map(surface => surface.comment)
+            .filter((value): value is string => Boolean(value))
+            .join(', ');
+        warnings.push(`Contains ${blackBoxSurfaces.length} Zemax BLACKBOX surface(s)${names ? ` (${names})` : ''}; internal surfaces are hidden in .ZBB data and cannot be reconstructed from the ZMX wrapper.`);
+    }
 
     const firstGlass = physical.findIndex(surface => surface.glass !== undefined);
     const start = firstGlass >= 0 ? firstGlass : 0;
     const lensSurfaces: PrescriptionSurface[] = [];
     for (let i = start; i < physical.length; i++) {
         const surface = physical[i];
-        lensSurfaces.push({
-            index: surface.index,
-            type: surface.type,
-            radiusMm: surface.radiusMm ?? radiusFromCurvature(surface.curvature, unitScaleMm),
-            thicknessToNextMm: surface.thicknessToNextMm,
-            glass: surface.glass,
-            ior: surface.ior,
-            semiDiameterMm: surface.semiDiameterMm,
-            conic: surface.conic,
-            evenAsphereTerms: surface.evenAsphereTerms.length > 0 ? [...surface.evenAsphereTerms] : undefined,
-        });
+        lensSurfaces.push(zemaxScratchToSurface(surface, unitScaleMm));
         if (i > start && surface.glass === undefined) break;
         if (lensSurfaces.length >= 3) break;
     }
@@ -339,6 +411,12 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
         format: 'zemaxSequentialText',
         name: cleanName(fileName),
         surfaces: lensSurfaces,
+        allSurfaces,
+        blackBoxSurfaces,
+        entrancePupilDiameterMm,
+        objectNumericalAperture,
+        wavelengthsNm: wavelengthsNm.length > 0 ? wavelengthsNm : undefined,
+        fieldYValues,
         warnings,
     };
 }
@@ -622,8 +700,9 @@ function looksLikeSurfaceTable(text: string): boolean {
 
 function addModelCoverageWarnings(prescription: OpticalPrescription): OpticalPrescription {
     const warnings = [...prescription.warnings];
-    if (prescription.surfaces.length > 3) {
-        warnings.push(`Read ${prescription.surfaces.length} surfaces. Current simulator components model a singlet/asphere or cemented doublet, so only the first supported lens group is instantiated.`);
+    const explicitSurfaceCount = prescription.allSurfaces?.length ?? prescription.surfaces.length;
+    if (explicitSurfaceCount > 3) {
+        warnings.push(`Read ${explicitSurfaceCount} sequential surfaces. Current simulator components model a singlet/asphere or cemented doublet, so only the first supported lens group is instantiated.`);
     }
     return { ...prescription, warnings };
 }
@@ -682,6 +761,10 @@ function surfaceIor(surface: PrescriptionSurface, fallback = 1.5168): number {
 }
 
 export function normalizedParamsFromPrescription(prescription: OpticalPrescription): NormalizedCatalogParams {
+    if ((prescription.blackBoxSurfaces?.length ?? 0) > 0) {
+        throw new Error('Zemax BLACKBOX prescriptions cannot be reduced to a simulator lens because the internal surfaces are hidden.');
+    }
+
     const surfaces = prescription.surfaces;
     const apertureRadiusMm = apertureRadiusFromSurfaces(surfaces);
     const front = surfaces[0];

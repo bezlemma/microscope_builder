@@ -166,6 +166,61 @@ SURF 3
         expect(imported.normalized.ior2).toBeCloseTo(1.8052, 4);
     });
 
+    test('preserves Zemax BLACKBOX wrapper metadata without instantiating fake internal surfaces', () => {
+        const zmx = `
+UNIT MM
+ENPD 10
+YFLN 0 0.01 0.02 0.075
+WAVM 1 0.45000000000000001 1
+WAVM 2 0.58756180000000002 1
+SURF 0
+  TYPE STANDARD
+  CURV 0
+  DISZ INFINITY
+SURF 1
+  STOP
+  TYPE STANDARD
+  CURV 0
+  DISZ 1.55
+  DIAM 5
+SURF 2
+  COMM SOCC.ZBB
+  TYPE BLACKBOX
+  CURV 0
+  DISZ 25.322594113995482
+  DIAM 5.93755627355001
+SURF 3
+  TYPE STANDARD
+  CURV 0
+  DISZ 0.14998481602223177
+  DIAM 4.1366724668269796
+SURF 4
+  TYPE STANDARD
+  CURV 2.309468822170900604E-01
+  DISZ 6.20957
+  GLAS S-LAM2 0 0 1.743996848438 44.78643058214
+  DIAM 3.5245669128915624
+SURF 5
+  TYPE STANDARD
+  CURV 0
+  DISZ 0
+  GLAS S-LAM2 0 0 1.743996848438 44.78643058214
+  DIAM 0.17541723553584443
+`;
+        const prescription = parseOpticalPrescription(zmx, 'snouty-wrapper.zmx');
+
+        expect(prescription.entrancePupilDiameterMm).toBeCloseTo(10, 6);
+        expect(prescription.wavelengthsNm?.[0]).toBeCloseTo(450, 6);
+        expect(prescription.wavelengthsNm?.[1]).toBeCloseTo(587.5618, 6);
+        expect(prescription.fieldYValues).toEqual([0, 0.01, 0.02, 0.075]);
+        expect(prescription.allSurfaces?.length).toBe(5);
+        expect(prescription.blackBoxSurfaces).toHaveLength(1);
+        expect(prescription.blackBoxSurfaces?.[0].comment).toBe('SOCC.ZBB');
+        expect(prescription.blackBoxSurfaces?.[0].thicknessToNextMm).toBeCloseTo(25.322594113995482, 9);
+        expect(prescription.warnings.some(warning => warning.includes('BLACKBOX'))).toBe(true);
+        expect(() => normalizedParamsFromPrescription(prescription)).toThrow(/BLACKBOX/);
+    });
+
     test('imports a CSV surface table as a spherical lens', () => {
         const csv = `Surface,Radius (mm),Thickness (mm),Glass,Diameter (mm),Conic
 1,51.5,3.6,N-BK7,25.4,0

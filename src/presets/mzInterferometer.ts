@@ -3,7 +3,7 @@ import { Laser } from '../physics/components/Laser';
 import { Mirror } from '../physics/components/Mirror';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { Card } from '../physics/components/Card';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import { Blocker } from '../physics/components/Blocker';
 
 /**
@@ -44,20 +44,11 @@ export function createMZInterferometerScene(): OpticalComponent[] {
     mirrorA.pointAlong(-1, 1, 0);  // reflects +Y -> +X
     scene.push(mirrorA);
 
-    const phaseTrim = new PupilMaskElement("Arm A Phase Trim");
-    phaseTrim.mode = 'phaseRing';
-    phaseTrim.radius = 12;
-    phaseTrim.innerRadius = 0;
-    phaseTrim.outerRadius = 1;
-    phaseTrim.ringTransmission = 1;
-    phaseTrim.ringPhaseShift = 0;
-    phaseTrim.backgroundTransmission = 1;
-    phaseTrim.backgroundPhaseShift = 0;
-    phaseTrim.updateBounds();
-    phaseTrim.rebuildMask();
-    phaseTrim.setPosition(-50, 80, 0);
-    phaseTrim.pointAlong(1, 0, 0);
-    scene.push(phaseTrim);
+    const compensationPlate = new OpticalWindow(25.4, 5, 1.458, "Arm A Compensation Plate");
+    compensationPlate.surfaceTransmission = 1;
+    compensationPlate.setPosition(-50, 80, 0);
+    compensationPlate.pointAlong(1, 0, 0);
+    scene.push(compensationPlate);
 
     const mirrorB = new Mirror(20, 2, "Mirror B");
     mirrorB.setPosition(0, 0, 0);

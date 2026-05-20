@@ -39,7 +39,7 @@ Options:
   --out-dir PATH  Output static mesh directory
   --manifest PATH Generated TypeScript manifest path
   --chrome PATH   Chrome executable path
-  --force         Re-import existing objective assets
+  --force         Re-import existing mechanical assets
   --help          Show this help
 `);
 }
@@ -431,7 +431,7 @@ async function main() {
     writeFileSync(manifestPath, manifestSource(allAssets));
     console.log(`Wrote ${allAssets.length} manifest entry(s). Imported/reused ${imported.length}/${catalogParts.length} mechanical asset(s).`);
     if (failures.length > 0) {
-        console.log(`Failed ${failures.length} objective asset(s):`);
+        console.log(`Failed ${failures.length} mechanical asset(s):`);
         for (const failure of failures) {
             console.log(`- ${failure.sku}`);
             for (const error of failure.errors) console.log(`  ${error}`);

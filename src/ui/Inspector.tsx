@@ -57,6 +57,7 @@ import { Diffuser } from '../physics/components/Diffuser';
 import { DoubleSlit } from '../physics/components/DoubleSlit';
 import { Annotation } from '../physics/components/Annotation';
 import { Filter } from '../physics/components/Filter';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
@@ -64,7 +65,6 @@ import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { PMT, derivePMTScanResolution } from '../physics/components/PMT';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { MediumVolume } from '../physics/components/MediumVolume';
 import { PointSourceBase } from '../physics/components/PointSourceBase';
 import { ConeSource3D } from '../physics/components/ConeSource3D';
@@ -1502,15 +1502,11 @@ export const Inspector: React.FC = () => {
     const [localAbsorption, setLocalAbsorption] = useState<string>('3');
     const [localRefractiveIndexDelta, setLocalRefractiveIndexDelta] = useState<string>('0');
     const [localChamberFillMediumIndex, setLocalChamberFillMediumIndex] = useState<string>('1.33');
-    const [localPupilMaskRadius, setLocalPupilMaskRadius] = useState<string>('4');
-    const [localPupilMaskInner, setLocalPupilMaskInner] = useState<string>('0.55');
-    const [localPupilMaskOuter, setLocalPupilMaskOuter] = useState<string>('0.8');
-    const [localPupilMaskRingTransmission, setLocalPupilMaskRingTransmission] = useState<string>('1');
-    const [localPupilMaskRingPhase, setLocalPupilMaskRingPhase] = useState<string>('1.5708');
-    const [localPupilMaskBackgroundTransmission, setLocalPupilMaskBackgroundTransmission] = useState<string>('1');
-    const [localPupilMaskBackgroundPhase, setLocalPupilMaskBackgroundPhase] = useState<string>('0');
-    const [localPupilMaskResolution, setLocalPupilMaskResolution] = useState<string>('64');
-    const [localPupilMaskMode, setLocalPupilMaskMode] = useState<'uniform' | 'annulus' | 'phaseRing'>('phaseRing');
+    const [localWindowDiameter, setLocalWindowDiameter] = useState<string>('25.4');
+    const [localWindowThickness, setLocalWindowThickness] = useState<string>('5');
+    const [localWindowIndex, setLocalWindowIndex] = useState<string>('1.458');
+    const [localWindowSurfaceT, setLocalWindowSurfaceT] = useState<string>('0.995');
+    const [localWindowOplOffset, setLocalWindowOplOffset] = useState<string>('0');
     const [localMediumWidth, setLocalMediumWidth] = useState<string>('10');
     const [localMediumHeight, setLocalMediumHeight] = useState<string>('10');
     const [localMediumDepth, setLocalMediumDepth] = useState<string>('10');
@@ -1733,16 +1729,12 @@ export const Inspector: React.FC = () => {
                     // Read the roll angle (rotation around the slit's optical axis).
                     setLocalSlitRotation(String(Math.round(selectedComponent.rollAngle * 180 / Math.PI * 100) / 100));
                 }
-                if (selectedComponent instanceof PupilMaskElement) {
-                    setLocalPupilMaskRadius(String(selectedComponent.radius));
-                    setLocalPupilMaskInner(String(selectedComponent.innerRadius));
-                    setLocalPupilMaskOuter(String(selectedComponent.outerRadius));
-                    setLocalPupilMaskRingTransmission(String(selectedComponent.ringTransmission));
-                    setLocalPupilMaskRingPhase(String(selectedComponent.ringPhaseShift));
-                    setLocalPupilMaskBackgroundTransmission(String(selectedComponent.backgroundTransmission));
-                    setLocalPupilMaskBackgroundPhase(String(selectedComponent.backgroundPhaseShift));
-                    setLocalPupilMaskResolution(String(selectedComponent.resolution));
-                    setLocalPupilMaskMode(selectedComponent.mode);
+                if (selectedComponent instanceof OpticalWindow) {
+                    setLocalWindowDiameter(String(Math.round(selectedComponent.diameter * 100) / 100));
+                    setLocalWindowThickness(String(Math.round(selectedComponent.thickness * 1000) / 1000));
+                    setLocalWindowIndex(String(Math.round(selectedComponent.refractiveIndex * 10000) / 10000));
+                    setLocalWindowSurfaceT(String(Math.round(selectedComponent.surfaceTransmission * 10000) / 10000));
+                    setLocalWindowOplOffset(String(Math.round(selectedComponent.opticalPathOffsetMm * 1000000) / 1000000));
                 }
                 if (selectedComponent instanceof MediumVolume) {
                     setLocalMediumWidth(String(selectedComponent.width));
@@ -2000,6 +1992,7 @@ export const Inspector: React.FC = () => {
         isWaveplate,
         isAperture,
         isSlitAperture,
+        isOpticalWindow,
         isDichroic,
         isCylindrical,
         isCurvedMirror,
@@ -2012,7 +2005,6 @@ export const Inspector: React.FC = () => {
         isPMT,
         isCamera,
         isAchromatDoublet,
-        isPupilMask,
         isMediumVolume,
         isPointSource2D,
         isPointSource3D,
@@ -4664,87 +4656,62 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                {isPupilMask && (
+                {isOpticalWindow && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Pupil Mask</label>
-                        <div style={{ marginBottom: 8 }}>
-                            <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: 4 }}>Mode</label>
-                            <select
-                                value={localPupilMaskMode}
-                                onChange={(e) => {
-                                    const mode = e.target.value as 'uniform' | 'annulus' | 'phaseRing';
-                                    setLocalPupilMaskMode(mode);
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.mode = mode;
-                                            c.rebuildMask();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }}
-                                style={{ ...inputStyle, cursor: 'pointer' }}
-                            >
-                                <option value="uniform">Uniform</option>
-                                <option value="annulus">Annulus</option>
-                                <option value="phaseRing">Phase Ring</option>
-                            </select>
-                        </div>
+                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Optical Window / Plate</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            <ScrubInput label="Radius" suffix="mm" value={localPupilMaskRadius} onChange={setLocalPupilMaskRadius}
+                            <ScrubInput label="Diameter" suffix="mm" value={localWindowDiameter} onChange={setLocalWindowDiameter}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
                                     if (isNaN(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.radius = val;
+                                        if (c.id === selection[0] && c instanceof OpticalWindow) {
+                                            c.diameter = val;
                                             c.updateBounds();
-                                            c.rebuildMask();
                                             return c;
                                         }
                                         return c;
                                     });
                                     setComponents([...newComponents]);
-                                }} speed={0.2} min={0.1} max={100} />
-                            <ScrubInput label="Res" suffix="" value={localPupilMaskResolution} onChange={setLocalPupilMaskResolution}
+                                }} speed={0.5} min={0.1} max={200} />
+                            <ScrubInput label="Thickness" suffix="mm" value={localWindowThickness} onChange={setLocalWindowThickness}
                                 onCommit={(v: string) => {
-                                    const val = Math.round(parseFloat(v));
-                                    if (!Number.isFinite(val) || val < 8) return;
+                                    const val = parseFloat(v);
+                                    if (!Number.isFinite(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.resolution = val;
-                                            c.rebuildMask();
+                                        if (c.id === selection[0] && c instanceof OpticalWindow) {
+                                            c.thickness = val;
+                                            c.updateBounds();
                                             return c;
                                         }
                                         return c;
                                     });
                                     setComponents([...newComponents]);
-                                }} speed={1} min={8} max={256} />
+                                }} speed={0.1} min={0.01} max={50} />
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-                            <ScrubInput label="Inner ρ" suffix="" value={localPupilMaskInner} onChange={setLocalPupilMaskInner}
+                            <ScrubInput label="Index" suffix="" value={localWindowIndex} onChange={setLocalWindowIndex}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
-                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    if (!Number.isFinite(val) || val <= 0) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.innerRadius = val;
-                                            c.rebuildMask();
+                                        if (c.id === selection[0] && c instanceof OpticalWindow) {
+                                            c.refractiveIndex = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
                                     });
                                     setComponents([...newComponents]);
-                                }} speed={0.01} min={0} max={1} />
-                            <ScrubInput label="Outer ρ" suffix="" value={localPupilMaskOuter} onChange={setLocalPupilMaskOuter}
+                                }} speed={0.001} min={1} max={3} />
+                            <ScrubInput label="Surface T" suffix="" value={localWindowSurfaceT} onChange={setLocalWindowSurfaceT}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
-                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    if (!Number.isFinite(val) || val < 0 || val > 1) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.outerRadius = val;
-                                            c.rebuildMask();
+                                        if (c.id === selection[0] && c instanceof OpticalWindow) {
+                                            c.surfaceTransmission = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
@@ -4752,65 +4719,21 @@ export const Inspector: React.FC = () => {
                                     setComponents([...newComponents]);
                                 }} speed={0.01} min={0} max={1} />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-                            <ScrubInput label="Ring T" suffix="" value={localPupilMaskRingTransmission} onChange={setLocalPupilMaskRingTransmission}
+                        <div style={{ marginTop: 8 }}>
+                            <ScrubInput label="OPL Trim" suffix="mm" value={localWindowOplOffset} onChange={setLocalWindowOplOffset}
                                 onCommit={(v: string) => {
                                     const val = parseFloat(v);
-                                    if (isNaN(val) || val < 0 || val > 1) return;
+                                    if (!Number.isFinite(val)) return;
                                     const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.ringTransmission = val;
-                                            c.rebuildMask();
+                                        if (c.id === selection[0] && c instanceof OpticalWindow) {
+                                            c.opticalPathOffsetMm = val;
+                                            c.version++;
                                             return c;
                                         }
                                         return c;
                                     });
                                     setComponents([...newComponents]);
-                                }} speed={0.01} min={0} max={1} />
-                            <ScrubInput label="Ring φ" suffix="rad" value={localPupilMaskRingPhase} onChange={setLocalPupilMaskRingPhase}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.ringPhaseShift = val;
-                                            c.rebuildMask();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }} speed={0.05} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-                            <ScrubInput label="Bg T" suffix="" value={localPupilMaskBackgroundTransmission} onChange={setLocalPupilMaskBackgroundTransmission}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val) || val < 0 || val > 1) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.backgroundTransmission = val;
-                                            c.rebuildMask();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }} speed={0.01} min={0} max={1} />
-                            <ScrubInput label="Bg φ" suffix="rad" value={localPupilMaskBackgroundPhase} onChange={setLocalPupilMaskBackgroundPhase}
-                                onCommit={(v: string) => {
-                                    const val = parseFloat(v);
-                                    if (isNaN(val)) return;
-                                    const newComponents = components.map(c => {
-                                        if (c.id === selection[0] && c instanceof PupilMaskElement) {
-                                            c.backgroundPhaseShift = val;
-                                            c.rebuildMask();
-                                            return c;
-                                        }
-                                        return c;
-                                    });
-                                    setComponents([...newComponents]);
-                                }} speed={0.05} />
+                                }} speed={0.0001} />
                         </div>
                     </div>
                 )}

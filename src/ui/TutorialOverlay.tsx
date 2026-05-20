@@ -15,7 +15,7 @@ import {
     startTutorialStage2Atom,
     tutorialStageAtom,
 } from '../state/store';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import {
     copyTutorialCameraDetectorSettings,
     findNearestRealTutorialCamera,
@@ -214,17 +214,17 @@ const TutorialOverlayContent: React.FC = () => {
             .add(new Vector3(0, -30, 44));
     }, [components]);
     const mzPhaseTrim = useMemo(
-        () => components.find((component): component is PupilMaskElement =>
-            component instanceof PupilMaskElement && component.name === 'Arm A Phase Trim',
+        () => components.find((component): component is OpticalWindow =>
+            component instanceof OpticalWindow && component.name === 'Arm A Compensation Plate',
         ) ?? null,
         [components],
     );
     const adjustPhaseTrim = useCallback((id: string, delta: number) => {
         pushUndo();
         setComponents(prev => prev.map(component => {
-            if (component.id === id && component instanceof PupilMaskElement) {
-                component.ringPhaseShift += delta;
-                component.rebuildMask();
+            if (component.id === id && component instanceof OpticalWindow) {
+                component.opticalPathOffsetMm += (delta / (2 * Math.PI)) * 0.000532;
+                component.version++;
             }
             return component;
         }));
@@ -275,7 +275,7 @@ const TutorialOverlayContent: React.FC = () => {
                     <div className="tutorial-callout compact mz-callout">
                         <div className="tutorial-callout-title">Set the interference phase</div>
                         <div className="tutorial-callout-body">
-                            Step the phase plate by half a wave to move the detector from bright to dark.
+                            Step the compensation plate by half a wave to move the detector from bright to dark.
                         </div>
                     </div>
                 </Html>

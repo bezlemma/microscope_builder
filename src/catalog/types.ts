@@ -1,4 +1,4 @@
-export type CatalogVendor = 'thorlabs' | 'edmund' | 'coherent';
+export type CatalogVendor = 'thorlabs' | 'edmund' | 'coherent' | 'asi';
 
 export type CatalogComponentType =
     | 'sphericalLens'
@@ -8,6 +8,10 @@ export type CatalogComponentType =
     | 'objective'
     | 'prism'
     | 'mirror'
+    | 'curvedMirror'
+    | 'beamSplitter'
+    | 'polarizingBeamSplitter'
+    | 'dichroic'
     | 'filter'
     | 'laser'
     | 'camera'
@@ -138,6 +142,28 @@ export interface ObjectiveParams {
     coverGlassThicknessMm?: number;
     fieldNumberMm?: number;
     diameterMm?: number;
+    zemaxEnvelope?: ObjectiveZemaxEnvelopeParams;
+}
+
+export interface ObjectiveZemaxBlackBoxSurface {
+    orientation: 'forward' | 'reverse';
+    surfaceIndex: number;
+    fileName?: string;
+    thicknessToNextMm?: number;
+    semiDiameterMm?: number;
+}
+
+export interface ObjectiveZemaxEnvelopeParams {
+    model: 'zemaxBlackBoxEnvelope';
+    forwardFileName?: string;
+    reverseFileName?: string;
+    entrancePupilDiameterMm?: number;
+    wavelengthRangeNm?: [number, number];
+    sampledWavelengthsNm?: number[];
+    fieldPointsMm?: number[];
+    explicitSurfaceCount?: number;
+    blackBoxSurfaces: ObjectiveZemaxBlackBoxSurface[];
+    notes?: string[];
 }
 
 export interface PrismParams {
@@ -153,6 +179,86 @@ export interface PrismParams {
     deviationAngleDeg?: number;
 }
 
+export interface MirrorParams {
+    kind: 'mirror';
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    thicknessMm: number;
+    coating?: string;
+    substrate?: string;
+    shape?: 'round' | 'rectangular' | 'square' | 'unknown';
+}
+
+export interface CurvedMirrorParams {
+    kind: 'curvedMirror';
+    diameterMm: number;
+    thicknessMm: number;
+    radiusOfCurvatureMm: number;
+    focalLengthMm?: number;
+    coating?: string;
+    substrate?: string;
+}
+
+export interface BeamSplitterParams {
+    kind: 'beamSplitter';
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    thicknessMm: number;
+    splitRatio?: number;
+    wavelengthRange?: string;
+    coating?: string;
+    substrate?: string;
+    shape?: 'round' | 'rectangular' | 'square' | 'cube' | 'unknown';
+}
+
+export interface PolarizingBeamSplitterParams {
+    kind: 'polarizingBeamSplitter';
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    thicknessMm: number;
+    wavelengthRange?: string;
+    extinctionRatio?: string;
+    coating?: string;
+    substrate?: string;
+    shape?: 'round' | 'rectangular' | 'square' | 'cube' | 'unknown';
+}
+
+export interface DichroicParams {
+    kind: 'dichroic';
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    thicknessMm: number;
+    filterKind: 'longpass' | 'shortpass' | 'bandpass';
+    cutoffWavelengthNm?: number;
+    transmissionBand?: string;
+    reflectionBand?: string;
+    coating?: string;
+    substrate?: string;
+    shape?: 'round' | 'rectangular' | 'square' | 'unknown';
+}
+
+export interface FilterParams {
+    kind: 'filter';
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    thicknessMm: number;
+    filterKind: 'longpass' | 'shortpass' | 'bandpass' | 'multiband';
+    cutoffWavelengthNm?: number;
+    centerWavelengthNm?: number;
+    bandwidthNm?: number;
+    transmissionBand?: string;
+    blockingBand?: string;
+    opticalDensity?: number;
+    coating?: string;
+    substrate?: string;
+    shape?: 'round' | 'rectangular' | 'square' | 'unknown';
+}
+
 export type NormalizedCatalogParams =
     | SphericalLensParams
     | AsphericLensParams
@@ -160,6 +266,12 @@ export type NormalizedCatalogParams =
     | AchromatDoubletParams
     | ObjectiveParams
     | PrismParams
+    | MirrorParams
+    | CurvedMirrorParams
+    | BeamSplitterParams
+    | PolarizingBeamSplitterParams
+    | DichroicParams
+    | FilterParams
     | { kind: 'unknown' };
 
 export interface CatalogPart {

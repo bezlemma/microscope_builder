@@ -4,7 +4,7 @@ import { createLensZooScene } from '../../presets/lensZoo';
 import { createMZInterferometerScene } from '../../presets/mzInterferometer';
 import { Blocker } from '../components/Blocker';
 import { Card } from '../components/Card';
-import { PupilMaskElement } from '../components/PupilMaskElement';
+import { OpticalWindow } from '../components/OpticalWindow';
 import { Solver1 } from '../Solver1';
 import { createSourceRays } from '../SourceRayFactory';
 
@@ -61,10 +61,10 @@ describe('Preset orientation regressions', () => {
         expect(dumpHits.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('Mach-Zehnder phase trim adds physical optical phase to one arm', () => {
+    test('Mach-Zehnder compensation plate adds physical optical phase to one arm', () => {
         const scene = createMZInterferometerScene();
-        const phaseTrim = scene.find((component): component is PupilMaskElement =>
-            component instanceof PupilMaskElement && component.name === 'Arm A Phase Trim',
+        const phaseTrim = scene.find((component): component is OpticalWindow =>
+            component instanceof OpticalWindow && component.name === 'Arm A Compensation Plate',
         );
         const detector = scene.find((component): component is Card =>
             component instanceof Card && component.name === 'MZ Detector',
@@ -72,16 +72,22 @@ describe('Preset orientation regressions', () => {
         expect(phaseTrim).toBeDefined();
         expect(detector).toBeDefined();
 
-        phaseTrim!.ringPhaseShift = Math.PI;
-        phaseTrim!.rebuildMask();
+        new Solver1(scene).trace(createSourceRays(scene, 1, 'center'));
+        expect(detector!.hits).toHaveLength(2);
+        const [baseA, baseB] = detector!.hits;
+        const baseDeltaOpl = Math.abs(baseA.ray.opticalPathLength - baseB.ray.opticalPathLength);
+
+        phaseTrim!.opticalPathOffsetMm = 532e-6 / 2;
+        phaseTrim!.version++;
         new Solver1(scene).trace(createSourceRays(scene, 1, 'center'));
 
         expect(detector!.hits).toHaveLength(2);
         const [a, b] = detector!.hits;
-        const deltaOpl = Math.abs(a.ray.opticalPathLength - b.ray.opticalPathLength);
+        const shiftedDeltaOpl = Math.abs(a.ray.opticalPathLength - b.ray.opticalPathLength);
         const halfWaveMm = a.ray.wavelength * 1e3 / 2;
+        const deltaChange = shiftedDeltaOpl - baseDeltaOpl;
 
         expect(a.ray.intensity).toBeCloseTo(b.ray.intensity, 9);
-        expect(deltaOpl).toBeCloseTo(halfWaveMm, 9);
+        expect(Math.min(Math.abs(deltaChange - halfWaveMm), Math.abs(deltaChange + halfWaveMm))).toBeLessThan(1e-9);
     });
 });

@@ -16,7 +16,6 @@ import { SphericalLens } from '../physics/components/SphericalLens';
 import { AsphericLens } from '../physics/components/AsphericLens';
 import { Aperture } from '../physics/components/Aperture';
 import { SlitAperture } from '../physics/components/SlitAperture';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import {
     adaptiveTerminalFieldWindow,
     analyzeTerminalField,
@@ -494,20 +493,6 @@ function landmarksForComponent(component: OpticalComponent): LocalOpticalLandmar
             height: component.slitHeight,
         });
         return landmarks;
-    }
-
-    if (component instanceof PupilMaskElement) {
-        landmarks.push({
-            id: 'pupil-mask',
-            label: 'Pupil plane',
-            kind: 'pupil',
-            confidence: 'defined',
-            shape: 'circle',
-            color: COLORS.pupil,
-            localZ: 0,
-            radius: component.radius,
-            note: 'Pupil mask plane',
-        });
     }
 
     return landmarks;

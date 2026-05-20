@@ -8,6 +8,7 @@ import { PMT } from './components/PMT';
 import { Sample } from './components/Sample';
 import { SlitAperture } from './components/SlitAperture';
 import { Filter } from './components/Filter';
+import { OpticalWindow } from './components/OpticalWindow';
 import { DichroicMirror } from './components/DichroicMirror';
 import { BeamSplitter } from './components/BeamSplitter';
 import { PolarizingBeamSplitter } from './components/PolarizingBeamSplitter';
@@ -140,7 +141,8 @@ export interface Solver3PacketHeader {
 
 function packSurfaceParams(component: OpticalComponent, out: Float64Array, offset: number): number {
     // FLAT_DISC family: plane at local z=0 clipped by an outer radius, optionally
-    // with an absorbing annular ring (Aperture).  Filter / Card / BeamSplitter /
+    // with an absorbing annular ring (Aperture).  Filter / OpticalWindow /
+    // Card / BeamSplitter /
     // DichroicMirror / PolarizingBeamSplitter all share the same geometric test.
     if (component instanceof Aperture) {
         out[offset + 0] = component.openingDiameter / 2;
@@ -150,6 +152,12 @@ function packSurfaceParams(component: OpticalComponent, out: Float64Array, offse
         return SURFACE_KIND_FLAT_DISC;
     }
     if (component instanceof Filter) {
+        out[offset + 0] = component.diameter / 2;
+        out[offset + 1] = component.diameter / 2;
+        out[offset + 2] = 0;
+        return SURFACE_KIND_FLAT_DISC;
+    }
+    if (component instanceof OpticalWindow) {
         out[offset + 0] = component.diameter / 2;
         out[offset + 1] = component.diameter / 2;
         out[offset + 2] = 0;

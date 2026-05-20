@@ -18,9 +18,9 @@ import {
 } from '../store';
 import { PMT } from '../../physics/components/PMT';
 import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
-import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
 import { Card } from '../../physics/components/Card';
 import { Camera } from '../../physics/components/Camera';
+import { Mirror } from '../../physics/components/Mirror';
 import { Sample } from '../../physics/components/Sample';
 import { SampleChamber } from '../../physics/components/SampleChamber';
 import { QPD } from '../../physics/components/QPD';
@@ -124,15 +124,15 @@ describe('Confocal preset loading', () => {
             (component): component is Sample | SampleChamber =>
                 component instanceof Sample || component instanceof SampleChamber,
         );
-        const scanHead = components.find((component): component is GalvoScanHead => component instanceof GalvoScanHead);
+        const animatedMirrors = components.filter((component): component is Mirror => component instanceof Mirror);
         expect(cameras.length).toBeGreaterThan(0);
         expect(samples.length).toBeGreaterThan(0);
-        expect(scanHead).toBeDefined();
+        expect(animatedMirrors.length).toBeGreaterThan(0);
         expect(store.get(presetDescriptionAtom)).toBe('');
         expect(cameras.every(camera => store.get(pinnedViewersAtom).has(camera.id))).toBe(true);
         expect(samples.some(sample => store.get(pinnedViewersAtom).has(sample.id))).toBe(false);
         expect(store.get(animatorAtom).channels.some(channel =>
-            channel.targetId === scanHead!.id && channel.property === 'scanX',
+            animatedMirrors.some(mirror => mirror.id === channel.targetId) && channel.property === 'panAngle',
         )).toBe(true);
         const rayConfig = store.get(rayConfigAtom);
         expect(rayConfig.rayCount).toBe(36);
@@ -164,6 +164,7 @@ describe('Confocal preset loading', () => {
 
     test('optical plane view raises the displayed ray count minimum', () => {
         const store = createStore();
+        store.set(loadPresetAtom, PresetName.Blank);
 
         expect(store.get(rayConfigAtom).rayCount).toBeLessThan(OPTICAL_PLANE_MIN_FORWARD_RAY_COUNT);
 

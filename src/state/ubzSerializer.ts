@@ -21,6 +21,7 @@ import { Blocker } from '../physics/components/Blocker';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
 import { Filter } from '../physics/components/Filter';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import { Camera } from '../physics/components/Camera';
 import { Sample } from '../physics/components/Sample';
 import { Objective } from '../physics/components/Objective';
@@ -45,7 +46,6 @@ import { AOD } from '../physics/components/AOD';
 import { QPD } from '../physics/components/QPD';
 import { Rail } from '../physics/components/Rail';
 import { MediumVolume } from '../physics/components/MediumVolume';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { PointSource2D } from '../physics/components/PointSource2D';
 import { PointSource3D } from '../physics/components/PointSource3D';
@@ -230,6 +230,13 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`diameter = ${fmt(comp.diameter)}`);
         lines.push(`thickness = ${fmt(comp.thickness)}`);
         writeSpectralProfile(comp.spectralProfile, lines);
+    } else if (comp instanceof OpticalWindow) {
+        lines.push(`diameter = ${fmt(comp.diameter)}`);
+        lines.push(`thickness = ${fmt(comp.thickness)}`);
+        lines.push(`refractiveIndex = ${fmt(comp.refractiveIndex)}`);
+        lines.push(`exteriorRefractiveIndex = ${fmt(comp.exteriorRefractiveIndex)}`);
+        lines.push(`surfaceTransmission = ${fmt(comp.surfaceTransmission)}`);
+        lines.push(`opticalPathOffsetMm = ${fmt(comp.opticalPathOffsetMm)}`);
     } else if (comp instanceof Camera) {
         lines.push(`width = ${fmt(comp.width)}`);
         lines.push(`height = ${fmt(comp.height)}`);
@@ -302,6 +309,13 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`coverslipThickness = ${fmt(comp.coverslipThickness)}`);
         lines.push(`fieldNumber = ${fmt(comp.fieldNumber)}`);
         lines.push(`immersionMediumKind = ${comp.immersionMediumKind}`);
+        lines.push(`mechanicalStyle = ${comp.mechanicalStyle}`);
+        if (comp.mechanicalStyle === 'snout') {
+            lines.push(`snoutRadius = ${fmt(comp.snoutRadius)}`);
+            lines.push(`snoutLength = ${fmt(comp.snoutLength)}`);
+            lines.push(`snoutCutOffset = ${fmt(comp.snoutCutOffset)}`);
+            lines.push(`snoutCutAngle = ${fmt(comp.snoutCutAngle)}`);
+        }
         if (comp.pupil?.aberrations && comp.pupil.aberrations.coefficients.length > 0) {
             lines.push(`pupilReferenceWavelengthNm = ${fmt(comp.pupil.aberrations.referenceWavelengthNm)}`);
             lines.push(`pupilZernike = ${comp.pupil.aberrations.coefficients.map(({ index, coefficient }) => `${index}:${fmt(coefficient)}`).join('; ')}`);
@@ -411,17 +425,6 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`visualMode = ${comp.visualMode}`);
         lines.push(`bridgeStartRadius = ${fmt(comp.bridgeStartRadius)}`);
         lines.push(`bridgeEndRadius = ${fmt(comp.bridgeEndRadius)}`);
-    } else if (comp instanceof PupilMaskElement) {
-        lines.push(`mode = ${comp.mode}`);
-        lines.push(`radius = ${fmt(comp.radius)}`);
-        lines.push(`thickness = ${fmt(comp.thickness)}`);
-        lines.push(`innerRadius = ${fmt(comp.innerRadius)}`);
-        lines.push(`outerRadius = ${fmt(comp.outerRadius)}`);
-        lines.push(`ringTransmission = ${fmt(comp.ringTransmission)}`);
-        lines.push(`ringPhaseShift = ${fmt(comp.ringPhaseShift)}`);
-        lines.push(`backgroundTransmission = ${fmt(comp.backgroundTransmission)}`);
-        lines.push(`backgroundPhaseShift = ${fmt(comp.backgroundPhaseShift)}`);
-        lines.push(`resolution = ${fmt(comp.resolution)}`);
     } else if (comp instanceof Rail) {
         lines.push(`holeA = ${fmt(comp.holeA.x)}, ${fmt(comp.holeA.y)}, ${fmt(comp.holeA.z)}`);
         lines.push(`holeB = ${fmt(comp.holeB.x)}, ${fmt(comp.holeB.y)}, ${fmt(comp.holeB.z)}`);
@@ -914,6 +917,19 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 str(props, 'name', 'Filter')
             );
         }
+        case 'OpticalWindow': {
+            const c = new OpticalWindow(
+                num(props, 'diameter', 25.4),
+                num(props, 'thickness', 5),
+                num(props, 'refractiveIndex', 1.458),
+                str(props, 'name', 'Optical Window'),
+                num(props, 'surfaceTransmission', 0.995),
+            );
+            c.exteriorRefractiveIndex = num(props, 'exteriorRefractiveIndex', 1);
+            c.opticalPathOffsetMm = num(props, 'opticalPathOffsetMm', 0);
+            c.updateBounds();
+            return c;
+        }
         case 'Camera': {
             const c = new Camera(
                 num(props, 'width', 13),
@@ -982,6 +998,11 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
                 workingDistance: num(props, 'workingDistance', 10),
                 tubeLensFocal: num(props, 'tubeLensFocal', 200),
                 diameter: num(props, 'diameter', 20),
+                mechanicalStyle: str(props, 'mechanicalStyle', 'standard') as Objective['mechanicalStyle'],
+                snoutRadius: num(props, 'snoutRadius', 4),
+                snoutLength: num(props, 'snoutLength', 16),
+                snoutCutOffset: num(props, 'snoutCutOffset', 2),
+                snoutCutAngle: num(props, 'snoutCutAngle', 0),
                 name: str(props, 'name', 'Objective'),
             });
             c.coverslipThickness = num(props, 'coverslipThickness', c.coverslipThickness);
@@ -1171,18 +1192,17 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             });
         }
         case 'PupilMaskElement': {
-            const c = new PupilMaskElement(str(props, 'name', 'Pupil Mask'));
-            c.mode = str(props, 'mode', 'phaseRing') as 'uniform' | 'annulus' | 'phaseRing';
-            c.radius = num(props, 'radius', 4);
-            c.thickness = num(props, 'thickness', 1);
-            c.innerRadius = num(props, 'innerRadius', 0.55);
-            c.outerRadius = num(props, 'outerRadius', 0.8);
-            c.ringTransmission = num(props, 'ringTransmission', 1);
-            c.ringPhaseShift = num(props, 'ringPhaseShift', Math.PI / 2);
-            c.backgroundTransmission = num(props, 'backgroundTransmission', 1);
-            c.backgroundPhaseShift = num(props, 'backgroundPhaseShift', 0);
-            c.resolution = num(props, 'resolution', 64);
-            c.rebuildMask();
+            const radius = num(props, 'radius', 12);
+            const c = new OpticalWindow(
+                radius * 2,
+                num(props, 'thickness', 1),
+                1.458,
+                str(props, 'name', 'Legacy Phase Plate'),
+                Math.sqrt(num(props, 'ringTransmission', 1)),
+            );
+            const phase = num(props, 'ringPhaseShift', 0);
+            c.opticalPathOffsetMm = phase / (2 * Math.PI) * 0.000532;
+            c.updateBounds();
             return c;
         }
         case 'Rail': {

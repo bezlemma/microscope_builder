@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Html, Line } from '@react-three/drei';
 import { Vector3, QuadraticBezierCurve3, DoubleSide } from 'three';
 import { Annotation } from '../../physics/components/Annotation';
+import { TABLE_ANNOTATION_Z_INDEX_RANGE } from '../zLayers';
 
 /**
  * Draws user-placed text / arrow / curved-arrow annotations.
@@ -14,6 +15,7 @@ import { Annotation } from '../../physics/components/Annotation';
 export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ component }) => {
     const { kind, text, length, fontSize, color } = component;
     const label = text || 'Label';
+    const labelLines = label.split('\n');
     const cssFontSize = `${Math.max(9, Math.min(32, fontSize))}px`;
     const textStyle: React.CSSProperties = {
         fontFamily: 'var(--ui-font)',
@@ -39,8 +41,9 @@ export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ comp
             textAlign: 'left',
         }
         : textStyle;
-    const textHitWidth = Math.max(20, label.length * 5);
-    const textHitHeight = Math.max(12, fontSize);
+    const longestLineLength = Math.max(...labelLines.map(line => line.length), 1);
+    const textHitWidth = Math.max(18, longestLineLength * Math.max(2.6, fontSize * 0.32) + 8);
+    const textHitHeight = Math.max(10, labelLines.length * fontSize * 0.72 + 4);
 
     const straightPoints = useMemo<[number, number, number][]>(() => {
         const half = length / 2;
@@ -103,7 +106,7 @@ export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ comp
                     <planeGeometry args={[textHitWidth, textHitHeight]} />
                     <meshBasicMaterial transparent opacity={0} depthWrite={false} side={DoubleSide} />
                 </mesh>
-                <Html center style={{ pointerEvents: 'none' }}>
+                <Html center zIndexRange={TABLE_ANNOTATION_Z_INDEX_RANGE} style={{ pointerEvents: 'none' }}>
                     <div style={cardTextStyle}>{label}</div>
                 </Html>
             </group>
@@ -122,7 +125,7 @@ export const AnnotationVisualizer: React.FC<{ component: Annotation }> = ({ comp
             <Line points={points} color={color} lineWidth={3} />
             {head && <Line points={head} color={color} lineWidth={3} />}
             {text && (
-                <Html position={[0, kind === 'curvedArrow' ? length * 0.55 : 6, 0]} center style={{ pointerEvents: 'none' }}>
+                <Html position={[0, kind === 'curvedArrow' ? length * 0.55 : 6, 0]} center zIndexRange={TABLE_ANNOTATION_Z_INDEX_RANGE} style={{ pointerEvents: 'none' }}>
                     <div style={textStyle}>{text}</div>
                 </Html>
             )}

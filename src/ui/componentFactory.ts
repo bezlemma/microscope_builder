@@ -19,6 +19,7 @@ import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSpli
 import { Aperture } from '../physics/components/Aperture';
 import { SlitAperture } from '../physics/components/SlitAperture';
 import { Filter } from '../physics/components/Filter';
+import { OpticalWindow } from '../physics/components/OpticalWindow';
 import { Diffuser } from '../physics/components/Diffuser';
 import { DoubleSlit } from '../physics/components/DoubleSlit';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
@@ -27,7 +28,6 @@ import { SampleChamber } from '../physics/components/SampleChamber';
 import { PMT } from '../physics/components/PMT';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { DualGalvoScanHead } from '../physics/components/DualGalvoScanHead';
-import { PupilMaskElement } from '../physics/components/PupilMaskElement';
 import { MediumVolume } from '../physics/components/MediumVolume';
 import { Rail } from '../physics/components/Rail';
 import { PointSource2D } from '../physics/components/PointSource2D';
@@ -35,9 +35,7 @@ import { PointSource3D } from '../physics/components/PointSource3D';
 import { ConeSource3D } from '../physics/components/ConeSource3D';
 import { WedgeSource2D } from '../physics/components/WedgeSource2D';
 import { StructuredSource } from '../physics/components/StructuredSource';
-import { FaradayIsolator } from '../physics/components/FaradayIsolator';
 import { QPD } from '../physics/components/QPD';
-import { AOD } from '../physics/components/AOD';
 import { Annotation } from '../physics/components/Annotation';
 import { TrappedBead } from '../physics/components/TrappedBead';
 import { SpectralProfile } from '../physics/SpectralProfile';
@@ -73,22 +71,20 @@ const AXIAL_OPTIC_TYPES = new Set([
     'aperture',
     'slitAperture',
     'filter',
+    'opticalWindow',
     'diffuser',
     'doubleSlit',
     'curvedMirror',
     'pmt',
     'achromatDoublet',
     'dualGalvoScanHead',
-    'pupilMask',
     'mediumVolume',
     'pointSource2D',
     'pointSource3D',
     'coneSource3D',
     'wedgeSource2D',
     'structuredSource',
-    'faradayIsolator',
     'qpd',
-    'aod',
     'abstractPlane',
     'textAnnotation',
     'arrowAnnotation',
@@ -144,6 +140,7 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'aperture') return new Aperture(10, 25, 'Aperture');
     if (type === 'slitAperture') return new SlitAperture(0.5, 20, 25, 'Slit Aperture');
     if (type === 'filter') return new Filter(25, 3, new SpectralProfile('bandpass', 500, [{ center: 525, width: 50 }]), 'Filter');
+    if (type === 'opticalWindow') return new OpticalWindow(25.4, 5, 1.458, 'Optical Window');
     if (type === 'diffuser') return new Diffuser(25.4, 2, 1 * Math.PI / 180, 'Diffuser');
     if (type === 'doubleSlit') return new DoubleSlit(0.5, 2, 20, 25, 'Double Slit');
     if (type === 'dichroic') return new DichroicMirror(25, 2, new SpectralProfile('longpass', 500), 'Dichroic');
@@ -153,7 +150,6 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'pmt') return new PMT(10, 10, 'PMT Detector');
     if (type === 'achromatDoublet') return new AchromatDoublet();
     if (type === 'dualGalvoScanHead') return new DualGalvoScanHead();
-    if (type === 'pupilMask') return new PupilMaskElement();
     if (type === 'mediumVolume') return new MediumVolume();
     if (type === 'rail') return new Rail();
     if (type === 'pointSource2D') return new PointSource2D();
@@ -161,9 +157,7 @@ export function createComponentForType(type: string): OpticalComponent | null {
     if (type === 'coneSource3D') return new ConeSource3D();
     if (type === 'wedgeSource2D') return new WedgeSource2D();
     if (type === 'structuredSource') return new StructuredSource();
-    if (type === 'faradayIsolator') return new FaradayIsolator();
     if (type === 'qpd') return new QPD();
-    if (type === 'aod') return new AOD();
     if (type === 'textAnnotation') return new Annotation('text', 'Text Label', 'Label');
     if (type === 'arrowAnnotation') return new Annotation('arrow', 'Arrow', '', 60);
     if (type === 'curvedArrowAnnotation') return new Annotation('curvedArrow', 'Curved Arrow', '', 60);

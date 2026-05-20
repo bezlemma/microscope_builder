@@ -6,12 +6,21 @@ import { CylindricalLens } from '../physics/components/CylindricalLens';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 import { Objective } from '../physics/components/Objective';
 import { PrismLens } from '../physics/components/PrismLens';
+import { Mirror } from '../physics/components/Mirror';
+import { CurvedMirror } from '../physics/components/CurvedMirror';
+import { BeamSplitter } from '../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
+import { DichroicMirror } from '../physics/components/DichroicMirror';
+import { Filter } from '../physics/components/Filter';
+import { SpectralProfile } from '../physics/SpectralProfile';
 import {
     applyCatalogPartToComponent,
     rankCatalogPartsForDesignComponent,
 } from '../catalog/catalog';
 import type { CatalogPart } from '../catalog/types';
 import { LensFamilyDesigner, type LensFamilyComponent } from './LensFamilyDesigner';
+import { FoldOpticDesigner, SpectralProfileEditor, type FoldOpticComponent } from './FoldOpticDesigner';
+import { MODAL_Z_INDEX } from './zLayers';
 
 function formatCatalogNumber(value: number): string {
     if (!Number.isFinite(value)) return String(value);
@@ -52,6 +61,13 @@ function partSummary(part: CatalogPart): string {
     const prismType = part.specs.prismType?.value;
     const legLength = part.specs.legLength?.value;
     const wedgeAngle = part.specs.wedgeAngle?.value;
+    const splitRatio = part.specs.splitRatio?.value;
+    const wavelengthRange = part.specs.wavelengthRange?.value;
+    const cutoff = part.specs.cutoffWavelength?.value;
+    const center = part.specs.centerWavelength?.value;
+    const bandwidth = part.specs.bandwidth?.value;
+    const focalLength = part.specs.focalLength?.value;
+    const radiusOfCurvature = part.specs.radiusOfCurvature?.value;
     if (part.componentType === 'objective') {
         return [
             typeof magnification === 'number' ? `${formatCatalogNumber(magnification)}X` : null,
@@ -65,6 +81,55 @@ function partSummary(part: CatalogPart): string {
             typeof prismType === 'string' ? prismType : null,
             typeof legLength === 'number' ? `L=${formatCatalogNumber(legLength)} mm` : null,
             typeof wedgeAngle === 'number' ? `${formatCatalogNumber(wedgeAngle)}° wedge` : null,
+            typeof coating === 'string' ? coating : null,
+        ].filter(Boolean).join(' · ');
+    }
+    if (part.componentType === 'mirror' || part.componentType === 'curvedMirror') {
+        const size = typeof diameter === 'number'
+            ? `Ø${formatCatalogNumber(diameter)} mm`
+            : (typeof length === 'number' && typeof height === 'number')
+                ? `${formatCatalogNumber(length)} x ${formatCatalogNumber(height)} mm`
+                : typeof width === 'number'
+                    ? `${formatCatalogNumber(width)} mm wide`
+                    : null;
+        return [
+            size,
+            typeof focalLength === 'number' ? `f=${formatCatalogNumber(focalLength)} mm` : null,
+            typeof radiusOfCurvature === 'number' ? `ROC ${formatCatalogNumber(radiusOfCurvature)} mm` : null,
+            casingLabelForCatalogPart(part),
+            typeof coating === 'string' ? coating : null,
+        ].filter(Boolean).join(' · ');
+    }
+    if (part.componentType === 'beamSplitter' || part.componentType === 'polarizingBeamSplitter' || part.componentType === 'dichroic') {
+        const size = typeof diameter === 'number'
+            ? `Ø${formatCatalogNumber(diameter)} mm`
+            : (typeof length === 'number' && typeof height === 'number')
+                ? `${formatCatalogNumber(length)} x ${formatCatalogNumber(height)} mm`
+                : typeof width === 'number'
+                    ? `${formatCatalogNumber(width)} mm wide`
+                    : null;
+        return [
+            size,
+            typeof splitRatio === 'number' ? `R=${formatCatalogNumber(splitRatio * 100)}%` : null,
+            typeof cutoff === 'number' ? `${formatCatalogNumber(cutoff)} nm` : null,
+            typeof wavelengthRange === 'string' ? wavelengthRange : null,
+            casingLabelForCatalogPart(part),
+        ].filter(Boolean).join(' · ');
+    }
+    if (part.componentType === 'filter') {
+        const size = typeof diameter === 'number'
+            ? `Ø${formatCatalogNumber(diameter)} mm`
+            : (typeof length === 'number' && typeof height === 'number')
+                ? `${formatCatalogNumber(length)} x ${formatCatalogNumber(height)} mm`
+                : typeof width === 'number'
+                    ? `${formatCatalogNumber(width)} mm wide`
+                    : null;
+        return [
+            size,
+            typeof center === 'number' ? `CWL ${formatCatalogNumber(center)} nm` : null,
+            typeof bandwidth === 'number' ? `FWHM ${formatCatalogNumber(bandwidth)} nm` : null,
+            typeof cutoff === 'number' ? `${formatCatalogNumber(cutoff)} nm` : null,
+            casingLabelForCatalogPart(part),
             typeof coating === 'string' ? coating : null,
         ].filter(Boolean).join(' · ');
     }
@@ -120,19 +185,48 @@ export function applyCatalogPartToDesignLens(lens: SphericalLens, part: CatalogP
     return applyCatalogPartToDesignComponent(lens, part);
 }
 
-export function applyCatalogPartToDesignComponent(component: LensFamilyComponent, part: CatalogPart): boolean {
+type CatalogDesignComponent = LensFamilyComponent | FoldOpticComponent | Filter;
+
+function isLensFamilyComponent(component: CatalogDesignComponent): component is LensFamilyComponent {
+    return component instanceof SphericalLens
+        || component instanceof AsphericLens
+        || component instanceof CylindricalLens
+        || component instanceof AchromatDoublet
+        || component instanceof Objective
+        || component instanceof PrismLens;
+}
+
+function isFoldOpticComponent(component: CatalogDesignComponent): component is FoldOpticComponent {
+    return component instanceof Mirror
+        || component instanceof CurvedMirror
+        || component instanceof BeamSplitter
+        || component instanceof PolarizingBeamSplitter
+        || component instanceof DichroicMirror;
+}
+
+function isFilterComponent(component: CatalogDesignComponent): component is Filter {
+    return component instanceof Filter;
+}
+
+export function applyCatalogPartToDesignComponent(component: CatalogDesignComponent, part: CatalogPart): boolean {
     const applied = applyCatalogPartToComponent(component, part);
     if (applied) component.name = `${part.sku} design`;
     return applied;
 }
 
-function createDesignComponent(componentType?: string): LensFamilyComponent | null {
+function createDesignComponent(componentType?: string): CatalogDesignComponent | null {
     if (componentType === 'lens') return new SphericalLens(0.02, 12.7, 5, 'Catalog design');
     if (componentType === 'asphericLens') return new AsphericLens({ name: 'Catalog asphere design' });
     if (componentType === 'cylindricalLens') return new CylindricalLens(40, 1e9, 12, 24, 3, 'Catalog cylindrical design');
     if (componentType === 'achromatDoublet') return new AchromatDoublet();
     if (componentType === 'objective') return new Objective({ name: 'Catalog objective design' });
     if (componentType === 'prism') return new PrismLens(Math.PI / 3, 20, 20, 'Catalog prism design');
+    if (componentType === 'mirror') return new Mirror(25.4, 6, 'Catalog mirror design');
+    if (componentType === 'curvedMirror') return new CurvedMirror(25.4, 100, 6, 'Catalog curved mirror design');
+    if (componentType === 'beamSplitter') return new BeamSplitter(25.4, 2, 0.5, 'Catalog beam splitter design');
+    if (componentType === 'polarizingBeamSplitter') return new PolarizingBeamSplitter(25.4, 2, 'Catalog PBS design');
+    if (componentType === 'dichroic') return new DichroicMirror(25.4, 1, new SpectralProfile('longpass', 500), 'Catalog dichroic design');
+    if (componentType === 'filter') return new Filter(25.4, 3, new SpectralProfile('bandpass', 525, [{ center: 525, width: 50 }]), 'Catalog filter design');
     return null;
 }
 
@@ -148,13 +242,13 @@ export const CatalogPartChooser: React.FC<{
     const [preferCased, setPreferCased] = useState(() => parts.some(isCasedCatalogPart));
     const [designComponent] = useState(() => createDesignComponent(componentType));
     const [designRevision, setDesignRevision] = useState(0);
-    const hasLensDesigner = !!designComponent;
+    const hasDesigner = !!designComponent;
     const hasCasedParts = useMemo(() => parts.some(isCasedCatalogPart), [parts]);
     const hasBareParts = useMemo(() => parts.some(isBareCatalogPart), [parts]);
     const casingFilterEnabled = hasCasedParts && hasBareParts;
     const rankedParts = useMemo(() => (
-        hasLensDesigner && designComponent ? rankCatalogPartsForDesignComponent(designComponent, parts) : parts
-    ), [designComponent, designRevision, hasLensDesigner, parts]);
+        hasDesigner && designComponent ? rankCatalogPartsForDesignComponent(designComponent, parts) : parts
+    ), [designComponent, designRevision, hasDesigner, parts]);
     const casingFilteredParts = useMemo(() => (
         filterCatalogPartsByCasingPreference(rankedParts, preferCased)
     ), [rankedParts, preferCased]);
@@ -224,7 +318,7 @@ export const CatalogPartChooser: React.FC<{
                 position: 'fixed',
                 inset: 0,
                 background: 'rgba(0,0,0,0.46)',
-                zIndex: 40,
+                zIndex: MODAL_Z_INDEX,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -237,7 +331,7 @@ export const CatalogPartChooser: React.FC<{
         >
             <div
                 style={{
-                    width: hasLensDesigner ? 'min(1060px, calc(100vw - 36px))' : 'min(720px, calc(100vw - 36px))',
+                    width: hasDesigner ? 'min(1060px, calc(100vw - 36px))' : 'min(720px, calc(100vw - 36px))',
                     maxHeight: 'min(680px, calc(var(--app-height, 100dvh) - 36px))',
                     display: 'grid',
                     gridTemplateRows: 'auto 1fr auto',
@@ -291,28 +385,52 @@ export const CatalogPartChooser: React.FC<{
 
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: hasLensDesigner
+                    gridTemplateColumns: hasDesigner
                         ? 'minmax(300px, 0.95fr) minmax(240px, 0.8fr) minmax(220px, 0.9fr)'
                         : 'minmax(240px, 0.95fr) minmax(220px, 1.05fr)',
                     minHeight: 260,
                     overflow: 'hidden',
                 }}>
-                    {hasLensDesigner && designComponent && (
+                    {hasDesigner && designComponent && (
                         <div style={{ overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.08)', padding: 12 }}>
                             {casingControl}
-                            <LensFamilyDesigner
-                                component={designComponent}
-                                onMutate={(mutate) => {
-                                    mutate(designComponent);
-                                    setSelectedId('');
-                                    setDesignRevision(revision => revision + 1);
-                                }}
-                            />
+                            {isLensFamilyComponent(designComponent) && (
+                                <LensFamilyDesigner
+                                    component={designComponent}
+                                    onMutate={(mutate) => {
+                                        mutate(designComponent);
+                                        setSelectedId('');
+                                        setDesignRevision(revision => revision + 1);
+                                    }}
+                                />
+                            )}
+                            {isFoldOpticComponent(designComponent) && (
+                                <FoldOpticDesigner
+                                    component={designComponent}
+                                    onMutate={(mutate) => {
+                                        mutate(designComponent);
+                                        setSelectedId('');
+                                        setDesignRevision(revision => revision + 1);
+                                    }}
+                                />
+                            )}
+                            {isFilterComponent(designComponent) && (
+                                <SpectralProfileEditor
+                                    label="Filter Spectrum"
+                                    profile={designComponent.spectralProfile}
+                                    onChange={(profile) => {
+                                        designComponent.spectralProfile = profile;
+                                        designComponent.version++;
+                                        setSelectedId('');
+                                        setDesignRevision(revision => revision + 1);
+                                    }}
+                                />
+                            )}
                         </div>
                     )}
                     <div style={{ overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.08)', padding: 8 }}>
-                        {!hasLensDesigner && casingControl}
-                        {hasLensDesigner && (
+                        {!hasDesigner && casingControl}
+                        {hasDesigner && (
                             <div style={{ color: '#8d9aa5', fontSize: 10, fontWeight: 800, padding: '2px 3px 7px' }}>
                                 CLOSEST CATALOG MATCHES
                             </div>
@@ -325,7 +443,7 @@ export const CatalogPartChooser: React.FC<{
                                     type="button"
                                     onClick={() => {
                                         setSelectedId(part.id);
-                                        if (hasLensDesigner && designComponent && applyCatalogPartToDesignComponent(designComponent, part)) {
+                                        if (hasDesigner && designComponent && applyCatalogPartToDesignComponent(designComponent, part)) {
                                             setDesignRevision(revision => revision + 1);
                                         }
                                     }}

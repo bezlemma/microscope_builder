@@ -29,17 +29,24 @@ function hasFlag(flag) {
 function usage() {
     console.log(`Usage: bun scripts/catalog/build-objective-mechanical-assets.mjs [options]
 
-Downloads objective STEP files from the catalog, converts them to WRL with
-FreeCADCmd, and writes a static manifest used by the objective visualizer.
+Downloads catalog STEP files, converts them to WRL with FreeCADCmd, and writes
+a static manifest used by component visualizers.
 
 Options:
-  --sku SKU           Limit to one or more objective SKUs, e.g. --sku TL10X-2P
-  --limit N           Convert at most N matching objective parts
+  --sku SKU           Limit to one or more SKUs. When set, any catalog component type is eligible.
+  --component-type TYPE
+                      Limit to a catalog component type. Defaults to objective when no SKU is set.
+  --limit N           Convert at most N matching catalog parts
   --out-dir PATH      Output static mesh directory (default: public/catalog/mechanical/objectives)
   --cache-dir PATH    Download cache directory (default: .cache/mechanical-step-source)
   --manifest PATH     Generated TypeScript manifest path
   --freecad PATH      FreeCADCmd executable path
   --format FORMAT     Browser mesh format: wrl or stl (default: wrl)
+  --batch-size N      Number of STEP files to convert per FreeCAD process (default: 1)
+  --checkpoint-every N
+                      Rewrite the manifest after every N processed parts (default: 25)
+  --quiet             Only print progress and failures
+  --fail-fast         Stop on the first download or conversion failure
   --force             Re-download and re-convert existing assets
   --help              Show this help
 `);
@@ -93,6 +100,7 @@ function findFreeCad(explicitPath) {
         'FreeCADCmd',
         'freecadcmd',
         'freecad',
+        'C:\\Program Files\\FreeCAD 1.1\\bin\\FreeCADCmd.exe',
         'C:\\Program Files\\FreeCAD 1.0\\bin\\FreeCADCmd.exe',
         'C:\\Program Files\\FreeCAD 0.21\\bin\\FreeCADCmd.exe',
         'C:\\Program Files\\FreeCAD 0.20\\bin\\FreeCADCmd.exe',
@@ -114,41 +122,118 @@ async function downloadFile(url, destination, force) {
     writeFileSync(destination, bytes);
 }
 
-function writeFreeCadScript(scriptPath, stepPath, outPath) {
-    const pyString = value => JSON.stringify(value.replace(/\\/g, '/'));
+function writeFreeCadScript(scriptPath, jobs) {
+    const jobsJson = JSON.stringify(jobs.map(job => ({
+        sku: job.part.sku,
+        stepPath: job.sourcePath.replace(/\\/g, '/'),
+        outPath: job.assetPath.replace(/\\/g, '/'),
+    })));
     writeFileSync(scriptPath, `
+import json
+import os
+import traceback
 import FreeCAD
 import Mesh
+import MeshPart
 import Import
 
-step_path = ${pyString(stepPath)}
-out_path = ${pyString(outPath)}
+jobs = json.loads(${JSON.stringify(jobsJson)})
 
-doc = Import.open(step_path)
-if doc is None:
-    doc = FreeCAD.ActiveDocument
-if doc is None:
-    raise RuntimeError("FreeCAD did not create a document for the STEP file")
-objects = list(doc.Objects)
-if not objects:
-    raise RuntimeError("No solids imported from STEP file")
-Mesh.export(objects, out_path)
-FreeCAD.closeDocument(doc.Name)
+def export_objects_as_mesh(objects, out_path):
+    flattened = []
+    for obj in objects:
+        if isinstance(obj, (list, tuple)):
+            flattened.extend(obj)
+        else:
+            flattened.append(obj)
+    objects = flattened
+
+    try:
+        Mesh.export(objects, out_path)
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return
+    except Exception:
+        pass
+
+    combined = Mesh.Mesh()
+    descriptions = []
+    for obj in objects:
+        descriptions.append(str(getattr(obj, "TypeId", type(obj).__name__)))
+        shape = getattr(obj, "Shape", None)
+        if shape is None:
+            continue
+        try:
+            if shape.isNull():
+                continue
+        except Exception:
+            pass
+        mesh = MeshPart.meshFromShape(
+            Shape=shape,
+            LinearDeflection=0.05,
+            AngularDeflection=0.174533,
+            Relative=False,
+        )
+        combined.addMesh(mesh)
+    if combined.CountFacets == 0:
+        raise RuntimeError("None of the imported STEP objects contained meshable shape geometry: " + ", ".join(descriptions[:12]))
+    combined.write(out_path)
+
+for job in jobs:
+    doc = None
+    try:
+        imported = Import.open(job["stepPath"])
+        if isinstance(imported, list):
+            objects = list(imported)
+            doc = FreeCAD.ActiveDocument
+        else:
+            doc = imported
+            if doc is None:
+                doc = FreeCAD.ActiveDocument
+            if doc is None:
+                raise RuntimeError("FreeCAD did not create a document for the STEP file")
+            objects = list(doc.Objects)
+        if not objects:
+            raise RuntimeError("No solids imported from STEP file")
+        export_objects_as_mesh(objects, job["outPath"])
+        print("FREECAD_OK\\t" + job["sku"])
+    except Exception as exc:
+        print("FREECAD_ERR\\t" + job["sku"] + "\\t" + str(exc).replace("\\n", " "))
+        traceback.print_exc()
+    finally:
+        if doc is not None:
+            try:
+                FreeCAD.closeDocument(doc.Name)
+            except Exception:
+                pass
 `);
 }
 
-function convertStepToMesh(freecadPath, stepPath, outPath) {
-    const scriptPath = `${outPath}.freecad.py`;
-    writeFreeCadScript(scriptPath, stepPath, outPath);
+function convertStepsToMeshes(freecadPath, jobs, scriptPath) {
+    if (jobs.length === 0) return { converted: new Map(), errors: new Map() };
+    writeFreeCadScript(scriptPath, jobs);
     const result = spawnSync(freecadPath, [scriptPath], {
         cwd: ROOT,
         encoding: 'utf8',
         windowsHide: true,
-        maxBuffer: 1024 * 1024 * 10,
+        maxBuffer: 1024 * 1024 * 100,
     });
-    if (result.status !== 0) {
-        throw new Error(`FreeCAD failed for ${basename(stepPath)}:\n${result.stdout}\n${result.stderr}`);
+    const converted = new Map(jobs.map(job => [job.part.id, false]));
+    const errors = new Map();
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    for (const line of output.split(/\r?\n/)) {
+        const parts = line.split('\t');
+        if (parts[0] === 'FREECAD_OK' && parts[1]) {
+            const job = jobs.find(candidate => candidate.part.sku === parts[1]);
+            if (job) converted.set(job.part.id, true);
+        } else if (parts[0] === 'FREECAD_ERR' && parts[1]) {
+            const job = jobs.find(candidate => candidate.part.sku === parts[1]);
+            if (job) errors.set(job.part.id, parts.slice(2).join('\t') || 'FreeCAD conversion failed');
+        }
     }
+    if (result.status !== 0) {
+        throw new Error(`FreeCAD failed for ${jobs.length} STEP file(s):\n${output}`);
+    }
+    return { converted, errors };
 }
 
 function manifestSource(assets) {
@@ -156,7 +241,7 @@ function manifestSource(assets) {
     return `import type { CatalogMechanicalVisualAsset } from './mechanicalVisualAssets';
 
 // Generated by scripts/catalog/build-objective-mechanical-assets.mjs.
-// The app only renders vendor mechanical assets listed here; STEP URLs in the
+// The app renders vendor mechanical assets listed here; STEP URLs in the
 // catalog remain source CAD and are converted offline into browser-loadable meshes.
 export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanicalVisualAsset> = ${JSON.stringify(rows, null, 4)};
 `;
@@ -171,6 +256,32 @@ async function loadCatalogParts() {
     return CATALOG_PARTS;
 }
 
+function readExistingAssets(manifestPath) {
+    if (!existsSync(manifestPath)) return [];
+    const text = readFileSync(manifestPath, 'utf8');
+    const match = text.match(/=\s*(\{[\s\S]*\});?\s*$/);
+    if (!match) return [];
+    try {
+        return Object.values(JSON.parse(match[1]));
+    } catch {
+        return [];
+    }
+}
+
+function writeManifest(manifestPath, assetsByPartId) {
+    const allAssets = [...assetsByPartId.values()].sort((a, b) => a.sku.localeCompare(b.sku));
+    writeFileSync(manifestPath, manifestSource(allAssets));
+    return allAssets.length;
+}
+
+function chunkArray(values, chunkSize) {
+    const chunks = [];
+    for (let index = 0; index < values.length; index += chunkSize) {
+        chunks.push(values.slice(index, index + chunkSize));
+    }
+    return chunks;
+}
+
 async function main() {
     if (hasFlag('--help')) {
         usage();
@@ -182,8 +293,15 @@ async function main() {
     const manifestPath = resolve(argValue('--manifest', DEFAULT_MANIFEST));
     const force = hasFlag('--force');
     const requestedSkus = new Set(argValues('--sku').map(sku => sku.toUpperCase()));
+    const requestedTypes = new Set(argValues('--component-type'));
     const limitValue = Number.parseInt(argValue('--limit', '0'), 10);
     const limit = Number.isFinite(limitValue) && limitValue > 0 ? limitValue : Number.POSITIVE_INFINITY;
+    const batchSizeValue = Number.parseInt(argValue('--batch-size', '1'), 10);
+    const batchSize = Number.isFinite(batchSizeValue) && batchSizeValue > 0 ? batchSizeValue : 1;
+    const checkpointEveryValue = Number.parseInt(argValue('--checkpoint-every', '25'), 10);
+    const checkpointEvery = Number.isFinite(checkpointEveryValue) && checkpointEveryValue > 0 ? checkpointEveryValue : Number.POSITIVE_INFINITY;
+    const quiet = hasFlag('--quiet');
+    const failFast = hasFlag('--fail-fast');
     const freecad = findFreeCad(argValue('--freecad', ''));
     const format = outputFormat();
 
@@ -196,54 +314,111 @@ async function main() {
     mkdirSync(dirname(manifestPath), { recursive: true });
 
     const parts = await loadCatalogParts();
-    const objectiveParts = parts
-        .filter(part => part.componentType === 'objective')
-        .filter(part => requestedSkus.size === 0 || requestedSkus.has(part.sku.toUpperCase()))
+    const catalogParts = parts
+        .filter(part => requestedSkus.size > 0
+            ? requestedSkus.has(part.sku.toUpperCase())
+            : (requestedTypes.size > 0 ? requestedTypes.has(part.componentType) : part.componentType === 'objective'))
         .filter(part => findStepFile(part))
         .slice(0, limit);
 
-    const assets = [];
     const generatedAt = new Date().toISOString();
+    const existingAssets = readExistingAssets(manifestPath);
+    const assetsByPartId = new Map(existingAssets.map(asset => [asset.partId, asset]));
+    const conversionJobs = [];
+    const failures = [];
+    let processed = 0;
 
-    for (const part of objectiveParts) {
+    for (const part of catalogParts) {
         const source = findStepFile(part);
         const sourcePath = sourceCachePath(cacheDir, part, source.url);
         const assetPath = outputAssetPath(outDir, part);
-        console.log(`${part.sku}: ${source.url}`);
-        await downloadFile(source.url, sourcePath, force);
-        if (force || !existsSync(assetPath)) {
-            convertStepToMesh(freecad, sourcePath, assetPath);
-        }
-        assets.push({
-            partId: part.id,
-            sku: part.sku,
-            format,
-            url: publicUrlForAsset(outDir, assetPath),
-            sourceUrl: source.url,
-            units: 'mm',
-            generatedAt,
-        });
-    }
-
-    const existingAssets = [];
-    if (!force && existsSync(manifestPath)) {
-        const text = readFileSync(manifestPath, 'utf8');
-        const match = text.match(/=\s*(\{[\s\S]*\});?\s*$/);
-        if (match) {
-            try {
-                const parsed = JSON.parse(match[1]);
-                for (const asset of Object.values(parsed)) {
-                    if (!assets.some(next => next.partId === asset.partId)) existingAssets.push(asset);
-                }
-            } catch {
-                // Ignore an old hand-written manifest and replace it below.
+        if (!quiet) console.log(`${part.sku}: ${source.url}`);
+        try {
+            await downloadFile(source.url, sourcePath, force);
+            if (force || !existsSync(assetPath)) {
+                conversionJobs.push({ part, source, sourcePath, assetPath });
+            } else {
+                const existingAsset = assetsByPartId.get(part.id);
+                assetsByPartId.set(part.id, {
+                    partId: part.id,
+                    sku: part.sku,
+                    format,
+                    url: publicUrlForAsset(outDir, assetPath),
+                    sourceUrl: source.url,
+                    units: 'mm',
+                    generatedAt: existingAsset?.generatedAt ?? generatedAt,
+                });
             }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            failures.push({ sku: part.sku, stage: 'download', message });
+            console.warn(`${part.sku}: download failed: ${message}`);
+            if (failFast) throw error;
+        }
+        processed++;
+        if (processed % checkpointEvery === 0) {
+            writeManifest(manifestPath, assetsByPartId);
         }
     }
 
-    const allAssets = [...existingAssets, ...assets].sort((a, b) => a.sku.localeCompare(b.sku));
-    writeFileSync(manifestPath, manifestSource(allAssets));
-    console.log(`Wrote ${assets.length} converted objective model(s), ${allAssets.length} total manifest entry(s).`);
+    let convertedCount = 0;
+    let completedJobs = 0;
+    for (const [chunkIndex, jobs] of chunkArray(conversionJobs, batchSize).entries()) {
+        if (!quiet) {
+            console.log(`Converting ${completedJobs + 1}-${completedJobs + jobs.length} of ${conversionJobs.length}`);
+        } else if (chunkIndex === 0 || completedJobs % Math.max(checkpointEvery, 1) === 0) {
+            console.log(`Converting ${completedJobs}/${conversionJobs.length}`);
+        }
+        let converted;
+        let conversionErrors;
+        try {
+            const scriptPath = join(cacheDir, `mechanical-convert-${Date.now()}-${chunkIndex}.freecad.py`);
+            const result = convertStepsToMeshes(freecad, jobs, scriptPath);
+            converted = result.converted;
+            conversionErrors = result.errors;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            for (const job of jobs) failures.push({ sku: job.part.sku, stage: 'convert', message });
+            console.warn(`FreeCAD batch failed: ${message}`);
+            if (failFast) throw error;
+            converted = new Map();
+            conversionErrors = new Map();
+        }
+
+        for (const job of jobs) {
+            const ok = converted.get(job.part.id) === true || existsSync(job.assetPath);
+            if (!ok) {
+                const message = conversionErrors.get(job.part.id) ?? 'No mesh file was produced';
+                failures.push({ sku: job.part.sku, stage: 'convert', message });
+                if (failFast) throw new Error(`${job.part.sku}: ${message}`);
+                continue;
+            }
+            convertedCount++;
+            assetsByPartId.set(job.part.id, {
+                partId: job.part.id,
+                sku: job.part.sku,
+                format,
+                url: publicUrlForAsset(outDir, job.assetPath),
+                sourceUrl: job.source.url,
+                units: 'mm',
+                generatedAt,
+            });
+        }
+        completedJobs += jobs.length;
+        if (completedJobs % checkpointEvery === 0 || completedJobs === conversionJobs.length) {
+            writeManifest(manifestPath, assetsByPartId);
+        }
+    }
+
+    const totalAssets = writeManifest(manifestPath, assetsByPartId);
+    const reusedCount = catalogParts.length - conversionJobs.length - failures.filter(failure => failure.stage === 'download').length;
+    console.log(`Wrote/reused ${reusedCount + convertedCount}/${catalogParts.length} mechanical model(s), ${totalAssets} total manifest entry(s).`);
+    if (failures.length > 0) {
+        console.log(`Failed ${failures.length} catalog part(s):`);
+        for (const failure of failures) {
+            console.log(`- ${failure.sku} (${failure.stage}): ${failure.message}`);
+        }
+    }
 }
 
 main().catch(error => {

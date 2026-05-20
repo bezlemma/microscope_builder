@@ -5,7 +5,7 @@
  * Grouped here to keep OpticalTable.tsx focused on the solver/render loop.
  */
 import React, { useMemo, useState, useRef, useCallback, useContext, createContext } from 'react';
-import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry, Box3, Matrix4, Object3D, Mesh, LineBasicMaterial, LineSegments, MeshStandardMaterial, Material } from 'three';
+import { Vector2, Vector3, DoubleSide, BufferGeometry, Float32BufferAttribute, Shape, Path as ThreePath, ExtrudeGeometry, CylinderGeometry, LatheGeometry, ShapeGeometry, Box3, Matrix4, Object3D, Mesh, LineBasicMaterial, LineSegments, MeshStandardMaterial, MeshPhysicalMaterial, Material } from 'three';
 import { useAtom } from 'jotai';
 import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom, uiLockedAtom } from '../../state/store';
 import { Text, Edges, Line } from '@react-three/drei';
@@ -27,10 +27,12 @@ import { CylindricalLens } from '../../physics/components/CylindricalLens';
 import { PrismLens } from '../../physics/components/PrismLens';
 import { Waveplate } from '../../physics/components/Waveplate';
 import { BeamSplitter } from '../../physics/components/BeamSplitter';
+import { PolarizingBeamSplitter } from '../../physics/components/PolarizingBeamSplitter';
 import { Aperture } from '../../physics/components/Aperture';
 import { SlitAperture } from '../../physics/components/SlitAperture';
 import { SampleChamber } from '../../physics/components/SampleChamber';
 import { Filter } from '../../physics/components/Filter';
+import { OpticalWindow } from '../../physics/components/OpticalWindow';
 import { DichroicMirror } from '../../physics/components/DichroicMirror';
 import { CurvedMirror } from '../../physics/components/CurvedMirror';
 import { PolygonScanner } from '../../physics/components/PolygonScanner';
@@ -44,7 +46,6 @@ import { FaradayIsolator } from '../../physics/components/FaradayIsolator';
 import { QPD } from '../../physics/components/QPD';
 import { AOD } from '../../physics/components/AOD';
 import { AchromatDoublet } from '../../physics/components/AchromatDoublet';
-import { PupilMaskElement } from '../../physics/components/PupilMaskElement';
 import { MediumVolume } from '../../physics/components/MediumVolume';
 import { Rail } from '../../physics/components/Rail';
 import { StructuredSource } from '../../physics/components/StructuredSource';
@@ -137,6 +138,7 @@ const SELECTED_LENS_FLAT_OPACITY = 0.7;
 const LENS_BODY_OPACITY = 0.92;
 const SELECTED_LENS_BODY_OPACITY = 0.96;
 const OBJECTIVE_MECHANICAL_OPACITY = 0.46;
+const inertRaycast = () => {};
 
 interface EDrawingsBodyMesh {
     id: number;
@@ -502,30 +504,7 @@ export const SampleVisualizer = ({ component }: { component: Sample }) => {
 };
 
 function objectiveVisualMetrics(component: Objective) {
-    const f = component.focalLength;
-    const a = component.apertureRadius;
-    const wd = component.workingDistance;
-    const bodyR = Math.max(a + 1, component.diameter / 2);
-
-    const parfocalDistance = 35;
-    const zFront = -f + wd;
-    const zBack = Math.max(-f + parfocalDistance, zFront + 20);
-    const zTaperEnd = zFront + Math.min(15, (zBack - zFront) * 0.6);
-
-    const opticalFrontRadius = component.getOpticalFrontRadius();
-    const frontRadius = component.getFrontRadius();
-    const barrelLength = zBack - zFront;
-
-    return {
-        a,
-        bodyR,
-        zFront,
-        zBack,
-        zTaperEnd,
-        opticalFrontRadius,
-        frontRadius,
-        barrelLength,
-    };
+    return component.getMechanicalMetrics();
 }
 
 function disposeMaterial(material: Material | Material[]): void {
@@ -536,11 +515,15 @@ function disposeMaterial(material: Material | Material[]): void {
     }
 }
 
+function isDisposableRenderable(child: Object3D): child is Mesh | LineSegments {
+    return child instanceof Mesh || child instanceof LineSegments;
+}
+
 function disposeObject3D(object: Object3D): void {
     object.traverse((child) => {
-        const renderable = child as Mesh | LineSegments;
-        if (!renderable.isMesh && renderable.type !== 'LineSegments') return;
-        renderable.geometry?.dispose();
+        if (!isDisposableRenderable(child)) return;
+        const renderable = child;
+        renderable.geometry.dispose();
         if (renderable.material) disposeMaterial(renderable.material);
     });
 }
@@ -548,8 +531,8 @@ function disposeObject3D(object: Object3D): void {
 function cloneRenderableObject(source: Object3D): Object3D {
     const object = source.clone(true);
     object.traverse((child) => {
-        const renderable = child as Mesh | LineSegments;
-        if (!renderable.isMesh && renderable.type !== 'LineSegments') return;
+        if (!isDisposableRenderable(child)) return;
+        const renderable = child;
         if (renderable.geometry) renderable.geometry = renderable.geometry.clone();
         if (Array.isArray(renderable.material)) renderable.material = renderable.material.map(material => material.clone());
         else if (renderable.material) renderable.material = renderable.material.clone();
@@ -576,6 +559,169 @@ function standardizeMechanicalMaterials(object: Object3D): void {
         });
         mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
         mesh.renderOrder = 2;
+    });
+}
+
+function hasExplicitMechanicalColors(asset: CatalogMechanicalVisualAsset): boolean {
+    return asset.format === 'edrawings-json';
+}
+
+function catalogLensColor(component: CatalogMechanicalComponent): string {
+    const ior = component instanceof AchromatDoublet
+        ? Math.max(component.ior1, component.ior2)
+        : (
+            component instanceof SphericalLens
+            || component instanceof AsphericLens
+            || component instanceof CylindricalLens
+                ? component.ior
+                : 1.5
+        );
+    return ior > 1.55 ? '#88ffee' : '#aaddff';
+}
+
+function buildSemanticCatalogMeshMaterial(
+    component: CatalogMechanicalComponent,
+    blend: number,
+    isSelected: boolean,
+): Material {
+    if (
+        component instanceof SphericalLens
+        || component instanceof AsphericLens
+        || component instanceof CylindricalLens
+        || component instanceof AchromatDoublet
+    ) {
+        return new MeshStandardMaterial({
+            color: catalogLensColor(component),
+            opacity: isSelected ? SELECTED_LENS_BODY_OPACITY : LENS_BODY_OPACITY,
+            transparent: true,
+            roughness: 0.18,
+            metalness: 0,
+            side: DoubleSide,
+            depthWrite: false,
+            emissive: isSelected ? '#64ffda' : '#000000',
+            emissiveIntensity: isSelected ? 0.15 : 0,
+        });
+    }
+
+    if (component instanceof Filter) {
+        const dominantNm = component.spectralProfile.getDominantPassWavelength();
+        const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#888888';
+        return new MeshPhysicalMaterial({
+            color: tintColor,
+            metalness: 0,
+            roughness: 0.12,
+            transmission: FILTER_TRANSMISSION_3D,
+            transparent: true,
+            opacity: FILTER_OPACITY,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.05,
+            side: DoubleSide,
+            depthWrite: false,
+        });
+    }
+
+    if (component instanceof Mirror || component instanceof CurvedMirror) {
+        return new MeshPhysicalMaterial({
+            color: '#f4f8fb',
+            metalness: 0.92,
+            roughness: 0.07,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.02,
+            emissive: '#9da8b3',
+            emissiveIntensity: 0.16,
+            side: DoubleSide,
+        });
+    }
+
+    if (component instanceof DichroicMirror) {
+        const dominantNm = component.spectralProfile.getDominantPassWavelength();
+        const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#88ccff';
+        return new MeshPhysicalMaterial({
+            color: tintColor,
+            transmission: blend * DICHROIC_TRANSMISSION_3D,
+            opacity: DICHROIC_OPACITY_3D,
+            transparent: true,
+            roughness: 0.1 * (1 - blend),
+            metalness: 0,
+            ior: 1.5,
+            thickness: 0.5,
+            attenuationColor: '#aaddff',
+            attenuationDistance: 5,
+            side: DoubleSide,
+            depthWrite: false,
+        });
+    }
+
+    if (component instanceof BeamSplitter || component instanceof PolarizingBeamSplitter) {
+        return new MeshPhysicalMaterial({
+            color: '#88ccff',
+            transmission: blend * GLASS_TRANSMISSION_3D,
+            opacity: GLASS_OPACITY_3D,
+            transparent: true,
+            roughness: 0.1 * (1 - blend),
+            metalness: 0,
+            ior: 1.5,
+            thickness: 0.5,
+            attenuationColor: '#aaddff',
+            attenuationDistance: 5,
+            side: DoubleSide,
+            depthWrite: false,
+        });
+    }
+
+    return new MeshStandardMaterial({
+        color: '#222222',
+        roughness: 0.8,
+        metalness: 0.2,
+        side: DoubleSide,
+        transparent: true,
+        opacity: OBJECTIVE_MECHANICAL_OPACITY,
+        depthWrite: false,
+    });
+}
+
+export function semanticCatalogMechanicalMaterialName(component: CatalogMechanicalComponent): 'lens' | 'mirror' | 'dichroic' | 'splitter' | 'filter' | 'objective' {
+    if (
+        component instanceof SphericalLens
+        || component instanceof AsphericLens
+        || component instanceof CylindricalLens
+        || component instanceof AchromatDoublet
+    ) return 'lens';
+    if (component instanceof Mirror || component instanceof CurvedMirror) return 'mirror';
+    if (component instanceof DichroicMirror) return 'dichroic';
+    if (component instanceof BeamSplitter || component instanceof PolarizingBeamSplitter) return 'splitter';
+    if (component instanceof Filter) return 'filter';
+    return 'objective';
+}
+
+function applySemanticCatalogMechanicalMaterials(
+    object: Object3D,
+    component: CatalogMechanicalComponent,
+    asset: CatalogMechanicalVisualAsset,
+    blend: number,
+    isSelected: boolean,
+): void {
+    if (hasExplicitMechanicalColors(asset)) return;
+
+    object.traverse((child) => {
+        if (child instanceof Mesh) {
+            disposeMaterial(child.material);
+            child.material = buildSemanticCatalogMeshMaterial(component, blend, isSelected);
+            child.renderOrder = 2;
+            return;
+        }
+        if (child instanceof LineSegments) {
+            disposeMaterial(child.material);
+            child.material = new LineBasicMaterial({
+                color: 0x000000,
+                transparent: true,
+                opacity: semanticCatalogMechanicalMaterialName(component) === 'mirror' ? 0.55 : 0.72,
+                depthWrite: false,
+                depthTest: true,
+                toneMapped: false,
+            });
+            child.renderOrder = 4;
+        }
     });
 }
 
@@ -770,11 +916,26 @@ function rotationToLocalZ(axis: 'x' | 'y' | 'z'): Matrix4 {
     return new Matrix4().identity();
 }
 
-type CatalogMechanicalComponent = Objective | SphericalLens | AsphericLens | CylindricalLens | AchromatDoublet;
+export type CatalogMechanicalComponent =
+    | Objective
+    | SphericalLens
+    | AsphericLens
+    | CylindricalLens
+    | AchromatDoublet
+    | Filter
+    | Mirror
+    | CurvedMirror
+    | BeamSplitter
+    | PolarizingBeamSplitter
+    | DichroicMirror;
 
 function targetMechanicalDiameter(component: CatalogMechanicalComponent): number {
     if (component instanceof Objective) return Math.max(objectiveVisualMetrics(component).bodyR * 2, 0.01);
     if (component instanceof CylindricalLens) return Math.max(component.width, component.apertureRadius * 2, 0.01);
+    if (component instanceof Filter) return Math.max(component.diameter, 0.01);
+    if (component instanceof Mirror || component instanceof CurvedMirror || component instanceof BeamSplitter || component instanceof PolarizingBeamSplitter || component instanceof DichroicMirror) {
+        return Math.max(component.diameter, 0.01);
+    }
     return Math.max(component.apertureRadius * 2, 0.01);
 }
 
@@ -858,21 +1019,25 @@ function normalizeCatalogMechanicalObject(source: Object3D, component: CatalogMe
     return normalizeLensMechanicalObject(source, component);
 }
 
+function objectiveBandColor(mag: number): string {
+    if (mag <= 4) return '#ff0000';
+    if (mag <= 10) return '#ffd700';
+    if (mag <= 20) return '#00ff00';
+    if (mag <= 40) return '#00bfff';
+    if (mag <= 60) return '#0000ff';
+    return '#ffffff';
+}
+
 const ObjectiveGenericBody: React.FC<{
     component: Objective;
     metrics: ReturnType<typeof objectiveVisualMetrics>;
 }> = ({ component, metrics }) => {
-    const getObjectiveBandColor = (mag: number) => {
-        if (mag <= 4) return '#ff0000';
-        if (mag <= 10) return '#ffd700';
-        if (mag <= 20) return '#00ff00';
-        if (mag <= 40) return '#00bfff';
-        if (mag <= 60) return '#0000ff';
-        return '#ffffff';
-    };
+    if (component.mechanicalStyle === 'snout') {
+        return <SnoutObjectiveBody component={component} metrics={metrics} />;
+    }
 
     const lathePoints = React.useMemo(() => {
-        const pts = [];
+        const pts: Vector2[] = [];
         pts.push(new Vector2(metrics.opticalFrontRadius, metrics.zFront));
         pts.push(new Vector2(metrics.frontRadius, metrics.zFront));
         if (metrics.zTaperEnd > metrics.zFront) pts.push(new Vector2(metrics.bodyR, metrics.zTaperEnd));
@@ -905,7 +1070,7 @@ const ObjectiveGenericBody: React.FC<{
             </mesh>
             <mesh position={[0, 0, metrics.zTaperEnd + 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
                 <cylinderGeometry args={[metrics.bodyR + 0.1, metrics.bodyR + 0.1, 3, 32, 1, true]} />
-                <meshStandardMaterial color={getObjectiveBandColor(component.magnification)} transparent opacity={0.8} depthWrite={false} roughness={0.3} side={DoubleSide} />
+                <meshStandardMaterial color={objectiveBandColor(component.magnification)} transparent opacity={0.8} depthWrite={false} roughness={0.3} side={DoubleSide} />
             </mesh>
         </>
     );
@@ -916,11 +1081,16 @@ const CatalogMechanicalBody: React.FC<{
     asset: CatalogMechanicalVisualAsset;
     fallback: React.ReactNode;
 }> = ({ component, asset, fallback }) => {
+    const [blend] = useAtom(cameraBlendAtom);
+    const [selection] = useAtom(selectionAtom);
+    const isSelected = selection.includes(component.id);
     const { object, failed } = useMechanicalAssetObject(asset);
     const normalizedObject = React.useMemo(() => {
         if (!object) return null;
-        return normalizeCatalogMechanicalObject(object, component);
-    }, [component, component.version, object]);
+        const normalized = normalizeCatalogMechanicalObject(object, component);
+        applySemanticCatalogMechanicalMaterials(normalized, component, asset, blend, isSelected);
+        return normalized;
+    }, [asset, blend, component, component.version, isSelected, object]);
 
     React.useEffect(() => {
         return () => {
@@ -940,6 +1110,275 @@ function catalogMechanicalAssetForComponent(component: CatalogMechanicalComponen
     return mechanicalVisualAssetForCatalogPart(catalogPart);
 }
 
+function buildSnoutBevelWindowGeometry(component: Objective): BufferGeometry {
+    const bevel = component.getSnoutBevelPlane();
+    const geometry = new BufferGeometry();
+    if (!bevel) return geometry;
+
+    const segments = 64;
+    const vertices: number[] = [
+        bevel.center.x,
+        bevel.center.y,
+        bevel.center.z,
+    ];
+    for (let i = 0; i <= segments; i++) {
+        const theta = Math.PI * 2 * (i / segments);
+        const point = bevel.center.clone()
+            .add(bevel.tangent.clone().multiplyScalar(Math.cos(theta) * bevel.radius))
+            .add(bevel.slope.clone().multiplyScalar(Math.sin(theta) * bevel.slopeRadius));
+        vertices.push(point.x, point.y, point.z);
+    }
+
+    const indices: number[] = [];
+    for (let i = 1; i <= segments; i++) {
+        indices.push(0, i, i + 1);
+    }
+    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+}
+
+function buildSnoutBevelRimPoints(component: Objective): Vector3[] {
+    const bevel = component.getSnoutBevelPlane();
+    if (!bevel) return [];
+    const points: Vector3[] = [];
+    const segments = 72;
+    for (let i = 0; i <= segments; i++) {
+        const theta = Math.PI * 2 * (i / segments);
+        points.push(bevel.center.clone()
+            .add(bevel.tangent.clone().multiplyScalar(Math.cos(theta) * bevel.radius))
+            .add(bevel.slope.clone().multiplyScalar(Math.sin(theta) * bevel.slopeRadius)));
+    }
+    return points;
+}
+
+const SnoutBevelInteractionOverlay: React.FC<{ component: Objective }> = ({ component }) => {
+    const geometry = useDisposableGeometry(
+        () => buildSnoutBevelWindowGeometry(component),
+        [component.version, component.snoutRadius, component.snoutLength, component.snoutCutAngle],
+    );
+    const rimPoints = React.useMemo(
+        () => buildSnoutBevelRimPoints(component),
+        [component.version, component.snoutRadius, component.snoutLength, component.snoutCutAngle],
+    );
+    if (rimPoints.length === 0) return null;
+
+    return (
+        <group>
+            <mesh geometry={geometry} renderOrder={30} raycast={inertRaycast}>
+                <meshBasicMaterial
+                    color="#9ee8ff"
+                    transparent
+                    opacity={0.72}
+                    side={DoubleSide}
+                    depthWrite={false}
+                    depthTest={false}
+                    toneMapped={false}
+                />
+            </mesh>
+            <Line points={rimPoints} color="#d6f7ff" lineWidth={2.2} transparent opacity={0.98} renderOrder={31} raycast={inertRaycast} />
+        </group>
+    );
+};
+
+function circlePointsAtZ(radius: number, z: number, segments = 96): Vector3[] {
+    const points: Vector3[] = [];
+    for (let i = 0; i <= segments; i++) {
+        const theta = Math.PI * 2 * (i / segments);
+        points.push(new Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, z));
+    }
+    return points;
+}
+
+const SnoutZemaxEnvelopeOverlay: React.FC<{ component: Objective }> = ({ component }) => {
+    const metrics = component.getMechanicalMetrics();
+    const envelope = component.getSnoutZemaxEnvelope();
+    const planes = component.getSnoutZemaxEnvelopePlanes(metrics);
+    const coreRing = React.useMemo(
+        () => circlePointsAtZ(component.apertureRadius, planes?.corePlaneZ ?? 0),
+        [component.version, component.apertureRadius, planes?.corePlaneZ],
+    );
+    const stopRing = React.useMemo(
+        () => circlePointsAtZ(envelope?.stopRadius ?? component.apertureRadius, planes?.imageStopZ ?? 0),
+        [component.version, component.apertureRadius, envelope?.stopRadius, planes?.imageStopZ],
+    );
+    const blackBoxRing = React.useMemo(
+        () => circlePointsAtZ(envelope?.blackBoxRadius ?? component.apertureRadius, planes?.blackBoxExitZ ?? 0),
+        [component.version, component.apertureRadius, envelope?.blackBoxRadius, planes?.blackBoxExitZ],
+    );
+
+    if (!envelope || !planes) return null;
+
+    const blackBoxLength = Math.max(0.01, planes.blackBoxExitZ - planes.corePlaneZ);
+    const blackBoxMidZ = planes.corePlaneZ + blackBoxLength / 2;
+    const rearWindowZ = metrics.zBack - 0.18;
+
+    return (
+        <group>
+            <mesh position={[0, 0, blackBoxMidZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={4} raycast={inertRaycast}>
+                <cylinderGeometry args={[envelope.blackBoxRadius, envelope.blackBoxRadius, blackBoxLength, 72, 1, true]} />
+                <meshStandardMaterial
+                    color="#146279"
+                    roughness={0.18}
+                    metalness={0.02}
+                    transparent
+                    opacity={0.24}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+            </mesh>
+            <mesh position={[0, 0, planes.corePlaneZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={6} raycast={inertRaycast}>
+                <cylinderGeometry args={[component.apertureRadius, component.apertureRadius * 0.92, 0.32, 72, 1, false]} />
+                <meshPhysicalMaterial
+                    color="#a7d7ff"
+                    roughness={0.025}
+                    metalness={0.02}
+                    transmission={0.3}
+                    transparent
+                    opacity={0.30}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+            </mesh>
+            <mesh position={[0, 0, rearWindowZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={6} raycast={inertRaycast}>
+                <cylinderGeometry args={[metrics.a * 0.98, metrics.a * 0.98, 0.34, 72, 1, false]} />
+                <meshPhysicalMaterial
+                    color="#b9ecff"
+                    roughness={0.035}
+                    metalness={0.02}
+                    transmission={0.34}
+                    transparent
+                    opacity={0.26}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+            </mesh>
+            <Line points={coreRing} color="#b388ff" lineWidth={1.4} transparent opacity={0.82} renderOrder={7} raycast={inertRaycast} />
+            <Line points={blackBoxRing} color="#66d9ff" lineWidth={1.2} transparent opacity={0.62} renderOrder={7} raycast={inertRaycast} />
+            <Line points={stopRing} color="#ffce6b" lineWidth={1.7} transparent opacity={0.9} renderOrder={8} raycast={inertRaycast} />
+            <mesh position={[0, 0, planes.imageStopZ]} renderOrder={6} raycast={inertRaycast}>
+                <ringGeometry args={[envelope.stopRadius * 0.96, envelope.stopRadius * 1.08, 72]} />
+                <meshBasicMaterial color="#ffce6b" transparent opacity={0.28} side={DoubleSide} depthWrite={false} />
+            </mesh>
+        </group>
+    );
+};
+
+function buildSnoutFootprintShape(radius: number, cutOffset: number, cutAngle: number): Shape {
+    const shape = new Shape();
+    const safeRadius = Math.max(radius, 0.01);
+    const safeCutOffset = Math.max(0, Math.min(cutOffset, safeRadius * 0.98));
+    const segments = 56;
+    const cosCut = Math.cos(cutAngle);
+    const sinCut = Math.sin(cutAngle);
+    const rotate = (x: number, y: number): [number, number] => [
+        x * cosCut - y * sinCut,
+        x * sinCut + y * cosCut,
+    ];
+
+    const thetaUpper = Math.acos(-safeCutOffset / safeRadius);
+    const thetaLower = Math.PI * 2 - thetaUpper;
+    const arcSpan = Math.PI * 2 - thetaLower + thetaUpper;
+
+    for (let i = 0; i <= segments; i++) {
+        const rawTheta = thetaLower + arcSpan * (i / segments);
+        const theta = rawTheta > Math.PI * 2 ? rawTheta - Math.PI * 2 : rawTheta;
+        const [x, y] = rotate(safeRadius * Math.cos(theta), safeRadius * Math.sin(theta));
+        if (i === 0) shape.moveTo(x, y);
+        else shape.lineTo(x, y);
+    }
+    shape.closePath();
+    return shape;
+}
+
+const SnoutObjectiveBody: React.FC<{
+    component: Objective;
+    metrics: ReturnType<typeof objectiveVisualMetrics>;
+}> = ({ component, metrics }) => {
+    const length = Math.max(metrics.snoutLength, 0.01);
+    const radius = Math.max(metrics.frontRadius, 0.2);
+    const cutOffset = Math.max(0, Math.min(metrics.snoutCutOffset, radius * 0.98));
+    const cutAngle = metrics.snoutCutAngle;
+    const midZ = metrics.zFront + length / 2;
+    const reliefLength = length * 0.54;
+    const reliefZ = metrics.zFront + reliefLength / 2 + length * 0.08;
+    const flatWidth = 2 * Math.sqrt(Math.max(radius * radius - cutOffset * cutOffset, 0.01));
+    const reliefCenter = new Vector3(
+        -cutOffset * Math.cos(cutAngle),
+        -cutOffset * Math.sin(cutAngle),
+        reliefZ,
+    );
+    const glassRadius = Math.max(metrics.opticalFrontRadius, radius * 0.42);
+    const capGeometry = useDisposableGeometry(() => {
+        return new ShapeGeometry(buildSnoutFootprintShape(radius, cutOffset, cutAngle));
+    }, [radius, cutOffset, cutAngle]);
+    const shoulderLength = Math.max(metrics.zTaperEnd - metrics.zTaperStart, 0.01);
+    const rearLength = Math.max(metrics.zBack - metrics.zTaperEnd, 0.01);
+
+    return (
+        <group>
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1}>
+                <cylinderGeometry args={[metrics.a, metrics.a, 0.45, 48]} />
+                <meshBasicMaterial color="#b388ff" transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
+            </mesh>
+            <mesh position={[0, 0, midZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <cylinderGeometry args={[radius * 0.92, radius, length, 64, 1, false]} />
+                <meshStandardMaterial color="#3b4752" roughness={0.42} metalness={0.46} side={DoubleSide} transparent opacity={0.64} depthWrite={false} />
+                <EdgeOutline threshold={18} />
+            </mesh>
+            <mesh
+                position={[reliefCenter.x, reliefCenter.y, reliefCenter.z]}
+                rotation={[0, 0, cutAngle]}
+                renderOrder={3}
+            >
+                <boxGeometry args={[0.035, flatWidth, reliefLength]} />
+                <meshStandardMaterial color="#a9bac4" roughness={0.48} metalness={0.08} side={DoubleSide} transparent opacity={0.30} depthWrite={false} />
+                <EdgeOutline threshold={2} />
+            </mesh>
+            <mesh position={[0, 0, metrics.zFront - 0.10]} rotation={[Math.PI / 2, 0, 0]} renderOrder={4}>
+                <cylinderGeometry args={[glassRadius * 0.95, glassRadius * 0.72, 0.26, 48, 1, false]} />
+                <meshStandardMaterial color="#7fd5ff" roughness={0.04} metalness={0.02} transparent opacity={0.44} side={DoubleSide} depthWrite={false} />
+                <EdgeOutline threshold={16} color="#75cfff" />
+            </mesh>
+            <mesh geometry={capGeometry} position={[0, 0, metrics.zFront - 0.015]} renderOrder={4}>
+                <meshStandardMaterial color="#7fd5ff" roughness={0.08} metalness={0.02} side={DoubleSide} transparent opacity={0.20} depthWrite={false} />
+                <EdgeOutline threshold={4} color="#75cfff" />
+            </mesh>
+            <mesh position={[0, 0, metrics.zTaperStart + shoulderLength / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <cylinderGeometry args={[metrics.bodyR, radius * 1.08, shoulderLength, 64, 1, false]} />
+                <meshStandardMaterial color="#111820" roughness={0.56} metalness={0.46} side={DoubleSide} transparent opacity={0.58} depthWrite={false} />
+                <EdgeOutline threshold={18} />
+            </mesh>
+            <mesh position={[0, 0, metrics.zTaperEnd + rearLength / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <cylinderGeometry args={[metrics.bodyR, metrics.bodyR, rearLength, 64, 1, false]} />
+                <meshStandardMaterial color="#0d1117" roughness={0.62} metalness={0.36} side={DoubleSide} transparent opacity={0.54} depthWrite={false} />
+                <EdgeOutline threshold={18} />
+            </mesh>
+            <mesh position={[0, 0, metrics.zTaperStart + 0.25]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                <cylinderGeometry args={[radius * 1.18, radius * 1.18, 0.50, 64, 1, false]} />
+                <meshStandardMaterial color="#3c4650" roughness={0.48} metalness={0.54} side={DoubleSide} transparent opacity={0.82} depthWrite={false} />
+                <EdgeOutline threshold={12} />
+            </mesh>
+            <mesh position={[0, 0, metrics.zFront + length * 0.22]} rotation={[Math.PI / 2, 0, 0]} renderOrder={4}>
+                <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.18, 64, 1, true]} />
+                <meshStandardMaterial color="#b9c8d0" roughness={0.35} metalness={0.22} side={DoubleSide} transparent opacity={0.42} depthWrite={false} />
+                <EdgeOutline threshold={10} color="#9fd7ee" />
+            </mesh>
+            <mesh position={[0, 0, metrics.zFront + length * 0.62]} rotation={[Math.PI / 2, 0, 0]} renderOrder={4}>
+                <cylinderGeometry args={[radius * 0.985, radius * 0.985, 0.14, 64, 1, true]} />
+                <meshStandardMaterial color="#6c7a84" roughness={0.4} metalness={0.28} side={DoubleSide} transparent opacity={0.40} depthWrite={false} />
+                <EdgeOutline threshold={10} color="#89a7b5" />
+            </mesh>
+            <mesh position={[0, 0, Math.min(metrics.zBack - 2.2, metrics.zTaperEnd + rearLength * 0.62)]} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
+                <cylinderGeometry args={[metrics.bodyR + 0.12, metrics.bodyR + 0.12, 2.4, 64, 1, true]} />
+                <meshStandardMaterial color={objectiveBandColor(component.magnification)} transparent opacity={0.78} depthWrite={false} roughness={0.28} side={DoubleSide} />
+                <EdgeOutline threshold={16} />
+            </mesh>
+        </group>
+    );
+};
+
 export const ObjectiveVisualizer = ({ component }: { component: Objective }) => {
     const [selection] = useAtom(selectionAtom);
     const isSelected = selection.includes(component.id);
@@ -947,6 +1386,12 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
     const catalogPart = component.catalog ? findCatalogPart(component.catalog.partId) : null;
     const mechanicalAsset = mechanicalVisualAssetForCatalogPart(catalogPart);
     const genericBody = <ObjectiveGenericBody component={component} metrics={metrics} />;
+    const interactionRadius = component.mechanicalStyle === 'snout'
+        ? metrics.bodyR * 1.06
+        : metrics.bodyR * 1.22;
+    const interactionLength = component.mechanicalStyle === 'snout'
+        ? metrics.barrelLength + 1.5
+        : metrics.barrelLength + 5;
 
     return (
         <group
@@ -957,8 +1402,10 @@ export const ObjectiveVisualizer = ({ component }: { component: Objective }) => 
             {mechanicalAsset
                 ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
                 : genericBody}
+            {component.mechanicalStyle === 'snout' && <SnoutBevelInteractionOverlay component={component} />}
+            {component.mechanicalStyle === 'snout' && <SnoutZemaxEnvelopeOverlay component={component} />}
             <mesh position={[0, 0, (metrics.zFront + metrics.zBack) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[metrics.bodyR * 1.5, metrics.bodyR * 1.5, metrics.barrelLength + 10, 8]} />
+                <cylinderGeometry args={[interactionRadius, interactionRadius, interactionLength, 12]} />
                 <meshBasicMaterial transparent opacity={0} side={DoubleSide} depthWrite={false} colorWrite={false} />
             </mesh>
             {isSelected && !mechanicalAsset && (
@@ -1029,25 +1476,31 @@ export const PMTVisualizer = ({ component }: { component: PMT }) => {
 
 export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
     const radius = component.diameter / 2;
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
+            <cylinderGeometry args={[radius, radius, component.thickness, 64]} />
+            <meshPhysicalMaterial
+                color="#f4f8fb"
+                metalness={0.92}
+                roughness={0.07}
+                clearcoat={1.0}
+                clearcoatRoughness={0.02}
+                emissive="#9da8b3"
+                emissiveIntensity={0.16}
+                side={DoubleSide}
+            />
+        </mesh>
+    );
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 64]} />
-                <meshPhysicalMaterial
-                    color="#f4f8fb"
-                    metalness={0.92}
-                    roughness={0.07}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                    emissive="#9da8b3"
-                    emissiveIntensity={0.16}
-                    side={DoubleSide}
-                />
-            </mesh>
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1146,41 +1599,44 @@ export const PolygonScannerVisualizer = ({ component }: { component: PolygonScan
 
 export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
     const geom = useDisposableGeometry(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <mesh geometry={geom} renderOrder={-1}>
+            <meshPhysicalMaterial
+                color="#f4f8fb"
+                metalness={0.92}
+                roughness={0.07}
+                clearcoat={1.0}
+                clearcoatRoughness={0.02}
+                emissive="#9da8b3"
+                emissiveIntensity={0.16}
+                side={DoubleSide}
+            />
+        </mesh>
+    );
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh geometry={geom} renderOrder={-1}>
-                <meshPhysicalMaterial
-                    color="#f4f8fb"
-                    metalness={0.92}
-                    roughness={0.07}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                    emissive="#9da8b3"
-                    emissiveIntensity={0.16}
-                    side={DoubleSide}
-                />
-            </mesh>
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
 
-export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter }) => {
+export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter | PolarizingBeamSplitter }) => {
     const radius = component.diameter / 2;
     const [blend] = useAtom(cameraBlendAtom);
     const opticColor = '#88ccff';
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
     const flatOpacity = 0.5;
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {show2D && (
                 <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
                     <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
@@ -1214,6 +1670,17 @@ export const BeamSplitterVisualizer = ({ component }: { component: BeamSplitter 
                     <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
+        </>
+    );
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1312,28 +1779,34 @@ export const FilterVisualizer = ({ component }: { component: Filter }) => {
     const radius = component.diameter / 2;
     const dominantNm = component.spectralProfile.getDominantPassWavelength();
     const tintColor = dominantNm ? wavelengthToHex(dominantNm) : '#888888';
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+            <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
+            <meshPhysicalMaterial
+                color={tintColor}
+                metalness={0}
+                roughness={0.12}
+                transmission={FILTER_TRANSMISSION_3D}
+                transparent={true}
+                opacity={FILTER_OPACITY}
+                clearcoat={1.0}
+                clearcoatRoughness={0.05}
+                side={DoubleSide}
+                depthWrite={false}
+            />
+            <EdgeOutline threshold={15} color="#000000" />
+        </mesh>
+    );
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
-                <meshPhysicalMaterial
-                    color={tintColor}
-                    metalness={0}
-                    roughness={0.12}
-                    transmission={FILTER_TRANSMISSION_3D}
-                    transparent={true}
-                    opacity={FILTER_OPACITY}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
-                    side={DoubleSide}
-                    depthWrite={false}
-                />
-                <EdgeOutline threshold={15} color="#000000" />
-            </mesh>
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -1345,12 +1818,9 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
     const [blend] = useAtom(cameraBlendAtom);
     const show3D = blend > 0.01;
     const show2D = blend < 0.99;
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
+    const mechanicalAsset = catalogMechanicalAssetForComponent(component);
+    const genericBody = (
+        <>
             {show2D && (
                 <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
                     <cylinderGeometry args={[radius, radius, component.thickness, 32]} />
@@ -1384,6 +1854,17 @@ export const DichroicVisualizer = ({ component }: { component: DichroicMirror })
                     <EdgeOutline threshold={15} color="#000000" />
                 </mesh>
             )}
+        </>
+    );
+    return (
+        <group
+            position={[component.position.x, component.position.y, component.position.z]}
+            quaternion={component.rotation.clone()}
+            onClick={(e) => { e.stopPropagation(); }}
+        >
+            {mechanicalAsset
+                ? <CatalogMechanicalBody component={component} asset={mechanicalAsset} fallback={genericBody} />
+                : genericBody}
         </group>
     );
 };
@@ -2075,44 +2556,32 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
     );
 };
 
-export const PupilMaskVisualizer = ({ component }: { component: PupilMaskElement }) => {
-    const outerR = component.radius;
-    const innerR = outerR * Math.max(0, Math.min(component.innerRadius, 1));
-    const ringOuterR = outerR * Math.max(component.innerRadius, Math.min(component.outerRadius, 1));
-    const ringVisible = component.mode !== 'uniform' && ringOuterR > innerR + 1e-4;
-    const backgroundOpacity = Math.max(0.08, Math.min(0.65, component.backgroundTransmission));
-    const ringOpacity = Math.max(0.1, Math.min(0.85, component.ringTransmission));
-    const ringColor = component.ringPhaseShift >= 0 ? '#ffd166' : '#ef476f';
-
+export const OpticalWindowVisualizer = ({ component }: { component: OpticalWindow }) => {
+    const radius = component.diameter / 2;
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[outerR, outerR, component.thickness, 48]} />
-                <meshStandardMaterial color="#6f7d8c" transparent opacity={backgroundOpacity} metalness={0.3} roughness={0.3} />
-                <EdgeOutline />
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                <cylinderGeometry args={[radius, radius, component.thickness, 48]} />
+                <meshPhysicalMaterial
+                    color="#cbe9ff"
+                    transparent
+                    opacity={0.5}
+                    transmission={0.25}
+                    roughness={0.04}
+                    metalness={0}
+                    ior={component.refractiveIndex}
+                    thickness={Math.max(component.thickness, 0.1)}
+                    attenuationColor="#dff6ff"
+                    attenuationDistance={20}
+                    side={DoubleSide}
+                    depthWrite={false}
+                />
+                <EdgeOutline threshold={15} color="#000000" />
             </mesh>
-            {component.mode !== 'annulus' && innerR > 0.01 && (
-                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.02]}>
-                    <cylinderGeometry args={[innerR, innerR, component.thickness * 0.55, 48]} />
-                    <meshBasicMaterial color="#8ecae6" transparent opacity={Math.max(0.1, backgroundOpacity)} />
-                </mesh>
-            )}
-            {ringVisible && (
-                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.04]}>
-                    <cylinderGeometry args={[ringOuterR, ringOuterR, component.thickness * 0.65, 48]} />
-                    <meshBasicMaterial color={ringColor} transparent opacity={ringOpacity} />
-                </mesh>
-            )}
-            {ringVisible && innerR > 0.001 && (
-                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, component.thickness * 0.05]}>
-                    <cylinderGeometry args={[innerR, innerR, component.thickness * 0.8, 48]} />
-                    <meshStandardMaterial color="#111" transparent opacity={component.mode === 'annulus' ? 0.9 : 0.15} />
-                </mesh>
-            )}
         </group>
     );
 };
