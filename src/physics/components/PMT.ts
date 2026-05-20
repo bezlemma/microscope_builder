@@ -32,7 +32,7 @@ export class PMT extends OpticalComponent {
     yAxisComponentId: string | null = null;
     yAxisProperty: string | null = null;
 
-    // Solver 3 backward trace parameters (PMT acts as a 1-pixel camera)
+    // Reverse tracer backward trace parameters (PMT acts as a 1-pixel camera)
     sensorNA: number = 0.01;        // Acceptance cone half-angle (matches Camera default)
     samplesPerPixel: number = 4;     // Monte Carlo samples per galvo position
     sampleOffset: number = 0;        // Progressive sampler offset for repeated raster passes

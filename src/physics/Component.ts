@@ -255,7 +255,7 @@ export abstract class OpticalComponent implements Surface {
         this._worldBoundsVersion = this.version;
     }
 
-    /** Clear aperture radius [mm]. Used by Solver 3 aperture importance sampling
+    /** Clear aperture radius [mm]. Used by Reverse tracer aperture importance sampling
      *  and by the measurement overlay. Default: 0 (no aperture info). */
     getApertureRadius(): number {
         return 0;

@@ -9,8 +9,8 @@ import {
     pinnedViewersAtom,
     rayConfigAtom,
     setVisualizationModeAtom,
-    solver3RenderTriggerAtom,
-    solver3RenderingAtom,
+    reverseTraceRenderTriggerAtom,
+    reverseTraceRenderingAtom,
     pushUndoAtom,
     animatorAtom,
     animationPlayingAtom,
@@ -1324,8 +1324,8 @@ export const Inspector: React.FC = () => {
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [rayConfig, setrayConfig] = useAtom(rayConfigAtom);
     const [, setVisualizationMode] = useAtom(setVisualizationModeAtom);
-    const [, setImageFormationTrigger] = useAtom(solver3RenderTriggerAtom);
-    const [isRendering] = useAtom(solver3RenderingAtom);
+    const [, setImageFormationTrigger] = useAtom(reverseTraceRenderTriggerAtom);
+    const [isRendering] = useAtom(reverseTraceRenderingAtom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [animator] = useAtom(animatorAtom);
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
@@ -2199,7 +2199,7 @@ export const Inspector: React.FC = () => {
         const newComponents = components.map(c => {
             if (c.id === selection[0] && c instanceof Camera) {
                 mutate(c);
-                c.markSolver3Stale();
+                c.markReverseTracerStale();
                 c.version++;
                 return c;
             }

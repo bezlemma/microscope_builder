@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
-import { Solver1 } from '../../physics/Solver1';
+import { ForwardTracer } from '../../physics/ForwardTracer';
 import { createSourceRays, stablePreviewSourceRays } from '../../physics/SourceRayFactory';
 import { Blocker } from '../../physics/components/Blocker';
 import { Laser } from '../../physics/components/Laser';
@@ -9,7 +9,7 @@ import { QPD } from '../../physics/components/QPD';
 import { Sample } from '../../physics/components/Sample';
 import { TrappedBead } from '../../physics/components/TrappedBead';
 import { Coherence } from '../../physics/types';
-import type { GaussianBeamSegment } from '../../physics/Solver2';
+import type { GaussianBeamSegment } from '../../physics/BeamField';
 import {
     colloidTrapZonesBySample,
     createDragPreviewSourceRays,
@@ -37,13 +37,13 @@ describe('forward trace dependency cache', () => {
 
         const cacheRef: { current: ForwardTraceCache | null } = { current: null };
         const sourceRays = stablePreviewSourceRays(createSourceRays(scene, 144, 'full'), 72);
-        const first = traceForwardWithDependencyCache(new Solver1(scene), sourceRays, scene, cacheRef);
+        const first = traceForwardWithDependencyCache(new ForwardTracer(scene), sourceRays, scene, cacheRef);
 
         dump!.position.y += 2;
         dump!.version++;
 
         const movedSourceRays = stablePreviewSourceRays(createSourceRays(scene, 144, 'full'), 72);
-        const second = traceForwardWithDependencyCache(new Solver1(scene), movedSourceRays, scene, cacheRef);
+        const second = traceForwardWithDependencyCache(new ForwardTracer(scene), movedSourceRays, scene, cacheRef);
 
         const firstPaths = new Set(first.paths);
         const firstBySource = new Map<string, number>();
@@ -72,18 +72,18 @@ describe('forward trace dependency cache', () => {
         expect(qpd).toBeDefined();
 
         const sourceRays = stablePreviewSourceRays(createSourceRays(scene, 144, 'full'), 72);
-        new Solver1(scene).trace(sourceRays);
+        new ForwardTracer(scene).trace(sourceRays);
         const directHits = qpd!.totalHits;
         const directSignal = qpd!.signalSum;
 
         const cacheRef: { current: ForwardTraceCache | null } = { current: null };
         qpd!.resetAccumulator();
-        traceForwardWithDependencyCache(new Solver1(scene), sourceRays, scene, cacheRef);
+        traceForwardWithDependencyCache(new ForwardTracer(scene), sourceRays, scene, cacheRef);
         expect(qpd!.totalHits).toBe(directHits);
         expect(qpd!.signalSum).toBeCloseTo(directSignal, 12);
 
         qpd!.resetAccumulator();
-        traceForwardWithDependencyCache(new Solver1(scene), sourceRays, scene, cacheRef);
+        traceForwardWithDependencyCache(new ForwardTracer(scene), sourceRays, scene, cacheRef);
         expect(qpd!.totalHits).toBe(directHits);
         expect(qpd!.signalSum).toBeCloseTo(directSignal, 12);
     });
@@ -97,12 +97,12 @@ describe('forward trace dependency cache', () => {
         expect(sample).toBeDefined();
         expect(laser).toBeDefined();
 
-        const poweredResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const poweredResult = new ForwardTracer(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
         expect(colloidTrapZonesBySample(scene, poweredResult.beamSegments).get(sample!.id)?.length).toBeGreaterThan(0);
 
         laser!.isOn = false;
         laser!.version++;
-        const darkResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const darkResult = new ForwardTracer(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
         expect(colloidTrapZonesBySample(scene, darkResult.beamSegments).get(sample!.id)).toBeUndefined();
     });
 
@@ -139,13 +139,13 @@ describe('forward trace dependency cache', () => {
         expect(sample).toBeDefined();
         expect(laser).toBeDefined();
 
-        const strongResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const strongResult = new ForwardTracer(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
         const strongZone = colloidTrapZonesBySample(scene, strongResult.beamSegments).get(sample!.id)?.[0];
         expect(strongZone?.stiffnessPerSecond).toBeGreaterThan(10);
 
         laser!.power *= 0.5;
         laser!.version++;
-        const weakResult = new Solver1(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
+        const weakResult = new ForwardTracer(scene).traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
         const weakZone = colloidTrapZonesBySample(scene, weakResult.beamSegments).get(sample!.id)?.[0];
         expect(weakZone?.stiffnessPerSecond).toBeGreaterThan(1);
         expect(weakZone!.stiffnessPerSecond!).toBeLessThan(strongZone!.stiffnessPerSecond! * 0.6);

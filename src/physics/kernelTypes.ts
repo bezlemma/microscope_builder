@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { GaussianBeamSegment } from './Solver2';
+import { GaussianBeamSegment } from './BeamField';
 import { HitRecord, InteractionResult, Ray } from './types';
 
 export type KernelComponentKind =
@@ -23,7 +23,7 @@ export interface KernelTraceComponent {
     absorptionCoeff: number;
     /** World-space centre of the component (read from the underlying instance). */
     position: Vector3;
-    /** World-space AABB used by the Solver 3 scene accelerator. */
+    /** World-space AABB used by the Reverse tracer scene accelerator. */
     worldBounds: {
         minX: number;
         minY: number;

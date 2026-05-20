@@ -255,7 +255,7 @@ const DemandRenderHeartbeat: React.FC = () => {
 
   const tutorialPulseActive =
     activePreset === PresetName.Tutorial || activePreset === PresetName.Tutorial2;
-  const waveViewActive = rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave';
+  const waveViewActive = rayConfig.beamFieldEnabled && rayConfig.viewerMode === 'wave';
   const continuous = animationPlaying || isDragging || waveViewActive || tutorialPulseActive;
 
   useEffect(() => {
@@ -415,7 +415,7 @@ function App() {
   //   #scene=<base64> — full custom scene (from the Share button); takes priority
   //   #preset=brightfield — built-in preset
   //   ?preset=brightfield — legacy preset URL, still accepted
-  //   ?solver2=on — auto-enable Solver 2
+  //   ?beamField=on — auto-enable Beam field
   useEffect(() => {
     // Try a Share-link scene first; if it loads, skip the preset path so the
     // user-shared scene wins over any preset hint left in the same URL.
@@ -437,8 +437,8 @@ function App() {
       setAppRoute('editor');
     }
 
-    const solver2Param = params.get('solver2');
-    if (solver2Param === 'on' || solver2Param === '1' || solver2Param === 'true') {
+    const beamFieldParam = params.get('beamField');
+    if (beamFieldParam === 'on' || beamFieldParam === '1' || beamFieldParam === 'true') {
       setTimeout(() => {
         setBundleDataEnabled(true);
       }, 100);

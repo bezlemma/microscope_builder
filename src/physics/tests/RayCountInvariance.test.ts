@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 import { Laser } from '../components/Laser';
 import { DichroicMirror } from '../components/DichroicMirror';
@@ -30,7 +30,7 @@ describe('ray-count invariant branch physics', () => {
             const { laser, dichroic } = splitScene();
             const scene = [laser, dichroic];
             const sourceRays = createSourceRays(scene, rayCount, 'full');
-            const paths = new Solver1(scene).trace(sourceRays);
+            const paths = new ForwardTracer(scene).trace(sourceRays);
 
             expect(paths).toHaveLength(sourceRays.length * 2);
             expect(paths.every(path => path[0]?.sourceId === laser.id)).toBe(true);

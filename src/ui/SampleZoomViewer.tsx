@@ -533,7 +533,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
                 const path = paths[pathIndex];
                 if (path.length === 0) continue;
                 const wl = path[0].wavelength * 1e9;
-                const isReverse = forceReverse || path.some(r => r.isBackward || r.sourceId?.startsWith('solver3_'));
+                const isReverse = forceReverse || path.some(r => r.isBackward || r.sourceId?.startsWith('reverse_trace_'));
                 const color = isReverse && !isSampleChamber ? '#ff3f52' : wavelengthToCSS(wl);
                 const lineWidth = isReverse ? reverseLineWidth : forwardLineWidth;
                 const opacity = isReverse ? reverseOpacity : forwardOpacity;
@@ -596,7 +596,7 @@ export const SampleZoomViewer: React.FC<SampleZoomViewerProps> = ({ sample, size
             trace(reverseRays, true);
         } else {
             for (const c of components) {
-                if (c instanceof OpticCamera && c.solver3Paths) trace(c.solver3Paths, true);
+                if (c instanceof OpticCamera && c.reverseTracePaths) trace(c.reverseTracePaths, true);
             }
         }
         trace(excitationForwardRays);

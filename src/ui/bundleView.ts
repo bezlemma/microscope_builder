@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { GaussianBeamSegment, segmentBeamRadiiAtFraction } from '../physics/Solver2';
+import { GaussianBeamSegment, segmentBeamRadiiAtFraction } from '../physics/BeamField';
 import { Coherence, JonesVector, Ray } from '../physics/types';
 
 export interface BundleEnvelopeSample {
@@ -268,15 +268,15 @@ function buildEnvelopeProfile(
 
 function normalizeReverseSourceId(path: Ray[], pathIndex: number): string {
     const raw = path[0]?.sourceId ?? `reverse_path_${pathIndex}`;
-    if (raw.startsWith('solver3_cam_') && raw.includes('_px')) {
+    if (raw.startsWith('reverse_trace_cam_') && raw.includes('_px')) {
         return raw.split('_px')[0];
     }
     const pmtMatch = raw.match(/^(pmt_backward_.+)_\d+$/);
     if (pmtMatch) {
         return pmtMatch[1];
     }
-    if (raw.startsWith('solver3_')) {
-        return 'solver3_reverse';
+    if (raw.startsWith('reverse_trace_')) {
+        return 'reverse_trace_reverse';
     }
     return raw;
 }

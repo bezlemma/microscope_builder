@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Vector3 } from 'three';
 import { Ray, Coherence } from '../../physics/types';
-import { Solver1 } from '../../physics/Solver1';
+import { ForwardTracer } from '../../physics/ForwardTracer';
 import { OpticalComponent } from '../../physics/Component';
 import { SphericalLens } from '../../physics/components/SphericalLens';
 import { RayVisualizer } from '../RayVisualizer';
@@ -34,7 +34,7 @@ export const InfinitySystemTest: React.FC = () => {
 
     useEffect(() => {
         console.log("InfinityTest: Setup Solver");
-        const solver = new Solver1(sceneComponents);
+        const solver = new ForwardTracer(sceneComponents);
         
         // Point Source at Origin (x=0)
         // Diverging rays.

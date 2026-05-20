@@ -202,7 +202,7 @@ export class Waveplate extends OpticalComponent {
         const slowInside = new Vector3().crossVectors(dirInside, fastInside).normalize();
 
         // Same basis but built around the OUTGOING ray direction — the field
-        // we hand back to Solver 1 must be transverse to dirOut.
+        // we hand back to forward tracer must be transverse to dirOut.
         const fastOutside = fHatLocal.clone()
             .addScaledVector(dirOut, -fHatLocal.dot(dirOut))
             .normalize();

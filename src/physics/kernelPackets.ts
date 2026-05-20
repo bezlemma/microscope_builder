@@ -15,10 +15,10 @@ import { PolarizingBeamSplitter } from './components/PolarizingBeamSplitter';
 import { SphericalLens } from './components/SphericalLens';
 import { AchromatDoublet } from './components/AchromatDoublet';
 import { Mirror } from './components/Mirror';
-import { GaussianBeamSegment } from './Solver2';
+import { GaussianBeamSegment } from './BeamField';
 import { Coherence } from './types';
 
-export const SOLVER3_KERNEL_ABI_VERSION = 1;
+export const REVERSE_TRACE_KERNEL_ABI_VERSION = 1;
 export const PACKED_COMPONENT_MATRIX_STRIDE = 16;
 export const PACKED_COMPONENT_BOUNDS_STRIDE = 6;
 export const PACKED_DETECTOR_BASIS_STRIDE = 12;
@@ -34,9 +34,9 @@ export const SURFACE_KIND_MIRROR_DISC = 3;  // params: [radius, half_thickness, 
 export const PACKED_INTERACTION_UNSUPPORTED = 0;
 export const PACKED_INTERACTION_APERTURE = 1;
 export const PACKED_INTERACTION_MIRROR = 2;
-export const SOLVER3_KERNEL_STATUS_OK = 0;
-export const SOLVER3_KERNEL_STATUS_UNSUPPORTED_ABI = 1;
-export const SOLVER3_KERNEL_STATUS_UNIMPLEMENTED = 2;
+export const REVERSE_TRACE_KERNEL_STATUS_OK = 0;
+export const REVERSE_TRACE_KERNEL_STATUS_UNSUPPORTED_ABI = 1;
+export const REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED = 2;
 
 export const DETECTOR_KIND_CAMERA = 1;
 export const DETECTOR_KIND_PMT = 2;
@@ -131,7 +131,7 @@ export interface PackedPMTKernel {
     ints: Uint32Array;
 }
 
-export interface Solver3PacketHeader {
+export interface ReverseTracerPacketHeader {
     abiVersion: number;
     traceComponentCount: number;
     beamBranchCount: number;
@@ -264,7 +264,7 @@ export function createPackedTraceScene(scene: OpticalComponent[]): PackedTraceSc
     }
 
     return {
-        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        abiVersion: REVERSE_TRACE_KERNEL_ABI_VERSION,
         componentKinds,
         componentAbsorptionCoeff,
         localToWorldMatrices,
@@ -318,7 +318,7 @@ export function createPackedBeamField(beamSegments: GaussianBeamSegment[][]): Pa
     }
 
     return {
-        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        abiVersion: REVERSE_TRACE_KERNEL_ABI_VERSION,
         branchOffsets,
         segmentScalars,
         coherenceModes,
@@ -339,7 +339,7 @@ export function createPackedCameraKernel(camera: Camera): PackedCameraKernel {
     const ints = new Uint32Array([camera.sensorResX, camera.sensorResY, camera.samplesPerPixel]);
 
     return {
-        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        abiVersion: REVERSE_TRACE_KERNEL_ABI_VERSION,
         id: camera.id,
         name: camera.name,
         basis,
@@ -362,7 +362,7 @@ export function createPackedPMTKernel(pmt: PMT): PackedPMTKernel {
     const ints = new Uint32Array([pmt.samplesPerPixel]);
 
     return {
-        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        abiVersion: REVERSE_TRACE_KERNEL_ABI_VERSION,
         id: pmt.id,
         name: pmt.name,
         basis,
@@ -371,13 +371,13 @@ export function createPackedPMTKernel(pmt: PMT): PackedPMTKernel {
     };
 }
 
-export function createSolver3PacketHeader(
+export function createReverseTracerPacketHeader(
     traceScene: PackedTraceScene,
     beamField: PackedBeamField,
     detectorKind: number,
-): Solver3PacketHeader {
+): ReverseTracerPacketHeader {
     return {
-        abiVersion: SOLVER3_KERNEL_ABI_VERSION,
+        abiVersion: REVERSE_TRACE_KERNEL_ABI_VERSION,
         traceComponentCount: traceScene.componentKinds.length,
         beamBranchCount: Math.max(0, beamField.branchOffsets.length - 1),
         beamSegmentCount: beamField.coherenceModes.length,

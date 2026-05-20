@@ -27,14 +27,14 @@ export const PMTViewer: React.FC<PMTViewerProps> = ({ pmt, isRendering, onRefres
     const adapter = React.useMemo(() => ({
         get id() { return pmt.id; },
         get name() { return pmt.name; },
-        get solver3Image() { return pmt.scanImage; },
+        get reverseTraceImage() { return pmt.scanImage; },
         get forwardImage() { return pmt.scanExcitationImage; },
         get sensorResX() { return pmt.scanResX; },
         get sensorResY() { return pmt.scanResY; },
         get scanFrames() { return null; },
         get scanExFrames() { return null; },
         get scanFrameCount() { return 0; },
-        get solver3Stale() { return pmt.scanStale; },
+        get reverseTraceStale() { return pmt.scanStale; },
         get version() { return pmt.version; },
     }) as unknown as Camera, [pmt]);
 

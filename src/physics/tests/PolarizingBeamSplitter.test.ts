@@ -5,7 +5,7 @@ import { describe, test, expect } from 'bun:test';
 import { Vector3 } from 'three';
 import { PolarizingBeamSplitter } from '../components/PolarizingBeamSplitter';
 import { SphericalLens } from '../components/SphericalLens';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { Coherence, type JonesVector, type Ray } from '../types';
 
 function makeRay(direction: Vector3, polarization: JonesVector, origin = new Vector3(0, 0, -50)): Ray {
@@ -50,7 +50,7 @@ describe('PolarizingBeamSplitter physics', () => {
         pbs.setPosition(0, 0, 0);
         const dirIn = new Vector3(0, 0, 1);
 
-        const result = classify(new Solver1([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]), dirIn);
+        const result = classify(new ForwardTracer([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]), dirIn);
         expect(result.transmitted).toBeDefined();
         expect(result.transmitted!.intensity).toBeGreaterThan(0.99);
         expect(result.reflected).toBeUndefined();
@@ -63,13 +63,13 @@ describe('PolarizingBeamSplitter physics', () => {
         const dirIn = new Vector3(0, 0, 1);
 
         // d = +Z, n approximately (0,-1,+1), so S = d x n = +X.
-        const sOut = classify(new Solver1([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]), dirIn);
+        const sOut = classify(new ForwardTracer([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]), dirIn);
         expect(sOut.reflected).toBeDefined();
         expect(sOut.reflected!.intensity).toBeGreaterThan(0.99);
         expect(sOut.transmitted).toBeUndefined();
 
         // P lies in the incidence plane and is transverse to d: ±Y.
-        const pOut = classify(new Solver1([pbs]).trace([makeRay(dirIn, pol(0, 1, 0))]), dirIn);
+        const pOut = classify(new ForwardTracer([pbs]).trace([makeRay(dirIn, pol(0, 1, 0))]), dirIn);
         expect(pOut.transmitted).toBeDefined();
         expect(pOut.transmitted!.intensity).toBeGreaterThan(0.99);
         expect(pOut.reflected).toBeUndefined();
@@ -89,7 +89,7 @@ describe('PolarizingBeamSplitter physics', () => {
         for (const roll of [0, Math.PI / 4, Math.PI / 2]) {
             const pbs = makePbs(roll);
             const { reflected, transmitted } = classify(
-                new Solver1([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]),
+                new ForwardTracer([pbs]).trace([makeRay(dirIn, pol(1, 0, 0))]),
                 dirIn,
             );
             expect(reflected).toBeDefined();
@@ -105,7 +105,7 @@ describe('PolarizingBeamSplitter physics', () => {
         const dirIn = new Vector3(0, 0, 1);
         const mixed = pol(1 / Math.SQRT2, 1 / Math.SQRT2, 0);
 
-        const { reflected, transmitted } = classify(new Solver1([pbs]).trace([makeRay(dirIn, mixed)]), dirIn);
+        const { reflected, transmitted } = classify(new ForwardTracer([pbs]).trace([makeRay(dirIn, mixed)]), dirIn);
         expect(reflected).toBeDefined();
         expect(transmitted).toBeDefined();
         expect(reflected!.intensity).toBeCloseTo(0.5, 5);
@@ -123,7 +123,7 @@ describe('PolarizingBeamSplitter physics', () => {
 
         // For a +X-travelling beam and this plate normal, S is +Z and P is +Y.
         const ray = makeRay(new Vector3(1, 0, 0), pol(0, 1, 0), new Vector3(-30, 6, 0));
-        const paths = new Solver1([lens, pbs]).trace([ray]);
+        const paths = new ForwardTracer([lens, pbs]).trace([ray]);
 
         let reflectedPower = 0;
         let transmittedPower = 0;
@@ -149,7 +149,7 @@ describe('PolarizingBeamSplitter physics', () => {
         const dirIn = new Vector3(1, 0, 0);
 
         const { reflected } = classify(
-            new Solver1([pbs]).trace([makeRay(dirIn, pol(0, 0, 1), new Vector3(-50, 0, 0))]),
+            new ForwardTracer([pbs]).trace([makeRay(dirIn, pol(0, 0, 1), new Vector3(-50, 0, 0))]),
             dirIn,
         );
         expect(reflected).toBeDefined();

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Vector3, BufferGeometry, Float32BufferAttribute, DoubleSide, Color } from 'three';
-import { GaussianBeamSegment, sampleBeamProfile } from '../physics/Solver2';
+import { GaussianBeamSegment, sampleBeamProfile } from '../physics/BeamField';
 
 import { wavelengthToRGB as wavelengthToRGBnm } from '../physics/spectral';
 

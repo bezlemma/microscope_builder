@@ -106,7 +106,7 @@ interface ScheduledRenderJobOptions {
     scanAccumActiveRef: MutableRefObject<boolean>;
     animStateRef: MutableRefObject<{ playing: boolean; speed: number }>;
     setAnimPlaying: (playing: boolean) => void;
-    setSolver3Rendering: (rendering: boolean) => void;
+    setReverseTracerRendering: (rendering: boolean) => void;
     setProgress: (progress: number) => void;
     /** Optional callback receiving detailed progress snapshots. */
     onDetailedProgress?: (progress: RenderJobProgress) => void;
@@ -142,7 +142,7 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
         scanAccumActiveRef,
         animStateRef,
         setAnimPlaying,
-        setSolver3Rendering,
+        setReverseTracerRendering,
         setProgress,
         onDetailedProgress,
         totalSteps: totalStepsOption,
@@ -163,7 +163,7 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
         setAnimPlaying(false);
         animator.playing = false;
     }
-    setSolver3Rendering(true);
+    setReverseTracerRendering(true);
     setProgress(0);
 
     const emitProgress = (fraction: number) => {
@@ -188,7 +188,7 @@ export function createScheduledRenderJob(options: ScheduledRenderJobOptions) {
         closed = true;
         restoreProperties();
         if (blockLiveScene) scanAccumActiveRef.current = false;
-        setSolver3Rendering(false);
+        setReverseTracerRendering(false);
         emitProgress(progress);
         if (pauseAnimation && savedPlaying) {
             setAnimPlaying(true);

@@ -264,7 +264,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
     const [scanProgress] = useAtom(scanAccumProgressAtom);
     const [animPlaying] = useAtom(animationPlayingAtom);
     // Subscribe so the viewer repaints each time a progressive round writes
-    // a new image into `camera.solver3Image` (the Camera instance itself is
+    // a new image into `camera.reverseTraceImage` (the Camera instance itself is
     // mutated — React can't observe that directly).
     const [cameraImageTick] = useAtom(cameraImageTickAtom);
 
@@ -378,7 +378,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
 
         if (hasScanFrames) {
             if (projection === 'avg') {
-                emImg = camera.solver3Image; // already averaged by ScanAccum
+                emImg = camera.reverseTraceImage; // already averaged by ScanAccum
                 exImg = camera.forwardImage;
             } else if (projection === 'max') {
                 // Compute Maximum Intensity Projection (MIP)
@@ -403,13 +403,13 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
             }
         } else {
             // Single-shot image
-            emImg = camera.solver3Image;
+            emImg = camera.reverseTraceImage;
             exImg = camera.forwardImage;
         }
 
         return { emImg, exImg };
     }, [
-        camera.solver3Image, camera.forwardImage,
+        camera.reverseTraceImage, camera.forwardImage,
         camera.sensorResX, camera.sensorResY,
         camera.scanFrames, camera.scanExFrames, camera.scanFrameCount,
         frameIndex, hasScanFrames, projection,

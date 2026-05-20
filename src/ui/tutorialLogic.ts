@@ -152,6 +152,6 @@ export function copyTutorialCameraDetectorSettings(source: Camera, target: Camer
     target.detectorLaunchModel = source.detectorLaunchModel;
     target.fieldPixelPitchOverrideX = source.fieldPixelPitchOverrideX;
     target.fieldPixelPitchOverrideY = source.fieldPixelPitchOverrideY;
-    target.markSolver3Stale();
+    target.markReverseTracerStale();
     target.version++;
 }

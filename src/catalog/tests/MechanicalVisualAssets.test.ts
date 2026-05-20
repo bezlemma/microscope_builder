@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { CATALOG_PARTS, findCatalogPart } from '../catalog';
+import { isCasedCatalogPart } from '../catalogCasing';
 import {
     mechanicalModelSourceForCatalogPart,
     mechanicalVisualAssetForCatalogPart,
@@ -60,35 +61,44 @@ describe('catalog mechanical visual assets', () => {
         expect(assetText).toContain('Shape');
     });
 
-    test('all STEP-backed lens catalog parts have converted mechanical visual assets', () => {
+    test('only mounted STEP-backed lens catalog parts keep converted mechanical visual assets', () => {
         const lensTypes = new Set(['sphericalLens', 'asphericLens', 'cylindricalLens', 'achromatDoublet']);
         const stepBackedLensParts = CATALOG_PARTS.filter(part =>
             lensTypes.has(part.componentType) &&
             stepMechanicalModelSourceForCatalogPart(part)
         );
+        const casedLensParts = stepBackedLensParts.filter(isCasedCatalogPart);
+        const bareLensParts = stepBackedLensParts.filter(part => !isCasedCatalogPart(part));
 
         expect(stepBackedLensParts.length).toBeGreaterThan(3_000);
-        const missing = stepBackedLensParts
+        expect(casedLensParts.length).toBeGreaterThan(700);
+        expect(bareLensParts.length).toBeGreaterThan(3_000);
+
+        const missing = casedLensParts
             .filter(part => !mechanicalVisualAssetForCatalogPart(part))
             .map(part => part.sku);
         expect(missing).toEqual([]);
+
+        expect(mechanicalVisualAssetForCatalogPart(findCatalogPart('thorlabs:LA1027'))).toBeNull();
+        expect(mechanicalVisualAssetForCatalogPart(findCatalogPart('thorlabs:AC254-200-A'))).toBeNull();
     });
 
-    test('STEP-backed fold optics have converted mechanical visual assets', () => {
+    test('only cased STEP-backed fold optics keep converted mechanical visual assets', () => {
         const foldTypes = new Set(['mirror', 'curvedMirror', 'beamSplitter', 'polarizingBeamSplitter', 'dichroic']);
         const stepBackedFoldParts = CATALOG_PARTS.filter(part =>
             foldTypes.has(part.componentType) &&
             stepMechanicalModelSourceForCatalogPart(part)
         );
+        const casedFoldParts = stepBackedFoldParts.filter(isCasedCatalogPart);
+        const bareFoldParts = stepBackedFoldParts.filter(part => !isCasedCatalogPart(part));
 
         expect(stepBackedFoldParts.length).toBeGreaterThan(700);
+        expect(casedFoldParts.length).toBeGreaterThan(70);
+        expect(bareFoldParts.length).toBeGreaterThan(700);
         for (const partId of [
-            'thorlabs:PF10-03-P01',
             'thorlabs:CCM1-P01',
-            'thorlabs:CM254-050-P01',
-            'thorlabs:BS013',
-            'thorlabs:PBS513',
-            'thorlabs:DMLP505',
+            'thorlabs:CCM1-BS013',
+            'thorlabs:CCM1-PBS25-633',
         ]) {
             const part = findCatalogPart(partId);
             const visualAsset = mechanicalVisualAssetForCatalogPart(part);
@@ -96,10 +106,20 @@ describe('catalog mechanical visual assets', () => {
             expect(visualAsset?.url).toContain('/catalog/mechanical/fold-optics/');
         }
 
-        const missing = stepBackedFoldParts
+        const missing = casedFoldParts
             .filter(part => !mechanicalVisualAssetForCatalogPart(part))
             .map(part => part.sku);
         expect(missing).toEqual([]);
+
+        for (const partId of [
+            'thorlabs:PF10-03-P01',
+            'thorlabs:CM254-050-P01',
+            'thorlabs:BS013',
+            'thorlabs:PBS513',
+            'thorlabs:DMLP505',
+        ]) {
+            expect(mechanicalVisualAssetForCatalogPart(findCatalogPart(partId))).toBeNull();
+        }
     });
 
     test('TL10X-2P eDrawing visual asset preserves imported linework', () => {

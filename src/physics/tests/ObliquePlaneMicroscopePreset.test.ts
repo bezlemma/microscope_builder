@@ -14,9 +14,9 @@ import { Mirror } from '../components/Mirror';
 import { Sample } from '../components/Sample';
 import { createSourceRays } from '../SourceRayFactory';
 import { PropertyAnimator } from '../PropertyAnimator';
-import { Solver1 } from '../Solver1';
-import { Solver2 } from '../Solver2';
-import { Solver3 } from '../Solver3';
+import { ForwardTracer } from '../ForwardTracer';
+import { BeamField } from '../BeamField';
+import { ReverseTracer } from '../ReverseTracer';
 import { Ray } from '../types';
 
 function centralRayFrom(component: { id: string; position: Vector3; rotation: any }, wavelengthNm: number): Ray {
@@ -108,7 +108,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(dump).toBeDefined();
         expect(dump!.position.y).toBeLessThan(sample!.position.y);
 
-        const paths = new Solver1(scene).trace(createSourceRays(scene, 36, 'full'));
+        const paths = new ForwardTracer(scene).trace(createSourceRays(scene, 36, 'full'));
         const sampleHitPaths = paths.filter(path => path.some(ray => ray.interactionComponentId === sample!.id));
         const dumpedPaths = sampleHitPaths.filter(path => {
             const last = path[path.length - 1];
@@ -149,7 +149,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(laser).toBeDefined();
         expect(sample).toBeDefined();
 
-        const paths = new Solver1(scene).trace([centralRayFrom(laser!, laser!.wavelength)]);
+        const paths = new ForwardTracer(scene).trace([centralRayFrom(laser!, laser!.wavelength)]);
 
         expect(pathHitsComponent(paths, sample!.id)).toBe(true);
     });
@@ -161,7 +161,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(laser).toBeDefined();
         expect(sample).toBeDefined();
 
-        const paths = new Solver1(scene).trace([centralRayFrom(laser!, laser!.wavelength)]);
+        const paths = new ForwardTracer(scene).trace([centralRayFrom(laser!, laser!.wavelength)]);
         const sampleSegment = paths
             .flat()
             .find(ray => ray.sourceId === laser!.id && ray.interactionComponentId === sample!.id);
@@ -173,7 +173,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(Math.abs(sampleSegment!.direction.x)).toBeGreaterThan(0.38);
         expect(Math.abs(sampleSegment!.direction.z)).toBeLessThan(0.12);
 
-        const sourcePaths = new Solver1(scene).trace(createSourceRays(scene, 36, 'full'));
+        const sourcePaths = new ForwardTracer(scene).trace(createSourceRays(scene, 36, 'full'));
         expect(countSpecimenChordHits(sourcePaths, sample!)).toBeGreaterThan(20);
     });
 
@@ -184,7 +184,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(camera).toBeDefined();
         expect(sample).toBeDefined();
 
-        const paths = new Solver1(scene).trace([centralRayFrom(camera!, sample!.getEmissionWavelength())]);
+        const paths = new ForwardTracer(scene).trace([centralRayFrom(camera!, sample!.getEmissionWavelength())]);
 
         expect(pathHitsComponent(paths, sample!.id)).toBe(true);
     });
@@ -196,16 +196,16 @@ describe('Oblique Plane Light Sheet preset', () => {
         expect(camera).toBeDefined();
         expect(sample).toBeDefined();
         const sourceRays = createSourceRays(scene, 36, 'full');
-        const paths = new Solver1(scene).trace(sourceRays);
-        const beamSegments = new Solver2().propagate(paths, scene);
-        const centerExcitation = Solver2.queryIntensityMultiBeam(
+        const paths = new ForwardTracer(scene).trace(sourceRays);
+        const beamSegments = new BeamField().propagate(paths, scene);
+        const centerExcitation = BeamField.queryIntensityMultiBeam(
             sample!.position.x,
             sample!.position.y,
             sample!.position.z,
             beamSegments,
             sample!.getExcitationWavelength() * 1e-9,
         );
-        const render = new Solver3(scene, beamSegments).render(camera!, 16);
+        const render = new ReverseTracer(scene, beamSegments).render(camera!, 16);
         const litPixels = Array.from(render.emissionImage).filter(value => value > 0).length;
         const terminalDistances = render.paths.map(path => {
             const last = path[path.length - 1];
@@ -262,7 +262,7 @@ describe('Oblique Plane Light Sheet preset', () => {
         for (const panAngle of [channel!.from, channel!.restoreValue ?? excitationScanMirror!.panAngle, channel!.to]) {
             excitationScanMirror!.panAngle = panAngle;
             excitationScanMirror!.recomputeRotation();
-            const paths = new Solver1(result.scene).trace(createSourceRays(result.scene, 36, 'full'));
+            const paths = new ForwardTracer(result.scene).trace(createSourceRays(result.scene, 36, 'full'));
             expect(pathHitsComponent(paths, sample!.id)).toBe(true);
             expect(countSpecimenChordHits(paths, sample!)).toBeGreaterThan(0);
         }
@@ -278,9 +278,9 @@ describe('Oblique Plane Light Sheet preset', () => {
         for (let step = 0; step < 8; step++) {
             animator.evaluateAt(4000 * step / 8, result.scene);
             result.scene.forEach(component => component.updateMatrices());
-            const forwardPaths = new Solver1(result.scene).trace(createSourceRays(result.scene, 36, 'full'));
-            const beamSegments = new Solver2().propagate(forwardPaths, result.scene);
-            const render = new Solver3(result.scene, beamSegments).render(camera!, 16);
+            const forwardPaths = new ForwardTracer(result.scene).trace(createSourceRays(result.scene, 36, 'full'));
+            const beamSegments = new BeamField().propagate(forwardPaths, result.scene);
+            const render = new ReverseTracer(result.scene, beamSegments).render(camera!, 16);
             const litPixels = Array.from(render.emissionImage).filter(value => value > 0).length;
 
             expect(render.paths.length).toBeGreaterThan(0);
@@ -310,7 +310,7 @@ describe('Oblique Plane Light Sheet preset', () => {
             excitationScanMirror!.recomputeRotation();
             result.scene.forEach(component => component.updateMatrices());
 
-            const paths = new Solver1(result.scene).trace(createSourceRays(result.scene, 200, 'full'));
+            const paths = new ForwardTracer(result.scene).trace(createSourceRays(result.scene, 200, 'full'));
             let maxL3PlaneRadius = 0;
             let maxL4PlaneRadius = 0;
             let measuredL3Rays = 0;

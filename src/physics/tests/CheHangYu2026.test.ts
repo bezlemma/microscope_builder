@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 
 import { createCheHangYu2026Scene } from '../../presets/CheHangYu2026';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 import { SphericalLens } from '../components/SphericalLens';
 import { Card } from '../components/Card';
@@ -28,7 +28,7 @@ function centralLaserRay(laser: Laser): Ray {
     };
 }
 
-/** Of all the branches Solver 1 explores from one source ray, pick the one
+/** Of all the branches forward tracer explores from one source ray, pick the one
  *  that actually reached the named component — that's the doubler exit path. */
 function pathHitting(scene: ReturnType<typeof createCheHangYu2026Scene>['scene'], paths: Ray[][], name: string): string[] | null {
     const namePaths = paths.map(path =>
@@ -108,7 +108,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
     test('the laser beam bounces off the resonant scanner twice and exits to the card', () => {
         const { scene } = createCheHangYu2026Scene();
         const laser = scene.find(c => c instanceof Laser) as Laser;
-        const paths = new Solver1(scene).trace([centralLaserRay(laser)]);
+        const paths = new ForwardTracer(scene).trace([centralLaserRay(laser)]);
 
         const cardPath = pathHitting(scene, paths, 'Doubled-scan viewing card');
         expect(cardPath).not.toBeNull();
@@ -125,7 +125,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
     test('any final PBS leakage branch is not marked as the main ray', () => {
         const { scene } = createCheHangYu2026Scene();
         const pbs = scene.find(c => c instanceof PolarizingBeamSplitter) as PolarizingBeamSplitter;
-        const paths = new Solver1(scene).trace(createSourceRays(scene, 32, 'full'));
+        const paths = new ForwardTracer(scene).trace(createSourceRays(scene, 32, 'full'));
 
         const finalPbsChildren: { incoming: Ray; child: Ray }[] = [];
         for (const path of paths) {
@@ -164,7 +164,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
             resonant.recomputeRotation();
             slow.tiltAngle = scanY;
             slow.recomputeRotation();
-            const paths = new Solver1(scene).trace([centralLaserRay(laser)]);
+            const paths = new ForwardTracer(scene).trace([centralLaserRay(laser)]);
             const cardPath = pathHitting(scene, paths, 'Doubled-scan viewing card');
             expect(cardPath).not.toBeNull();
         }
@@ -181,7 +181,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
             slow.tiltAngle = slowScan;
             slow.recomputeRotation();
 
-            const cardChild = finalPbsCardChild(scene, new Solver1(scene).trace([centralLaserRay(laser)]));
+            const cardChild = finalPbsCardChild(scene, new ForwardTracer(scene).trace([centralLaserRay(laser)]));
             expect(cardChild).not.toBeNull();
             const p = cardChild!.polarization;
             const d = cardChild!.direction;
@@ -211,7 +211,7 @@ describe('Che-Hang Yu 2026 — Nisam2× demo preset', () => {
             slow.tiltAngle = scanY;
             slow.recomputeRotation();
 
-            const powers = finalPbsBranchPowers(scene, new Solver1(scene).trace(createSourceRays(scene, 32, 'full')));
+            const powers = finalPbsBranchPowers(scene, new ForwardTracer(scene).trace(createSourceRays(scene, 32, 'full')));
             const total = powers.transmitted + powers.reflected;
             expect(total).toBeGreaterThan(0.9);
             expect(powers.reflected / total).toBeLessThan(0.05);

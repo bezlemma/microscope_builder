@@ -45,7 +45,7 @@ export function defaultColloidColor(index: number): string {
  *   - Brightfield: Beer-Lambert absorption based on ray path length through material.
  *     T = exp(-α·d) where α = absorption coefficient, d = chord length.
  *   - Fluorescence metadata (excitation/emission spectra) is stored here
- *     for Solver 3 to query when backward rays hit the sample.
+ *     for Reverse tracer to query when backward rays hit the sample.
  *     The Sample does NOT generate emission rays itself.
  */
 export class Sample extends OpticalComponent {
@@ -347,7 +347,7 @@ export class Sample extends OpticalComponent {
 
     /**
      * Query excitation efficiency at a given wavelength (0–1).
-     * Used by Solver 3 to weight fluorescence by spectral overlap.
+     * Used by Reverse tracer to weight fluorescence by spectral overlap.
      */
     getExcitationEfficiency(wavelengthNm: number): number {
         return this.excitationSpectrum.getTransmission(wavelengthNm);
@@ -460,7 +460,7 @@ export class Sample extends OpticalComponent {
 
     /**
      * Get the near and far planes of the sample volume for a world ray.
-     * Used by Solver 3 strictly to evaluate the internal E&M field integral.
+     * Used by Reverse tracer strictly to evaluate the internal E&M field integral.
      */
     getVolumeIntersection(worldRay: Ray): { tNear: number, tFar: number } | null {
         return this.intersectLocalBox(worldRay, this.getVolumeBoundsLocal());

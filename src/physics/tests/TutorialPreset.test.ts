@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { createTutorialMicroscopeScene, createTutorialScene } from '../../presets/tutorial';
 import { createSourceRays } from '../SourceRayFactory';
-import { Solver1 } from '../Solver1';
-import { Solver3 } from '../Solver3';
+import { ForwardTracer } from '../ForwardTracer';
+import { ReverseTracer } from '../ReverseTracer';
 import { Camera } from '../components/Camera';
 import { Card } from '../components/Card';
 import { CurvedMirror } from '../components/CurvedMirror';
@@ -30,7 +30,7 @@ function placeMirrorOnGhost(scene: unknown[], mirrorName: string, targetName: st
 describe('Tutorial preset flow', () => {
     test('does not mark the beam-expander tutorial complete before mirror alignment', () => {
         const { scene } = createTutorialScene();
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 32, 'full'));
 
         expect(isTutorialStageOneComplete(scene, paths)).toBe(false);
@@ -41,7 +41,7 @@ describe('Tutorial preset flow', () => {
         placeMirrorOnGhost(scene, 'M1', 'M1 Target');
         placeMirrorOnGhost(scene, 'M2', 'M2 Target');
 
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 32, 'full'));
         const screen = scene.find((c): c is Card => c instanceof Card && c.name === 'Screen');
         expect(screen).toBeDefined();
@@ -85,10 +85,10 @@ describe('Tutorial preset flow', () => {
 
         expect(isCameraOnTutorialTarget(camera, ghost!)).toBe(true);
 
-        const solver1 = new Solver1(scene);
-        const trace = solver1.traceWithBeamSegments(createSourceRays(scene, 24, 'center'));
-        const solver3 = new Solver3(scene, trace.beamSegments);
-        const result = solver3.render(camera, 16);
+        const forwardTracer = new ForwardTracer(scene);
+        const trace = forwardTracer.traceWithBeamSegments(createSourceRays(scene, 24, 'center'));
+        const reverseTrace = new ReverseTracer(scene, trace.beamSegments);
+        const result = reverseTrace.render(camera, 16);
 
         expect(result.paths.length).toBeGreaterThan(0);
         expect(result.emissionImage.length).toBe(16);

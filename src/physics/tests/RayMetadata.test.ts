@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { childRay, Coherence, createRay, type Ray } from '../types';
 import { MediumVolume } from '../components/MediumVolume';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 
 function parentRay(): Ray {
     return {
@@ -72,7 +72,7 @@ describe('childRay', () => {
             currentMediumIndex: 1,
         });
 
-        const paths = new Solver1([volume]).trace([ray]);
+        const paths = new ForwardTracer([volume]).trace([ray]);
         const transmittedPath = paths.find(path => (path[1]?.currentMediumIndex ?? 1) > 1.2);
 
         expect(transmittedPath).toBeDefined();

@@ -150,7 +150,7 @@ export function createOpticalTrapScene(): OpticalComponent[] {
     bead.rayMomentumScale = 0.015;
     bead.trapCaptureRadius = 0.018;
     bead.trapAxialCaptureRange = 0.006;
-    // Solver-2 intensity is normalized rather than SI W/m^2. This calibrates
+    // beam-field intensity is normalized rather than SI W/m^2. This calibrates
     // the local beam-envelope gradient to a visible overdamped micron-bead
     // capture without inflating the bead geometry.
     bead.gradientForceScale = 1e6;

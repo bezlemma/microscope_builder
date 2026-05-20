@@ -4,7 +4,7 @@
  * Output: confocal_diag.txt
  */
 import { createConfocalScene } from '../../presets/confocal';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { Laser } from '../components/Laser';
 import { Ray } from '../types';
 import { Vector3 } from 'three';
@@ -14,7 +14,7 @@ const out: string[] = [];
 function log(s: string) { out.push(s); }
 
 const { scene } = createConfocalScene();
-const solver = new Solver1(scene);
+const solver = new ForwardTracer(scene);
 const laser = scene.find(c => c instanceof Laser) as Laser;
 
 // Central ray

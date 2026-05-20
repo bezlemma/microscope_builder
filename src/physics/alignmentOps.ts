@@ -140,7 +140,7 @@ export function alignAxisToIncomingBeam(
         for (let i = 0; i < path.length; i++) {
             const ray = path[i];
             // Skip the ray segment whose start is this component itself —
-            // otherwise we snap to where we already are. Solver 1 stamps the
+            // otherwise we snap to where we already are. forward tracer stamps the
             // interaction id on the ray that's about to hit; the NEXT ray
             // starts at that hit and has no interactionComponentId of `target`.
             const segStart = ray.origin;

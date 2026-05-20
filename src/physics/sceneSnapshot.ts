@@ -20,7 +20,7 @@ import {
     PMTKernelSnapshot,
     TraceSceneSnapshot,
 } from './kernelTypes';
-import { GaussianBeamSegment } from './Solver2';
+import { GaussianBeamSegment } from './BeamField';
 
 const WORLD_BOUNDS_CORNERS = [
     [0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1],

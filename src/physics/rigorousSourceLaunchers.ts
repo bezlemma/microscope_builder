@@ -386,7 +386,7 @@ export function launchRigorousLampEmitterPoint(params: {
         ...params,
         sourceKind: 'lamp',
         // Each (wavelength, emitter point) sub-bundle is internally coherent.
-        // Solver 2 / cardFieldSynthesis bin contributions by OPL inside one
+        // Beam field / cardFieldSynthesis bin contributions by OPL inside one
         // sourceId, with bin size set by the coherence length L_c = λ²/Δλ
         // derived from the lamp bandwidth (10 nm here → L_c ≈ 30 µm). Beamlets
         // whose paths diverge by more than L_c automatically decohere.

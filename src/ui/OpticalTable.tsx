@@ -4,8 +4,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import {
     componentsAtom,
     rayConfigAtom,
-    solver3RenderTriggerAtom,
-    solver3RenderingAtom,
+    reverseTraceRenderTriggerAtom,
+    reverseTraceRenderingAtom,
     animatorAtom,
     animationPlayingAtom,
     animationSpeedAtom,
@@ -32,7 +32,7 @@ import { useFrame } from '@react-three/fiber';
 
 import { Ray } from '../physics/types';
 import { OpticalComponent } from '../physics/Component';
-import { Solver1 } from '../physics/Solver1';
+import { ForwardTracer } from '../physics/ForwardTracer';
 import { Card } from '../physics/components/Card';
 import { Sample, type ColloidTrapZone } from '../physics/components/Sample';
 import { Camera } from '../physics/components/Camera';
@@ -47,13 +47,13 @@ import { RayOcclusionLayer } from './RayOcclusionLayer';
 
 import { BundleWaveVisualizer } from './BundleWaveVisualizer';
 import { OpticalPlaneVisualizer } from './OpticalPlaneVisualizer';
-import { GaussianBeamSegment, segmentBeamEnvelopeRadii } from '../physics/Solver2';
-import { Solver3 } from '../physics/Solver3';
+import { GaussianBeamSegment, segmentBeamEnvelopeRadii } from '../physics/BeamField';
+import { ReverseTracer } from '../physics/ReverseTracer';
 import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../physics/tableTrace';
 import { deserializeScene, serializeScene } from '../state/ubzSerializer';
-import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/solver3Worker';
-import type { SerializedBeamSegment, Solver1WorkerRequest, Solver1WorkerResponse } from '../physics/solver1Worker';
+import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/reverseTraceWorker';
+import type { SerializedBeamSegment, ForwardTraceWorkerRequest, ForwardTraceWorkerResponse } from '../physics/forwardTraceWorker';
 
 export function createDragPreviewSourceRays(
     components: OpticalComponent[],
@@ -210,7 +210,7 @@ function traceLiveForwardSideEffects(
     makeSourceRays: () => Ray[],
 ): void {
     if (!hasLiveForwardTraceSideEffects(components)) return;
-    new Solver1(components).trace(makeSourceRays());
+    new ForwardTracer(components).trace(makeSourceRays());
 }
 
 const MAX_TIMELINE_CYCLE_MS = 120_000;
@@ -474,7 +474,7 @@ function pathsReachAnyComponent(paths: Ray[][], componentIds: Set<string>): bool
     return false;
 }
 
-function traceSourceBundles(solver: Solver1, sourceRays: Ray[], sourceKeys: string[]): Map<string, Ray[][]> {
+function traceSourceBundles(solver: ForwardTracer, sourceRays: Ray[], sourceKeys: string[]): Map<string, Ray[][]> {
     const pathsBySourceKey = new Map<string, Ray[][]>();
     const keyBySourceRay = new Map<Ray, string>();
     for (let i = 0; i < sourceRays.length; i++) {
@@ -500,7 +500,7 @@ function flattenSourceBundles(sourceKeys: string[], pathsBySourceKey: Map<string
 }
 
 export function traceForwardWithDependencyCache(
-    solver: Solver1,
+    solver: ForwardTracer,
     sourceRays: Ray[],
     components: OpticalComponent[],
     cacheRef: React.MutableRefObject<ForwardTraceCache | null>,
@@ -726,11 +726,11 @@ export const OpticalTable: React.FC = () => {
     // queue tiny revision counters to ask React for a redraw.
     const solverPathsRef = useRef<Ray[][]>([]);
     const beamSegsRef = useRef<GaussianBeamSegment[][]>([]);
-    const solver3PathsRef = useRef<Ray[][]>([]);
+    const reverseTracePathsRef = useRef<Ray[][]>([]);
     const trapBeamSegsRef = useRef<GaussianBeamSegment[][]>([]);
     const [, setRayRenderRevision] = useState(0);
     const [, setBeamRenderRevision] = useState(0);
-    const [, setSolver3RenderRevision] = useState(0);
+    const [, setReverseTracerRenderRevision] = useState(0);
     // Write-only handles: useSetAtom, NOT useAtom. `const [, setX] = useAtom(a)`
     // still SUBSCRIBES this fiber to `a`. forwardRays / reverseRays /
     // trapBeamSegments / the image-tick atoms are all reassigned on every
@@ -743,10 +743,10 @@ export const OpticalTable: React.FC = () => {
     const setReverseRays = useSetAtom(publishReverseRaysAtom);
     const setTrapBeamSegments = useSetAtom(publishTrapBeamSegmentsAtom);
     const setCardImageTick = useSetAtom(cardImageTickAtom);
-    const setSolver3Rendering = useSetAtom(solver3RenderingAtom);
+    const setReverseTracerRendering = useSetAtom(reverseTraceRenderingAtom);
     const rays = solverPathsRef.current;
     const beamSegments = beamSegsRef.current;
-    const solver3Paths = solver3PathsRef.current;
+    const reverseTracePaths = reverseTracePathsRef.current;
     const setRays = (next: Ray[][]) => {
         solverPathsRef.current = next;
         setRayRenderRevision(revision => revision + 1);
@@ -755,19 +755,19 @@ export const OpticalTable: React.FC = () => {
         beamSegsRef.current = next;
         setBeamRenderRevision(revision => revision + 1);
     };
-    const setSolver3Paths = (next: Ray[][]) => {
-        solver3PathsRef.current = next;
+    const setReverseTracerPaths = (next: Ray[][]) => {
+        reverseTracePathsRef.current = next;
         setReverseRays(next);
-        setSolver3RenderRevision(revision => revision + 1);
+        setReverseTracerRenderRevision(revision => revision + 1);
     };
-    const [solver3Trigger, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [reverseTraceTrigger, setReverseTracerTrigger] = useAtom(reverseTraceRenderTriggerAtom);
     const [isDragging] = useAtom(isDraggingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
     // The solver-3 guard genuinely needs the live value, so this one subscribes.
-    const [solver3Rendering] = useAtom(solver3RenderingAtom);
-    const solver3RenderingRef = useRef(solver3Rendering);
-    solver3RenderingRef.current = solver3Rendering;
-    const solver3DragPendingRef = useRef(false);
+    const [reverseTraceRendering] = useAtom(reverseTraceRenderingAtom);
+    const reverseTraceRenderingRef = useRef(reverseTraceRendering);
+    reverseTraceRenderingRef.current = reverseTraceRendering;
+    const reverseTraceDragPendingRef = useRef(false);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
     const setScanAccumProgress = useSetAtom(scanAccumProgressAtom);
     const setDrawnRayCounts = useSetAtom(drawnRayCountsAtom);
@@ -779,11 +779,11 @@ export const OpticalTable: React.FC = () => {
     // several components, producing multiple segments — those are not counted
     // separately here).
     useEffect(() => {
-        setDrawnRayCounts({ forward: rays.length, reverse: solver3Paths.length });
-    }, [rays.length, solver3Paths.length, setDrawnRayCounts]);
+        setDrawnRayCounts({ forward: rays.length, reverse: reverseTracePaths.length });
+    }, [rays.length, reverseTracePaths.length, setDrawnRayCounts]);
 
     // Preset-switch ghost-ray cleanup: the worker-traced paths live in local
-    // refs (`rays`, `beamSegments`, `solver3Paths`), so even though
+    // refs (`rays`, `beamSegments`, `reverseTracePaths`), so even though
     // loadPresetAtom clears the global ray atoms, this component still holds
     // the old preset's traces until a new trace completes asynchronously.
     // Wipe them synchronously the moment the active preset changes so the
@@ -792,7 +792,7 @@ export const OpticalTable: React.FC = () => {
     useEffect(() => {
         setRays([]);
         setBeamSegments([]);
-        setSolver3Paths([]);
+        setReverseTracerPaths([]);
         trapBeamSegsRef.current = [];
     }, [activePreset]);
 
@@ -812,15 +812,15 @@ export const OpticalTable: React.FC = () => {
     componentsRef.current = components;
     const isDraggingRef = useRef(isDragging);
     isDraggingRef.current = isDragging;
-    const solver2EnabledRef = useRef(rayConfig.solver2Enabled);
-    solver2EnabledRef.current = rayConfig.solver2Enabled;
+    const beamFieldEnabledRef = useRef(rayConfig.beamFieldEnabled);
+    beamFieldEnabledRef.current = rayConfig.beamFieldEnabled;
 
     // Animation counter — increments force React re-render for fingerprint
     const [animTick, setAnimTick] = useState(0);
     const setAnimTickRef = useRef(setAnimTick);
     setAnimTickRef.current = setAnimTick;
 
-    // Guard ref: when true, scan accumulation is running — skip useFrame and Solver 1
+    // Guard ref: when true, scan accumulation is running — skip useFrame and forward tracer
     const scanAccumActiveRef = useRef(false);
     const activeScanJobRef = useRef<ReturnType<typeof createScheduledRenderJob> | null>(null);
     const lastAnimationTimelineSignatureRef = useRef('');
@@ -877,7 +877,7 @@ export const OpticalTable: React.FC = () => {
         const signature = signatureParts.join('|');
         if (lastTimelineReverseFrameRef.current === signature) return;
         lastTimelineReverseFrameRef.current = signature;
-        setSolver3Paths(pathFrames);
+        setReverseTracerPaths(pathFrames);
     };
 
     useFrame((_, delta) => {
@@ -906,7 +906,7 @@ export const OpticalTable: React.FC = () => {
     // global "play" button shouldn't freeze a trap any more than turning off
     // your monitor freezes one in a real lab.
     //
-    // Solver 1 is intentionally not re-run for every bead Brownian/force step:
+    // forward tracer is intentionally not re-run for every bead Brownian/force step:
     // doing so continuously remounts thousands of ray line geometries and can
     // grow browser memory until interaction crashes the page. Static optics
     // changes rebuild the beam field; bead motion samples that cached field.
@@ -955,7 +955,7 @@ export const OpticalTable: React.FC = () => {
 
     // ─── Optics fingerprint: changes only when non-Card components change ───
     // Cards are passive detectors and don't affect the optical path, so moving
-    // them should NOT trigger the expensive Solver1/Solver2 re-computation.
+    // them should NOT trigger the expensive ForwardTracer/BeamField re-computation.
     // Uses component.version which is bumped on every property mutation.
     const opticsFingerprint = useMemo(() => {
         if (!components) return '';
@@ -1003,12 +1003,12 @@ export const OpticalTable: React.FC = () => {
     }, [animPlaying, animator, components, setScanAccumConfig]);
 
     const forwardTraceCacheRef = useRef<ForwardTraceCache | null>(null);
-    const solver1WorkerRef = useRef<Worker | null>(null);
-    const solver1WorkerBusyRef = useRef(false);
-    const solver1WorkerPendingRef = useRef<PendingForwardTrace | null>(null);
-    const solver1WorkerTimerRef = useRef<number | null>(null);
-    const solver1WorkerJobIdRef = useRef(0);
-    const solver1WorkerJobsRef = useRef<Map<number, PendingForwardTrace>>(new Map());
+    const forwardTraceWorkerRef = useRef<Worker | null>(null);
+    const forwardTraceWorkerBusyRef = useRef(false);
+    const forwardTraceWorkerPendingRef = useRef<PendingForwardTrace | null>(null);
+    const forwardTraceWorkerTimerRef = useRef<number | null>(null);
+    const forwardTraceWorkerJobIdRef = useRef(0);
+    const forwardTraceWorkerJobsRef = useRef<Map<number, PendingForwardTrace>>(new Map());
     const lastOpticsFingerprintRef = useRef<string>('');
 
     const minForwardRayCount = rayConfig.viewerMode === 'planes'
@@ -1018,34 +1018,34 @@ export const OpticalTable: React.FC = () => {
     const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
     const tracedForwardRayCount = clampedForwardRayCount;
 
-    const pumpSolver1Worker = () => {
-        if (solver1WorkerBusyRef.current) return;
-        const pending = solver1WorkerPendingRef.current;
+    const pumpForwardTraceWorker = () => {
+        if (forwardTraceWorkerBusyRef.current) return;
+        const pending = forwardTraceWorkerPendingRef.current;
         if (!pending) return;
 
-        let worker = solver1WorkerRef.current;
+        let worker = forwardTraceWorkerRef.current;
         if (!worker) {
-            worker = new Worker(new URL('../physics/solver1Worker.ts', import.meta.url), { type: 'module' });
-            worker.onmessage = (event: MessageEvent<Solver1WorkerResponse>) => {
+            worker = new Worker(new URL('../physics/forwardTraceWorker.ts', import.meta.url), { type: 'module' });
+            worker.onmessage = (event: MessageEvent<ForwardTraceWorkerResponse>) => {
                 const msg = event.data;
-                solver1WorkerBusyRef.current = false;
-                const job = solver1WorkerJobsRef.current.get(msg.jobId);
-                solver1WorkerJobsRef.current.delete(msg.jobId);
-                if (msg.jobId !== solver1WorkerJobIdRef.current) {
-                    pumpSolver1Worker();
+                forwardTraceWorkerBusyRef.current = false;
+                const job = forwardTraceWorkerJobsRef.current.get(msg.jobId);
+                forwardTraceWorkerJobsRef.current.delete(msg.jobId);
+                if (msg.jobId !== forwardTraceWorkerJobIdRef.current) {
+                    pumpForwardTraceWorker();
                     return;
                 }
                 if (!job) {
-                    pumpSolver1Worker();
+                    pumpForwardTraceWorker();
                     return;
                 }
-                if ((job.applyPaths || job.applyBeamSegments) && solver1WorkerPendingRef.current) {
-                    pumpSolver1Worker();
+                if ((job.applyPaths || job.applyBeamSegments) && forwardTraceWorkerPendingRef.current) {
+                    pumpForwardTraceWorker();
                     return;
                 }
                 if (job.applyPaths && !isDraggingRef.current) {
-                    solver1WorkerPendingRef.current = null;
-                    pumpSolver1Worker();
+                    forwardTraceWorkerPendingRef.current = null;
+                    pumpForwardTraceWorker();
                     return;
                 }
                 if (msg.type === 'forward-done') {
@@ -1059,7 +1059,7 @@ export const OpticalTable: React.FC = () => {
                         const nextBeamSegs = rehydrateBeamSegments(msg.beamSegments);
                         trapBeamSegsRef.current = nextBeamSegs;
                         setTrapBeamSegments(nextBeamSegs);
-                        if (solver2EnabledRef.current) {
+                        if (beamFieldEnabledRef.current) {
                             setBeamSegments(nextBeamSegs);
                             beamSegsRef.current = nextBeamSegs;
                         } else {
@@ -1068,18 +1068,18 @@ export const OpticalTable: React.FC = () => {
                         }
                     }
                 } else {
-                    console.warn('Solver 1 worker error:', msg.message);
+                    console.warn('forward tracer worker error:', msg.message);
                 }
-                pumpSolver1Worker();
+                pumpForwardTraceWorker();
             };
-            solver1WorkerRef.current = worker;
+            forwardTraceWorkerRef.current = worker;
         }
 
-        solver1WorkerPendingRef.current = null;
-        solver1WorkerBusyRef.current = true;
-        const jobId = solver1WorkerJobIdRef.current + 1;
-        solver1WorkerJobIdRef.current = jobId;
-        const request: Solver1WorkerRequest = {
+        forwardTraceWorkerPendingRef.current = null;
+        forwardTraceWorkerBusyRef.current = true;
+        const jobId = forwardTraceWorkerJobIdRef.current + 1;
+        forwardTraceWorkerJobIdRef.current = jobId;
+        const request: ForwardTraceWorkerRequest = {
             type: 'trace-forward',
             jobId,
             sceneText: pending.sceneText,
@@ -1088,30 +1088,30 @@ export const OpticalTable: React.FC = () => {
             includeBeamSegments: pending.includeBeamSegments,
             returnPaths: pending.returnPaths,
         };
-        solver1WorkerJobsRef.current.set(jobId, pending);
+        forwardTraceWorkerJobsRef.current.set(jobId, pending);
         worker.postMessage(request);
     };
 
-    const scheduleSolver1WorkerTrace = (pending: PendingForwardTrace) => {
-        solver1WorkerPendingRef.current = pending;
-        if (solver1WorkerTimerRef.current !== null) return;
-        solver1WorkerTimerRef.current = window.setTimeout(() => {
-            solver1WorkerTimerRef.current = null;
-            pumpSolver1Worker();
+    const scheduleForwardTraceWorkerTrace = (pending: PendingForwardTrace) => {
+        forwardTraceWorkerPendingRef.current = pending;
+        if (forwardTraceWorkerTimerRef.current !== null) return;
+        forwardTraceWorkerTimerRef.current = window.setTimeout(() => {
+            forwardTraceWorkerTimerRef.current = null;
+            pumpForwardTraceWorker();
         }, 33);
     };
 
     useEffect(() => () => {
-        if (solver1WorkerTimerRef.current !== null) {
-            window.clearTimeout(solver1WorkerTimerRef.current);
-            solver1WorkerTimerRef.current = null;
+        if (forwardTraceWorkerTimerRef.current !== null) {
+            window.clearTimeout(forwardTraceWorkerTimerRef.current);
+            forwardTraceWorkerTimerRef.current = null;
         }
-        solver1WorkerRef.current?.terminate();
-        solver1WorkerRef.current = null;
-        solver1WorkerBusyRef.current = false;
-        solver1WorkerPendingRef.current = null;
-        solver1WorkerJobsRef.current.clear();
-        solver1WorkerJobIdRef.current++;
+        forwardTraceWorkerRef.current?.terminate();
+        forwardTraceWorkerRef.current = null;
+        forwardTraceWorkerBusyRef.current = false;
+        forwardTraceWorkerPendingRef.current = null;
+        forwardTraceWorkerJobsRef.current.clear();
+        forwardTraceWorkerJobIdRef.current++;
     }, []);
 
     const traceCenterBeamSegments = (traceComponents: OpticalComponent[] = components) => {
@@ -1119,14 +1119,14 @@ export const OpticalTable: React.FC = () => {
         return traceStableTableOverlay(
             traceComponents,
             () => {
-                const solver1 = new Solver1(traceComponents);
-                // We MUST trace a full ring cohort so Solver1 can estimate beam footprints geometrically.
+                const forwardTracer = new ForwardTracer(traceComponents);
+                // We MUST trace a full ring cohort so ForwardTracer can estimate beam footprints geometrically.
                 // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
                 const sourceRays = stablePreviewSourceRays(
                     createSourceRays(traceComponents, clampedForwardRayCount, 'full'),
                     Math.max(8, Math.min(tracedForwardRayCount, 16)),
                 );
-                return solver1.traceWithBeamSegments(sourceRays).beamSegments;
+                return forwardTracer.traceWithBeamSegments(sourceRays).beamSegments;
             },
         );
     };
@@ -1136,10 +1136,10 @@ export const OpticalTable: React.FC = () => {
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
 
         if (!isDragging) {
-            solver1WorkerPendingRef.current = null;
-            if (solver1WorkerTimerRef.current !== null) {
-                window.clearTimeout(solver1WorkerTimerRef.current);
-                solver1WorkerTimerRef.current = null;
+            forwardTraceWorkerPendingRef.current = null;
+            if (forwardTraceWorkerTimerRef.current !== null) {
+                window.clearTimeout(forwardTraceWorkerTimerRef.current);
+                forwardTraceWorkerTimerRef.current = null;
             }
         }
 
@@ -1152,21 +1152,21 @@ export const OpticalTable: React.FC = () => {
             // Correctness during drag is more important than a clever partial
             // update. A cached/preview trace can mix sparse bead-scatter rays
             // with stale families and show physically impossible beam paths.
-            let dragSolver: Solver1 | null = null;
+            let dragSolver: ForwardTracer | null = null;
             const calculatedPaths = traceStableTableOverlay(
                 components,
                 () => {
-                    dragSolver = new Solver1(components);
+                    dragSolver = new ForwardTracer(components);
                     return dragSolver.trace(makeForwardSourceRays());
                 },
             );
-            if (rayConfig.solver2Enabled) {
+            if (rayConfig.beamFieldEnabled) {
                 try {
-                    const previewBeamSegs = (dragSolver ?? new Solver1(components)).buildBeamSegments(calculatedPaths);
+                    const previewBeamSegs = (dragSolver ?? new ForwardTracer(components)).buildBeamSegments(calculatedPaths);
                     setBeamSegments(previewBeamSegs);
                     beamSegsRef.current = previewBeamSegs;
                 } catch (e) {
-                    console.warn('Solver 2 drag preview error:', e);
+                    console.warn('Beam field drag preview error:', e);
                     setBeamSegments([]);
                     beamSegsRef.current = [];
                 }
@@ -1182,15 +1182,15 @@ export const OpticalTable: React.FC = () => {
             let hasCamera = false;
             for (const comp of components) {
                 if (comp instanceof Camera) {
-                    comp.solver3Stale = true;
+                    comp.reverseTraceStale = true;
                     hasCamera = true;
                 }
             }
             if (hasCamera && sceneChanged) {
-                solver3DragPendingRef.current = true;
-                if (!solver3RenderingRef.current) {
-                    solver3DragPendingRef.current = false;
-                    setSolver3Trigger(t => t + 1);
+                reverseTraceDragPendingRef.current = true;
+                if (!reverseTraceRenderingRef.current) {
+                    reverseTraceDragPendingRef.current = false;
+                    setReverseTracerTrigger(t => t + 1);
                 }
             }
             return;
@@ -1207,7 +1207,7 @@ export const OpticalTable: React.FC = () => {
         // the dependency cache, which was especially visible when dragging
         // blockers around optical-trap and tutorial scenes.
         forwardTraceCacheRef.current = null;
-        let solver: Solver1 | null = null;
+        let solver: ForwardTracer | null = null;
         const makeForwardSourceRays = () => {
             const fullSourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
             return tracedForwardRayCount < clampedForwardRayCount
@@ -1215,7 +1215,7 @@ export const OpticalTable: React.FC = () => {
                 : fullSourceRays;
         };
         const calculatedPaths = traceStableTableOverlay(components, () => {
-            solver = new Solver1(components);
+            solver = new ForwardTracer(components);
             return solver.trace(makeForwardSourceRays());
         }).slice();
         traceLiveForwardSideEffects(components, makeForwardSourceRays);
@@ -1224,7 +1224,7 @@ export const OpticalTable: React.FC = () => {
         // Post-trace: detect beam splits via angle histogram population analysis.
         // Only needed when E&M solver is enabled — the branching path logic
         // relies on marginal rays to detect population splits.
-        if (rayConfig.solver2Enabled && !isDragging) {
+        if (rayConfig.beamFieldEnabled && !isDragging) {
             const syntheticMainOptics = new Set(
                 components
                     .filter((component): component is PrismLens => component instanceof PrismLens)
@@ -1471,7 +1471,7 @@ export const OpticalTable: React.FC = () => {
                 } // end for boundaryBySource
 
             } // end fallback split detection block
-        } // end solver2Enabled guard
+        } // end beamFieldEnabled guard
 
         setRays(calculatedPaths);
         setForwardRays(calculatedPaths);
@@ -1488,12 +1488,12 @@ export const OpticalTable: React.FC = () => {
             if (!pathsReachAnyComponent(calculatedPaths, trappedBeadIds)) {
                 trapBeamSegsRef.current = [];
                 setTrapBeamSegments([]);
-                if (rayConfig.solver2Enabled) {
+                if (rayConfig.beamFieldEnabled) {
                     setBeamSegments([]);
                     beamSegsRef.current = [];
                 }
             } else {
-                scheduleSolver1WorkerTrace({
+                scheduleForwardTraceWorkerTrace({
                     sceneText: serializeScene(components),
                     forwardRayCount: clampedForwardRayCount,
                     sourceRayLimit: clampedForwardRayCount,
@@ -1503,15 +1503,15 @@ export const OpticalTable: React.FC = () => {
                     returnPaths: false,
                 });
             }
-        } else if (rayConfig.solver2Enabled || trappedBeads.length > 0) {
+        } else if (rayConfig.beamFieldEnabled || trappedBeads.length > 0) {
             try {
-                beamSegs = (solver ?? new Solver1(components)).buildBeamSegments(calculatedPaths);
+                beamSegs = (solver ?? new ForwardTracer(components)).buildBeamSegments(calculatedPaths);
             } catch (e) {
-                console.warn('Solver 2 error:', e);
+                console.warn('Beam field error:', e);
             }
             trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
             setTrapBeamSegments(trappedBeads.length > 0 ? beamSegs : []);
-            const visibleBeamSegs = rayConfig.solver2Enabled ? beamSegs : [];
+            const visibleBeamSegs = rayConfig.beamFieldEnabled ? beamSegs : [];
             setBeamSegments(visibleBeamSegs);
             beamSegsRef.current = visibleBeamSegs;
         } else {
@@ -1526,16 +1526,16 @@ export const OpticalTable: React.FC = () => {
             let hasCamera = false;
             for (const comp of components) {
                 if (comp instanceof Camera) {
-                    comp.markSolver3Stale();
+                    comp.markReverseTracerStale();
                     hasCamera = true;
                 }
             }
-            // Auto-kick Solver-3 whenever the scene changes and there is a detector,
+            // Auto-kick reverse-tracer whenever the scene changes and there is a detector,
             // so camera images refresh without the user pressing "Render".
             // PMTs are handled by the dedicated raster effect below; the worker
             // path only produced preview rays and never published a PMT image.
-            if (hasCamera && (!solver3Rendering || isDragging) && !animationDrivenChange) {
-                setSolver3Trigger(t => t + 1);
+            if (hasCamera && (!reverseTraceRendering || isDragging) && !animationDrivenChange) {
+                setReverseTracerTrigger(t => t + 1);
             }
             // Check if scan results should be invalidated:
             // Only clear if a NON-ANIMATED component changed since scan completed
@@ -1557,38 +1557,38 @@ export const OpticalTable: React.FC = () => {
                         }
                         if (shouldClearScan) {
                             cam.clearScanFrames();
-                            cam.solver3Image = null;
+                            cam.reverseTraceImage = null;
                             cam.forwardImage = null;
-                            cam.solver3Paths = null;
+                            cam.reverseTracePaths = null;
                         }
                     }
                 }
             }
             if (!animationDrivenChange) {
-                setSolver3Paths([]);
-                solver3PathsRef.current = [];
+                setReverseTracerPaths([]);
+                reverseTracePathsRef.current = [];
             }
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isDragging, opticsFingerprint, rayConfig]);
 
-    // ─── Effect 1b: Solver 3 — backward trace from ALL detectors, run in a
+    // ─── Effect 1b: Reverse tracer — backward trace from ALL detectors, run in a
     // worker pool.  Each worker runs an independent infinite-progressive
     // accumulator with its own RNG; the main thread merges N parallel
     // snapshots per camera by computing a weighted running average across
     // workers (sum(emAvg_w · count_w) / sum(count_w) per pixel).
-    const SOLVER3_WORKER_COUNT = (() => {
+    const REVERSE_TRACE_WORKER_COUNT = (() => {
         if (typeof navigator === 'undefined') return 1;
         const cores = (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency ?? 2;
         // Keep CPU headroom for synchronous forward tracing and pointer/UI work.
         // Reverse tracing is progressive, so it can afford to use fewer cores.
         return Math.max(1, Math.min(4, cores - 2));
     })();
-    const solver3WorkersRef = useRef<Worker[]>([]);
-    const solver3JobIdRef = useRef<number>(0);
-    const componentsRefForSolver3 = useRef(components);
-    componentsRefForSolver3.current = components;
+    const reverseTraceWorkersRef = useRef<Worker[]>([]);
+    const reverseTraceJobIdRef = useRef<number>(0);
+    const componentsRefForReverseTracer = useRef(components);
+    componentsRefForReverseTracer.current = components;
 
     // Per-(camera,worker) latest accumulator snapshot, for the main-thread
     // weighted-merge. Map<cameraId, snapshots[workerId]>.
@@ -1596,55 +1596,55 @@ export const OpticalTable: React.FC = () => {
     const workerCompleteRef = useRef<Set<number>>(new Set());
     const workerRayCountsRef = useRef<number[]>([]);
     const workerErrorRef = useRef(false);
-    const solver3ActiveWorkerCountRef = useRef(0);
-    const lastSolver3InvalidationFingerprintRef = useRef(opticsFingerprint);
+    const reverseTraceActiveWorkerCountRef = useRef(0);
+    const lastReverseTracerInvalidationFingerprintRef = useRef(opticsFingerprint);
 
-    const cancelActiveSolver3Job = (clearPaths: boolean = false) => {
-        const previousId = solver3JobIdRef.current;
+    const cancelActiveReverseTracerJob = (clearPaths: boolean = false) => {
+        const previousId = reverseTraceJobIdRef.current;
         if (previousId <= 0) return;
-        for (const worker of solver3WorkersRef.current) {
+        for (const worker of reverseTraceWorkersRef.current) {
             worker.postMessage({ type: 'cancel', jobId: previousId } as MainToWorker);
         }
-        solver3JobIdRef.current = previousId + 1;
+        reverseTraceJobIdRef.current = previousId + 1;
         workerAccumRef.current.clear();
         workerCompleteRef.current.clear();
-        workerRayCountsRef.current = new Array(solver3WorkersRef.current.length).fill(0);
+        workerRayCountsRef.current = new Array(reverseTraceWorkersRef.current.length).fill(0);
         workerErrorRef.current = false;
-        solver3ActiveWorkerCountRef.current = 0;
-        solver3DragPendingRef.current = false;
-        setSolver3Rendering(false);
-        solver3RenderingRef.current = false;
+        reverseTraceActiveWorkerCountRef.current = 0;
+        reverseTraceDragPendingRef.current = false;
+        setReverseTracerRendering(false);
+        reverseTraceRenderingRef.current = false;
         setScanAccumProgress(0);
         if (clearPaths) {
-            setSolver3Paths([]);
-            solver3PathsRef.current = [];
+            setReverseTracerPaths([]);
+            reverseTracePathsRef.current = [];
         }
     };
 
     useEffect(() => {
-        if (lastSolver3InvalidationFingerprintRef.current === opticsFingerprint) return;
-        lastSolver3InvalidationFingerprintRef.current = opticsFingerprint;
+        if (lastReverseTracerInvalidationFingerprintRef.current === opticsFingerprint) return;
+        lastReverseTracerInvalidationFingerprintRef.current = opticsFingerprint;
         // Timeline scan accumulation owns component mutation while it bakes; do
         // not let those internal evaluate/restore steps cancel the scan job.
         if (scanAccumActiveRef.current) return;
         if (animPlaying && animator.channels.length > 0) return;
-        cancelActiveSolver3Job(false);
+        cancelActiveReverseTracerJob(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [opticsFingerprint, animPlaying, animator.channels.length]);
 
     // Lazily spin up a pool of workers and wire the merging message handler.
     useEffect(() => {
         const workers: Worker[] = [];
-        for (let w = 0; w < SOLVER3_WORKER_COUNT; w++) {
-            const worker = new Worker(new URL('../physics/solver3Worker.ts', import.meta.url), {
+        for (let w = 0; w < REVERSE_TRACE_WORKER_COUNT; w++) {
+            const worker = new Worker(new URL('../physics/reverseTraceWorker.ts', import.meta.url), {
                 type: 'module',
             });
             workers.push(worker);
 
             const onMessage = (e: MessageEvent<WorkerToMain>) => {
                 const msg = e.data;
-                if (msg.jobId !== solver3JobIdRef.current) return;
-                const currentComponents = componentsRefForSolver3.current;
+                if (msg.jobId !== reverseTraceJobIdRef.current) return;
+                const currentComponents = componentsRefForReverseTracer.current;
                 if (msg.type === 'progress') {
                     if (w === 0) {
                         // Use the first worker as the progress source so the
@@ -1661,7 +1661,7 @@ export const OpticalTable: React.FC = () => {
                     // Stash this worker's latest snapshot for the camera.
                     let snapshots = workerAccumRef.current.get(msg.cameraId);
                     if (!snapshots) {
-                        snapshots = new Array(Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
+                        snapshots = new Array(Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
                         workerAccumRef.current.set(msg.cameraId, snapshots);
                     }
                     const dstX = camera.sensorResX;
@@ -1701,104 +1701,104 @@ export const OpticalTable: React.FC = () => {
                     // sample (clipping by the sample plane below).  Across N
                     // workers we'd grow the path reservoir N×; capping at the
                     // global limit (500) keeps memory bounded.
-                    // Solver3 already returns sample-terminated visualization
+                    // ReverseTracer already returns sample-terminated visualization
                     // paths. Re-clipping folded microscopes by projecting the
                     // sample onto every segment can collapse the visible path
                     // to a tiny stub near the camera.
                     const clipped = msg.paths
                         .map(rehydratePath)
                         .filter(path => path.length > 0);
-                    camera.solver3Image = merged;
+                    camera.reverseTraceImage = merged;
                     camera.forwardImage = mergedEx;
-                    const visiblePaths = clipped.length > 0 ? clipped : (camera.solver3Paths ?? []);
-                    camera.solver3Paths = visiblePaths;
-                    camera.solver3Stale = false;
+                    const visiblePaths = clipped.length > 0 ? clipped : (camera.reverseTracePaths ?? []);
+                    camera.reverseTracePaths = visiblePaths;
+                    camera.reverseTraceStale = false;
                     setCameraImageTick(t => t + 1);
 
                     if (clipped.length > 0) {
-                        const currentPaths = solver3PathsRef.current || [];
+                        const currentPaths = reverseTracePathsRef.current || [];
                         const nextPaths = [...currentPaths, ...clipped];
                         if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
-                        setSolver3Paths(nextPaths);
-                        solver3PathsRef.current = nextPaths;
+                        setReverseTracerPaths(nextPaths);
+                        reverseTracePathsRef.current = nextPaths;
                     }
                 } else if (msg.type === 'pmt-done') {
                     if (w !== 0) return; // PMTs only need to run once.
                     const hydrated = msg.paths.map(rehydratePath);
-                    const currentPaths = solver3PathsRef.current || [];
+                    const currentPaths = reverseTracePathsRef.current || [];
                     const nextPaths = [...currentPaths, ...hydrated];
                     if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
-                    setSolver3Paths(nextPaths);
-                    solver3PathsRef.current = nextPaths;
+                    setReverseTracerPaths(nextPaths);
+                    reverseTracePathsRef.current = nextPaths;
                 } else if (msg.type === 'complete') {
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = msg.raysTraced;
-                    if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
+                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)) {
                         setScanAccumProgress(1);
-                        setSolver3Rendering(false);
-                        solver3RenderingRef.current = false;
+                        setReverseTracerRendering(false);
+                        reverseTraceRenderingRef.current = false;
                         if (!isDraggingRef.current) {
                             if (workerErrorRef.current) haptic.error();
                             else haptic.done();
                         }
-                        if (isDraggingRef.current && solver3DragPendingRef.current) {
-                            solver3DragPendingRef.current = false;
-                            window.setTimeout(() => setSolver3Trigger(t => t + 1), 0);
+                        if (isDraggingRef.current && reverseTraceDragPendingRef.current) {
+                            reverseTraceDragPendingRef.current = false;
+                            window.setTimeout(() => setReverseTracerTrigger(t => t + 1), 0);
                         }
                     }
                 } else if (msg.type === 'error') {
-                    console.warn(`[Solver3 worker ${w}] `, msg.message);
+                    console.warn(`[ReverseTracer worker ${w}] `, msg.message);
                     workerErrorRef.current = true;
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = 0;
-                    if (workerCompleteRef.current.size >= Math.max(1, solver3ActiveWorkerCountRef.current || SOLVER3_WORKER_COUNT)) {
-                        setSolver3Rendering(false);
-                        solver3RenderingRef.current = false;
+                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)) {
+                        setReverseTracerRendering(false);
+                        reverseTraceRenderingRef.current = false;
                         setScanAccumProgress(0);
                         if (!isDraggingRef.current) haptic.error();
-                        if (isDraggingRef.current && solver3DragPendingRef.current) {
-                            solver3DragPendingRef.current = false;
-                            window.setTimeout(() => setSolver3Trigger(t => t + 1), 0);
+                        if (isDraggingRef.current && reverseTraceDragPendingRef.current) {
+                            reverseTraceDragPendingRef.current = false;
+                            window.setTimeout(() => setReverseTracerTrigger(t => t + 1), 0);
                         }
                     }
                 }
             };
             worker.addEventListener('message', onMessage);
         }
-        solver3WorkersRef.current = workers;
+        reverseTraceWorkersRef.current = workers;
         window.setTimeout(() => {
-            const currentComponents = componentsRefForSolver3.current;
+            const currentComponents = componentsRefForReverseTracer.current;
             if (currentComponents.some(component => component instanceof Camera)) {
-                setSolver3Trigger(trigger => trigger + 1);
+                setReverseTracerTrigger(trigger => trigger + 1);
             }
         }, 0);
         return () => {
             for (const w of workers) w.terminate();
-            solver3WorkersRef.current = [];
+            reverseTraceWorkersRef.current = [];
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
-        if (solver3Trigger === 0) return; // Skip initial mount
+        if (reverseTraceTrigger === 0) return; // Skip initial mount
         if (!components) return;
-        const workers = solver3WorkersRef.current;
+        const workers = reverseTraceWorkersRef.current;
         if (workers.length === 0) return;
 
         const cameras = components.filter(c => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return;
         const activeWorkerCount = isDragging ? 1 : workers.length;
-        solver3ActiveWorkerCountRef.current = activeWorkerCount;
+        reverseTraceActiveWorkerCountRef.current = activeWorkerCount;
 
         // Cancel any in-flight job on every worker, then assign a fresh id.
-        const previousId = solver3JobIdRef.current;
+        const previousId = reverseTraceJobIdRef.current;
         if (previousId > 0) {
             for (const w of workers) {
                 w.postMessage({ type: 'cancel', jobId: previousId } as MainToWorker);
             }
         }
         const newJobId = previousId + 1;
-        solver3JobIdRef.current = newJobId;
+        reverseTraceJobIdRef.current = newJobId;
 
         // Reset per-worker accumulator state for the new job.
         workerAccumRef.current.clear();
@@ -1806,8 +1806,8 @@ export const OpticalTable: React.FC = () => {
         workerRayCountsRef.current = new Array(workers.length).fill(0);
         workerErrorRef.current = false;
 
-        setSolver3Rendering(true);
-        solver3RenderingRef.current = true;
+        setReverseTracerRendering(true);
+        reverseTraceRenderingRef.current = true;
         setScanAccumProgress(0);
 
         const sceneText = serializeScene(components);
@@ -1820,7 +1820,7 @@ export const OpticalTable: React.FC = () => {
                 pmtIds: [],
                 reversePathCount: clampedReversePathCount,
                 forwardRayCount: clampedForwardRayCount,
-                solver2Enabled: rayConfig.solver2Enabled,
+                beamFieldEnabled: rayConfig.beamFieldEnabled,
                 previewMode: isDragging,
                 workerId: w,
                 workerCount: activeWorkerCount,
@@ -1834,9 +1834,9 @@ export const OpticalTable: React.FC = () => {
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [solver3Trigger]);
+    }, [reverseTraceTrigger]);
 
-    // Dragging owns the CPU budget: during drag Solver-3 is re-kicked in
+    // Dragging owns the CPU budget: during drag reverse-tracer is re-kicked in
     // one-worker preview mode; after release it reruns with the full pool.
     const lastDragRef = useRef(isDragging);
     useEffect(() => {
@@ -1844,13 +1844,13 @@ export const OpticalTable: React.FC = () => {
         lastDragRef.current = isDragging;
         if (isDragging) {
             for (const comp of components) {
-                if (comp instanceof Camera) comp.markSolver3Stale();
+                if (comp instanceof Camera) comp.markReverseTracerStale();
             }
         } else {
-            solver3DragPendingRef.current = false;
+            reverseTraceDragPendingRef.current = false;
         }
-        setSolver3Trigger(t => t + 1);
-    }, [components, isDragging, setSolver3Trigger]);
+        setReverseTracerTrigger(t => t + 1);
+    }, [components, isDragging, setReverseTracerTrigger]);
 
     // ─── Effect 1b': rod-count sliders (forward or reverse) also kick a fresh reverse trace ───
     const reverseCountRef = useRef(clampedReversePathCount);
@@ -1863,13 +1863,13 @@ export const OpticalTable: React.FC = () => {
         forwardCountRef.current = clampedForwardRayCount;
         // Mark camera images stale so the UI shows "Updating…" while a new trace runs.
         for (const comp of components) {
-            if (comp instanceof Camera) comp.markSolver3Stale();
+            if (comp instanceof Camera) comp.markReverseTracerStale();
         }
-        setSolver3Trigger(t => t + 1);
+        setReverseTracerTrigger(t => t + 1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clampedReversePathCount, clampedForwardRayCount]);
 
-    // ─── Effect 1b'': re-kick Solver-3 when the page comes back to the
+    // ─── Effect 1b'': re-kick reverse-tracer when the page comes back to the
     // foreground.  Mobile browsers (especially iOS Safari) suspend Web
     // Workers when the screen locks, the user app-switches, or the device
     // gets warm.  When the user returns, the worker may have been killed or
@@ -1887,13 +1887,13 @@ export const OpticalTable: React.FC = () => {
             if (!hasCamera) return;
             if (animPlaying && animator.channels.length > 0) return;
             for (const comp of components) {
-                if (comp instanceof Camera) comp.markSolver3Stale();
+                if (comp instanceof Camera) comp.markReverseTracerStale();
             }
-            setSolver3Trigger(t => t + 1);
+            setReverseTracerTrigger(t => t + 1);
         };
         document.addEventListener('visibilitychange', onVisibility);
         return () => document.removeEventListener('visibilitychange', onVisibility);
-    }, [animPlaying, animator.channels.length, components, setSolver3Trigger]);
+    }, [animPlaying, animator.channels.length, components, setReverseTracerTrigger]);
 
     useEffect(() => {
         return () => {
@@ -1902,9 +1902,9 @@ export const OpticalTable: React.FC = () => {
             activeScanJobRef.current = null;
             timelineBakePendingSignatureRef.current = '';
         };
-    }, [components, clampedForwardRayCount, clampedReversePathCount, rayConfig.solver2Enabled]);
+    }, [components, clampedForwardRayCount, clampedReversePathCount, rayConfig.beamFieldEnabled]);
 
-    // ─── Effect 1c: Scan Accumulation — batch Solver 3 across scan cycle ───
+    // ─── Effect 1c: Scan Accumulation — batch Reverse tracer across scan cycle ───
     useEffect(() => {
         if (scanAccumConfig.trigger === 0) return; // Skip initial mount
         if (!components) return;
@@ -1935,15 +1935,15 @@ export const OpticalTable: React.FC = () => {
             return;
         }
 
-        const activeWorkerJobId = solver3JobIdRef.current;
+        const activeWorkerJobId = reverseTraceJobIdRef.current;
         if (activeWorkerJobId > 0) {
-            for (const worker of solver3WorkersRef.current) {
+            for (const worker of reverseTraceWorkersRef.current) {
                 worker.postMessage({ type: 'cancel', jobId: activeWorkerJobId } as MainToWorker);
             }
-            solver3JobIdRef.current = activeWorkerJobId + 1;
+            reverseTraceJobIdRef.current = activeWorkerJobId + 1;
             workerAccumRef.current.clear();
             workerCompleteRef.current.clear();
-            workerRayCountsRef.current = new Array(solver3WorkersRef.current.length).fill(0);
+            workerRayCountsRef.current = new Array(reverseTraceWorkersRef.current.length).fill(0);
         }
 
         const steps = Math.max(1, Math.min(128, Math.floor(scanAccumConfig.steps)));
@@ -1991,7 +1991,7 @@ export const OpticalTable: React.FC = () => {
             scanAccumActiveRef,
             animStateRef,
             setAnimPlaying,
-            setSolver3Rendering,
+            setReverseTracerRendering,
             setProgress: setScanAccumProgress,
             totalSteps: steps,
             pauseAnimation: false,
@@ -2044,8 +2044,8 @@ export const OpticalTable: React.FC = () => {
                 publishTimelineReversePathsForClock(animator.clockMs, componentsRef.current);
                 return;
             }
-            setSolver3Paths(fallbackPaths);
-            solver3PathsRef.current = fallbackPaths;
+            setReverseTracerPaths(fallbackPaths);
+            reverseTracePathsRef.current = fallbackPaths;
         };
 
         const publishProgressiveFrames = () => {
@@ -2071,10 +2071,10 @@ export const OpticalTable: React.FC = () => {
                 state.camera.scanFrameTimesMs = orderedSolvedSteps.map(step => frameTimesMs[step]);
                 state.camera.scanFrameCount = frameEmissions.length;
                 state.camera.scanCycleMs = cycleMs;
-                state.camera.solver3Image = runningEmission;
+                state.camera.reverseTraceImage = runningEmission;
                 state.camera.forwardImage = runningExcitation;
-                state.camera.solver3Paths = state.lastPaths;
-                state.camera.solver3Stale = false;
+                state.camera.reverseTracePaths = state.lastPaths;
+                state.camera.reverseTraceStale = false;
                 visiblePaths.push(...state.lastPaths);
             }
             publishScanPlaybackFrame(visiblePaths);
@@ -2100,10 +2100,10 @@ export const OpticalTable: React.FC = () => {
                     state.camera.scanFrameTimesMs = frameTimesMs;
                     state.camera.scanFrameCount = steps;
                     state.camera.scanCycleMs = cycleMs;
-                    state.camera.solver3Image = state.accumulatedEmission;
+                    state.camera.reverseTraceImage = state.accumulatedEmission;
                     state.camera.forwardImage = state.accumulatedExcitation;
-                    state.camera.solver3Paths = state.lastPaths;
-                    state.camera.solver3Stale = false;
+                    state.camera.reverseTracePaths = state.lastPaths;
+                    state.camera.reverseTraceStale = false;
                     visiblePaths.push(...state.lastPaths);
                 }
 
@@ -2128,14 +2128,14 @@ export const OpticalTable: React.FC = () => {
             animator.evaluateAt(clockMs, renderComponents);
 
             try {
-                // ── Solver 1: Forward trace ──
+                // ── forward tracer: Forward trace ──
                 const beamSegs = traceCenterBeamSegments(renderComponents);
 
-                // ── Solver 3: Backward render ──
-                const solver3 = new Solver3(renderComponents, beamSegs);
+                // ── Reverse tracer: Backward render ──
+                const reverseTrace = new ReverseTracer(renderComponents, beamSegs);
                 const scanVisualizationPathCount = Math.max(16, Math.min(clampedReversePathCount, 64));
                 for (const state of cameraStates) {
-                    const result = solver3.render(state.renderCamera, scanVisualizationPathCount);
+                    const result = reverseTrace.render(state.renderCamera, scanVisualizationPathCount);
                     const frameEm = new Float32Array(state.pixelCount);
                     const frameEx = new Float32Array(state.pixelCount);
                     frameEm.set(result.emissionImage.subarray(0, state.pixelCount));
@@ -2172,7 +2172,7 @@ export const OpticalTable: React.FC = () => {
         };
 
         // Let the play click and live table animation paint before the first
-        // off-screen Solver3 frame starts.
+        // off-screen ReverseTracer frame starts.
         scheduleScanBakeStep(() => runStep(0), scanBakeStartDelayMs);
 
         return () => {
@@ -2228,7 +2228,7 @@ export const OpticalTable: React.FC = () => {
         let cancelled = false;
         const timeoutIds: number[] = [];
         const ownsRenderingState = !components.some(c => c instanceof Camera);
-        const workerCount = isDragging ? 1 : SOLVER3_WORKER_COUNT;
+        const workerCount = isDragging ? 1 : REVERSE_TRACE_WORKER_COUNT;
         const rasterWorkers: Worker[] = [];
         const serializableComponents = components.filter(c =>
             !c.isSubComponent || (c instanceof TrappedBead && Boolean(c.parentSampleId))
@@ -2265,7 +2265,7 @@ export const OpticalTable: React.FC = () => {
         };
 
         if (ownsRenderingState) {
-            setSolver3Rendering(true);
+            setReverseTracerRendering(true);
             setScanAccumProgress(0);
         }
 
@@ -2304,7 +2304,7 @@ export const OpticalTable: React.FC = () => {
             firstFrameDone = true;
             console.log('[PMT Raster] First worker-striped frame complete. Continuing accumulation.');
             if (ownsRenderingState) {
-                setSolver3Rendering(false);
+                setReverseTracerRendering(false);
                 setScanAccumProgress(1);
             }
             if (!completionHapticSent) {
@@ -2351,7 +2351,7 @@ export const OpticalTable: React.FC = () => {
         };
 
         for (let w = 0; w < workerCount; w++) {
-            const worker = new Worker(new URL('../physics/solver3Worker.ts', import.meta.url), { type: 'module' });
+            const worker = new Worker(new URL('../physics/reverseTraceWorker.ts', import.meta.url), { type: 'module' });
             rasterWorkers.push(worker);
             worker.addEventListener('message', (e: MessageEvent<WorkerToMain>) => {
                 const msg = e.data;
@@ -2365,7 +2365,7 @@ export const OpticalTable: React.FC = () => {
                         rasterWorker.terminate();
                     }
                     if (ownsRenderingState) {
-                        setSolver3Rendering(false);
+                        setReverseTracerRendering(false);
                         setScanAccumProgress(firstFrameDone ? 1 : 0);
                     }
                     haptic.error();
@@ -2402,8 +2402,8 @@ export const OpticalTable: React.FC = () => {
                     if (passPaths.length > 0) {
                         const nextPaths = [...passPaths];
                         if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
-                        setSolver3Paths(nextPaths);
-                        solver3PathsRef.current = nextPaths;
+                        setReverseTracerPaths(nextPaths);
+                        reverseTracePathsRef.current = nextPaths;
                     }
                     if (passIndex === 0) finishFirstFrame();
                     passIndex++;
@@ -2422,7 +2422,7 @@ export const OpticalTable: React.FC = () => {
                 worker.terminate();
             }
             if (ownsRenderingState) {
-                setSolver3Rendering(false);
+                setReverseTracerRendering(false);
                 setScanAccumProgress(firstFrameDone ? 1 : 0);
             }
         };
@@ -2438,7 +2438,7 @@ export const OpticalTable: React.FC = () => {
 
         const beamSegs = beamSegsRef.current;
         const solverPaths = rays.length > 0 ? rays : solverPathsRef.current;
-        const s3Paths = solver3PathsRef.current;
+        const s3Paths = reverseTracePathsRef.current;
 
         // Combine forward and reverse ray paths for card intersection
         const allPaths = s3Paths.length > 0 ? [...solverPaths, ...s3Paths] : solverPaths;
@@ -2453,7 +2453,7 @@ export const OpticalTable: React.FC = () => {
 
             for (const path of allPaths) {
                 for (const ray of path) {
-                    if (!ray.isMainRay && !ray.sourceId?.startsWith('solver3_')) continue;
+                    if (!ray.isMainRay && !ray.sourceId?.startsWith('reverse_trace_')) continue;
 
 
                     const localOrigin = ray.origin.clone().sub(card.position).applyQuaternion(invQ);
@@ -2478,7 +2478,7 @@ export const OpticalTable: React.FC = () => {
 
             if (hitRays.length === 0 && card.hits.length > 0) {
                 for (const hit of card.hits) {
-                    if (hit.ray.isBackward || hit.ray.sourceId?.startsWith('solver3_')) continue;
+                    if (hit.ray.isBackward || hit.ray.sourceId?.startsWith('reverse_trace_')) continue;
                     hitRays.push({
                         ray: hit.ray,
                         hitLocalPoint: hit.localPoint.clone(),
@@ -2528,7 +2528,7 @@ export const OpticalTable: React.FC = () => {
                 }
 
                 if (!bestSeg || bestDist >= 50) {
-                    // Collect for merging below (common for Solver 3 backward-traced rays)
+                    // Collect for merging below (common for Reverse tracer backward-traced rays)
                     fallbackHits.push({ ray: mainHitRay, hitLocalPoint });
                     continue;
                 }
@@ -2592,7 +2592,7 @@ export const OpticalTable: React.FC = () => {
             }
             card.emissionPowerRef = emissionPower;
 
-            // Merge fallback hits (Solver 3 backward rays) into ONE averaged profile
+            // Merge fallback hits (Reverse tracer backward rays) into ONE averaged profile
             if (fallbackHits.length > 0) {
                 const n = fallbackHits.length;
                 let meanU = 0, meanV = 0, meanPhase = 0;
@@ -2659,11 +2659,11 @@ export const OpticalTable: React.FC = () => {
         }
         setCardImageTick(tick => tick + 1);
 
-    }, [components, rayConfig, solver3Paths, rays, setCardImageTick]);
+    }, [components, rayConfig, reverseTracePaths, rays, setCardImageTick]);
 
     const opticalPlaneRayPaths = useMemo(() => (
-        solver3Paths.length > 0 ? [...rays, ...solver3Paths] : rays
-    ), [rays, solver3Paths]);
+        reverseTracePaths.length > 0 ? [...rays, ...reverseTracePaths] : rays
+    ), [rays, reverseTracePaths]);
 
     return (
         <group>
@@ -2672,23 +2672,23 @@ export const OpticalTable: React.FC = () => {
                 ensures components appear in front of beam lines. */}
             <RayVisualizer
                 paths={rays}
-                hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+                hideAll={rayConfig.beamFieldEnabled && rayConfig.viewerMode === 'wave'}
                 minOpacity={rayConfig.minRayOpacity}
                 maxOpacity={rayConfig.maxRayOpacity}
                 colorByPolarization={rayConfig.colorByPolarization}
             />
-            {solver3Paths.length > 0 && (
+            {reverseTracePaths.length > 0 && (
                 <RayVisualizer
-                    paths={solver3Paths}
+                    paths={reverseTracePaths}
                     noBloom={true}
-                    hideAll={rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave'}
+                    hideAll={rayConfig.beamFieldEnabled && rayConfig.viewerMode === 'wave'}
                     minOpacity={rayConfig.minRayOpacity}
                     maxOpacity={rayConfig.maxRayOpacity}
                     colorByPolarization={rayConfig.colorByPolarization}
                 />
             )}
-            {rayConfig.solver2Enabled && rayConfig.viewerMode === 'wave' && (
-                <BundleWaveVisualizer beamSegments={beamSegments} reversePaths={solver3Paths} />
+            {rayConfig.beamFieldEnabled && rayConfig.viewerMode === 'wave' && (
+                <BundleWaveVisualizer beamSegments={beamSegments} reversePaths={reverseTracePaths} />
             )}
             {rayConfig.viewerMode === 'planes' && (
                 <OpticalPlaneVisualizer components={components} rayPaths={opticalPlaneRayPaths} />

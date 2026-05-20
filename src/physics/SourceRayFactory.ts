@@ -208,7 +208,7 @@ export function stablePreviewSourceRays(sourceRays: Ray[], maxNonMainPerSource: 
  * @param components  All scene components
  * @param rayCount    Number of sampled rays per source
  * @param mode        'full' = full source packet set; 'center' = center ray only
- * @returns           Array of source rays ready for Solver 1
+ * @returns           Array of source rays ready for forward tracer
  */
 export function createSourceRays(
     components: OpticalComponent[],
@@ -290,7 +290,7 @@ export function createSourceRays(
                 lampGroupIndex++;
                 // Each (wavelength, emitter point) sub-bundle gets its own
                 // sourceId. Beamlets that share a sourceId are internally
-                // coherent (modulo the L_c cutoff inside Solver 2); different
+                // coherent (modulo the L_c cutoff inside Beam field); different
                 // sub-bundles cannot interfere with one another.
                 const sourceId = effectiveSourcePoints > 1
                     ? `${lamp.id}_${wavelengthNm}nm_pt${sourcePointIndex}`

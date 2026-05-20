@@ -9,16 +9,16 @@ export class Camera extends OpticalComponent {
     sensorResX: number;
     sensorResY: number;
     sensorNA: number;           // Pixel acceptance cone NA (determines angular sampling spread)
-    samplesPerPixel: number;    // Monte Carlo samples per pixel for Solver 3
+    samplesPerPixel: number;    // Monte Carlo samples per pixel for Reverse tracer
     detectorLaunchModel: 'stochastic' | 'packet' = 'stochastic';
     fieldPixelPitchOverrideX: number = 0;  // Override for field pixel pitch (0 = auto)
     fieldPixelPitchOverrideY: number = 0;
 
-    // Solver 3 render results (stored on the camera that produced them)
-    solver3Image: Float32Array | null = null;
-    forwardImage: Float32Array | null = null;  // Forward excitation signal (Solver 2 beam at sensor)
-    solver3Paths: Ray[][] | null = null;
-    solver3Stale: boolean = true;
+    // Reverse tracer render results (stored on the camera that produced them)
+    reverseTraceImage: Float32Array | null = null;
+    forwardImage: Float32Array | null = null;  // Forward excitation signal (Beam field beam at sensor)
+    reverseTracePaths: Ray[][] | null = null;
+    reverseTraceStale: boolean = true;
     packetHits: TerminalPacketHit[] = [];
 
     // Scan accumulation results — per-frame images for scrubbing
@@ -46,15 +46,15 @@ export class Camera extends OpticalComponent {
         );
     }
 
-    /** Clear single-shot Solver 3 results (called when scene changes).
+    /** Clear single-shot Reverse tracer results (called when scene changes).
      *  Scan frame data is preserved — only cleared when a new scan starts. */
-    markSolver3Stale(): void {
-        this.solver3Stale = true;
+    markReverseTracerStale(): void {
+        this.reverseTraceStale = true;
         // If we have scan frames, keep the averaged image visible
         if (!this.scanFrames) {
-            this.solver3Image = null;
+            this.reverseTraceImage = null;
             this.forwardImage = null;
-            this.solver3Paths = null;
+            this.reverseTracePaths = null;
         }
     }
 

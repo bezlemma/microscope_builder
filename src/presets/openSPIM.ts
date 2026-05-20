@@ -221,7 +221,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
 
     // sCMOS Camera — positioned at tube lens back focal distance (~200mm).
     // Detection is via a 10×/0.3W objective: sensorNA = NA / mag = 0.03.
-    // Solver 3 pupil-aware sampling handles the off-axis pixels; this NA
+    // Reverse tracer pupil-aware sampling handles the off-axis pixels; this NA
     // controls the small residual jitter around the aimed direction.
     const cam = new Camera(13, 13, "sCMOS Camera");
     cam.setPosition(hole(C.F, 9).x + 1.63 - 200, hole(C.F, 9).y, 0);

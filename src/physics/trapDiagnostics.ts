@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { Sample, type ColloidTrapZone } from './components/Sample';
 import { TrappedBead } from './components/TrappedBead';
 import { Coherence } from './types';
-import { GaussianBeamSegment, Solver2 } from './Solver2';
+import { GaussianBeamSegment, BeamField } from './BeamField';
 
 const PASSIVE_TRAP_RATE_PER_FIELD_DROP = 0.15;
 const PASSIVE_TRAP_MIN_RELATIVE_CURVATURE = 1e-4;
@@ -76,7 +76,7 @@ export function estimateTrapFieldDiagnostics(
         const worldPoint = localOffset.clone().applyMatrix4(bead.localToWorld);
         let total = 0;
         for (const branch of trapBranches) {
-            total += Solver2.queryIntensity(worldPoint.x, worldPoint.y, worldPoint.z, branch)?.intensity ?? 0;
+            total += BeamField.queryIntensity(worldPoint.x, worldPoint.y, worldPoint.z, branch)?.intensity ?? 0;
         }
         return total;
     };

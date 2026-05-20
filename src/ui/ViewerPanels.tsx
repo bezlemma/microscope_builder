@@ -4,11 +4,11 @@
  * Multiple panels stack horizontally.
  * Each shows only the canvas — no properties, no delete, no readout text.
  *
- * Supports both Card beam profile viewers and Camera Solver 3 image viewers.
+ * Supports both Card beam profile viewers and Camera Reverse tracer image viewers.
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, solver3RenderingAtom, uiLockedAtom } from '../state/store';
+import { componentsAtom, pinnedViewersAtom, reverseTraceRenderingAtom, uiLockedAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
@@ -34,7 +34,7 @@ export const ViewerPanels: React.FC = () => {
     const isMobile = useIsMobile();
     const [components] = useAtom(componentsAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
-    const [isRendering] = useAtom(solver3RenderingAtom);
+    const [isRendering] = useAtom(reverseTraceRenderingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
     const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
 

@@ -1,7 +1,7 @@
 /**
- * Complex number arithmetic for Solver 2's legacy analytic beam helpers.
+ * Complex number arithmetic for Beam field's legacy analytic beam helpers.
  *
- * Shared module used by Solver2, and available to any future
+ * Shared module used by BeamField, and available to any future
  * physics code that needs complex math (e.g. Jones calculus).
  */
 

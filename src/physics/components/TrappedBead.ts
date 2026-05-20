@@ -3,7 +3,7 @@ import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay, Coherence } from '../types';
 import { OpticMesh } from '../OpticMesh';
 import { reflectVector } from '../math_solvers';
-import { Solver2, type GaussianBeamSegment } from '../Solver2';
+import { BeamField, type GaussianBeamSegment } from '../BeamField';
 
 /**
  * TrappedBead — a small dielectric microsphere whose position responds to the
@@ -16,14 +16,14 @@ import { Solver2, type GaussianBeamSegment } from '../Solver2';
  *
  * Per-frame physics, in two halves:
  *
- * 1. During Solver 1's forward trace, every ray that enters the bead causes a
+ * 1. During forward tracer's forward trace, every ray that enters the bead causes a
  *    single `interact()` call.  We trace the ray's full chord through the
  *    sphere (refract at entry → straight line inside → refract at exit) in
  *    one shot and add the photon-momentum change
  *
  *        Δp = (n_medium · I_ray / c) · (d_in − d_out)
  *
- *    to `forceAccumulator`.  Because Solver 1 calls `interact()` once per ray
+ *    to `forceAccumulator`.  Because forward tracer calls `interact()` once per ray
  *    serially, the accumulator is naturally collected without race conditions.
  *
  * 2. Once per frame (driven from OpticalTable's render loop), the integrator
@@ -88,7 +88,7 @@ export class TrappedBead extends OpticalComponent {
      *  show the collected return beam, but uncollected bead scatter does not
      *  turn into long bench-wide lines. */
     showOutgoingRayVisualization: boolean;
-    /** Scale for the beam-envelope gradient force accumulated from Solver 2
+    /** Scale for the beam-envelope gradient force accumulated from Beam field
      *  Gaussian segments. */
     gradientForceScale: number;
     /** Lateral capture radius around the optical focus. Outside this range the
@@ -218,7 +218,7 @@ export class TrappedBead extends OpticalComponent {
         if (disc < 0) return null;
         const sq = Math.sqrt(disc);
         // Two intersections; take the nearest in front of the ray.  Epsilon
-        // matches Solver 1's anti-self-intersection threshold.
+        // matches forward tracer's anti-self-intersection threshold.
         let t = -b - sq;
         if (t < 0.001) t = -b + sq;
         if (t < 0.001) return null;
@@ -416,7 +416,7 @@ export class TrappedBead extends OpticalComponent {
         const intensityAt = (x: number, y: number, z: number) => {
             let total = 0;
             for (const branch of trapBranches) {
-                total += Solver2.queryIntensity(x, y, z, branch)?.intensity ?? 0;
+                total += BeamField.queryIntensity(x, y, z, branch)?.intensity ?? 0;
             }
             return total;
         };
@@ -463,7 +463,7 @@ export class TrappedBead extends OpticalComponent {
 
     /**
      * Drive one integrator step.  Called from OpticalTable's per-frame loop
-     * AFTER Solver 1 finishes its trace, so `forceAccumulator` already holds
+     * AFTER forward tracer finishes its trace, so `forceAccumulator` already holds
      * every ray contribution for this frame.
      *
      * Overdamped Langevin in the world frame:

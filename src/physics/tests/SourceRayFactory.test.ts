@@ -7,8 +7,8 @@ import { PointSource2D } from '../components/PointSource2D';
 import { PointSource3D } from '../components/PointSource3D';
 import { StructuredSource } from '../components/StructuredSource';
 import { WedgeSource2D } from '../components/WedgeSource2D';
-import { Solver1 } from '../Solver1';
-import { segmentBeamEnvelopeRadii } from '../Solver2';
+import { ForwardTracer } from '../ForwardTracer';
+import { segmentBeamEnvelopeRadii } from '../BeamField';
 import { createSourceRays } from '../SourceRayFactory';
 import { Coherence, Ray } from '../types';
 
@@ -104,13 +104,13 @@ describe('SourceRayFactory', () => {
         expect(laser.power).toBe(7);
     });
 
-    test('Solver2 segments keep whole laser envelope separate from beamlet footprints', () => {
+    test('BeamField segments keep whole laser envelope separate from beamlet footprints', () => {
         const laser = new Laser('Wide laser');
         laser.beamRadius = 2;
         laser.pointAlong(1, 0, 0);
 
         const rays = createSourceRays([laser], 32, 'full');
-        const segments = new Solver1([laser]).traceWithBeamSegments(rays).beamSegments
+        const segments = new ForwardTracer([laser]).traceWithBeamSegments(rays).beamSegments
             .map(branch => branch[0])
             .filter(segment => segment !== undefined);
 
@@ -283,7 +283,7 @@ describe('SourceRayFactory', () => {
         expect(rays.reduce((sum, ray) => sum + ray.intensity, 0)).toBe(0);
     });
 
-    test('empty lamp spectrum fallback preserves Solver2 beam power', () => {
+    test('empty lamp spectrum fallback preserves BeamField beam power', () => {
         const lamp = new Lamp('Fallback lamp');
         lamp.power = 2;
         lamp.spectralWavelengths = [];
@@ -296,7 +296,7 @@ describe('SourceRayFactory', () => {
         ]));
         expect(rays.reduce((sum, ray) => sum + ray.intensity, 0)).toBeCloseTo(2, 6);
 
-        const beamSegments = new Solver1([lamp]).traceWithBeamSegments(rays).beamSegments;
+        const beamSegments = new ForwardTracer([lamp]).traceWithBeamSegments(rays).beamSegments;
         const totalBeamPower = beamSegments.reduce((sum, branch) => sum + (branch[0]?.power ?? 0), 0);
         expect(totalBeamPower).toBeCloseTo(2, 6);
     });

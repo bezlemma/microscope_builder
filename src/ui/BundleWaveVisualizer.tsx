@@ -8,7 +8,7 @@ import {
     Vector3,
 } from 'three';
 import { wavelengthToRGB as wavelengthToRGBnm } from '../physics/spectral';
-import { GaussianBeamSegment } from '../physics/Solver2';
+import { GaussianBeamSegment } from '../physics/BeamField';
 import { Coherence, Ray } from '../physics/types';
 import {
     buildBundleWavePaths,

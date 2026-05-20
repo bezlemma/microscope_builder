@@ -148,7 +148,7 @@ export function collectTerminalPacketHitsFromRayPaths(
         for (let rayIndex = 0; rayIndex < path.length; rayIndex++) {
             const ray = path[rayIndex];
             if (!ray || Math.max(ray.powerWeight ?? ray.intensity, 0) <= 0) continue;
-            if (ray.isBackward || ray.sourceId?.startsWith('solver3_')) continue;
+            if (ray.isBackward || ray.sourceId?.startsWith('reverse_trace_')) continue;
 
             const endWorld = raySegmentEnd(path, rayIndex);
             if (!endWorld) continue;

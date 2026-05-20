@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Laser } from '../components/Laser';
 import { Waveplate } from '../components/Waveplate';
 import { Card } from '../components/Card';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 import { createPolarizationZooScene } from '../../presets/polarizationZoo';
 
@@ -25,7 +25,7 @@ describe('Polarization Zoo preset', () => {
         expect(cards.every(card => card.opaque)).toBe(true);
 
         const sourceRays = createSourceRays(scene, 1, 'center');
-        const paths = new Solver1(scene).trace(sourceRays);
+        const paths = new ForwardTracer(scene).trace(sourceRays);
 
         expect(paths).toHaveLength(3);
         for (const path of paths) {

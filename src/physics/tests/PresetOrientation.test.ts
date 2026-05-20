@@ -5,7 +5,7 @@ import { createMZInterferometerScene } from '../../presets/mzInterferometer';
 import { Blocker } from '../components/Blocker';
 import { Card } from '../components/Card';
 import { OpticalWindow } from '../components/OpticalWindow';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 
 function forwardOf(component: { rotation: any }): Vector3 {
@@ -55,7 +55,7 @@ describe('Preset orientation regressions', () => {
         );
         expect(dump).toBeDefined();
 
-        const paths = new Solver1(scene).trace(createSourceRays(scene, 8, 'center'));
+        const paths = new ForwardTracer(scene).trace(createSourceRays(scene, 8, 'center'));
         const dumpHits = paths.filter(path => path.some(ray => ray.interactionComponentId === dump!.id));
 
         expect(dumpHits.length).toBeGreaterThanOrEqual(2);
@@ -72,14 +72,14 @@ describe('Preset orientation regressions', () => {
         expect(phaseTrim).toBeDefined();
         expect(detector).toBeDefined();
 
-        new Solver1(scene).trace(createSourceRays(scene, 1, 'center'));
+        new ForwardTracer(scene).trace(createSourceRays(scene, 1, 'center'));
         expect(detector!.hits).toHaveLength(2);
         const [baseA, baseB] = detector!.hits;
         const baseDeltaOpl = Math.abs(baseA.ray.opticalPathLength - baseB.ray.opticalPathLength);
 
         phaseTrim!.opticalPathOffsetMm = 532e-6 / 2;
         phaseTrim!.version++;
-        new Solver1(scene).trace(createSourceRays(scene, 1, 'center'));
+        new ForwardTracer(scene).trace(createSourceRays(scene, 1, 'center'));
 
         expect(detector!.hits).toHaveLength(2);
         const [a, b] = detector!.hits;

@@ -26,6 +26,23 @@ function hasFlag(flag) {
     return process.argv.includes(flag);
 }
 
+function positiveNumberArg(flag, fallback) {
+    const value = Number.parseFloat(argValue(flag, String(fallback)));
+    if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(`${flag} must be a positive number.`);
+    }
+    return value;
+}
+
+function meshSettingsFromArgs() {
+    const linearDeflectionMm = positiveNumberArg('--linear-deflection-mm', 0.05);
+    const angularDeflectionDeg = positiveNumberArg('--angular-deflection-deg', 10);
+    return {
+        linearDeflectionMm,
+        angularDeflectionRad: angularDeflectionDeg * Math.PI / 180,
+    };
+}
+
 function usage() {
     console.log(`Usage: bun scripts/catalog/build-objective-mechanical-assets.mjs [options]
 
@@ -42,6 +59,10 @@ Options:
   --manifest PATH     Generated TypeScript manifest path
   --freecad PATH      FreeCADCmd executable path
   --format FORMAT     Browser mesh format: wrl or stl (default: wrl)
+  --linear-deflection-mm N
+                      FreeCAD mesh linear deflection in mm (default: 0.05)
+  --angular-deflection-deg N
+                      FreeCAD mesh angular deflection in degrees (default: 10)
   --batch-size N      Number of STEP files to convert per FreeCAD process (default: 1)
   --checkpoint-every N
                       Rewrite the manifest after every N processed parts (default: 25)
@@ -122,12 +143,14 @@ async function downloadFile(url, destination, force) {
     writeFileSync(destination, bytes);
 }
 
-function writeFreeCadScript(scriptPath, jobs) {
+function writeFreeCadScript(scriptPath, jobs, meshSettings) {
     const jobsJson = JSON.stringify(jobs.map(job => ({
         sku: job.part.sku,
         stepPath: job.sourcePath.replace(/\\/g, '/'),
         outPath: job.assetPath.replace(/\\/g, '/'),
     })));
+    const linearDeflection = JSON.stringify(meshSettings.linearDeflectionMm);
+    const angularDeflection = JSON.stringify(meshSettings.angularDeflectionRad);
     writeFileSync(scriptPath, `
 import json
 import os
@@ -148,13 +171,6 @@ def export_objects_as_mesh(objects, out_path):
             flattened.append(obj)
     objects = flattened
 
-    try:
-        Mesh.export(objects, out_path)
-        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-            return
-    except Exception:
-        pass
-
     combined = Mesh.Mesh()
     descriptions = []
     for obj in objects:
@@ -169,8 +185,8 @@ def export_objects_as_mesh(objects, out_path):
             pass
         mesh = MeshPart.meshFromShape(
             Shape=shape,
-            LinearDeflection=0.05,
-            AngularDeflection=0.174533,
+            LinearDeflection=${linearDeflection},
+            AngularDeflection=${angularDeflection},
             Relative=False,
         )
         combined.addMesh(mesh)
@@ -208,9 +224,9 @@ for job in jobs:
 `);
 }
 
-function convertStepsToMeshes(freecadPath, jobs, scriptPath) {
+function convertStepsToMeshes(freecadPath, jobs, scriptPath, meshSettings) {
     if (jobs.length === 0) return { converted: new Map(), errors: new Map() };
-    writeFreeCadScript(scriptPath, jobs);
+    writeFreeCadScript(scriptPath, jobs, meshSettings);
     const result = spawnSync(freecadPath, [scriptPath], {
         cwd: ROOT,
         encoding: 'utf8',
@@ -220,7 +236,7 @@ function convertStepsToMeshes(freecadPath, jobs, scriptPath) {
     const converted = new Map(jobs.map(job => [job.part.id, false]));
     const errors = new Map();
     const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-    for (const line of output.split(/\r?\n/)) {
+    for (const line of output.split(/\r?\n|\r/)) {
         const parts = line.split('\t');
         if (parts[0] === 'FREECAD_OK' && parts[1]) {
             const job = jobs.find(candidate => candidate.part.sku === parts[1]);
@@ -304,6 +320,7 @@ async function main() {
     const failFast = hasFlag('--fail-fast');
     const freecad = findFreeCad(argValue('--freecad', ''));
     const format = outputFormat();
+    const meshSettings = meshSettingsFromArgs();
 
     if (!freecad) {
         throw new Error('FreeCADCmd was not found. Install FreeCAD or pass --freecad "C:\\\\Path\\\\To\\\\FreeCADCmd.exe".');
@@ -373,7 +390,7 @@ async function main() {
         let conversionErrors;
         try {
             const scriptPath = join(cacheDir, `mechanical-convert-${Date.now()}-${chunkIndex}.freecad.py`);
-            const result = convertStepsToMeshes(freecad, jobs, scriptPath);
+            const result = convertStepsToMeshes(freecad, jobs, scriptPath, meshSettings);
             converted = result.converted;
             conversionErrors = result.errors;
         } catch (error) {

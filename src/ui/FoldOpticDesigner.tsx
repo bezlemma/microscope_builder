@@ -5,7 +5,7 @@ import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { BeamSplitter } from '../physics/components/BeamSplitter';
 import { PolarizingBeamSplitter } from '../physics/components/PolarizingBeamSplitter';
 import { DichroicMirror } from '../physics/components/DichroicMirror';
-import { Solver1 } from '../physics/Solver1';
+import { ForwardTracer } from '../physics/ForwardTracer';
 import { SpectralProfile, type ProfilePreset } from '../physics/SpectralProfile';
 import { wavelengthToCSS } from '../physics/spectral';
 import { Coherence, createRay, defaultTransversePolarization } from '../physics/types';
@@ -156,7 +156,7 @@ function tracedPreviewSegments(
         });
     });
 
-    const paths = new Solver1([previewComponent]).trace(sources);
+    const paths = new ForwardTracer([previewComponent]).trace(sources);
     const segments = new Map<string, PreviewSegment>();
     const toSvg = (point: Vector3) => ({
         x: centerX + point.x * scale,

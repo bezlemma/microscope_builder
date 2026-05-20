@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Quaternion, Vector3 } from 'three';
 import { PrismLens } from '../components/PrismLens';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { Coherence, Ray } from '../types';
 
 function makeRay(y: number): Ray {
@@ -26,7 +26,7 @@ describe('Prism transport regression', () => {
         prism.rotation.copy(tiltQuat.multiply(baseQuat));
         prism.version++;
 
-        const solver = new Solver1([prism]);
+        const solver = new ForwardTracer([prism]);
         for (const y of [-44, -42, -40, -38, -36]) {
             const path = solver.trace([makeRay(y)])[0];
             const last = path[path.length - 1];

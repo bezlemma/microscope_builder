@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { Coherence, Ray } from '../../physics/types';
-import { GaussianBeamSegment } from '../../physics/Solver2';
+import { GaussianBeamSegment } from '../../physics/BeamField';
 import { createBeamExpanderScene } from '../../presets/beamExpander';
 import { createSourceRays } from '../../physics/SourceRayFactory';
-import { Solver1 } from '../../physics/Solver1';
+import { ForwardTracer } from '../../physics/ForwardTracer';
 import { buildBundleWavePaths, buildBundleWaveSegments, buildBundleWaveSegmentsFromRayPaths } from '../bundleView';
 import { buildWavePathRenderData, fieldVectorForSample } from '../bundleWaveRender';
 
@@ -227,7 +227,7 @@ describe('Bundle wave grouping', () => {
     test('beam expander preset narrows to the visible top-down waist', () => {
         const scene = createBeamExpanderScene();
         const sourceRays = createSourceRays(scene, 32, 'full');
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const beamSegments = solver.buildBeamSegments(solver.trace(sourceRays));
         const bundles = buildBundleWaveSegments(beamSegments);
         const freeSpaceBundles = bundles.filter(bundle => bundle.key.includes('|air|1|'));
@@ -364,12 +364,12 @@ describe('Bundle wave grouping', () => {
     test('groups reverse camera rays into detector-level bundles', () => {
         const reversePaths = [
             makeReversePath({
-                sourceId: 'solver3_cam_camA_px0_py0_s0_wl532',
+                sourceId: 'reverse_trace_cam_camA_px0_py0_s0_wl532',
                 origin: new Vector3(10, -1, 0),
                 nextOrigin: new Vector3(0, -1, 0),
             }),
             makeReversePath({
-                sourceId: 'solver3_cam_camA_px1_py0_s0_wl532',
+                sourceId: 'reverse_trace_cam_camA_px1_py0_s0_wl532',
                 origin: new Vector3(10, 1, 0),
                 nextOrigin: new Vector3(0, 1, 0),
             }),

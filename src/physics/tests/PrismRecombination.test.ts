@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 
 import { createPrismRecombinationScene } from '../../presets/prismRecombination';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 import type { Ray } from '../types';
 import { Card } from '../components/Card';
@@ -154,7 +154,7 @@ describe('Prism recombination preset', () => {
         const prisms = scene.filter((c): c is PrismLens => c instanceof PrismLens);
         const traceRayCount = 96;
         const sourceRays = createSourceRays(scene, traceRayCount, 'full');
-        const paths = new Solver1(scene).trace(sourceRays);
+        const paths = new ForwardTracer(scene).trace(sourceRays);
 
         const afterFirst = raysAfterOrderedPrisms(paths, [prisms[0].name]);
         const afterSecond = raysAfterOrderedPrisms(paths, [prisms[0].name, prisms[1].name]);

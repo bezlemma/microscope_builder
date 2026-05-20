@@ -6,8 +6,8 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { createConfocalScene } from '../../presets/confocal';
-import { Solver1 } from '../Solver1';
-import { Solver3 } from '../Solver3';
+import { ForwardTracer } from '../ForwardTracer';
+import { ReverseTracer } from '../ReverseTracer';
 import { Laser } from '../components/Laser';
 import { PMT } from '../components/PMT';
 import { Objective } from '../components/Objective';
@@ -20,7 +20,7 @@ describe('Confocal Beam Path Diagnostic', () => {
 
     test('Central ray traces through all components in correct order', () => {
         const { scene } = createConfocalScene();
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
 
         // Find the laser
         const laser = scene.find(c => c instanceof Laser) as Laser;
@@ -145,9 +145,9 @@ describe('Confocal Beam Path Diagnostic', () => {
         const renderAt = (xf: number, yf: number) => {
             setProperty(yTarget, yCh!.property, yCh!.from + (yCh!.to - yCh!.from) * yf);
             setProperty(xTarget, xCh!.property, xCh!.from + (xCh!.to - xCh!.from) * xf);
-            const solver1 = new Solver1(scene);
-            const beamSegs = solver1.traceWithBeamSegments(createSourceRays(scene, 8, 'full')).beamSegments;
-            return new Solver3(scene, beamSegs).renderPMTPixel(pmt);
+            const forwardTracer = new ForwardTracer(scene);
+            const beamSegs = forwardTracer.traceWithBeamSegments(createSourceRays(scene, 8, 'full')).beamSegments;
+            return new ReverseTracer(scene, beamSegs).renderPMTPixel(pmt);
         };
 
         const center = renderAt(0.5, 0.5);

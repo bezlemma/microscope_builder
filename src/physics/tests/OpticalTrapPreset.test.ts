@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Vector3 } from 'three';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 import { Laser } from '../components/Laser';
 import { Objective } from '../components/Objective';
@@ -34,7 +34,7 @@ function traceTrap(offset: [number, number, number]) {
     const scene = createOpticalTrapScene();
     const bead = findComponent(scene, TrappedBead);
     bead.specimenOffset.set(...offset);
-    const solver = new Solver1(scene);
+    const solver = new ForwardTracer(scene);
     const result = solver.traceWithBeamSegments(createSourceRays(scene, 144, 'full'));
     bead.accumulateGradientTrapForce(result.beamSegments);
     return { scene, bead, paths: result.paths, beamSegments: result.beamSegments };
@@ -105,7 +105,7 @@ describe('Optical Trap preset', () => {
     test('routes the trapping laser through the objective before the trapped colloid', () => {
         const scene = createOpticalTrapScene();
         const laser = findComponent(scene, Laser);
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 16, 'full'));
         const mainPath = paths.find(path => {
             if (path[0]?.sourceId !== laser.id || !path[0]?.isMainRay) return false;
@@ -187,7 +187,7 @@ describe('Optical Trap preset', () => {
         expect(dm2Dump!.thickness).toBeLessThanOrEqual(4);
         expect(qpd.backstopTransmission).toBe(0);
 
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 72, 'full'));
         const hitNames = new Set(
             paths.flatMap(path =>
@@ -205,7 +205,7 @@ describe('Optical Trap preset', () => {
     test('does not leave visually significant trap rays escaping across the table', () => {
         const scene = createOpticalTrapScene();
         const laser = findComponent(scene, Laser);
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 72, 'full'));
 
         const escaping = paths.filter(path => {
@@ -224,7 +224,7 @@ describe('Optical Trap preset', () => {
         const scene = createOpticalTrapScene();
         const laser = findComponent(scene, Laser);
         const bead = findComponent(scene, TrappedBead);
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 72, 'full'));
 
         const hiddenBeadBranches = paths.filter(path =>
@@ -245,7 +245,7 @@ describe('Optical Trap preset', () => {
         const scene = createOpticalTrapScene();
         const laser = findComponent(scene, Laser);
         const bead = findComponent(scene, TrappedBead);
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 72, 'full'));
 
         const visibleMainAfterBead = paths.some(path => {
@@ -270,7 +270,7 @@ describe('Optical Trap preset', () => {
         const scene = createOpticalTrapScene();
         const laser = findComponent(scene, Laser);
         const bead = findComponent(scene, TrappedBead);
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 144, 'full'));
 
         expect(visibleHitCount(scene, paths, 'DM2 Transmitted IR Dump')).toBeGreaterThan(20);
@@ -289,13 +289,13 @@ describe('Optical Trap preset', () => {
         const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
         expect(dump).toBeDefined();
 
-        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const beforePaths = new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         const beforeHits = visibleHitCount(scene, beforePaths, dump!.name);
 
         dump!.position.y += 0.2;
         dump!.version++;
 
-        const afterPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterPaths = new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         const afterHits = visibleHitCount(scene, afterPaths, dump!.name);
 
         expect(beforeHits).toBeGreaterThan(20);
@@ -310,13 +310,13 @@ describe('Optical Trap preset', () => {
         const dump = scene.find((c): c is Blocker => c instanceof Blocker && c.name === 'DM2 Transmitted IR Dump');
         expect(dump).toBeDefined();
 
-        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 72, 'full'));
+        const beforePaths = new ForwardTracer(scene).trace(createSourceRays(scene, 72, 'full'));
         const before = visibleNonDumpGeometry(scene, beforePaths, dump!.name);
 
         dump!.position.y += 0.2;
         dump!.version++;
 
-        const afterPaths = new Solver1(scene).trace(createSourceRays(scene, 72, 'full'));
+        const afterPaths = new ForwardTracer(scene).trace(createSourceRays(scene, 72, 'full'));
         const after = visibleNonDumpGeometry(scene, afterPaths, dump!.name);
 
         expect(after).toEqual(before);
@@ -330,18 +330,18 @@ describe('Optical Trap preset', () => {
         dump!.position.y += 45;
         dump!.version++;
 
-        const beforePaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const beforePaths = new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         expect(visibleHitCount(scene, beforePaths, dump!.name)).toBe(0);
         const before = visibleNonDumpGeometry(scene, beforePaths, dump!.name);
 
         dump!.position.x -= 20;
         dump!.version++;
-        const afterLeftPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterLeftPaths = new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         const afterLeft = visibleNonDumpGeometry(scene, afterLeftPaths, dump!.name);
 
         dump!.position.x += 40;
         dump!.version++;
-        const afterRightPaths = new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        const afterRightPaths = new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         const afterRight = visibleNonDumpGeometry(scene, afterRightPaths, dump!.name);
 
         expect(visibleHitCount(scene, afterLeftPaths, dump!.name)).toBe(0);
@@ -385,7 +385,7 @@ describe('Optical Trap preset', () => {
 
         const trace = () => traceStableTableOverlay(
             scene,
-            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+            () => new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full')),
         );
 
         const beforePaths = trace();
@@ -424,7 +424,7 @@ describe('Optical Trap preset', () => {
 
         traceStableTableOverlay(
             scene,
-            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+            () => new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full')),
         );
 
         expect(bead.specimenOffset.toArray()).toEqual([0.004, -0.003, 0.001]);
@@ -446,11 +446,11 @@ describe('Optical Trap preset', () => {
         const scene = createOpticalTrapScene();
         const qpd = findComponent(scene, QPD);
 
-        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
         const firstHits = qpd.totalHits;
         const firstSignal = qpd.signalSum;
 
-        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
 
         expect(firstHits).toBeGreaterThan(0);
         expect(qpd.totalHits).toBe(firstHits);
@@ -464,11 +464,11 @@ describe('Optical Trap preset', () => {
 
         traceStableTableOverlay(
             scene,
-            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+            () => new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full')),
         );
         expect(bead.forceAccumulator.length()).toBe(0);
 
-        new Solver1(scene).trace(createSourceRays(scene, 144, 'full'));
+        new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full'));
 
         expect(bead.forceAccumulator.length()).toBeGreaterThan(0);
     });

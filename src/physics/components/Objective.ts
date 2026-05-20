@@ -76,10 +76,10 @@ const AMS_AGY_ZEMAX_ENVELOPE: SnoutZemaxEnvelopeRuntime = {
  *   - apertureRadius = focalLength × NA (back-pupil radius in this air-space model)
  *   - frontRadius    = workingDistance × tan(asin(NA / immersionIndex))
  *
- * TODO: Solver 2 still uses the paraxial q-parameter transfer [[1,0],[-1/f,1]].
+ * TODO: Beam field still uses the paraxial q-parameter transfer [[1,0],[-1/f,1]].
  *       That remains separate from the surface-by-surface ray interaction here.
  *
- * TODO: Solver 3 (Imaging) — The immersion medium creates a region of
+ * TODO: Reverse tracer (Imaging) — The immersion medium creates a region of
  *       index `n` between the sample and the objective. Backward tracing
  *       from the image plane through the tube lens + objective should
  *       correctly map image points to sample points. The aplanatic

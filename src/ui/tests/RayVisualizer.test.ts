@@ -18,7 +18,7 @@ import {
 } from '../RayVisualizer';
 import { createOpticalTrapScene } from '../../presets/opticalTrap';
 import { createBeamExpanderScene } from '../../presets/beamExpander';
-import { Solver1 } from '../../physics/Solver1';
+import { ForwardTracer } from '../../physics/ForwardTracer';
 import { createSourceRays } from '../../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../../physics/tableTrace';
 import { Blocker } from '../../physics/components/Blocker';
@@ -119,7 +119,7 @@ describe('RayVisualizer coherent branch display', () => {
         for (const rayCount of [32, 85, 103, 116, 1000]) {
             const scene = createBeamExpanderScene();
             const sourceRays = createSourceRays(scene, rayCount, 'full');
-            const paths = new Solver1(scene).trace(sourceRays)
+            const paths = new ForwardTracer(scene).trace(sourceRays)
                 .filter(path => Math.abs((path[0]?.wavelength ?? 0) - 490e-9) < 1e-15);
             const firstSegments = paths.map(path => {
                 const shouldDrawOpenTail = isMainRayPath(path)
@@ -361,7 +361,7 @@ describe('RayVisualizer coherent branch display', () => {
 
         const paths = traceStableTableOverlay(
             scene,
-            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+            () => new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full')),
         );
         const collectedOffAxisPath = paths.find(path => {
             const last = path[path.length - 1];
@@ -387,7 +387,7 @@ describe('RayVisualizer coherent branch display', () => {
 
         const paths = traceStableTableOverlay(
             scene,
-            () => new Solver1(scene).trace(createSourceRays(scene, 144, 'full')),
+            () => new ForwardTracer(scene).trace(createSourceRays(scene, 144, 'full')),
         );
         const escapedOffAxisPaths = paths.filter(path => {
             const last = path[path.length - 1];

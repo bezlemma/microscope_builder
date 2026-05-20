@@ -105,14 +105,14 @@ describe("SphericalLens", () => {
      * Laser fires from (-80, 0, 0) in +X direction.
      */
     test("Condenser lens from Transmission Microscope: rays must refract, not stop or pass straight", () => {
-        const { Solver1 } = require("../Solver1");
+        const { ForwardTracer } = require("../ForwardTracer");
 
         // Exact condenser from TransmissionFluorescence.ts
         const condenser = new SphericalLens(1/25, 10, 4, "Condenser", 1e9, -12.5, 1.5);
         condenser.setPosition(-25, 0, 0);
         condenser.setRotation(0, Math.PI / 2, 0); // Optical axis → world +X
 
-        const solver = new Solver1([condenser]);
+        const solver = new ForwardTracer([condenser]);
 
         // Test rays at multiple Y-offsets within the aperture
         // All should pass through (TIR at extreme angles is clamped to grazing exit)
@@ -165,13 +165,13 @@ describe("SphericalLens", () => {
         expect(Math.abs(axial.dirY)).toBeLessThan(5e-3);
     });
 
-    test("Rotated Lens (via Solver1 pipeline): Off-axis ray should converge", () => {
+    test("Rotated Lens (via ForwardTracer pipeline): Off-axis ray should converge", () => {
         // This test exercises the FULL chkIntersection() -> interact() pipeline
         // with a rotated lens, which is the codepath where coordinate-space bugs appear.
         // Setup: Lens at origin, rotated 90° so optical axis aligns with world +X.
         // Fire a parallel ray offset in Y, verify it refracts inward (toward axis).
         
-        const { Solver1 } = require("../Solver1");
+        const { ForwardTracer } = require("../ForwardTracer");
         
         const rotatedLens = new SphericalLens(0.02, 10, 5, "RotatedLens");
         rotatedLens.setPosition(0, 0, 0);
@@ -188,7 +188,7 @@ describe("SphericalLens", () => {
             coherenceMode: Coherence.Incoherent
         };
         
-        const solver = new Solver1([rotatedLens]);
+        const solver = new ForwardTracer([rotatedLens]);
         const paths = solver.trace([ray]);
         const path = paths[0];
         

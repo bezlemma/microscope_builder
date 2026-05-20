@@ -113,7 +113,7 @@ export function createBrightfieldScene(): OpticalComponent[] {
     // Focal plane = 224.51 + 196.4 = 420.91 mm.
     camera.setPosition(420.91, 0, 0);
     camera.pointAlong(-1, 0, 0);  // faces -X (towards incoming beam)
-    // sensorNA = objective NA / magnification. Solver 3 pupil-aware sampling
+    // sensorNA = objective NA / magnification. Reverse tracer pupil-aware sampling
     // aims backward rays at the tube lens aperture, but a small extra cone
     // ensures every pixel still sees the full back pupil even at the sensor
     // edges so the Mickey silhouette develops across the whole frame.

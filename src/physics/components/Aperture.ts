@@ -9,7 +9,7 @@ import { Ray, HitRecord, InteractionResult, childRay } from '../types';
  * Rays hitting the ring body, outer barrel, or inner bore wall are absorbed.
  * Rays passing through the central opening continue unimpeded.
  *
- * For Solver2, the aperture radius is used for beam clipping checks.
+ * For BeamField, the aperture radius is used for beam clipping checks.
  */
 export class Aperture extends OpticalComponent {
     openingDiameter: number;  // mm — inner opening diameter (adjustable)

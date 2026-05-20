@@ -8,7 +8,7 @@ import { PMT } from '../physics/components/PMT';
 import { QPD } from '../physics/components/QPD';
 import { Sample } from '../physics/components/Sample';
 import { SampleChamber } from '../physics/components/SampleChamber';
-import type { GaussianBeamSegment } from '../physics/Solver2';
+import type { GaussianBeamSegment } from '../physics/BeamField';
 
 // Presets
 import { createTransFluorescenceScene } from '../presets/TransmissionFluorescence';
@@ -34,7 +34,7 @@ export interface RayConfig {
     rayCount: number; // Number of intermediate rays
     reversePathCount: number; // Backward paths retained for rod/wave visualization
     showFootprint: boolean;
-    solver2Enabled: boolean; // Beamlet/bundle data toggle
+    beamFieldEnabled: boolean; // Beamlet/bundle data toggle
     viewerMode: 'rods' | 'wave' | 'planes';
     minRayOpacity: number; // Minimum opacity for the dimmest visible rays (0..1)
     maxRayOpacity: number; // Maximum opacity for the brightest rays (0..1)
@@ -58,7 +58,7 @@ export const DEFAULT_RAY_CONFIG: RayConfig = {
     // referencing the field still load cleanly.
     reversePathCount: 1,
     showFootprint: false,
-    solver2Enabled: false,
+    beamFieldEnabled: false,
     viewerMode: 'rods',
     minRayOpacity: 0.33,
     maxRayOpacity: 1.0,
@@ -156,11 +156,11 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.PolarizationZoo, () => ({
         scene: createPolarizationZooScene(),
         description: POLARIZATION_ZOO_DESCRIPTION,
-        rayConfig: { solver2Enabled: true, viewerMode: 'wave' },
+        rayConfig: { beamFieldEnabled: true, viewerMode: 'wave' },
     })],
     [PresetName.MZInterferometer, () => ({
         scene: createMZInterferometerScene(),
-        rayConfig: { solver2Enabled: true, viewerMode: 'wave' },
+        rayConfig: { beamFieldEnabled: true, viewerMode: 'wave' },
     })],
     [PresetName.EpiFluorescence, () => ({ scene: createEpiFluorescenceScene() })],
     [PresetName.OpenSPIM, () => ({ scene: createOpenSPIMScene(), rayCount: 100 })],
@@ -255,7 +255,7 @@ export const loadPresetAtom = atom(
 
         // Phone-friendly defaults: every detector in the preset (Cameras,
         // scan-configured PMTs, and QPDs) starts with its viewer pinned so the image
-        // panel is visible immediately. We also kick off the Solver-3
+        // panel is visible immediately. We also kick off the reverse-tracer
         // backward-trace so the user sees a first image without having to
         // press Render.
         const cards = presetName === PresetName.MZInterferometer
@@ -285,10 +285,10 @@ export const loadPresetAtom = atom(
                 }
             }
             set(pinnedViewersAtom, pinned);
-            // Bumping the trigger atom causes OpticalTable's Solver-3 effect to
+            // Bumping the trigger atom causes OpticalTable's reverse-tracer effect to
             // run. It reads `components` at render time and will see the new scene.
             if (hasImageDetector) {
-                set(solver3RenderTriggerAtom, get(solver3RenderTriggerAtom) + 1);
+                set(reverseTraceRenderTriggerAtom, get(reverseTraceRenderTriggerAtom) + 1);
             }
         }
 
@@ -326,7 +326,7 @@ export const setBundleDataEnabledAtom = atom(
         const current = get(rayConfigAtom);
         set(rayConfigAtom, {
             ...current,
-            solver2Enabled: enabled,
+            beamFieldEnabled: enabled,
             viewerMode: enabled ? current.viewerMode : 'rods',
         });
     }
@@ -340,7 +340,7 @@ export const setVisualizationModeAtom = atom(
         set(rayConfigAtom, {
             ...current,
             rayCount: Math.max(current.rayCount, minRayCount),
-            solver2Enabled: mode === 'wave' ? true : (mode === 'planes' ? false : current.solver2Enabled),
+            beamFieldEnabled: mode === 'wave' ? true : (mode === 'planes' ? false : current.beamFieldEnabled),
             viewerMode: mode,
         });
     }
@@ -356,7 +356,7 @@ export const handleDraggingAtom = atom<boolean>(false);
 // 6. Pinned Viewer Panels — card IDs whose viewer panels are toggled on
 export const pinnedViewersAtom = atom<Set<string>>(new Set<string>());
 
-// 6a. Forward ray paths — published whenever Solver 1 traces.  Other viewers
+// 6a. Forward ray paths — published whenever forward tracer traces.  Other viewers
 // (e.g. SampleZoomViewer) read from this so they don't have to re-trace.
 export const forwardRaysAtom = atom<import('../physics/types').Ray[][]>([]);
 // High-churn ray payloads can be very large. Components that only need to
@@ -370,7 +370,7 @@ export const publishForwardRaysAtom = atom(
         set(forwardRaysRevisionAtom, revision => revision + 1);
     }
 );
-/** Reverse ray paths from Solver 3, published for SVG export and diagnostics. */
+/** Reverse ray paths from Reverse tracer, published for SVG export and diagnostics. */
 export const reverseRaysAtom = atom<import('../physics/types').Ray[][]>([]);
 export const reverseRaysRevisionAtom = atom<number>(0);
 export const publishReverseRaysAtom = atom(
@@ -381,7 +381,7 @@ export const publishReverseRaysAtom = atom(
     }
 );
 
-// Trap beam segments are published even when the global Solver-2 wave overlay
+// Trap beam segments are published even when the global beam-field wave overlay
 // is hidden, so the optical-trap sample viewer can show diagnostics using the
 // same cached field that drives bead/colloid dynamics.
 export const trapBeamSegmentsAtom = atom<GaussianBeamSegment[][]>([]);
@@ -394,16 +394,16 @@ export const publishTrapBeamSegmentsAtom = atom(
     }
 );
 
-// 7. Solver 3 render trigger — incrementing this value triggers a Solver 3 render
-export const solver3RenderTriggerAtom = atom<number>(0);
+// 7. Reverse tracer render trigger — incrementing this value triggers a Reverse tracer render
+export const reverseTraceRenderTriggerAtom = atom<number>(0);
 
-// 8. Solver 3 rendering status — true while render is in progress
-export const solver3RenderingAtom = atom<boolean>(false);
+// 8. Reverse tracer rendering status — true while render is in progress
+export const reverseTraceRenderingAtom = atom<boolean>(false);
 
 // 8.5. Drawn ray counts — number of forward and reverse rays currently visualized
 export const drawnRayCountsAtom = atom<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
 
-// 8.6. Camera image tick — bumped every time Solver-3 refreshes a camera's
+// 8.6. Camera image tick — bumped every time reverse-tracer refreshes a camera's
 // emission/excitation image. Lets CameraViewer re-render on each progressive
 // round without having to watch the mutated Camera instance directly.
 export const cameraImageTickAtom = atom<number>(0);
@@ -439,7 +439,7 @@ export const startTutorialStage2Atom = atom(
         set(publishReverseRaysAtom, []);
         set(publishTrapBeamSegmentsAtom, []);
         set(pinnedViewersAtom, new Set());
-        set(solver3RenderingAtom, false);
+        set(reverseTraceRenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(cameraImageTickAtom, tick => tick + 1);
     }
@@ -465,7 +465,7 @@ export const loadSceneAtom = atom(
         set(publishTrapBeamSegmentsAtom, []);
         set(animationPlayingAtom, false);
         set(animationSpeedAtom, 1.0);
-        set(solver3RenderingAtom, false);
+        set(reverseTraceRenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(activeZLevelAtom, 0);
         set(measurementAtom, { active: false, selectedId: null, measurements: [] });
@@ -536,7 +536,7 @@ export const undoAtom = atom(
         set(selectionAtom, []);
         set(animationPlayingAtom, snapshot.animationPlaying && restoredChannels.length > 0);
         set(animationSpeedAtom, snapshot.animationSpeed);
-        set(solver3RenderingAtom, false);
+        set(reverseTraceRenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(cameraImageTickAtom, tick => tick + 1);
     }
@@ -554,7 +554,7 @@ export const animationSpeedAtom = atom<number>(1.0);
 // ════════════════════════════════════════════════════════════
 //  12. Imaging progress + scan accumulation
 //  scanAccumProgressAtom is the shared 0..1 progress value for
-//  Solver 3 image renders, scan accumulation, and PMT raster scans.
+//  Reverse tracer image renders, scan accumulation, and PMT raster scans.
 //  scanAccumTriggerAtom starts the animated scan/raster jobs.
 // ════════════════════════════════════════════════════════════
 export const scanAccumTriggerAtom = atom<{ steps: number; trigger: number }>({ steps: 16, trigger: 0 });

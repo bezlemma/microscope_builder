@@ -146,7 +146,7 @@ describe('Confocal preset loading', () => {
         const store = createStore();
 
         store.set(loadPresetAtom, PresetName.MZInterferometer);
-        expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
+        expect(store.get(rayConfigAtom).beamFieldEnabled).toBe(true);
         expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
         const mzCards = store.get(componentsAtom).filter((component): component is Card => component instanceof Card);
         expect(mzCards.length).toBeGreaterThan(0);
@@ -154,7 +154,7 @@ describe('Confocal preset loading', () => {
         expect(mzCards.every(card => card.opaque)).toBe(true);
 
         store.set(loadPresetAtom, PresetName.PolarizationZoo);
-        expect(store.get(rayConfigAtom).solver2Enabled).toBe(true);
+        expect(store.get(rayConfigAtom).beamFieldEnabled).toBe(true);
         expect(store.get(rayConfigAtom).viewerMode).toBe('wave');
         const description = store.get(presetDescriptionAtom);
         expect(description).toContain('Jones-optics');

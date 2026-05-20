@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
 import { SphericalLens } from "../components/SphericalLens";
 import { Laser } from "../components/Laser";
-import { Solver1 } from "../Solver1";
+import { ForwardTracer } from "../ForwardTracer";
 import { Ray, Coherence } from "../types";
 
 describe("Ghost Intersection Debugging", () => {
@@ -10,7 +10,7 @@ describe("Ghost Intersection Debugging", () => {
         // 1. Setup Scene (matches beamExpander.ts)
         const scene = [];
 
-        // Laser (Not strictly needed for Solver1 if we provide rays manually, but good for context)
+        // Laser (Not strictly needed for ForwardTracer if we provide rays manually, but good for context)
         // NOTE: We do NOT add the Laser to the scene for the trace, 
         // because the manually created ray starts "at" the laser face.
         // If the Laser is in the scene, the ray might hit the laser housing immediately and die.
@@ -49,7 +49,7 @@ describe("Ghost Intersection Debugging", () => {
         };
 
         // 3. Trace
-        const solver = new Solver1(scene);
+        const solver = new ForwardTracer(scene);
         const paths = solver.trace([ray]);
         const path = paths[0];
 

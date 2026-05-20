@@ -1,0 +1,23 @@
+{
+  "applied": true,
+  "processed": 796,
+  "accepted": 796,
+  "rejected": 0,
+  "failed": 0,
+  "skipped": 20,
+  "originalBytes": 1879383245,
+  "candidateBytes": 605959659,
+  "savedBytes": 1273423586,
+  "options": {
+    "lossRatio": 0.01,
+    "minDeflectionMm": 0.08,
+    "maxDeflectionMm": 0.75,
+    "angularDeflectionDeg": 20
+  },
+  "failures": [],
+  "rejections": [],
+  "generatedAt": "2026-05-20T17:58:16.499Z",
+  "postPruneRemovedDeadAssets": 20,
+  "finalManifestEntries": 801,
+  "finalPublicCatalogMechanicalBytes": 656545000
+}

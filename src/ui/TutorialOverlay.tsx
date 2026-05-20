@@ -11,7 +11,7 @@ import {
     pinnedViewersAtom,
     PresetName,
     pushUndoAtom,
-    solver3RenderTriggerAtom,
+    reverseTraceRenderTriggerAtom,
     startTutorialStage2Atom,
     tutorialStageAtom,
 } from '../state/store';
@@ -176,7 +176,7 @@ const TutorialOverlayContent: React.FC = () => {
     const [, startTutorialStage2] = useAtom(startTutorialStage2Atom);
     const [, pushUndo] = useAtom(pushUndoAtom);
     const [, setPinnedViewers] = useAtom(pinnedViewersAtom);
-    const [, setSolver3Trigger] = useAtom(solver3RenderTriggerAtom);
+    const [, setReverseTracerTrigger] = useAtom(reverseTraceRenderTriggerAtom);
     const [, setCameraImageTick] = useAtom(cameraImageTickAtom);
     const snappedCameraIds = useRef<Set<string>>(new Set());
     const isTutorialPreset = activePreset === PresetName.Tutorial || activePreset === PresetName.Tutorial2;
@@ -245,7 +245,7 @@ const TutorialOverlayContent: React.FC = () => {
             return next;
         });
         setCameraImageTick(tick => tick + 1);
-        setSolver3Trigger(trigger => trigger + 1);
+        setReverseTracerTrigger(trigger => trigger + 1);
     }, [
         cameraReady,
         cameraTarget,
@@ -253,7 +253,7 @@ const TutorialOverlayContent: React.FC = () => {
         realTutorialCamera,
         setCameraImageTick,
         setPinnedViewers,
-        setSolver3Trigger,
+        setReverseTracerTrigger,
         tutorialStage,
     ]);
 

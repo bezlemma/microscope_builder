@@ -19,7 +19,7 @@ import {
     Float32BufferAttribute,
     Color,
 } from 'three';
-import { GaussianBeamSegment, segmentBeamRadii, segmentBeamRadiiAtFraction } from '../physics/Solver2';
+import { GaussianBeamSegment, segmentBeamRadii, segmentBeamRadiiAtFraction } from '../physics/BeamField';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 

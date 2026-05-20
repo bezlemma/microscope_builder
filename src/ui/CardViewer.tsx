@@ -83,7 +83,7 @@ function directCardHits(card: Card): DirectCardHit[] {
     return card.hits.filter(hit =>
         hit.ray.intensity > 0
         && !hit.ray.isBackward
-        && !hit.ray.sourceId?.startsWith('solver3_')
+        && !hit.ray.sourceId?.startsWith('reverse_trace_')
     );
 }
 

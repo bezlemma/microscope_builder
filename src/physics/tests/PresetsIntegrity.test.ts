@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
-import { Solver1 } from "../Solver1";
+import { ForwardTracer } from "../ForwardTracer";
 import { Laser } from "../components/Laser";
 import { Lamp } from "../components/Lamp";
 import { Ray } from "../types";
@@ -15,7 +15,7 @@ import { createConfocalScene } from "../../presets/confocal";
 function testPreset(name: string, createSceneFn: () => any[], targetClassNames: string[]) {
     test(`Preset ${name} successfully routes central rays to targets`, () => {
         const components = createSceneFn();
-        const solver = new Solver1(components);
+        const solver = new ForwardTracer(components);
 
         const sources = components.filter(c => c instanceof Laser || c instanceof Lamp);
         expect(sources.length).toBeGreaterThan(0);
@@ -80,20 +80,20 @@ describe("End-to-End Preset Integrity", () => {
 // A backward-facing camera or broken optical path will fail these.
 // ═══════════════════════════════════════════════════════════════════
 
-import { Solver3 } from "../Solver3";
+import { ReverseTracer } from "../ReverseTracer";
 import { Camera } from "../components/Camera";
 
-function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
-    test(`Solver 3: ${presetName} backward rays produce paths`, () => {
+function testReverseTracerPaths(presetName: string, createSceneFn: () => any[]) {
+    test(`Reverse tracer: ${presetName} backward rays produce paths`, () => {
         const components = createSceneFn();
         const cameras = components.filter((c: any) => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return; // Skip presets without cameras
 
-        // Generate forward ray paths via Solver 1
+        // Generate forward ray paths via forward tracer
         const sources = components.filter((c: any) => c instanceof Laser || c instanceof Lamp);
         expect(sources.length).toBeGreaterThan(0);
 
-        const solver1 = new Solver1(components);
+        const forwardTracer = new ForwardTracer(components);
         const allRayPaths: Ray[][] = [];
 
         for (const source of sources) {
@@ -115,14 +115,14 @@ function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
                 sourceId: source.id
             };
 
-            const paths = solver1.trace([ray]);
+            const paths = forwardTracer.trace([ray]);
             allRayPaths.push(...paths);
         }
 
-        // Build beam segments via the merged Solver 1 forward pipeline
-        const beamSegs = solver1.buildBeamSegments(allRayPaths);
+        // Build beam segments via the merged forward tracer forward pipeline
+        const beamSegs = forwardTracer.buildBeamSegments(allRayPaths);
 
-        // Run Solver 3 backward tracing with small resolution
+        // Run Reverse tracer backward tracing with small resolution
         for (const camera of cameras) {
             camera.sensorResX = 4;
             camera.sensorResY = 4;
@@ -130,8 +130,8 @@ function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
             // NA=0 → backward rays fire exactly along optical axis (deterministic, no random cone)
             camera.sensorNA = 0;
 
-            const solver3 = new Solver3(components, beamSegs);
-            const result = solver3.render(camera, 16);
+            const reverseTrace = new ReverseTracer(components, beamSegs);
+            const result = reverseTrace.render(camera, 16);
 
             console.log(`  [${presetName}] Camera "${camera.name}": ${result.paths.length} paths`);
             expect(result.paths.length).toBeGreaterThan(0);
@@ -139,14 +139,14 @@ function testSolver3Paths(presetName: string, createSceneFn: () => any[]) {
     });
 }
 
-describe("Solver 3 Preset Regression", () => {
-    testSolver3Paths("Brightfield", createBrightfieldScene);
-    testSolver3Paths("Epi-Fluorescence", createEpiFluorescenceScene);
-    testSolver3Paths("OpenSPIM", createOpenSPIMScene);
-    testSolver3Paths("Transmission Fluorescence", createTransFluorescenceScene);
+describe("Reverse tracer Preset Regression", () => {
+    testReverseTracerPaths("Brightfield", createBrightfieldScene);
+    testReverseTracerPaths("Epi-Fluorescence", createEpiFluorescenceScene);
+    testReverseTracerPaths("OpenSPIM", createOpenSPIMScene);
+    testReverseTracerPaths("Transmission Fluorescence", createTransFluorescenceScene);
 });
 
-describe("Solver 3: OpenSPIM Camera Facing", () => {
+describe("Reverse tracer: OpenSPIM Camera Facing", () => {
     test("OpenSPIM camera backward rays fire toward +X (detection arm)", () => {
         const components = createOpenSPIMScene();
         const camera = components.find((c: any) => c instanceof Camera) as Camera;

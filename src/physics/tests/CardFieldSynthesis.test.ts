@@ -15,7 +15,7 @@ import { Card } from '../components/Card';
 import { Camera } from '../components/Camera';
 import { SphericalLens } from '../components/SphericalLens';
 import { createSourceRays } from '../SourceRayFactory';
-import { Solver1 } from '../Solver1';
+import { ForwardTracer } from '../ForwardTracer';
 import { Coherence, createRay } from '../types';
 
 describe('terminal Gaussian Packet synthesis', () => {
@@ -65,7 +65,7 @@ describe('terminal Gaussian Packet synthesis', () => {
         card.opaque = true;
         const ray = packetRay(new Vector3(1, -2, -10), new Vector3(0, 0, 1));
 
-        new Solver1([card]).trace([ray]);
+        new ForwardTracer([card]).trace([ray]);
 
         expect(card.packetHits).toHaveLength(1);
         const hit = card.packetHits[0];
@@ -80,7 +80,7 @@ describe('terminal Gaussian Packet synthesis', () => {
     test('camera records terminal packet hits and clears them for each trace', () => {
         const camera = new Camera(10, 10, 'Packet camera');
         const ray = packetRay(new Vector3(0, 0, -10), new Vector3(0, 0, 1));
-        const solver = new Solver1([camera]);
+        const solver = new ForwardTracer([camera]);
 
         solver.trace([ray]);
 
@@ -121,7 +121,7 @@ describe('terminal Gaussian Packet synthesis', () => {
 
     test('reconstructs Epi expander relay focal planes that forward rods cross', () => {
         const components = createEpiFluorescenceScene();
-        const paths = new Solver1(components).trace(createSourceRays(components, 32, 'full'));
+        const paths = new ForwardTracer(components).trace(createSourceRays(components, 32, 'full'));
         const lenses = components.filter((component): component is SphericalLens =>
             component instanceof SphericalLens
         );
@@ -172,7 +172,7 @@ describe('terminal Gaussian Packet synthesis', () => {
     test('does not reconstruct terminal packet fields from reverse camera sampling rays', () => {
         const backwardRay = packetRay(new Vector3(0, 0, 0), new Vector3(0, 0, -1));
         backwardRay.isBackward = true;
-        backwardRay.sourceId = 'solver3_camera';
+        backwardRay.sourceId = 'reverse_trace_camera';
         backwardRay.interactionDistance = 10;
 
         const hits = collectTerminalPacketHitsFromRayPaths([[backwardRay]], {

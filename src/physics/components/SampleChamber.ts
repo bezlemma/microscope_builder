@@ -61,7 +61,7 @@ export class SampleChamber extends Sample {
     }
 
     // intersect() and computeChordLength() are inherited from Sample
-    // (Mickey SPHERE-based), so Solver3 backward rays interact with
+    // (Mickey SPHERE-based), so ReverseTracer backward rays interact with
     // the specimen geometry, not the transparent chamber walls.
 
     /** Refractive index of fill medium (water = 1.33, air = 1.0). */

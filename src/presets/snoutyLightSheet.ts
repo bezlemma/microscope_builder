@@ -247,7 +247,6 @@ export function createSnoutyLightSheetScene(): PresetResult {
 
     return {
         scene,
-        description: 'Appendix-style high-NA single-objective light sheet with Nikon O1/TL1, SL1/G1/SL2 scan relay, TL2/O2 remote refocus, O2* remote window, and a tilted ASI AMS-AGY v1 CAD-backed snouted O3.',
         channels: [],
         animationPlaying: false,
         animationSpeed: 1.0,
