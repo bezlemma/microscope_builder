@@ -24,7 +24,7 @@ type QpdTraceState = {
     momentYY: number;
 };
 
-export function resetTrapBeadAccumulators(components: OpticalComponent[]): void {
+function resetTrapBeadAccumulators(components: OpticalComponent[]): void {
     for (const component of components) {
         if (component instanceof TrappedBead) component.resetAccumulator();
     }

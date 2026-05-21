@@ -38,12 +38,15 @@ interface DragState {
     anchor: MeasurementPoint;
 }
 
+type MeasurementStateWithLegacyPoints = MeasurementState & { points?: MeasurementPoint[] };
+type SurfaceDimensions = Partial<Record<'diameter' | 'housingDiameter' | 'width' | 'height', number>>;
+
 function createMeasurement(point: MeasurementPoint): Measurement {
     return { id: `measurement-${nextMeasurementId++}`, points: [point] };
 }
 
 function normalizeMeasurementState(state: MeasurementState): MeasurementState {
-    const legacyPoints = (state as unknown as { points?: MeasurementPoint[] }).points;
+    const legacyPoints = (state as MeasurementStateWithLegacyPoints).points;
     const measurements = Array.isArray(state.measurements)
         ? state.measurements
         : Array.isArray(legacyPoints) && legacyPoints.length > 0
@@ -516,12 +519,7 @@ export const MeasureOverlay: React.FC = () => {
                 const zCandidates = uniqueSurfaceZs(min.z, max.z);
                 if (zCandidates.length === 0) return;
 
-                const sized = component as unknown as {
-                    diameter?: number;
-                    housingDiameter?: number;
-                    width?: number;
-                    height?: number;
-                };
+                const sized = component as SurfaceDimensions;
                 const apertureRadius = component.getApertureRadius();
                 const circularRadius = Math.max(
                     Number.isFinite(apertureRadius) ? apertureRadius : 0,

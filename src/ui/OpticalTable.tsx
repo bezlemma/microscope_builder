@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { Vector3 } from 'three';
 import { useAtom, useSetAtom } from 'jotai';
 import {
@@ -52,74 +52,10 @@ import { ReverseTracer } from '../physics/ReverseTracer';
 import { createSourceRays, stablePreviewSourceRays } from '../physics/SourceRayFactory';
 import { traceStableTableOverlay } from '../physics/tableTrace';
 import { deserializeScene, serializeScene } from '../state/ubzSerializer';
-import type { MainToWorker, WorkerToMain, SerializedPath } from '../physics/reverseTraceWorker';
-import type { SerializedBeamSegment, ForwardTraceWorkerRequest, ForwardTraceWorkerResponse } from '../physics/forwardTraceWorker';
-
-export function createDragPreviewSourceRays(
-    components: OpticalComponent[],
-    forwardRayCount: number,
-): Ray[] {
-    return createSourceRays(components, forwardRayCount, 'full');
-}
-
-/** Re-hydrate structured-cloned rays from the worker into real Vector3s. */
-function rehydratePath(path: SerializedPath): Ray[] {
-    return path.map(r => ({
-        origin: new Vector3(r.origin.x, r.origin.y, r.origin.z),
-        direction: new Vector3(r.direction.x, r.direction.y, r.direction.z),
-        wavelength: r.wavelength,
-        bandwidth: r.bandwidth,
-        intensity: r.intensity,
-        powerWeight: r.powerWeight,
-        currentMediumIndex: r.currentMediumIndex,
-        opticalPathLength: r.opticalPathLength,
-        phase: r.phase,
-        footprintRadius: r.footprintRadius,
-        coherenceMode: r.coherenceMode,
-        sourceId: r.sourceId,
-        sourceKind: r.sourceKind,
-        packetLaunchRigor: r.packetLaunchRigor,
-        sourcePosition: r.sourcePosition
-            ? new Vector3(r.sourcePosition.x, r.sourcePosition.y, r.sourcePosition.z)
-            : undefined,
-        isMainRay: r.isMainRay,
-        isBackward: r.isBackward,
-        polarization: r.polarization ?? { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
-        interactionDistance: r.interactionDistance,
-        interactionComponentId: r.interactionComponentId,
-        entryPoint: r.entryPoint
-            ? new Vector3(r.entryPoint.x, r.entryPoint.y, r.entryPoint.z)
-            : undefined,
-        internalPath: r.internalPath?.map(p => new Vector3(p.x, p.y, p.z)),
-        terminationPoint: r.terminationPoint
-            ? new Vector3(r.terminationPoint.x, r.terminationPoint.y, r.terminationPoint.z)
-            : undefined,
-        exitSurfaceId: r.exitSurfaceId,
-        suppressVisualization: r.suppressVisualization,
-        suppressOpenTail: r.suppressOpenTail,
-    }));
-}
-
-function rehydrateBeamSegments(branches: SerializedBeamSegment[][]): GaussianBeamSegment[][] {
-    return branches.map(branch => branch.map(segment => ({
-        start: new Vector3(segment.start.x, segment.start.y, segment.start.z),
-        end: new Vector3(segment.end.x, segment.end.y, segment.end.z),
-        direction: new Vector3(segment.direction.x, segment.direction.y, segment.direction.z),
-        wavelength: segment.wavelength,
-        bandwidth: segment.bandwidth,
-        power: segment.power,
-        sourceId: segment.sourceId,
-        bundleKey: segment.bundleKey,
-        footprintStart: segment.footprintStart,
-        footprintEnd: segment.footprintEnd,
-        beamRadiusStart: segment.beamRadiusStart,
-        beamRadiusEnd: segment.beamRadiusEnd,
-        polarization: segment.polarization,
-        opticalPathLength: segment.opticalPathLength,
-        refractiveIndex: segment.refractiveIndex,
-        coherenceMode: segment.coherenceMode,
-    })));
-}
+import type { MainToWorker, WorkerToMain } from '../physics/reverseTraceWorker';
+import type { ForwardTraceWorkerRequest, ForwardTraceWorkerResponse } from '../physics/forwardTraceWorker';
+import { deserializeRayPath } from '../physics/raySerialization';
+import { deserializeBeamSegments } from '../physics/beamSerialization';
 
 function resampleFloat32Image(
     src: Float32Array,
@@ -325,143 +261,6 @@ function animationTimelineSignature(components: OpticalComponent[], channels: An
     return `${channelKey}::${staticKey}`;
 }
 
-type BoundsSnapshot = {
-    id: string;
-    version: number;
-    center: Vector3;
-    radius: number;
-};
-
-export type ForwardTraceCache = {
-    componentIds: Set<string>;
-    componentBounds: Map<string, BoundsSnapshot>;
-    sourceKeys: string[];
-    pathsBySourceKey: Map<string, Ray[][]>;
-};
-
-export type ForwardTraceCacheResult = {
-    paths: Ray[][];
-    changedComponents: OpticalComponent[];
-};
-
-function componentBoundsSnapshot(component: OpticalComponent): BoundsSnapshot {
-    component.updateMatrices();
-    const min = component.bounds.min;
-    const max = component.bounds.max;
-    const center = new Vector3(
-        (min.x + max.x) * 0.5,
-        (min.y + max.y) * 0.5,
-        (min.z + max.z) * 0.5,
-    ).applyMatrix4(component.localToWorld);
-    const sx = max.x - min.x;
-    const sy = max.y - min.y;
-    const sz = max.z - min.z;
-    return {
-        id: component.id,
-        version: component.version,
-        center,
-        radius: 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz) + 0.25,
-    };
-}
-
-function componentBoundsById(components: OpticalComponent[]): Map<string, BoundsSnapshot> {
-    const bounds = new Map<string, BoundsSnapshot>();
-    for (const component of components) {
-        if (component.isGhost) continue;
-        bounds.set(component.id, componentBoundsSnapshot(component));
-    }
-    return bounds;
-}
-
-function sourceRayKey(ray: Ray, index: number): string {
-    const round = (value: number) => Math.round(value * 1e6) / 1e6;
-    return [
-        index,
-        ray.sourceId ?? '',
-        ray.isMainRay ? 1 : 0,
-        round(ray.origin.x),
-        round(ray.origin.y),
-        round(ray.origin.z),
-        round(ray.direction.x),
-        round(ray.direction.y),
-        round(ray.direction.z),
-        round(ray.wavelength),
-        round(ray.intensity),
-    ].join(':');
-}
-
-function sourceGroupKey(ray: Ray, fallbackKey: string): string {
-    return ray.sourceId ?? fallbackKey;
-}
-
-function sameSourceKeys(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) return false;
-    }
-    return true;
-}
-
-function sameComponentIds(ids: Set<string>, components: OpticalComponent[]): boolean {
-    let count = 0;
-    for (const component of components) {
-        if (component.isGhost) continue;
-        count++;
-        if (!ids.has(component.id)) return false;
-    }
-    return ids.size === count;
-}
-
-function sourceBelongsToChangedComponent(ray: Ray, changedIds: Set<string>): boolean {
-    const sourceId = ray.sourceId;
-    if (!sourceId) return false;
-    if (changedIds.has(sourceId)) return true;
-    for (const id of changedIds) {
-        if (sourceId.startsWith(`${id}_`)) return true;
-    }
-    return false;
-}
-
-function raySegmentTouchesBounds(ray: Ray, bounds: BoundsSnapshot): boolean {
-    const toCenter = bounds.center.clone().sub(ray.origin);
-    const dir = ray.direction.clone().normalize();
-    const projected = toCenter.dot(dir);
-    if (projected < -bounds.radius) return false;
-
-    const maxT = ray.interactionDistance;
-    if (maxT !== undefined && projected > maxT + bounds.radius) return false;
-
-    const closestT = maxT === undefined
-        ? Math.max(0, projected)
-        : Math.max(0, Math.min(maxT, projected));
-    const closest = ray.origin.clone().addScaledVector(dir, closestT);
-    return closest.distanceToSquared(bounds.center) <= bounds.radius * bounds.radius;
-}
-
-function pathAffectedByChangedComponents(
-    path: Ray[],
-    changedIds: Set<string>,
-    oldBounds: Map<string, BoundsSnapshot>,
-    newBounds: Map<string, BoundsSnapshot>,
-): boolean {
-    if (path.length === 0) return false;
-    if (sourceBelongsToChangedComponent(path[0], changedIds)) return true;
-
-    for (const ray of path) {
-        if (ray.interactionComponentId && changedIds.has(ray.interactionComponentId)) return true;
-
-        for (const id of changedIds) {
-            const current = newBounds.get(id);
-            if (current && raySegmentTouchesBounds(ray, current)) return true;
-
-            const previous = oldBounds.get(id);
-            if (previous && raySegmentTouchesBounds(ray, previous)) return true;
-        }
-    }
-
-    return false;
-}
-
 function pathsReachAnyComponent(paths: Ray[][], componentIds: Set<string>): boolean {
     if (componentIds.size === 0) return false;
     for (const path of paths) {
@@ -474,153 +273,7 @@ function pathsReachAnyComponent(paths: Ray[][], componentIds: Set<string>): bool
     return false;
 }
 
-function traceSourceBundles(solver: ForwardTracer, sourceRays: Ray[], sourceKeys: string[]): Map<string, Ray[][]> {
-    const pathsBySourceKey = new Map<string, Ray[][]>();
-    const keyBySourceRay = new Map<Ray, string>();
-    for (let i = 0; i < sourceRays.length; i++) {
-        keyBySourceRay.set(sourceRays[i], sourceKeys[i]);
-        pathsBySourceKey.set(sourceKeys[i], []);
-    }
-
-    for (const path of solver.trace(sourceRays)) {
-        const key = keyBySourceRay.get(path[0]);
-        if (!key) continue;
-        pathsBySourceKey.get(key)!.push(path);
-    }
-    return pathsBySourceKey;
-}
-
-function flattenSourceBundles(sourceKeys: string[], pathsBySourceKey: Map<string, Ray[][]>): Ray[][] {
-    const paths: Ray[][] = [];
-    for (const key of sourceKeys) {
-        const bundle = pathsBySourceKey.get(key);
-        if (bundle) paths.push(...bundle);
-    }
-    return paths;
-}
-
-export function traceForwardWithDependencyCache(
-    solver: ForwardTracer,
-    sourceRays: Ray[],
-    components: OpticalComponent[],
-    cacheRef: React.MutableRefObject<ForwardTraceCache | null>,
-): ForwardTraceCacheResult {
-    const sourceKeys = sourceRays.map(sourceRayKey);
-    const nextBounds = componentBoundsById(components);
-    const nextComponentIds = new Set(nextBounds.keys());
-    const cache = cacheRef.current;
-
-    const fullTrace = (
-        reportedChangedComponents = components.filter(component => !component.isGhost),
-    ) => {
-        const pathsBySourceKey = traceSourceBundles(solver, sourceRays, sourceKeys);
-        cacheRef.current = {
-            componentIds: nextComponentIds,
-            componentBounds: nextBounds,
-            sourceKeys,
-            pathsBySourceKey,
-        };
-        return {
-            paths: flattenSourceBundles(sourceKeys, pathsBySourceKey),
-            changedComponents: reportedChangedComponents,
-        };
-    };
-
-    if (!cache) return fullTrace();
-    if (!sameSourceKeys(cache.sourceKeys, sourceKeys)) return fullTrace();
-    if (!sameComponentIds(cache.componentIds, components)) return fullTrace();
-
-    const changedIds = new Set<string>();
-    for (const [id, bounds] of nextBounds) {
-        const previous = cache.componentBounds.get(id);
-        if (!previous || previous.version !== bounds.version) changedIds.add(id);
-    }
-
-    if (changedIds.size === 0) {
-        solver.trace(sourceRays);
-        return {
-            paths: flattenSourceBundles(sourceKeys, cache.pathsBySourceKey),
-            changedComponents: [],
-        };
-    }
-
-    const changedComponents = components.filter(component => changedIds.has(component.id));
-    const affectedSourceKeys = new Set<string>();
-    for (const key of sourceKeys) {
-        const bundle = cache.pathsBySourceKey.get(key);
-        if (!bundle) {
-            affectedSourceKeys.add(key);
-            continue;
-        }
-        if (bundle.some(path => pathAffectedByChangedComponents(path, changedIds, cache.componentBounds, nextBounds))) {
-            affectedSourceKeys.add(key);
-        }
-    }
-
-    if (affectedSourceKeys.size > 0) {
-        const affectedSourceGroups = new Set<string>();
-        for (let i = 0; i < sourceKeys.length; i++) {
-            const key = sourceKeys[i];
-            if (affectedSourceKeys.has(key)) {
-                affectedSourceGroups.add(sourceGroupKey(sourceRays[i], key));
-            }
-        }
-        for (let i = 0; i < sourceKeys.length; i++) {
-            const key = sourceKeys[i];
-            if (affectedSourceGroups.has(sourceGroupKey(sourceRays[i], key))) {
-                affectedSourceKeys.add(key);
-            }
-        }
-    }
-
-    if (affectedSourceKeys.size === 0) {
-        cacheRef.current = {
-            componentIds: nextComponentIds,
-            componentBounds: nextBounds,
-            sourceKeys,
-            pathsBySourceKey: cache.pathsBySourceKey,
-        };
-        solver.trace(sourceRays);
-        return {
-            paths: flattenSourceBundles(sourceKeys, cache.pathsBySourceKey),
-            changedComponents,
-        };
-    }
-
-    if (affectedSourceKeys.size > Math.ceil(sourceKeys.length * 0.85)) {
-        return fullTrace(changedComponents);
-    }
-
-    const pathsBySourceKey = new Map(cache.pathsBySourceKey);
-    const affectedSourceRays: Ray[] = [];
-    const affectedSourceKeyList: string[] = [];
-    for (let i = 0; i < sourceRays.length; i++) {
-        const key = sourceKeys[i];
-        if (!affectedSourceKeys.has(key)) continue;
-        affectedSourceRays.push(sourceRays[i]);
-        affectedSourceKeyList.push(key);
-    }
-    const retracedBundles = traceSourceBundles(solver, affectedSourceRays, affectedSourceKeyList);
-    for (const [key, bundle] of retracedBundles) {
-        pathsBySourceKey.set(key, bundle);
-    }
-
-    cacheRef.current = {
-        componentIds: nextComponentIds,
-        componentBounds: nextBounds,
-        sourceKeys,
-        pathsBySourceKey,
-    };
-
-    solver.trace(sourceRays);
-
-    return {
-        paths: flattenSourceBundles(sourceKeys, pathsBySourceKey),
-        changedComponents,
-    };
-}
-
-export function colloidTrapZonesBySample(
+function colloidTrapZonesBySample(
     components: OpticalComponent[],
     beamSegments: GaussianBeamSegment[][],
 ): Map<string, ColloidTrapZone[]> {
@@ -747,19 +400,19 @@ export const OpticalTable: React.FC = () => {
     const rays = solverPathsRef.current;
     const beamSegments = beamSegsRef.current;
     const reverseTracePaths = reverseTracePathsRef.current;
-    const setRays = (next: Ray[][]) => {
+    const setRays = useCallback((next: Ray[][]) => {
         solverPathsRef.current = next;
         setRayRenderRevision(revision => revision + 1);
-    };
-    const setBeamSegments = (next: GaussianBeamSegment[][]) => {
+    }, []);
+    const setBeamSegments = useCallback((next: GaussianBeamSegment[][]) => {
         beamSegsRef.current = next;
         setBeamRenderRevision(revision => revision + 1);
-    };
-    const setReverseTracerPaths = (next: Ray[][]) => {
+    }, []);
+    const setReverseTracerPaths = useCallback((next: Ray[][]) => {
         reverseTracePathsRef.current = next;
         setReverseRays(next);
         setReverseTracerRenderRevision(revision => revision + 1);
-    };
+    }, [setReverseRays]);
     const [reverseTraceTrigger, setReverseTracerTrigger] = useAtom(reverseTraceRenderTriggerAtom);
     const [isDragging] = useAtom(isDraggingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
@@ -769,10 +422,14 @@ export const OpticalTable: React.FC = () => {
     reverseTraceRenderingRef.current = reverseTraceRendering;
     const reverseTraceDragPendingRef = useRef(false);
     const [scanAccumConfig, setScanAccumConfig] = useAtom(scanAccumTriggerAtom);
+    const scanAccumConfigRef = useRef(scanAccumConfig);
+    scanAccumConfigRef.current = scanAccumConfig;
     const setScanAccumProgress = useSetAtom(scanAccumProgressAtom);
     const setDrawnRayCounts = useSetAtom(drawnRayCountsAtom);
     const setCameraImageTick = useSetAtom(cameraImageTickAtom);
     const haptic = useHaptic();
+    const hapticRef = useRef(haptic);
+    hapticRef.current = haptic;
 
     // Keep the UI counter of drawn rays in sync with what the RayVisualizer sees.
     // Each path corresponds to one source-emitted ray (it may bounce through
@@ -805,6 +462,8 @@ export const OpticalTable: React.FC = () => {
     const [animator] = useAtom(animatorAtom);
     const [animPlaying, setAnimPlaying] = useAtom(animationPlayingAtom);
     const [animSpeed] = useAtom(animationSpeedAtom);
+    const animatorRef = useRef(animator);
+    animatorRef.current = animator;
     const animStateRef = useRef({ playing: false, speed: 1.0 });
     animStateRef.current.playing = animPlaying;
     animStateRef.current.speed = animSpeed;
@@ -879,6 +538,8 @@ export const OpticalTable: React.FC = () => {
         lastTimelineReverseFrameRef.current = signature;
         setReverseTracerPaths(pathFrames);
     };
+    const publishTimelineReversePathsForClockRef = useRef(publishTimelineReversePathsForClock);
+    publishTimelineReversePathsForClockRef.current = publishTimelineReversePathsForClock;
 
     useFrame((_, delta) => {
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
@@ -1002,7 +663,6 @@ export const OpticalTable: React.FC = () => {
         };
     }, [animPlaying, animator, components, setScanAccumConfig]);
 
-    const forwardTraceCacheRef = useRef<ForwardTraceCache | null>(null);
     const forwardTraceWorkerRef = useRef<Worker | null>(null);
     const forwardTraceWorkerBusyRef = useRef(false);
     const forwardTraceWorkerPendingRef = useRef<PendingForwardTrace | null>(null);
@@ -1016,7 +676,18 @@ export const OpticalTable: React.FC = () => {
         : MIN_FORWARD_RAY_COUNT;
     const clampedForwardRayCount = Math.max(minForwardRayCount, Math.min(MAX_FORWARD_RAY_COUNT, rayConfig.rayCount));
     const clampedReversePathCount = Math.max(MIN_REVERSE_PATH_COUNT, Math.min(MAX_REVERSE_PATH_COUNT, rayConfig.reversePathCount));
-    const tracedForwardRayCount = clampedForwardRayCount;
+    const traceSettingsRef = useRef({
+        clampedForwardRayCount,
+        clampedReversePathCount,
+        isDragging,
+        beamFieldEnabled: rayConfig.beamFieldEnabled,
+    });
+    traceSettingsRef.current = {
+        clampedForwardRayCount,
+        clampedReversePathCount,
+        isDragging,
+        beamFieldEnabled: rayConfig.beamFieldEnabled,
+    };
 
     const pumpForwardTraceWorker = () => {
         if (forwardTraceWorkerBusyRef.current) return;
@@ -1050,13 +721,13 @@ export const OpticalTable: React.FC = () => {
                 }
                 if (msg.type === 'forward-done') {
                     if (job.applyPaths && msg.paths) {
-                        const calculatedPaths = msg.paths.map(rehydratePath);
+                        const calculatedPaths = msg.paths.map(deserializeRayPath);
                         setRays(calculatedPaths);
                         setForwardRays(calculatedPaths);
                         solverPathsRef.current = calculatedPaths;
                     }
                     if (job.applyBeamSegments && msg.beamSegments) {
-                        const nextBeamSegs = rehydrateBeamSegments(msg.beamSegments);
+                        const nextBeamSegs = deserializeBeamSegments(msg.beamSegments);
                         trapBeamSegsRef.current = nextBeamSegs;
                         setTrapBeamSegments(nextBeamSegs);
                         if (beamFieldEnabledRef.current) {
@@ -1100,6 +771,8 @@ export const OpticalTable: React.FC = () => {
             pumpForwardTraceWorker();
         }, 33);
     };
+    const scheduleForwardTraceWorkerTraceRef = useRef(scheduleForwardTraceWorkerTrace);
+    scheduleForwardTraceWorkerTraceRef.current = scheduleForwardTraceWorkerTrace;
 
     useEffect(() => () => {
         if (forwardTraceWorkerTimerRef.current !== null) {
@@ -1114,24 +787,9 @@ export const OpticalTable: React.FC = () => {
         forwardTraceWorkerJobIdRef.current++;
     }, []);
 
-    const traceCenterBeamSegments = (traceComponents: OpticalComponent[] = components) => {
-        syncManagedTrapBeads(traceComponents);
-        return traceStableTableOverlay(
-            traceComponents,
-            () => {
-                const forwardTracer = new ForwardTracer(traceComponents);
-                // We MUST trace a full ring cohort so ForwardTracer can estimate beam footprints geometrically.
-                // A single center ray results in an unfocused 0.1mm beam that misses the sample off-axis.
-                const sourceRays = stablePreviewSourceRays(
-                    createSourceRays(traceComponents, clampedForwardRayCount, 'full'),
-                    Math.max(8, Math.min(tracedForwardRayCount, 16)),
-                );
-                return forwardTracer.traceWithBeamSegments(sourceRays).beamSegments;
-            },
-        );
-    };
-
     useEffect(() => {
+        const components = componentsRef.current;
+        const settings = traceSettingsRef.current;
         if (!components) return;
         if (scanAccumActiveRef.current) return; // Skip during scan accumulation
 
@@ -1148,7 +806,7 @@ export const OpticalTable: React.FC = () => {
 
         if (isDragging) {
             syncManagedTrapBeads(components);
-            const makeForwardSourceRays = () => createDragPreviewSourceRays(components, clampedForwardRayCount);
+            const makeForwardSourceRays = () => createSourceRays(components, settings.clampedForwardRayCount, 'full');
             // Correctness during drag is more important than a clever partial
             // update. A cached/preview trace can mix sparse bead-scatter rays
             // with stale families and show physically impossible beam paths.
@@ -1160,7 +818,7 @@ export const OpticalTable: React.FC = () => {
                     return dragSolver.trace(makeForwardSourceRays());
                 },
             );
-            if (rayConfig.beamFieldEnabled) {
+            if (settings.beamFieldEnabled) {
                 try {
                     const previewBeamSegs = (dragSolver ?? new ForwardTracer(components)).buildBeamSegments(calculatedPaths);
                     setBeamSegments(previewBeamSegs);
@@ -1206,13 +864,9 @@ export const OpticalTable: React.FC = () => {
         // Correctness first: full traces avoid stale/new ray-family mixing from
         // the dependency cache, which was especially visible when dragging
         // blockers around optical-trap and tutorial scenes.
-        forwardTraceCacheRef.current = null;
         let solver: ForwardTracer | null = null;
         const makeForwardSourceRays = () => {
-            const fullSourceRays = createSourceRays(components, clampedForwardRayCount, 'full');
-            return tracedForwardRayCount < clampedForwardRayCount
-                ? stablePreviewSourceRays(fullSourceRays, tracedForwardRayCount)
-                : fullSourceRays;
+            return createSourceRays(components, settings.clampedForwardRayCount, 'full');
         };
         const calculatedPaths = traceStableTableOverlay(components, () => {
             solver = new ForwardTracer(components);
@@ -1224,7 +878,7 @@ export const OpticalTable: React.FC = () => {
         // Post-trace: detect beam splits via angle histogram population analysis.
         // Only needed when E&M solver is enabled — the branching path logic
         // relies on marginal rays to detect population splits.
-        if (rayConfig.beamFieldEnabled && !isDragging) {
+        if (settings.beamFieldEnabled && !isDragging) {
             const syntheticMainOptics = new Set(
                 components
                     .filter((component): component is PrismLens => component instanceof PrismLens)
@@ -1488,22 +1142,22 @@ export const OpticalTable: React.FC = () => {
             if (!pathsReachAnyComponent(calculatedPaths, trappedBeadIds)) {
                 trapBeamSegsRef.current = [];
                 setTrapBeamSegments([]);
-                if (rayConfig.beamFieldEnabled) {
+                if (settings.beamFieldEnabled) {
                     setBeamSegments([]);
                     beamSegsRef.current = [];
                 }
             } else {
-                scheduleForwardTraceWorkerTrace({
+                scheduleForwardTraceWorkerTraceRef.current({
                     sceneText: serializeScene(components),
-                    forwardRayCount: clampedForwardRayCount,
-                    sourceRayLimit: clampedForwardRayCount,
+                    forwardRayCount: settings.clampedForwardRayCount,
+                    sourceRayLimit: settings.clampedForwardRayCount,
                     applyPaths: false,
                     applyBeamSegments: true,
                     includeBeamSegments: true,
                     returnPaths: false,
                 });
             }
-        } else if (rayConfig.beamFieldEnabled || trappedBeads.length > 0) {
+        } else if (settings.beamFieldEnabled || trappedBeads.length > 0) {
             try {
                 beamSegs = (solver ?? new ForwardTracer(components)).buildBeamSegments(calculatedPaths);
             } catch (e) {
@@ -1511,7 +1165,7 @@ export const OpticalTable: React.FC = () => {
             }
             trapBeamSegsRef.current = trappedBeads.length > 0 ? beamSegs : [];
             setTrapBeamSegments(trappedBeads.length > 0 ? beamSegs : []);
-            const visibleBeamSegs = rayConfig.beamFieldEnabled ? beamSegs : [];
+            const visibleBeamSegs = settings.beamFieldEnabled ? beamSegs : [];
             setBeamSegments(visibleBeamSegs);
             beamSegsRef.current = visibleBeamSegs;
         } else {
@@ -1522,7 +1176,7 @@ export const OpticalTable: React.FC = () => {
         }
 
         if (sceneChanged) {
-            const animationDrivenChange = animPlaying && animator.channels.length > 0;
+            const animationDrivenChange = animStateRef.current.playing && animatorRef.current.channels.length > 0;
             let hasCamera = false;
             for (const comp of components) {
                 if (comp instanceof Camera) {
@@ -1534,13 +1188,13 @@ export const OpticalTable: React.FC = () => {
             // so camera images refresh without the user pressing "Render".
             // PMTs are handled by the dedicated raster effect below; the worker
             // path only produced preview rays and never published a PMT image.
-            if (hasCamera && (!reverseTraceRendering || isDragging) && !animationDrivenChange) {
+            if (hasCamera && (!reverseTraceRenderingRef.current || isDragging) && !animationDrivenChange) {
                 setReverseTracerTrigger(t => t + 1);
             }
             // Check if scan results should be invalidated:
             // Only clear if a NON-ANIMATED component changed since scan completed
             let shouldClearScan = false;
-            const animatedTargetIds = new Set(animator.channels.map(channel => channel.targetId));
+            const animatedTargetIds = new Set(animatorRef.current.channels.map(channel => channel.targetId));
             for (const comp of components) {
                 if (comp instanceof Camera && (comp as Camera).scanFrames) {
                     const cam = comp as Camera;
@@ -1570,7 +1224,6 @@ export const OpticalTable: React.FC = () => {
             }
         }
 
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isDragging, opticsFingerprint, rayConfig]);
 
     // ─── Effect 1b: Reverse tracer — backward trace from ALL detectors, run in a
@@ -1578,13 +1231,13 @@ export const OpticalTable: React.FC = () => {
     // accumulator with its own RNG; the main thread merges N parallel
     // snapshots per camera by computing a weighted running average across
     // workers (sum(emAvg_w · count_w) / sum(count_w) per pixel).
-    const REVERSE_TRACE_WORKER_COUNT = (() => {
+    const reverseTraceWorkerCount = useMemo(() => {
         if (typeof navigator === 'undefined') return 1;
         const cores = (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency ?? 2;
         // Keep CPU headroom for synchronous forward tracing and pointer/UI work.
         // Reverse tracing is progressive, so it can afford to use fewer cores.
         return Math.max(1, Math.min(4, cores - 2));
-    })();
+    }, []);
     const reverseTraceWorkersRef = useRef<Worker[]>([]);
     const reverseTraceJobIdRef = useRef<number>(0);
     const componentsRefForReverseTracer = useRef(components);
@@ -1599,7 +1252,7 @@ export const OpticalTable: React.FC = () => {
     const reverseTraceActiveWorkerCountRef = useRef(0);
     const lastReverseTracerInvalidationFingerprintRef = useRef(opticsFingerprint);
 
-    const cancelActiveReverseTracerJob = (clearPaths: boolean = false) => {
+    const cancelActiveReverseTracerJob = useCallback((clearPaths: boolean = false) => {
         const previousId = reverseTraceJobIdRef.current;
         if (previousId <= 0) return;
         for (const worker of reverseTraceWorkersRef.current) {
@@ -1619,7 +1272,7 @@ export const OpticalTable: React.FC = () => {
             setReverseTracerPaths([]);
             reverseTracePathsRef.current = [];
         }
-    };
+    }, [setReverseTracerPaths, setReverseTracerRendering, setScanAccumProgress]);
 
     useEffect(() => {
         if (lastReverseTracerInvalidationFingerprintRef.current === opticsFingerprint) return;
@@ -1629,13 +1282,12 @@ export const OpticalTable: React.FC = () => {
         if (scanAccumActiveRef.current) return;
         if (animPlaying && animator.channels.length > 0) return;
         cancelActiveReverseTracerJob(false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [opticsFingerprint, animPlaying, animator.channels.length]);
+    }, [animPlaying, animator.channels.length, cancelActiveReverseTracerJob, opticsFingerprint]);
 
     // Lazily spin up a pool of workers and wire the merging message handler.
     useEffect(() => {
         const workers: Worker[] = [];
-        for (let w = 0; w < REVERSE_TRACE_WORKER_COUNT; w++) {
+        for (let w = 0; w < reverseTraceWorkerCount; w++) {
             const worker = new Worker(new URL('../physics/reverseTraceWorker.ts', import.meta.url), {
                 type: 'module',
             });
@@ -1661,7 +1313,7 @@ export const OpticalTable: React.FC = () => {
                     // Stash this worker's latest snapshot for the camera.
                     let snapshots = workerAccumRef.current.get(msg.cameraId);
                     if (!snapshots) {
-                        snapshots = new Array(Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
+                        snapshots = new Array(Math.max(1, reverseTraceActiveWorkerCountRef.current || reverseTraceWorkerCount)).fill(null) as { em: Float32Array; ex: Float32Array; cnt: Uint32Array }[];
                         workerAccumRef.current.set(msg.cameraId, snapshots);
                     }
                     const dstX = camera.sensorResX;
@@ -1697,16 +1349,11 @@ export const OpticalTable: React.FC = () => {
                         mergedEx[i] /= c;
                     }
 
-                    // Visualisation paths still use only the latest worker's
-                    // sample (clipping by the sample plane below).  Across N
-                    // workers we'd grow the path reservoir N×; capping at the
-                    // global limit (500) keeps memory bounded.
-                    // ReverseTracer already returns sample-terminated visualization
-                    // paths. Re-clipping folded microscopes by projecting the
-                    // sample onto every segment can collapse the visible path
-                    // to a tiny stub near the camera.
+                    // Keep the worker-provided sample-terminated paths. Extra
+                    // clipping can collapse folded microscopes into a short
+                    // marker near the camera.
                     const clipped = msg.paths
-                        .map(rehydratePath)
+                        .map(deserializeRayPath)
                         .filter(path => path.length > 0);
                     camera.reverseTraceImage = merged;
                     camera.forwardImage = mergedEx;
@@ -1724,7 +1371,7 @@ export const OpticalTable: React.FC = () => {
                     }
                 } else if (msg.type === 'pmt-done') {
                     if (w !== 0) return; // PMTs only need to run once.
-                    const hydrated = msg.paths.map(rehydratePath);
+                    const hydrated = msg.paths.map(deserializeRayPath);
                     const currentPaths = reverseTracePathsRef.current || [];
                     const nextPaths = [...currentPaths, ...hydrated];
                     if (nextPaths.length > 500) nextPaths.splice(0, nextPaths.length - 500);
@@ -1733,13 +1380,13 @@ export const OpticalTable: React.FC = () => {
                 } else if (msg.type === 'complete') {
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = msg.raysTraced;
-                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)) {
+                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || reverseTraceWorkerCount)) {
                         setScanAccumProgress(1);
                         setReverseTracerRendering(false);
                         reverseTraceRenderingRef.current = false;
                         if (!isDraggingRef.current) {
-                            if (workerErrorRef.current) haptic.error();
-                            else haptic.done();
+                            if (workerErrorRef.current) hapticRef.current.error();
+                            else hapticRef.current.done();
                         }
                         if (isDraggingRef.current && reverseTraceDragPendingRef.current) {
                             reverseTraceDragPendingRef.current = false;
@@ -1751,11 +1398,11 @@ export const OpticalTable: React.FC = () => {
                     workerErrorRef.current = true;
                     workerCompleteRef.current.add(w);
                     workerRayCountsRef.current[w] = 0;
-                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || REVERSE_TRACE_WORKER_COUNT)) {
+                    if (workerCompleteRef.current.size >= Math.max(1, reverseTraceActiveWorkerCountRef.current || reverseTraceWorkerCount)) {
                         setReverseTracerRendering(false);
                         reverseTraceRenderingRef.current = false;
                         setScanAccumProgress(0);
-                        if (!isDraggingRef.current) haptic.error();
+                        if (!isDraggingRef.current) hapticRef.current.error();
                         if (isDraggingRef.current && reverseTraceDragPendingRef.current) {
                             reverseTraceDragPendingRef.current = false;
                             window.setTimeout(() => setReverseTracerTrigger(t => t + 1), 0);
@@ -1776,16 +1423,29 @@ export const OpticalTable: React.FC = () => {
             for (const w of workers) w.terminate();
             reverseTraceWorkersRef.current = [];
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [
+        reverseTraceWorkerCount,
+        setCameraImageTick,
+        setReverseTracerPaths,
+        setReverseTracerRendering,
+        setReverseTracerTrigger,
+        setScanAccumProgress,
+    ]);
 
     useEffect(() => {
         if (reverseTraceTrigger === 0) return; // Skip initial mount
-        if (!components) return;
+        const currentComponents = componentsRefForReverseTracer.current;
+        if (!currentComponents) return;
         const workers = reverseTraceWorkersRef.current;
         if (workers.length === 0) return;
+        const {
+            beamFieldEnabled,
+            clampedForwardRayCount,
+            clampedReversePathCount,
+            isDragging,
+        } = traceSettingsRef.current;
 
-        const cameras = components.filter(c => c instanceof Camera) as Camera[];
+        const cameras = currentComponents.filter(c => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return;
         const activeWorkerCount = isDragging ? 1 : workers.length;
         reverseTraceActiveWorkerCountRef.current = activeWorkerCount;
@@ -1810,7 +1470,7 @@ export const OpticalTable: React.FC = () => {
         reverseTraceRenderingRef.current = true;
         setScanAccumProgress(0);
 
-        const sceneText = serializeScene(components);
+        const sceneText = serializeScene(currentComponents);
         for (let w = 0; w < activeWorkerCount; w++) {
             const request: MainToWorker = {
                 type: 'render',
@@ -1820,7 +1480,7 @@ export const OpticalTable: React.FC = () => {
                 pmtIds: [],
                 reversePathCount: clampedReversePathCount,
                 forwardRayCount: clampedForwardRayCount,
-                beamFieldEnabled: rayConfig.beamFieldEnabled,
+                beamFieldEnabled,
                 previewMode: isDragging,
                 workerId: w,
                 workerCount: activeWorkerCount,
@@ -1833,8 +1493,7 @@ export const OpticalTable: React.FC = () => {
                 w.postMessage({ type: 'cancel', jobId: newJobId } as MainToWorker);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reverseTraceTrigger]);
+    }, [reverseTraceTrigger, setReverseTracerRendering, setScanAccumProgress]);
 
     // Dragging owns the CPU budget: during drag reverse-tracer is re-kicked in
     // one-worker preview mode; after release it reruns with the full pool.
@@ -1852,7 +1511,7 @@ export const OpticalTable: React.FC = () => {
         setReverseTracerTrigger(t => t + 1);
     }, [components, isDragging, setReverseTracerTrigger]);
 
-    // ─── Effect 1b': rod-count sliders (forward or reverse) also kick a fresh reverse trace ───
+    // Ray-count sliders also kick a fresh reverse trace.
     const reverseCountRef = useRef(clampedReversePathCount);
     const forwardCountRef = useRef(clampedForwardRayCount);
     useEffect(() => {
@@ -1866,8 +1525,7 @@ export const OpticalTable: React.FC = () => {
             if (comp instanceof Camera) comp.markReverseTracerStale();
         }
         setReverseTracerTrigger(t => t + 1);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [clampedReversePathCount, clampedForwardRayCount]);
+    }, [clampedForwardRayCount, clampedReversePathCount, components, setReverseTracerTrigger]);
 
     // ─── Effect 1b'': re-kick reverse-tracer when the page comes back to the
     // foreground.  Mobile browsers (especially iOS Safari) suspend Web
@@ -1907,26 +1565,27 @@ export const OpticalTable: React.FC = () => {
     // ─── Effect 1c: Scan Accumulation — batch Reverse tracer across scan cycle ───
     useEffect(() => {
         if (scanAccumConfig.trigger === 0) return; // Skip initial mount
-        if (!components) return;
+        const currentComponents = componentsRef.current;
+        const currentAnimator = animatorRef.current;
+        if (!currentComponents) return;
         if (scanAccumActiveRef.current || activeScanJobRef.current) return;
 
-        const cameras = components.filter(c => c instanceof Camera) as Camera[];
+        const cameras = currentComponents.filter(c => c instanceof Camera) as Camera[];
         if (cameras.length === 0) return;
-        if (animator.channels.length === 0) return;
+        if (currentAnimator.channels.length === 0) return;
 
-        // Gather all animation channels and their targets
         const byId = new Map<string, OpticalComponent>();
-        for (const c of components) byId.set(c.id, c);
+        for (const c of currentComponents) byId.set(c.id, c);
 
-        const activeChannels = animator.channels.filter(ch => {
+        const activeChannels = currentAnimator.channels.filter(ch => {
             return byId.has(ch.targetId);
         });
         if (activeChannels.length === 0) return;
-        const timelineSignature = animationTimelineSignature(components, activeChannels);
+        const timelineSignature = animationTimelineSignature(currentComponents, activeChannels);
         lastAnimationTimelineSignatureRef.current = timelineSignature;
         timelineBakePendingSignatureRef.current = timelineSignature;
 
-        const renderComponents = deserializeScene(serializeScene(components));
+        const renderComponents = deserializeScene(serializeScene(currentComponents));
         const renderById = new Map<string, OpticalComponent>();
         for (const component of renderComponents) renderById.set(component.id, component);
         const renderActiveChannels = activeChannels.filter(ch => renderById.has(ch.targetId));
@@ -1946,7 +1605,7 @@ export const OpticalTable: React.FC = () => {
             workerRayCountsRef.current = new Array(reverseTraceWorkersRef.current.length).fill(0);
         }
 
-        const steps = Math.max(1, Math.min(128, Math.floor(scanAccumConfig.steps)));
+        const steps = Math.max(1, Math.min(128, Math.floor(scanAccumConfigRef.current.steps)));
         const cycleMs = resolveAnimationCycleMs(activeChannels);
         const frameTimesMs = Array.from({ length: steps }, (_, step) =>
             timelineClockMsForStep(step, steps, cycleMs, activeChannels),
@@ -1983,10 +1642,8 @@ export const OpticalTable: React.FC = () => {
         // animating immediately instead of being stepped through the timeline.
         const savedValues = captureAnimatedValues(renderActiveChannels, renderById);
 
-        console.log(`[ScanAccum] Starting ${steps}-frame animation cycle (${activeChannels.length} channels, ${Math.round(cycleMs)} ms)`);
-
         job = createScheduledRenderJob({
-            animator,
+            animator: currentAnimator,
             savedValues,
             scanAccumActiveRef,
             animStateRef,
@@ -2041,7 +1698,7 @@ export const OpticalTable: React.FC = () => {
         const publishScanPlaybackFrame = (fallbackPaths: Ray[][]) => {
             if (animStateRef.current.playing) {
                 lastTimelineReverseFrameRef.current = '';
-                publishTimelineReversePathsForClock(animator.clockMs, componentsRef.current);
+                publishTimelineReversePathsForClockRef.current(currentAnimator.clockMs, componentsRef.current);
                 return;
             }
             setReverseTracerPaths(fallbackPaths);
@@ -2109,31 +1766,37 @@ export const OpticalTable: React.FC = () => {
 
                 publishScanPlaybackFrame(visiblePaths);
                 setCameraImageTick(t => t + 1);
-                console.log(`[ScanAccum] Done. ${steps} timeline frames stored for ${cameraStates.length} camera(s).`);
                 timelineBakePendingSignatureRef.current = '';
                 job.finish(1);
                 if (activeScanJobRef.current === job) {
                     activeScanJobRef.current = null;
                 }
                 for (const state of cameraStates) {
-                    state.camera.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+                    state.camera.scanVersionSnapshot = new Map(currentComponents.map(c => [c.id, c.version]));
                 }
-                timelineReadySignatureRef.current = animationTimelineSignature(components, activeChannels);
+                timelineReadySignatureRef.current = animationTimelineSignature(currentComponents, activeChannels);
                 return;
             }
 
             const step = scanStepOrder[orderIndex];
             job.advanceStep(orderIndex);
             const clockMs = frameTimesMs[step] ?? 0;
-            animator.evaluateAt(clockMs, renderComponents);
+            currentAnimator.evaluateAt(clockMs, renderComponents);
 
             try {
-                // ── forward tracer: Forward trace ──
-                const beamSegs = traceCenterBeamSegments(renderComponents);
+                syncManagedTrapBeads(renderComponents);
+                const sourceRayLimit = Math.max(8, Math.min(traceSettingsRef.current.clampedForwardRayCount, 16));
+                const beamSegs = traceStableTableOverlay(renderComponents, () => {
+                    const forwardTracer = new ForwardTracer(renderComponents);
+                    const sourceRays = stablePreviewSourceRays(
+                        createSourceRays(renderComponents, traceSettingsRef.current.clampedForwardRayCount, 'full'),
+                        sourceRayLimit,
+                    );
+                    return forwardTracer.traceWithBeamSegments(sourceRays).beamSegments;
+                });
 
-                // ── Reverse tracer: Backward render ──
                 const reverseTrace = new ReverseTracer(renderComponents, beamSegs);
-                const scanVisualizationPathCount = Math.max(16, Math.min(clampedReversePathCount, 64));
+                const scanVisualizationPathCount = Math.max(16, Math.min(traceSettingsRef.current.clampedReversePathCount, 64));
                 for (const state of cameraStates) {
                     const result = reverseTrace.render(state.renderCamera, scanVisualizationPathCount);
                     const frameEm = new Float32Array(state.pixelCount);
@@ -2186,8 +1849,14 @@ export const OpticalTable: React.FC = () => {
             }
         };
 
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scanAccumConfig.trigger]);
+    }, [
+        scanAccumConfig.trigger,
+        setAnimPlaying,
+        setCameraImageTick,
+        setReverseTracerPaths,
+        setReverseTracerRendering,
+        setScanAccumProgress,
+    ]);
 
     const pmtRasterRequestKey = useMemo(() => {
         if (!components) return '';
@@ -2220,17 +1889,24 @@ export const OpticalTable: React.FC = () => {
     // ─── Effect 1d: PMT Raster Scan ───────────────────────────────────────
     useEffect(() => {
         if (!pmtRasterRequestKey) return;
-        if (!components) return;
+        const currentComponents = componentsRef.current;
+        const currentAnimator = animatorRef.current;
+        if (!currentComponents) return;
+        const {
+            clampedForwardRayCount,
+            clampedReversePathCount,
+            isDragging,
+        } = traceSettingsRef.current;
 
-        const plans = resolvePMTRasterPlans(components, animator.channels);
+        const plans = resolvePMTRasterPlans(currentComponents, currentAnimator.channels);
         if (plans.length === 0) return;
 
         let cancelled = false;
         const timeoutIds: number[] = [];
-        const ownsRenderingState = !components.some(c => c instanceof Camera);
-        const workerCount = isDragging ? 1 : REVERSE_TRACE_WORKER_COUNT;
+        const ownsRenderingState = !currentComponents.some(c => c instanceof Camera);
+        const workerCount = isDragging ? 1 : reverseTraceWorkerCount;
         const rasterWorkers: Worker[] = [];
-        const serializableComponents = components.filter(c =>
+        const serializableComponents = currentComponents.filter(c =>
             !c.isSubComponent || (c instanceof TrappedBead && Boolean(c.parentSampleId))
         );
         const sceneText = serializeScene(serializableComponents);
@@ -2274,7 +1950,6 @@ export const OpticalTable: React.FC = () => {
             const resX = pmt.scanResX;
             const resY = pmt.scanResY;
             const totalPixels = resX * resY;
-            console.log(`[PMT Raster] Starting worker-striped continuous ${resX}×${resY} raster accumulation for ${pmt.name} (${totalPixels} pixels/frame, ${workerCount} workers)`);
 
             pmt.clearScan();
             rasterStates.set(pmt.id, {
@@ -2294,7 +1969,7 @@ export const OpticalTable: React.FC = () => {
                 state.pmt.scanImage = state.displayEmission;
                 state.pmt.scanExcitationImage = state.displayExcitation;
                 state.pmt.scanStale = false;
-                state.pmt.scanVersionSnapshot = new Map(components.map(c => [c.id, c.version]));
+                state.pmt.scanVersionSnapshot = new Map(currentComponents.map(c => [c.id, c.version]));
             }
             setCameraImageTick(t => t + 1);
         };
@@ -2302,14 +1977,13 @@ export const OpticalTable: React.FC = () => {
         const finishFirstFrame = () => {
             if (firstFrameDone) return;
             firstFrameDone = true;
-            console.log('[PMT Raster] First worker-striped frame complete. Continuing accumulation.');
             if (ownsRenderingState) {
                 setReverseTracerRendering(false);
                 setScanAccumProgress(1);
             }
             if (!completionHapticSent) {
                 completionHapticSent = true;
-                haptic.done();
+                hapticRef.current.done();
             }
         };
 
@@ -2368,7 +2042,7 @@ export const OpticalTable: React.FC = () => {
                         setReverseTracerRendering(false);
                         setScanAccumProgress(firstFrameDone ? 1 : 0);
                     }
-                    haptic.error();
+                    hapticRef.current.error();
                     return;
                 }
                 if (msg.type !== 'pmt-raster-done') return;
@@ -2393,7 +2067,7 @@ export const OpticalTable: React.FC = () => {
 
                 for (const serializedPath of msg.paths) {
                     if (passPaths.length >= clampedReversePathCount) break;
-                    passPaths.push(rehydratePath(serializedPath));
+                    passPaths.push(deserializeRayPath(serializedPath));
                 }
 
                 passMessagesDone++;
@@ -2427,8 +2101,16 @@ export const OpticalTable: React.FC = () => {
             }
         };
 
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pmtRasterRequestKey, scanAccumConfig.trigger, isDragging]);
+    }, [
+        isDragging,
+        pmtRasterRequestKey,
+        reverseTraceWorkerCount,
+        scanAccumConfig.trigger,
+        setCameraImageTick,
+        setReverseTracerPaths,
+        setReverseTracerRendering,
+        setScanAccumProgress,
+    ]);
 
     // ─── Effect 2: Cheap card beam profile sampling ───
     // Runs whenever ANY component changes (including card drags).
@@ -2516,7 +2198,7 @@ export const OpticalTable: React.FC = () => {
 
 
                             const dirDot = Math.abs(seg.direction.dot(mainHitRay.direction.clone().normalize()));
-                            if (dirDot < 0.5) continue; // Wrong beam branch
+                            if (dirDot < 0.5) continue;
 
                             if (perpDist < bestDist) {
                                 bestDist = perpDist;

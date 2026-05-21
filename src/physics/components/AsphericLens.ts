@@ -337,10 +337,9 @@ export class AsphericLens extends OpticalComponent {
                     return new Vector3(0, 0, onFront ? -1 : 1);
                 }
 
-                // Implicit form F = z − apex − sag(r); ∇F = (−x/r·dz, −y/r·dz, 1).
+                // Implicit form F = z - apex - sag(r); grad F = (-x/r*dz, -y/r*dz, 1).
                 // For the front surface flip so the normal points toward −Z (out of the
-                // lens). OpticMesh.interact further reorients against the ray, so the
-                // sign here is mostly cosmetic, but staying consistent helps debugging.
+                // lens). OpticMesh.interact further reorients against the ray.
                 const inv_r = 1 / r;
                 if (onFront) {
                     return new Vector3(v.x * inv_r * dz, v.y * inv_r * dz, -1).normalize();

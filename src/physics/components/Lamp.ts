@@ -5,24 +5,15 @@ import { Vector3, Box3 } from 'three';
 import { wavelengthToRGB } from '../spectral';
 
 /**
- * Convert wavelength (nm) to linear RGB for white-balance computation.
- * Delegates to the centralized spectral.ts implementation.
- */
-function wavelengthToRGBLinear(wlNm: number): { r: number; g: number; b: number } {
-    const { r, g, b } = wavelengthToRGB(wlNm);
-    return { r, g, b };
-}
-
-/**
  * Compute the optimal per-ray opacity for additive blending.
  * When all visible rays overlap with this opacity, their additive RGB sums
  * should each reach ~1.0, producing white. Formula: opacity = 1 / min(sumR, sumG, sumB).
  * The weakest channel barely saturates; stronger channels clamp.
  */
-export function computeAdditiveOpacity(wavelengthsNm: number[]): number {
+function computeAdditiveOpacity(wavelengthsNm: number[]): number {
     let sumR = 0, sumG = 0, sumB = 0;
     for (const wl of wavelengthsNm) {
-        const c = wavelengthToRGBLinear(wl);
+        const c = wavelengthToRGB(wl);
         sumR += c.r; sumG += c.g; sumB += c.b;
     }
     // If any channel has no contribution, fall back to 0.5

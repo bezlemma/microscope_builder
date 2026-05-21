@@ -1238,14 +1238,37 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
 //  FILE I/O HELPERS
 // ════════════════════════════════════════════════════════════
 
+interface UbzFilePickerWindow extends Window {
+    showSaveFilePicker?: (options: {
+        suggestedName?: string;
+        types?: Array<{
+            description: string;
+            accept: Record<string, string[]>;
+        }>;
+    }) => Promise<{
+        createWritable: () => Promise<{
+            write: (data: string) => Promise<void>;
+            close: () => Promise<void>;
+        }>;
+    }>;
+}
+
+function isAbortError(error: unknown): boolean {
+    return typeof error === 'object'
+        && error !== null
+        && 'name' in error
+        && error.name === 'AbortError';
+}
+
 /** Save scene to a .ubz file using native Save dialog */
 export async function downloadUbz(components: OpticalComponent[], filename: string = 'scene.ubz') {
     const text = serializeScene(components);
 
     // Use File System Access API if available (native save dialog)
-    if ('showSaveFilePicker' in window) {
+    const filePickerWindow = window as UbzFilePickerWindow;
+    if (filePickerWindow.showSaveFilePicker) {
         try {
-            const handle = await (window as any).showSaveFilePicker({
+            const handle = await filePickerWindow.showSaveFilePicker({
                 suggestedName: filename,
                 types: [{
                     description: 'Microscope Builder Scene',
@@ -1256,8 +1279,8 @@ export async function downloadUbz(components: OpticalComponent[], filename: stri
             await writable.write(text);
             await writable.close();
             return;
-        } catch (e: any) {
-            if (e.name === 'AbortError') return; // User cancelled
+        } catch (e: unknown) {
+            if (isAbortError(e)) return; // User cancelled
             console.warn('Save dialog failed, falling back to download:', e);
         }
     }

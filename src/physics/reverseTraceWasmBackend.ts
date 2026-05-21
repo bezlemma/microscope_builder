@@ -9,7 +9,7 @@ import {
     PACKED_INTERACTION_OUTPUT_STRIDE,
     REVERSE_TRACE_KERNEL_ABI_VERSION,
     REVERSE_TRACE_KERNEL_STATUS_OK,
-    REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED,
+    REVERSE_TRACE_KERNEL_STATUS_UNSUPPORTED_ABI,
 } from './kernelPackets';
 import { createPackedFirstHitHintsFromWasm } from './reverseTraceFirstHitHints';
 import { createPackedAnalyticHitsFromWasm } from './reverseTraceAnalyticNarrowPhase';
@@ -32,7 +32,6 @@ export interface ReverseTracerWasmExports {
     reverse_trace_beam_segment_scalar_stride(): number;
     reverse_trace_camera_sample_stride?(): number;
     reverse_trace_validate_packet_header(headerPtr: number): number;
-    reverse_trace_render_camera_stub?(headerPtr: number): number;
     reverse_trace_generate_camera_samples?(
         headerPtr: number,
         detectorBasisPtr: number,
@@ -157,7 +156,7 @@ export class WasmReverseTracerBackend implements ReverseTracerKernelBackend {
         const headerPtr = writeHeaderToMemory(this.module, header);
         const valid = headerPtr !== null
             ? this.module.exports.reverse_trace_validate_packet_header(headerPtr)
-            : REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED;
+            : REVERSE_TRACE_KERNEL_STATUS_UNSUPPORTED_ABI;
 
         const useWasmSampler = !request.activePixelMask && (request.rowWorkerCount === undefined || request.rowWorkerCount <= 1);
         const packet = (useWasmSampler && headerPtr !== null && valid === REVERSE_TRACE_KERNEL_STATUS_OK)
@@ -178,13 +177,6 @@ export class WasmReverseTracerBackend implements ReverseTracerKernelBackend {
             return this.fallback.renderCameraSamples(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
         }
 
-        if (typeof this.module.exports.reverse_trace_render_camera_stub === 'function' && headerPtr !== null) {
-            const status = this.module.exports.reverse_trace_render_camera_stub(headerPtr);
-            if (status !== REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED) {
-                return this.fallback.renderCamera(request);
-            }
-        }
-
         const jsPacket = createJsPackedCameraSamples(
             request.snapshot,
             null,
@@ -203,7 +195,7 @@ export class WasmReverseTracerBackend implements ReverseTracerKernelBackend {
         const headerPtr = writeHeaderToMemory(this.module, header);
         const valid = headerPtr !== null
             ? this.module.exports.reverse_trace_validate_packet_header(headerPtr)
-            : REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED;
+            : REVERSE_TRACE_KERNEL_STATUS_UNSUPPORTED_ABI;
         const useWasmSampler = !request.activePixelMask && (request.rowWorkerCount === undefined || request.rowWorkerCount <= 1);
         const packet = (useWasmSampler && headerPtr !== null && valid === REVERSE_TRACE_KERNEL_STATUS_OK)
             ? createPackedCameraSamplesFromWasm(this.module, header, request.packet)

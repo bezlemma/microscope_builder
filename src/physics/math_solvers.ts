@@ -101,23 +101,6 @@ export function intersectAABB(origin: Vector3, direction: Vector3, box: Box3): {
 
 
 /**
- * Solves Quadratic Equation At^2 + Bt + C = 0
- * Returns sorted real roots.
- */
-export function solveQuadratic(A: number, B: number, C: number): number[] {
-    const disc = B * B - 4 * A * C;
-    if (disc < 0) return [];
-    
-    if (disc === 0) return [-B / (2 * A)];
-    
-    const sqrtDisc = Math.sqrt(disc);
-    const t0 = (-B - sqrtDisc) / (2 * A);
-    const t1 = (-B + sqrtDisc) / (2 * A);
-    
-    return [Math.min(t0, t1), Math.max(t0, t1)];
-}
-
-/**
  * Numerical approximation of the Error Function (erf)
  * Maximum error 1.5e-7 (Abramowitz and Stegun 7.1.26)
  */

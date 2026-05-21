@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { activePresetAtom, componentsAtom, PresetName, tutorialStageAtom } from '../state/store';
+import { activePresetAtom, componentsAtom, mobilePanelModeAtom, PresetName, tutorialStageAtom } from '../state/store';
 import { Camera } from '../physics/components/Camera';
 import { useIsMobile } from './useIsMobile';
 
@@ -45,7 +45,7 @@ function computeLayout(isMobile: boolean): CalloutLayout {
     const anchorKind = anchor?.anchor ?? 'menu';
     if (isMobile && anchorKind === 'menu') {
         const left = clamp(targetRight + 18, 12, Math.max(12, viewportW - 172));
-        const width = Math.min(250, Math.max(160, viewportW - left - 12));
+        const width = Math.min(300, Math.max(220, viewportW - left - 12));
         return {
             left,
             top: clamp((anchorRect?.bottom ?? 50) + 34, 82, Math.max(82, viewportH - 150)),
@@ -56,7 +56,7 @@ function computeLayout(isMobile: boolean): CalloutLayout {
     }
 
     const width = isMobile
-        ? Math.min(250, Math.max(160, viewportW - targetRight - 32))
+        ? Math.min(300, Math.max(220, viewportW - targetRight - 32))
         : Math.min(340, Math.max(240, viewportW - targetRight - 56));
     const left = isMobile
         ? clamp(targetRight + 18, 12, Math.max(12, viewportW - width - 12))
@@ -78,12 +78,14 @@ export const TutorialDomOverlay: React.FC = () => {
     const activePreset = useAtomValue(activePresetAtom);
     const tutorialStage = useAtomValue(tutorialStageAtom);
     const components = useAtomValue(componentsAtom);
+    const mobilePanelMode = useAtomValue(mobilePanelModeAtom);
     const isMobile = useIsMobile();
     const [layout, setLayout] = useState<CalloutLayout | null>(null);
     const hasRealCamera = components.some(component => component instanceof Camera && !component.isGhost);
+    const mobilePropertiesOpen = isMobile && mobilePanelMode === 'properties';
 
     useEffect(() => {
-        if (activePreset !== PresetName.Tutorial2 || tutorialStage !== 2 || hasRealCamera) {
+        if (activePreset !== PresetName.Tutorial2 || tutorialStage !== 2 || hasRealCamera || mobilePropertiesOpen) {
             setLayout(null);
             return;
         }
@@ -108,9 +110,9 @@ export const TutorialDomOverlay: React.FC = () => {
             window.removeEventListener('scroll', update, true);
             window.clearInterval(interval);
         };
-    }, [activePreset, hasRealCamera, isMobile, tutorialStage]);
+    }, [activePreset, hasRealCamera, isMobile, mobilePropertiesOpen, tutorialStage]);
 
-    if (activePreset !== PresetName.Tutorial2 || tutorialStage !== 2 || hasRealCamera) return null;
+    if (activePreset !== PresetName.Tutorial2 || tutorialStage !== 2 || hasRealCamera || mobilePropertiesOpen) return null;
 
     return (
         <div

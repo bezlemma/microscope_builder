@@ -4,15 +4,21 @@ import { Camera } from '../physics/components/Camera';
 import { Card } from '../physics/components/Card';
 import { CurvedMirror } from '../physics/components/CurvedMirror';
 import { PrismLens } from '../physics/components/PrismLens';
+import {
+    TUTORIAL_FIRST_MIRROR_NAME,
+    TUTORIAL_FIRST_TARGET_NAME,
+    TUTORIAL_SECOND_MIRROR_NAME,
+    TUTORIAL_SECOND_TARGET_NAME,
+} from '../presets/tutorialNames';
 import type { Ray } from '../physics/types';
 
 export interface TutorialMirrorStatus {
-    realM1: CurvedMirror | null;
-    realM2: CurvedMirror | null;
-    ghostM1: CurvedMirror | null;
-    ghostM2: CurvedMirror | null;
-    m1Placed: boolean;
-    m2Placed: boolean;
+    firstMirror: CurvedMirror | null;
+    secondMirror: CurvedMirror | null;
+    firstTarget: CurvedMirror | null;
+    secondTarget: CurvedMirror | null;
+    firstPlaced: boolean;
+    secondPlaced: boolean;
 }
 
 const MIRROR_TARGET_TOLERANCE_MM = 6;
@@ -21,7 +27,7 @@ const MIRROR_ANGLE_TOLERANCE_RAD = 0.1;
 function componentByName<T extends OpticalComponent>(
     components: OpticalComponent[],
     name: string,
-    ctor: new (...args: any[]) => T,
+    ctor: abstract new (...args: never[]) => T,
     ghost: boolean,
 ): T | null {
     return components.find((c): c is T =>
@@ -42,18 +48,18 @@ function poseMatches(real: OpticalComponent | null, ghost: OpticalComponent | nu
 }
 
 export function getTutorialMirrorStatus(components: OpticalComponent[]): TutorialMirrorStatus {
-    const realM1 = componentByName(components, 'M1', CurvedMirror, false);
-    const realM2 = componentByName(components, 'M2', CurvedMirror, false);
-    const ghostM1 = componentByName(components, 'M1 Target', CurvedMirror, true);
-    const ghostM2 = componentByName(components, 'M2 Target', CurvedMirror, true);
+    const firstMirror = componentByName(components, TUTORIAL_FIRST_MIRROR_NAME, CurvedMirror, false);
+    const secondMirror = componentByName(components, TUTORIAL_SECOND_MIRROR_NAME, CurvedMirror, false);
+    const firstTarget = componentByName(components, TUTORIAL_FIRST_TARGET_NAME, CurvedMirror, true);
+    const secondTarget = componentByName(components, TUTORIAL_SECOND_TARGET_NAME, CurvedMirror, true);
 
     return {
-        realM1,
-        realM2,
-        ghostM1,
-        ghostM2,
-        m1Placed: poseMatches(realM1, ghostM1),
-        m2Placed: poseMatches(realM2, ghostM2),
+        firstMirror,
+        secondMirror,
+        firstTarget,
+        secondTarget,
+        firstPlaced: poseMatches(firstMirror, firstTarget),
+        secondPlaced: poseMatches(secondMirror, secondTarget),
     };
 }
 
@@ -105,8 +111,8 @@ export function isTutorialRainbowComplete(components: OpticalComponent[], paths:
 
 export function isTutorialStageOneComplete(components: OpticalComponent[], paths: Ray[][]): boolean {
     const mirrorStatus = getTutorialMirrorStatus(components);
-    return mirrorStatus.m1Placed
-        && mirrorStatus.m2Placed
+    return mirrorStatus.firstPlaced
+        && mirrorStatus.secondPlaced
         && isTutorialRainbowComplete(components, paths);
 }
 

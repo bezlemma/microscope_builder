@@ -146,16 +146,6 @@ export function createConfocalScene(): ConfocalPresetResult {
     sample.pointAlong(1, 0, 0);
     sample.specimenOffset.set(0, 0, -sampleHolderGapMm);
     scene.push(sample);
-    // Immersion bridge disabled — produced ~4% Fresnel back-reflections that
-    // retraced the entire microscope, creating visible noise. Re-enable once
-    // MediumVolume.interact suppresses sub-significant back-reflections.
-    // scene.push(createObjectiveBridgeToPoint(
-    //     objective,
-    //     holderCenter,
-    //     'Objective Immersion Bridge',
-    //     0.8,
-    // ));
-
     const blocker = new Blocker(30, 2, 'Beam Stop');
     const blockerCenter = focusWorld.clone().add(sampleNormal.clone().multiplyScalar(25));
     blocker.setPosition(blockerCenter.x, blockerCenter.y, blockerCenter.z);

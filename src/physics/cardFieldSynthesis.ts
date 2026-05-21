@@ -2,16 +2,6 @@ import { Matrix4, Vector3 } from 'three';
 import { childRay, Coherence, type Ray } from './types';
 import { evaluateZernikeNoll, zernikeNollLabel } from './PupilFunction';
 
-export function resolutionFromPixelPitch(
-    cardWidth: number,
-    cardHeight: number,
-    pixelPitch: number,
-): { resX: number; resY: number } {
-    const resX = Math.max(1, Math.round(cardWidth / pixelPitch));
-    const resY = Math.max(1, Math.round(cardHeight / pixelPitch));
-    return { resX, resY };
-}
-
 export interface TerminalPacketHit {
     localPoint: { x: number; y: number };
     localDirection?: Vector3;

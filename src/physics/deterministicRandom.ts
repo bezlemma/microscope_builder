@@ -17,7 +17,7 @@ function mixNumber(hash: number, value: number): number {
     return next >>> 0;
 }
 
-export function hashNumbers(...values: number[]): number {
+function hashNumbers(...values: number[]): number {
     let hash = 0x811c9dc5;
     for (const value of values) {
         hash = mixNumber(hash, value);
@@ -25,7 +25,7 @@ export function hashNumbers(...values: number[]): number {
     return hash >>> 0;
 }
 
-export function randomUnitFromHash(hash: number): number {
+function randomUnitFromHash(hash: number): number {
     return (hash >>> 0) / 0x1_0000_0000;
 }
 

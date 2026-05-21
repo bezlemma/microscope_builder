@@ -9,19 +9,11 @@ import {
     trapBeamSegmentsRevisionAtom,
 } from '../state/store';
 import { estimateTrapFieldDiagnostics } from '../physics/trapDiagnostics';
+import { formatPower } from './formatters';
 
 interface QPDViewerProps {
     qpd: QPD;
     compact?: boolean;
-}
-
-function fmtPower(watts: number): string {
-    if (!Number.isFinite(watts) || watts <= 0) return '0 W';
-    if (watts >= 1) return `${watts.toFixed(2)} W`;
-    if (watts >= 1e-3) return `${(watts * 1e3).toFixed(2)} mW`;
-    if (watts >= 1e-6) return `${(watts * 1e6).toFixed(2)} uW`;
-    if (watts >= 1e-9) return `${(watts * 1e9).toFixed(2)} nW`;
-    return `${watts.toExponential(2)} W`;
 }
 
 function fmtRate(value: number): string {
@@ -145,7 +137,7 @@ export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
                 </div>
                 <div style={rowStyle}>
                     <span style={labelStyle}>Sum</span>
-                    <span style={valueStyle}>{fmtPower(qpd.signalSum)}</span>
+                    <span style={valueStyle}>{formatPower(qpd.signalSum)}</span>
                 </div>
                 <div style={rowStyle}>
                     <span style={labelStyle}>Fill</span>
@@ -160,11 +152,11 @@ export const QPDViewer: React.FC<QPDViewerProps> = ({ qpd, compact }) => {
                         <div style={{ height: 1, background: '#242a31', margin: '7px 0' }} />
                         <div style={rowStyle}>
                             <span style={labelStyle}>A / B</span>
-                            <span style={valueStyle}>{fmtPower(qpd.quadrants[0])} / {fmtPower(qpd.quadrants[1])}</span>
+                            <span style={valueStyle}>{formatPower(qpd.quadrants[0])} / {formatPower(qpd.quadrants[1])}</span>
                         </div>
                         <div style={rowStyle}>
                             <span style={labelStyle}>C / D</span>
-                            <span style={valueStyle}>{fmtPower(qpd.quadrants[2])} / {fmtPower(qpd.quadrants[3])}</span>
+                            <span style={valueStyle}>{formatPower(qpd.quadrants[2])} / {formatPower(qpd.quadrants[3])}</span>
                         </div>
                         {trapField && (
                             <>

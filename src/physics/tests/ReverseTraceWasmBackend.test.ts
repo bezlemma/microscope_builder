@@ -28,7 +28,6 @@ import {
     PACKED_INTERACTION_UNSUPPORTED,
     REVERSE_TRACE_KERNEL_ABI_VERSION,
     REVERSE_TRACE_KERNEL_STATUS_OK,
-    REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED,
     createPackedTraceScene,
     createReverseTracerPacketHeader,
 } from '../kernelPackets';
@@ -65,7 +64,6 @@ function makeValidModule(): ReverseTracerWasmModule {
             reverse_trace_interaction_input_stride: () => PACKED_INTERACTION_INPUT_STRIDE,
             reverse_trace_interaction_output_stride: () => PACKED_INTERACTION_OUTPUT_STRIDE,
             reverse_trace_validate_packet_header: () => REVERSE_TRACE_KERNEL_STATUS_OK,
-            reverse_trace_render_camera_stub: () => REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED,
             reverse_trace_generate_camera_samples: (_headerPtr, _basisPtr, _scalarsPtr, intsPtr, rowOffsetsPtr, outputPtr, sampleCount) => {
                 const ints = new Uint32Array(memory.buffer, intsPtr, 3);
                 const rowOffsets = new Uint32Array(memory.buffer, rowOffsetsPtr, ints[1] + 1);

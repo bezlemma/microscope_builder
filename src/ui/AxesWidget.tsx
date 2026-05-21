@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { GizmoHelper, GizmoViewport } from '@react-three/drei';
-import { Quaternion, Vector3 } from 'three';
+import { EventDispatcher, Quaternion, Vector3 } from 'three';
 import { useIsMobile } from './useIsMobile';
 
 /**
@@ -87,33 +87,40 @@ function CameraSubscriber() {
     return null;
 }
 
+type GizmoControlsFallback = EventDispatcher & {
+    minPolarAngle: number;
+    maxPolarAngle: number;
+    target: Vector3;
+    update: () => void;
+    getTarget: (target: Vector3) => Vector3;
+    setTarget: (x: number, y: number, z: number) => void;
+};
+
+function createGizmoControlsFallback(): GizmoControlsFallback {
+    const target = new Vector3(0, 0, 0);
+    return Object.assign(new EventDispatcher(), {
+        minPolarAngle: 0,
+        maxPolarAngle: Math.PI,
+        target,
+        update: () => undefined,
+        getTarget: (out: Vector3) => out.copy(target),
+        setTarget: (x: number, y: number, z: number) => {
+            target.set(x, y, z);
+        },
+    });
+}
+
 function GizmoControlsShim({ children }: { children: React.ReactNode }) {
     const set = useThree(state => state.set);
     const activeControls = useThree(state => state.controls);
-    const controlsRef = useRef<{
-        minPolarAngle: number;
-        maxPolarAngle: number;
-        target: Vector3;
-        update: () => void;
-        getTarget: (target: Vector3) => Vector3;
-        setTarget: (x: number, y: number, z: number) => void;
-    } | null>(null);
+    const controlsRef = useRef<GizmoControlsFallback | null>(null);
     if (!controlsRef.current) {
-        const target = new Vector3(0, 0, 0);
-        controlsRef.current = {
-            minPolarAngle: 0,
-            maxPolarAngle: Math.PI,
-            target,
-            update: () => undefined,
-            getTarget: (out: Vector3) => out.copy(target),
-            setTarget: (x: number, y: number, z: number) => {
-                target.set(x, y, z);
-            },
-        };
+        controlsRef.current = createGizmoControlsFallback();
     }
 
     React.useLayoutEffect(() => {
-        const controls = controlsRef.current as any;
+        const controls = controlsRef.current;
+        if (!controls) return;
         set({ controls });
         return () => set({ controls });
     }, [set]);

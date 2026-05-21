@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Vector3 } from "three";
 import { ForwardTracer } from "../ForwardTracer";
+import { ReverseTracer } from "../ReverseTracer";
+import { OpticalComponent } from "../Component";
 import { Laser } from "../components/Laser";
 import { Lamp } from "../components/Lamp";
+import { Camera } from "../components/Camera";
 import { Ray } from "../types";
 import { createBrightfieldScene } from "../../presets/brightfield";
 import { createOpenSPIMScene } from "../../presets/openSPIM";
@@ -11,40 +14,49 @@ import { createTransFluorescenceScene } from "../../presets/TransmissionFluoresc
 import { createBeamExpanderScene } from "../../presets/beamExpander";
 import { createConfocalScene } from "../../presets/confocal";
 
+type SourceComponent = Laser | Lamp;
 
-function testPreset(name: string, createSceneFn: () => any[], targetClassNames: string[]) {
+function sourceWavelength(source: SourceComponent): number {
+    return source instanceof Laser ? source.wavelength : 532;
+}
+
+function sourceFootprintRadius(source: SourceComponent): number {
+    return source instanceof Laser ? source.beamRadius : 2;
+}
+
+function centralSourceRay(source: SourceComponent, footprintRadius = 0): Ray {
+    const origin = source.position.clone();
+    const direction = new Vector3(0, 0, 1).applyQuaternion(source.rotation).normalize();
+    origin.addScaledVector(direction, 3);
+
+    return {
+        origin,
+        direction,
+        wavelength: sourceWavelength(source) * 1e-9,
+        intensity: 1.0,
+        polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
+        opticalPathLength: 0,
+        footprintRadius,
+        coherenceMode: 0,
+        isMainRay: true,
+        sourceId: source.id
+    };
+}
+
+function testPreset(name: string, createSceneFn: () => OpticalComponent[], targetClassNames: string[]) {
     test(`Preset ${name} successfully routes central rays to targets`, () => {
         const components = createSceneFn();
         const solver = new ForwardTracer(components);
 
-        const sources = components.filter(c => c instanceof Laser || c instanceof Lamp);
+        const sources = components.filter((component): component is SourceComponent =>
+            component instanceof Laser || component instanceof Lamp,
+        );
         expect(sources.length).toBeGreaterThan(0);
 
         let hitTargets = false;
 
         for (const source of sources) {
-            // The central ray firing exactly down the component's optic axis
-            const origin = source.position.clone();
-            const direction = new Vector3(0, 0, 1).applyQuaternion(source.rotation).normalize();
-            
-            // Advance slightly to avoid self-intersection immediately at origin
-            origin.add(direction.clone().multiplyScalar(3));
-
-            const sourceWavelength = ((source as Laser).wavelength || 532) * 1e-9;
-            const ray: Ray = {
-                origin,
-                direction,
-                wavelength: sourceWavelength,
-                intensity: 1.0,
-                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
-                opticalPathLength: 0,
-                footprintRadius: 0,
-                coherenceMode: 0,
-                isMainRay: true,
-                sourceId: source.id
-            };
-
-            const paths = solver.trace([ray]);
+            const paths = solver.trace([centralSourceRay(source)]);
 
             // Verify the ray paths interact with expected target components
             for (const path of paths) {
@@ -74,55 +86,27 @@ describe("End-to-End Preset Integrity", () => {
     testPreset("Confocal", () => createConfocalScene().scene, ["Sample", "PMT"]);
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// SOLVER 3 — Preset Backward Ray Regression
-// Verifies that backward rays from cameras actually reach the sample.
-// A backward-facing camera or broken optical path will fail these.
-// ═══════════════════════════════════════════════════════════════════
-
-import { ReverseTracer } from "../ReverseTracer";
-import { Camera } from "../components/Camera";
-
-function testReverseTracerPaths(presetName: string, createSceneFn: () => any[]) {
+function testReverseTracerPaths(presetName: string, createSceneFn: () => OpticalComponent[]) {
     test(`Reverse tracer: ${presetName} backward rays produce paths`, () => {
         const components = createSceneFn();
-        const cameras = components.filter((c: any) => c instanceof Camera) as Camera[];
+        const cameras = components.filter((component): component is Camera => component instanceof Camera);
         if (cameras.length === 0) return; // Skip presets without cameras
 
-        // Generate forward ray paths via forward tracer
-        const sources = components.filter((c: any) => c instanceof Laser || c instanceof Lamp);
+        const sources = components.filter((component): component is SourceComponent =>
+            component instanceof Laser || component instanceof Lamp,
+        );
         expect(sources.length).toBeGreaterThan(0);
 
         const forwardTracer = new ForwardTracer(components);
         const allRayPaths: Ray[][] = [];
 
         for (const source of sources) {
-            const origin = source.position.clone();
-            const direction = new Vector3(0, 0, 1).applyQuaternion(source.rotation).normalize();
-            origin.add(direction.clone().multiplyScalar(3));
-
-            const sourceWl = ((source as Laser).wavelength || 532) * 1e-9;
-            const ray: Ray = {
-                origin,
-                direction,
-                wavelength: sourceWl,
-                intensity: 1.0,
-                polarization: { x: { re: 1, im: 0 }, y: { re: 0, im: 0 }, z: { re: 0, im: 0 }},
-                opticalPathLength: 0,
-                footprintRadius: (source as Laser).beamRadius || 2,
-                coherenceMode: 0,
-                isMainRay: true,
-                sourceId: source.id
-            };
-
-            const paths = forwardTracer.trace([ray]);
+            const paths = forwardTracer.trace([centralSourceRay(source, sourceFootprintRadius(source))]);
             allRayPaths.push(...paths);
         }
 
-        // Build beam segments via the merged forward tracer forward pipeline
         const beamSegs = forwardTracer.buildBeamSegments(allRayPaths);
 
-        // Run Reverse tracer backward tracing with small resolution
         for (const camera of cameras) {
             camera.sensorResX = 4;
             camera.sensorResY = 4;
@@ -133,7 +117,6 @@ function testReverseTracerPaths(presetName: string, createSceneFn: () => any[]) 
             const reverseTrace = new ReverseTracer(components, beamSegs);
             const result = reverseTrace.render(camera, 16);
 
-            console.log(`  [${presetName}] Camera "${camera.name}": ${result.paths.length} paths`);
             expect(result.paths.length).toBeGreaterThan(0);
         }
     });
@@ -149,15 +132,15 @@ describe("Reverse tracer Preset Regression", () => {
 describe("Reverse tracer: OpenSPIM Camera Facing", () => {
     test("OpenSPIM camera backward rays fire toward +X (detection arm)", () => {
         const components = createOpenSPIMScene();
-        const camera = components.find((c: any) => c instanceof Camera) as Camera;
+        const camera = components.find((component): component is Camera => component instanceof Camera);
         expect(camera).toBeDefined();
+        if (!camera) throw new Error('OpenSPIM preset should include a camera');
 
         // Camera backward ray direction = local +Z transformed to world
         const camW = new Vector3(0, 0, 1).applyQuaternion(camera.rotation).normalize();
 
         // For the detection arm going in -X direction, camera must fire backward
         // rays in +X (toward the sample at column N, x ≈ 337.5)
-        console.log(`  OpenSPIM camera at (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}), backward dir: (${camW.x.toFixed(2)}, ${camW.y.toFixed(2)}, ${camW.z.toFixed(2)})`);
         expect(camW.x).toBeGreaterThan(0.9); // Should be ≈ +1
     });
 });

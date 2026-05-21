@@ -10,7 +10,8 @@ import { useAtom } from 'jotai';
 import { selectionAtom, cameraBlendAtom, componentsAtom, pushUndoAtom, handleDraggingAtom, uiLockedAtom } from '../../state/store';
 import { Text, Edges, Line } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import { STLLoader, VRMLLoader } from 'three-stdlib';
+import type { ThreeEvent } from '@react-three/fiber';
+import { GLTFLoader, STLLoader, VRMLLoader } from 'three-stdlib';
 import { OpticalComponent } from '../../physics/Component';
 import { Mirror } from '../../physics/components/Mirror';
 import { SphericalLens } from '../../physics/components/SphericalLens';
@@ -24,7 +25,6 @@ import { ObjectiveCasing } from '../../physics/components/ObjectiveCasing';
 import { IdealLens } from '../../physics/components/IdealLens';
 import { Camera } from '../../physics/components/Camera';
 import { CylindricalLens } from '../../physics/components/CylindricalLens';
-import { PrismLens } from '../../physics/components/PrismLens';
 import { Waveplate } from '../../physics/components/Waveplate';
 import { BeamSplitter } from '../../physics/components/BeamSplitter';
 import { PolarizingBeamSplitter } from '../../physics/components/PolarizingBeamSplitter';
@@ -35,7 +35,6 @@ import { Filter } from '../../physics/components/Filter';
 import { OpticalWindow } from '../../physics/components/OpticalWindow';
 import { DichroicMirror } from '../../physics/components/DichroicMirror';
 import { CurvedMirror } from '../../physics/components/CurvedMirror';
-import { PolygonScanner } from '../../physics/components/PolygonScanner';
 import { AbstractPolygonOptic } from '../../physics/components/AbstractPolygonOptic';
 import { PMT } from '../../physics/components/PMT';
 import { GalvoScanHead } from '../../physics/components/GalvoScanHead';
@@ -55,10 +54,41 @@ import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
 import { TrappedBead } from '../../physics/components/TrappedBead';
 import { findCatalogPart } from '../../catalog/catalog';
 import { mechanicalVisualAssetForCatalogPart, type CatalogMechanicalVisualAsset } from '../../catalog/mechanicalVisualAssets';
+import { publicAssetUrlCandidates } from '../../catalog/publicAssetUrls';
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
 import { wavelengthToHex, wavelengthToCSS } from '../../physics/spectral';
+
+type CanvasClickEvent = ThreeEvent<MouseEvent>;
+type CanvasPointerEvent = ThreeEvent<PointerEvent>;
+type PointerCaptureTarget = {
+    setPointerCapture?: (pointerId: number) => void;
+    releasePointerCapture?: (pointerId: number) => void;
+};
+type ToggleableControls = { enabled: boolean };
+
+function capturePointer(event: CanvasPointerEvent): void {
+    try {
+        (event.target as PointerCaptureTarget).setPointerCapture?.(event.pointerId);
+    } catch {
+        // Pointer capture is best-effort on mobile browsers.
+    }
+}
+
+function releasePointer(event: CanvasPointerEvent): void {
+    try {
+        (event.target as PointerCaptureTarget).releasePointerCapture?.(event.pointerId);
+    } catch {
+        // Pointer capture may already be gone after a cancelled touch.
+    }
+}
+
+function setControlsEnabled(controls: unknown, enabled: boolean): void {
+    if (controls && typeof controls === 'object' && 'enabled' in controls) {
+        (controls as ToggleableControls).enabled = enabled;
+    }
+}
 
 /**
  * Context for outline color — black (#000000) for components on the active
@@ -137,6 +167,10 @@ const LENS_FLAT_OPACITY = 0.62;
 const SELECTED_LENS_FLAT_OPACITY = 0.7;
 const LENS_BODY_OPACITY = 0.92;
 const SELECTED_LENS_BODY_OPACITY = 0.96;
+const WINDOW_FLAT_OPACITY = 0.5;
+const SELECTED_WINDOW_FLAT_OPACITY = 0.62;
+const WINDOW_BODY_OPACITY = 0.78;
+const SELECTED_WINDOW_BODY_OPACITY = 0.88;
 const OBJECTIVE_MECHANICAL_OPACITY = 0.46;
 const inertRaycast = () => {};
 
@@ -557,6 +591,7 @@ function standardizeMechanicalMaterials(object: Object3D): void {
                 depthWrite: false,
             });
         });
+        disposeMaterial(materials);
         mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
         mesh.renderOrder = 2;
     });
@@ -622,13 +657,13 @@ function buildSemanticCatalogMeshMaterial(
 
     if (component instanceof Mirror || component instanceof CurvedMirror) {
         return new MeshPhysicalMaterial({
-            color: '#f4f8fb',
-            metalness: 0.92,
-            roughness: 0.07,
+            color: '#ffffff',
+            metalness: 1,
+            roughness: 0.018,
             clearcoat: 1.0,
-            clearcoatRoughness: 0.02,
-            emissive: '#9da8b3',
-            emissiveIntensity: 0.16,
+            clearcoatRoughness: 0.01,
+            emissive: '#e6f2ff',
+            emissiveIntensity: 0.28,
             side: DoubleSide,
         });
     }
@@ -804,9 +839,49 @@ function buildEdrawingsMechanicalObject(asset: EDrawingsMechanicalAsset): Object
     return object;
 }
 
+async function loadMechanicalAssetObject(
+    asset: CatalogMechanicalVisualAsset,
+    url: string,
+    signal: AbortSignal,
+): Promise<Object3D> {
+    if (asset.format === 'edrawings-json') {
+        const response = await fetch(url, { signal });
+        if (!response.ok) throw new Error(`Could not load ${url} (${response.status} ${response.statusText})`);
+        return buildEdrawingsMechanicalObject(await response.json() as EDrawingsMechanicalAsset);
+    }
+
+    if (asset.format === 'glb' || asset.format === 'gltf') {
+        const loaded = await new GLTFLoader().loadAsync(url);
+        const object = loaded.scene;
+        standardizeMechanicalMaterials(object);
+        return object;
+    }
+
+    if (asset.format === 'stl') {
+        const geometry = await new STLLoader().loadAsync(url);
+        geometry.computeVertexNormals();
+        const object = new Mesh(geometry, new MeshStandardMaterial({
+            color: 0x24272c,
+            metalness: 0.38,
+            roughness: 0.42,
+            side: DoubleSide,
+            transparent: true,
+            opacity: OBJECTIVE_MECHANICAL_OPACITY,
+            depthWrite: false,
+        }));
+        object.renderOrder = 2;
+        return object;
+    }
+
+    const object = await new VRMLLoader().loadAsync(url);
+    standardizeMechanicalMaterials(object);
+    return object;
+}
+
 function useMechanicalAssetObject(asset: CatalogMechanicalVisualAsset): { object: Object3D | null; failed: boolean } {
     const [state, setState] = useState<{ object: Object3D | null; failed: boolean }>({ object: null, failed: false });
-    const url = assetUrl(asset.url);
+    const urls = React.useMemo(() => publicAssetUrlCandidates(asset.url), [asset.url]);
+    const urlKey = urls.join('|');
 
     React.useEffect(() => {
         let cancelled = false;
@@ -816,69 +891,33 @@ function useMechanicalAssetObject(asset: CatalogMechanicalVisualAsset): { object
             return { object: null, failed: false };
         });
 
-        if (asset.format === 'edrawings-json') {
-            fetch(url, { signal: controller.signal })
-                .then(response => {
-                    if (!response.ok) throw new Error(`Could not load ${url}`);
-                    return response.json() as Promise<EDrawingsMechanicalAsset>;
-                })
-                .then(json => {
-                    const object = buildEdrawingsMechanicalObject(json);
+        void (async () => {
+            let lastError: unknown = null;
+            for (const url of urls) {
+                try {
+                    const object = await loadMechanicalAssetObject(asset, url, controller.signal);
                     if (cancelled) {
                         disposeObject3D(object);
                         return;
                     }
                     setState({ object, failed: false });
-                })
-                .catch(error => {
-                    if (!cancelled && error?.name !== 'AbortError') setState({ object: null, failed: true });
-                });
-
-            return () => {
-                cancelled = true;
-                controller.abort();
-            };
-        }
-
-        const loader = asset.format === 'wrl' ? new VRMLLoader() : new STLLoader();
-        loader.load(
-            url,
-            (loaded) => {
-                let object: Object3D;
-                if (asset.format === 'stl') {
-                    const geometry = loaded as BufferGeometry;
-                    geometry.computeVertexNormals();
-                    object = new Mesh(geometry, new MeshStandardMaterial({
-                        color: 0x24272c,
-                        metalness: 0.38,
-                        roughness: 0.42,
-                        side: DoubleSide,
-                        transparent: true,
-                        opacity: OBJECTIVE_MECHANICAL_OPACITY,
-                        depthWrite: false,
-                    }));
-                    object.renderOrder = 2;
-                } else {
-                    object = loaded as Object3D;
-                    standardizeMechanicalMaterials(object);
-                }
-                if (cancelled) {
-                    disposeObject3D(object);
                     return;
+                } catch (error) {
+                    if (cancelled || (error as { name?: string } | null)?.name === 'AbortError') return;
+                    lastError = error;
                 }
-                setState({ object, failed: false });
-            },
-            undefined,
-            () => {
-                if (!cancelled) setState({ object: null, failed: true });
-            },
-        );
+            }
+            if (!cancelled) {
+                console.warn(`Catalog mechanical asset failed to load: ${asset.partId}`, lastError);
+                setState({ object: null, failed: true });
+            }
+        })();
 
         return () => {
             cancelled = true;
             controller.abort();
         };
-    }, [asset.format, url]);
+    }, [asset, asset.format, urlKey, urls]);
 
     React.useEffect(() => {
         const object = state.object;
@@ -888,12 +927,6 @@ function useMechanicalAssetObject(asset: CatalogMechanicalVisualAsset): { object
     }, [state.object]);
 
     return state;
-}
-
-function assetUrl(url: string): string {
-    if (/^(https?:|blob:|data:)/i.test(url)) return url;
-    const base = import.meta.env.BASE_URL || '/';
-    return `${base.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
 }
 
 function dominantAxis(box: Box3): 'x' | 'y' | 'z' {
@@ -1032,10 +1065,6 @@ const ObjectiveGenericBody: React.FC<{
     component: Objective;
     metrics: ReturnType<typeof objectiveVisualMetrics>;
 }> = ({ component, metrics }) => {
-    if (component.mechanicalStyle === 'snout') {
-        return <SnoutObjectiveBody component={component} metrics={metrics} />;
-    }
-
     const lathePoints = React.useMemo(() => {
         const pts: Vector2[] = [];
         pts.push(new Vector2(metrics.opticalFrontRadius, metrics.zFront));
@@ -1047,6 +1076,10 @@ const ObjectiveGenericBody: React.FC<{
         pts.push(new Vector2(metrics.opticalFrontRadius, metrics.zFront));
         return pts;
     }, [metrics]);
+
+    if (component.mechanicalStyle === 'snout') {
+        return <SnoutObjectiveBody component={component} metrics={metrics} />;
+    }
 
     return (
         <>
@@ -1481,15 +1514,16 @@ export const MirrorVisualizer = ({ component }: { component: Mirror }) => {
         <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
             <cylinderGeometry args={[radius, radius, component.thickness, 64]} />
             <meshPhysicalMaterial
-                color="#f4f8fb"
-                metalness={0.92}
-                roughness={0.07}
+                color="#ffffff"
+                metalness={1}
+                roughness={0.018}
                 clearcoat={1.0}
-                clearcoatRoughness={0.02}
-                emissive="#9da8b3"
-                emissiveIntensity={0.16}
+                clearcoatRoughness={0.01}
+                emissive="#e6f2ff"
+                emissiveIntensity={0.28}
                 side={DoubleSide}
             />
+            <EdgeOutline threshold={20} color="#141414" />
         </mesh>
     );
     return (
@@ -1572,46 +1606,22 @@ export const DualGalvoScanHeadVisualizer = ({ component }: { component: DualGalv
     );
 };
 
-export const PolygonScannerVisualizer = ({ component }: { component: PolygonScanner }) => {
-    const geometry = useDisposableGeometry(() => component.buildDisplayGeometry(), [component.version]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh geometry={geometry}>
-                <meshPhysicalMaterial
-                    color="#f4f8fb"
-                    metalness={0.92}
-                    roughness={0.07}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                    emissive="#9da8b3"
-                    emissiveIntensity={0.16}
-                    side={DoubleSide}
-                />
-            </mesh>
-        </group>
-    );
-};
-
 export const CurvedMirrorVisualizer = ({ component }: { component: CurvedMirror }) => {
     const geom = useDisposableGeometry(() => component.buildGeometry(), [component.diameter, component.radiusOfCurvature, component.thickness, component.version]);
     const mechanicalAsset = catalogMechanicalAssetForComponent(component);
     const genericBody = (
         <mesh geometry={geom} renderOrder={-1}>
             <meshPhysicalMaterial
-                color="#f4f8fb"
-                metalness={0.92}
-                roughness={0.07}
+                color="#ffffff"
+                metalness={1}
+                roughness={0.018}
                 clearcoat={1.0}
-                clearcoatRoughness={0.02}
-                emissive="#9da8b3"
-                emissiveIntensity={0.16}
+                clearcoatRoughness={0.01}
+                emissive="#e6f2ff"
+                emissiveIntensity={0.28}
                 side={DoubleSide}
             />
+            <EdgeOutline threshold={20} color="#141414" />
         </mesh>
     );
     return (
@@ -2170,10 +2180,10 @@ export const SourceVisualizer = ({ component }: { component: OpticalComponent })
     const laser = component instanceof Laser ? component : null;
     const isLaser = laser !== null;
     const beamColor = laser ? wavelengthToCSS(laser.wavelength) : "#222";
-    const stopButtonEvent = useCallback((e: any) => {
+    const stopButtonEvent = useCallback((e: CanvasClickEvent) => {
         e.stopPropagation();
     }, []);
-    const toggleLaser = useCallback((e: any) => {
+    const toggleLaser = useCallback((e: CanvasClickEvent) => {
         e.stopPropagation();
         if (!laser) return;
         pushUndo();
@@ -2454,38 +2464,7 @@ export const CylindricalLensVisualizer = ({ component }: { component: Cylindrica
     );
 };
 
-export const PrismVisualizer = ({ component }: { component: PrismLens }) => {
-    const geometry = useDisposableGeometry(() => component.buildDisplayGeometry(), [component.version]);
-
-    return (
-        <group
-            position={[component.position.x, component.position.y, component.position.z]}
-            quaternion={component.rotation.clone()}
-            onClick={(e) => { e.stopPropagation(); }}
-        >
-            <mesh geometry={geometry}>
-                <meshPhysicalMaterial
-                    color="#ccffff"
-                    transmission={GLASS_TRANSMISSION_3D}
-                    opacity={GLASS_OPACITY_3D}
-                    transparent
-                    roughness={0.03}
-                    metalness={0}
-                    ior={component.ior || 1.5}
-                    thickness={0.8}
-                    attenuationColor="#aaddff"
-                    attenuationDistance={6}
-                    side={DoubleSide}
-                    depthWrite={false}
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.02}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-// ─── Legacy optical-table rendering helpers ──────────────────────────
+// ─── Polygon optics ──────────────────────────────────────────────────
 
 export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolygonOptic }) => {
     const [blend] = useAtom(cameraBlendAtom);
@@ -2557,31 +2536,52 @@ export const PolygonOpticVisualizer = ({ component }: { component: AbstractPolyg
 };
 
 export const OpticalWindowVisualizer = ({ component }: { component: OpticalWindow }) => {
+    const [selection] = useAtom(selectionAtom);
+    const [blend] = useAtom(cameraBlendAtom);
+    const isSelected = selection.includes(component.id);
     const radius = component.diameter / 2;
+    const show2D = blend < 0.99;
+    const show3D = blend > 0.01;
+    const flatOpacity = isSelected ? SELECTED_WINDOW_FLAT_OPACITY : WINDOW_FLAT_OPACITY;
+    const bodyOpacity = isSelected ? SELECTED_WINDOW_BODY_OPACITY : WINDOW_BODY_OPACITY;
+    const emissiveIntensity = isSelected ? 0.1 : 0.035;
+
     return (
         <group
             position={[component.position.x, component.position.y, component.position.z]}
             quaternion={component.rotation.clone()}
             onClick={(e) => { e.stopPropagation(); }}
         >
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
-                <cylinderGeometry args={[radius, radius, component.thickness, 48]} />
-                <meshPhysicalMaterial
-                    color="#cbe9ff"
-                    transparent
-                    opacity={0.5}
-                    transmission={0.25}
-                    roughness={0.04}
-                    metalness={0}
-                    ior={component.refractiveIndex}
-                    thickness={Math.max(component.thickness, 0.1)}
-                    attenuationColor="#dff6ff"
-                    attenuationDistance={20}
-                    side={DoubleSide}
-                    depthWrite={false}
-                />
-                <EdgeOutline threshold={15} color="#000000" />
-            </mesh>
+            {show2D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, Math.max(component.thickness, 0.02), 64]} />
+                    <meshBasicMaterial
+                        color="#f7fbff"
+                        transparent
+                        opacity={flatOpacity * (1 - blend)}
+                        side={DoubleSide}
+                        depthWrite={false}
+                    />
+                    <EdgeOutline threshold={15} color="#000000" />
+                </mesh>
+            )}
+            {show3D && (
+                <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={2}>
+                    <cylinderGeometry args={[radius, radius, Math.max(component.thickness, 0.02), 64]} />
+                    <meshStandardMaterial
+                        color="#f7fbff"
+                        transparent
+                        opacity={bodyOpacity}
+                        roughness={0.16}
+                        metalness={0}
+                        side={DoubleSide}
+                        depthWrite={false}
+                        emissive="#ffffff"
+                        emissiveIntensity={emissiveIntensity}
+                    />
+                    <EdgeOutline threshold={15} color="#000000" />
+                </mesh>
+            )}
         </group>
     );
 };
@@ -2945,31 +2945,31 @@ const RailEndpointHandle: React.FC<{
     const dragging = useRef(false);
     const [hovered, setHovered] = useState(false);
 
-    const raycastToTable = useCallback((e: any): Vector3 | null => {
+    const raycastToTable = useCallback((e: CanvasPointerEvent): Vector3 | null => {
         const ray = e.ray;
         if (Math.abs(ray.direction.z) < 1e-6) return null;
         const t = (Rail.TABLE_Z - ray.origin.z) / ray.direction.z;
         return ray.origin.clone().add(ray.direction.clone().multiplyScalar(t));
     }, []);
 
-    const handlePointerDown = useCallback((e: any) => {
+    const handlePointerDown = useCallback((e: CanvasPointerEvent) => {
         e.stopPropagation();
-        try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { }
+        capturePointer(e);
         pushUndo();
         dragging.current = true;
         setHandleDragging(true);
-        if (controls) (controls as any).enabled = false;
+        setControlsEnabled(controls, false);
     }, [pushUndo, setHandleDragging, controls]);
 
-    const handlePointerUp = useCallback((e: any) => {
+    const handlePointerUp = useCallback((e: CanvasPointerEvent) => {
         e.stopPropagation();
-        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { }
+        releasePointer(e);
         dragging.current = false;
         setHandleDragging(false);
-        if (controls) (controls as any).enabled = true;
+        setControlsEnabled(controls, true);
     }, [setHandleDragging, controls]);
 
-    const handlePointerMove = useCallback((e: any) => {
+    const handlePointerMove = useCallback((e: CanvasPointerEvent) => {
         if (!dragging.current) return;
         e.stopPropagation();
 
@@ -3179,21 +3179,22 @@ export const AODVisualizer: React.FC<{ component: AOD }> = ({ component }) => {
 
 // ─── Ghost Visualizer (mb4-specific) ─────────────────────────────────
 
-/**
- * Renders a component as a glowing dashed-blue outline — a target placeholder
- * the user drags a real component into. Ghosts are excluded from ray tracing.
- * Color: rgb(0, 127, 255) = #007fff (matches the table beam glow).
- */
+/** Draws ghost components as dashed blue outlines. Ghosts are excluded from ray tracing. */
 export const GhostVisualizer = ({ component }: { component: OpticalComponent }) => {
     const GHOST_COLOR = '#007fff';
 
-    // Guess an aperture radius from the component; fall back to 12.7 mm.
-    const anyComp = component as any;
-    const radius =
-        typeof anyComp.diameter === 'number' ? anyComp.diameter / 2 :
-        typeof anyComp.apertureRadius === 'number' ? anyComp.apertureRadius :
-        typeof anyComp.radius === 'number' ? anyComp.radius :
-        12.7;
+    const apertureLike = component as OpticalComponent & {
+        diameter?: unknown;
+        apertureRadius?: unknown;
+        radius?: unknown;
+    };
+    const radius = typeof apertureLike.diameter === 'number'
+        ? apertureLike.diameter / 2
+        : typeof apertureLike.apertureRadius === 'number'
+            ? apertureLike.apertureRadius
+            : typeof apertureLike.radius === 'number'
+                ? apertureLike.radius
+                : 12.7;
 
     // Build a ring of points in the component's local XY plane (the mirror/lens aperture plane).
     const ringPoints = useMemo(() => {

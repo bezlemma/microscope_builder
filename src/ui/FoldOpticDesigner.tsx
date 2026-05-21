@@ -11,9 +11,14 @@ import { wavelengthToCSS } from '../physics/spectral';
 import { Coherence, createRay, defaultTransversePolarization } from '../physics/types';
 import { ScrubInput } from './ScrubInput';
 import { SpectrumChart } from './SpectrumChart';
+import {
+    designerGridStyle as gridStyle,
+    designerOptionStyle as optionStyle,
+    designerSelectStyle as selectStyle,
+} from './lensDesignerShared';
 
 export type FoldOpticComponent = Mirror | CurvedMirror | BeamSplitter | PolarizingBeamSplitter | DichroicMirror;
-export type FoldOpticMutate = (mutate: (component: FoldOpticComponent) => void) => void;
+type FoldOpticMutate = (mutate: (component: FoldOpticComponent) => void) => void;
 
 function parseNumber(value: string): number {
     return Number.parseFloat(value.trim());
@@ -31,32 +36,6 @@ function updateCircularBounds(component: FoldOpticComponent): void {
         new Vector3(radius, radius, component.thickness / 2),
     );
 }
-
-const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: 6,
-    marginBottom: 10,
-};
-
-const selectStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    border: '1px solid #37404a',
-    color: '#eaf2fb',
-    fontWeight: 500,
-    outline: 'none',
-    padding: '4px 6px',
-    borderRadius: 5,
-    width: '100%',
-    minWidth: 0,
-    boxSizing: 'border-box',
-    cursor: 'pointer',
-};
-
-const optionStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    color: '#eaf2fb',
-};
 
 const defaultPreviewRayCount = 10;
 const dichroicPreviewRayCount = 15;

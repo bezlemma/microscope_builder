@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { createLensZooScene } from '../../presets/lensZoo';
 import { createMZInterferometerScene } from '../../presets/mzInterferometer';
 import { Blocker } from '../components/Blocker';
@@ -8,11 +8,11 @@ import { OpticalWindow } from '../components/OpticalWindow';
 import { ForwardTracer } from '../ForwardTracer';
 import { createSourceRays } from '../SourceRayFactory';
 
-function forwardOf(component: { rotation: any }): Vector3 {
+function forwardOf(component: { rotation: Quaternion }): Vector3 {
     return new Vector3(0, 0, 1).applyQuaternion(component.rotation).normalize();
 }
 
-function upOf(component: { rotation: any }): Vector3 {
+function upOf(component: { rotation: Quaternion }): Vector3 {
     return new Vector3(0, 1, 0).applyQuaternion(component.rotation).normalize();
 }
 

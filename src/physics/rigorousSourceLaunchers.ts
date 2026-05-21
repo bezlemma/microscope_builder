@@ -1,47 +1,6 @@
 import { Vector3 } from 'three';
 import { Coherence, Ray, createRay, defaultTransversePolarization } from './types';
 
-export interface LaunchRigor {
-    rigorous: boolean;
-    oneLiner?: string;
-    details?: string;
-}
-
-export const LAUNCH_RIGOR: Record<string, LaunchRigor> = {
-    Laser: {
-        rigorous: true,
-        oneLiner: 'Gaussian Packet source-plane quadrature, sigma/d = 0.7',
-    },
-    StructuredSource: {
-        rigorous: true,
-        oneLiner: 'Gaussian Packet source-plane quadrature over rasterized mask',
-    },
-    Lamp: {
-        rigorous: true,
-        oneLiner: 'independent emitter and wavelength groups, each packetized like a beam',
-    },
-    PointSource3D: {
-        rigorous: false,
-        oneLiner: 'directional Gaussian Packet frame not ported yet',
-    },
-    PointSource2D: {
-        rigorous: false,
-        oneLiner: 'directional Gaussian Packet frame not ported yet',
-    },
-    ConeSource3D: {
-        rigorous: false,
-        oneLiner: 'directional cap Gaussian Packet frame not ported yet',
-    },
-    WedgeSource2D: {
-        rigorous: false,
-        oneLiner: 'directional fan Gaussian Packet frame not ported yet',
-    },
-};
-
-export function getLaunchRigor(component: { constructor: { name: string } }): LaunchRigor | null {
-    return LAUNCH_RIGOR[component.constructor.name] ?? null;
-}
-
 const DISPLAY_BANDWIDTH_SCALE = 1.2;
 const DISPLAY_MAX_FRACTION = 0.95;
 const DISPLAY_MIN_FRACTION = 0.08;
@@ -307,7 +266,7 @@ export function launchRigorousStructured(params: {
     });
 }
 
-export function launchRigorousMaskedSource(params: {
+function launchRigorousMaskedSource(params: {
     origin: Vector3;
     direction: Vector3;
     /** Component's local +X axis in world coords. If omitted, an arbitrary

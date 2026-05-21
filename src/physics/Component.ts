@@ -84,7 +84,7 @@ export abstract class OpticalComponent implements Surface {
     declare rotation: Quaternion;
     declare worldToLocal: Matrix4;
     declare localToWorld: Matrix4;
-    declare bounds: Box3; // Local bounds
+    declare bounds: Box3;
     version: number = 0; // Increments on every mutation — used by React to detect changes on mutable objects
     absorptionCoeff: number = 0; // Beer-Lambert absorption coefficient [mm⁻¹], 0 = transparent
 
@@ -130,7 +130,7 @@ export abstract class OpticalComponent implements Surface {
         this.rotation = new Quaternion();
         this.worldToLocal = new Matrix4();
         this.localToWorld = new Matrix4();
-        this.bounds = new Box3(new Vector3(-10, -10, -10), new Vector3(10, 10, 10)); // Default bounds
+        this.bounds = new Box3(new Vector3(-10, -10, -10), new Vector3(10, 10, 10));
         this.updateMatrices();
     }
 
@@ -264,10 +264,7 @@ export abstract class OpticalComponent implements Surface {
     abstract intersect(rayLocal: Ray): HitRecord | null;
     abstract interact(ray: Ray, hit: HitRecord): InteractionResult;
 
-    // Template method for tracing
     chkIntersection(rayWorld: Ray, maxDistance: number = Infinity): HitRecord | null {
-        // Ensure matrices are fresh before checking intersection
-        // This fixes the "Blocker ignored" and "Lens Snapping" bugs caused by stale matrices
         this.updateMatrices();
         this.updateWorldBoundsSphere();
 
@@ -282,7 +279,6 @@ export abstract class OpticalComponent implements Surface {
             return null;
         }
 
-        // Transform Ray to Local
         const rayLocalOrigin = cleanVec(this._rayLocalOriginScratch.copy(rayWorld.origin).applyMatrix4(this.worldToLocal));
         const rayLocalDir = cleanVec(this._rayLocalDirectionScratch.copy(rayWorld.direction).transformDirection(this.worldToLocal)).normalize();
 
@@ -304,12 +300,11 @@ export abstract class OpticalComponent implements Surface {
         const hitLocal = this.intersect(rayLocal);
 
         if (hitLocal) {
-            // Transform hit back to world
             const pointWorld = hitLocal.point.clone().applyMatrix4(this.localToWorld);
             const normalWorld = hitLocal.normal.clone().transformDirection(this.localToWorld).normalize();
 
             return {
-                ...hitLocal, // Preserve all custom properties (like hitElement for Objective)
+                ...hitLocal,
                 t: hitLocal.t,
                 point: pointWorld,
                 normal: normalWorld,

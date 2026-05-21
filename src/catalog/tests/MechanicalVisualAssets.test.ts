@@ -1,12 +1,33 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { CATALOG_PARTS, findCatalogPart } from '../catalog';
 import { isCasedCatalogPart } from '../catalogCasing';
 import {
+    type CatalogMechanicalVisualAsset,
+    type MechanicalVisualFormat,
     mechanicalModelSourceForCatalogPart,
     mechanicalVisualAssetForCatalogPart,
     stepMechanicalModelSourceForCatalogPart,
 } from '../mechanicalVisualAssets';
+
+interface GltfAssetManifest {
+    asset: { version: string };
+    buffers?: Array<{ uri: string }>;
+}
+
+function requireMechanicalVisualAsset(partId: string): CatalogMechanicalVisualAsset {
+    const part = findCatalogPart(partId);
+    const visualAsset = mechanicalVisualAssetForCatalogPart(part);
+    expect(visualAsset).toBeDefined();
+    if (!visualAsset) throw new Error(`Missing mechanical visual asset for ${partId}`);
+    return visualAsset;
+}
+
+function expectVisualAssetFormat(partId: string, expectedFormat: MechanicalVisualFormat): CatalogMechanicalVisualAsset {
+    const visualAsset = requireMechanicalVisualAsset(partId);
+    expect(visualAsset.format).toBe(expectedFormat);
+    return visualAsset;
+}
 
 describe('catalog mechanical visual assets', () => {
     test('catalog parts expose STEP as source CAD but render converted assets', () => {
@@ -22,7 +43,7 @@ describe('catalog mechanical visual assets', () => {
 
         const visualAsset = mechanicalVisualAssetForCatalogPart(part);
         if (visualAsset) {
-            expect(['wrl', 'stl', 'edrawings-json']).toContain(visualAsset.format);
+            expect(['wrl', 'stl', 'glb', 'gltf', 'edrawings-json']).toContain(visualAsset.format);
             expect(visualAsset.url).toContain('/catalog/mechanical/objectives/');
         }
     });
@@ -45,20 +66,24 @@ describe('catalog mechanical visual assets', () => {
     });
 
     test('mounted spherical lenses can render converted vendor mechanical assets', () => {
-        const part = findCatalogPart('thorlabs:LB1471-A-ML');
-        expect(part?.componentType).toBe('sphericalLens');
+        for (const partId of ['thorlabs:LB1471-A-ML', 'thorlabs:LA1131-C-ML', 'thorlabs:LA4148-C-ML']) {
+            const part = findCatalogPart(partId);
+            expect(part?.componentType).toBe('sphericalLens');
 
-        const stepSource = stepMechanicalModelSourceForCatalogPart(part);
-        expect(stepSource?.kind).toBe('step');
-        expect(stepSource?.url).toContain('lb1471-a-ml');
+            const stepSource = stepMechanicalModelSourceForCatalogPart(part);
+            expect(stepSource?.kind).toBe('step');
 
-        const visualAsset = mechanicalVisualAssetForCatalogPart(part);
-        expect(visualAsset?.format).toBe('wrl');
-        expect(visualAsset?.url).toBe('/catalog/mechanical/lenses/lb1471-a-ml.wrl');
+            const visualAsset = expectVisualAssetFormat(partId, 'gltf');
+            expect(visualAsset.url).toContain('/catalog/mechanical/lenses/');
+            expect(visualAsset.url).toEndWith('.gltf');
 
-        const assetText = readFileSync(new URL('../../../public/catalog/mechanical/lenses/lb1471-a-ml.wrl', import.meta.url), 'utf8');
-        expect(assetText).toContain('#VRML');
-        expect(assetText).toContain('Shape');
+            const assetUrl = new URL(`../../../public${visualAsset.url}`, import.meta.url);
+            const asset = JSON.parse(readFileSync(assetUrl, 'utf8')) as GltfAssetManifest;
+            expect(asset.asset.version).toBe('2.0');
+            for (const buffer of asset.buffers ?? []) {
+                expect(existsSync(new URL(buffer.uri, assetUrl))).toBe(true);
+            }
+        }
     });
 
     test('only mounted STEP-backed lens catalog parts keep converted mechanical visual assets', () => {
@@ -78,6 +103,12 @@ describe('catalog mechanical visual assets', () => {
             .filter(part => !mechanicalVisualAssetForCatalogPart(part))
             .map(part => part.sku);
         expect(missing).toEqual([]);
+
+        const nonGltfAssets = casedLensParts
+            .map(part => mechanicalVisualAssetForCatalogPart(part))
+            .filter(asset => asset?.format !== 'gltf')
+            .map(asset => asset?.sku);
+        expect(nonGltfAssets).toEqual([]);
 
         expect(mechanicalVisualAssetForCatalogPart(findCatalogPart('thorlabs:LA1027'))).toBeNull();
         expect(mechanicalVisualAssetForCatalogPart(findCatalogPart('thorlabs:AC254-200-A'))).toBeNull();
@@ -100,16 +131,20 @@ describe('catalog mechanical visual assets', () => {
             'thorlabs:CCM1-BS013',
             'thorlabs:CCM1-PBS25-633',
         ]) {
-            const part = findCatalogPart(partId);
-            const visualAsset = mechanicalVisualAssetForCatalogPart(part);
-            expect(visualAsset?.format).toBe('wrl');
-            expect(visualAsset?.url).toContain('/catalog/mechanical/fold-optics/');
+            const visualAsset = expectVisualAssetFormat(partId, 'glb');
+            expect(visualAsset.url).toContain('/catalog/mechanical/fold-optics/');
         }
 
         const missing = casedFoldParts
             .filter(part => !mechanicalVisualAssetForCatalogPart(part))
             .map(part => part.sku);
         expect(missing).toEqual([]);
+
+        const nonGlbAssets = casedFoldParts
+            .map(part => mechanicalVisualAssetForCatalogPart(part))
+            .filter(asset => asset?.format !== 'glb')
+            .map(asset => asset?.sku);
+        expect(nonGlbAssets).toEqual([]);
 
         for (const partId of [
             'thorlabs:PF10-03-P01',

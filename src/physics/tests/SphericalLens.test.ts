@@ -141,13 +141,6 @@ describe("SphericalLens", () => {
             });
         }
 
-        // DEBUG: Print all results for diagnosis
-        console.log("\n--- Condenser Lens Test Results ---");
-        for (const r of results) {
-            const status = !r.passed ? "STOPPED" : (r.offset > 0 && Math.abs(r.dirY) < 1e-3 ? "UNBENT" : "OK");
-            console.log(`  Y=${r.offset}mm: path=${r.pathLen} segments, exit dirY=${r.dirY.toFixed(6)} → ${status}`);
-        }
-
         // ASSERTION 1: ALL rays within the aperture must pass through
         for (const r of results) {
             expect(r.passed).toBe(true);

@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useAtom } from 'jotai';
-import { componentsAtom, pinnedViewersAtom, reverseTraceRenderingAtom, uiLockedAtom } from '../state/store';
+import { componentsAtom, mobilePanelModeAtom, pinnedViewersAtom, reverseTraceRenderingAtom, uiLockedAtom } from '../state/store';
 import { Card } from '../physics/components/Card';
 import { Camera } from '../physics/components/Camera';
 import { PMT } from '../physics/components/PMT';
@@ -22,13 +22,10 @@ import { QPDViewer } from './QPDViewer';
 import { SampleZoomViewer } from './SampleZoomViewer';
 import { OpticalComponent } from '../physics/Component';
 import { useIsMobile } from './useIsMobile';
+import { formatPower } from './formatters';
 
-function fmtPowerCompact(watts: number): string {
-    if (watts >= 1e-3) return `${(watts * 1e3).toFixed(1)} mW`;
-    if (watts >= 1e-6) return `${(watts * 1e6).toFixed(1)} uW`;
-    if (watts >= 1e-9) return `${(watts * 1e9).toFixed(1)} nW`;
-    return `${watts.toExponential(1)} W`;
-}
+const MOBILE_RASTER_PANEL_WIDTH = 'min(26vw, calc(var(--app-height, 100dvh) * 0.19))';
+const MOBILE_RASTER_PANEL_MAX_HEIGHT = 'calc(var(--app-height, 100dvh) * 0.24)';
 
 export const ViewerPanels: React.FC = () => {
     const isMobile = useIsMobile();
@@ -36,26 +33,8 @@ export const ViewerPanels: React.FC = () => {
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
     const [isRendering] = useAtom(reverseTraceRenderingAtom);
     const [uiLocked] = useAtom(uiLockedAtom);
+    const [mobilePanelMode, setMobilePanelMode] = useAtom(mobilePanelModeAtom);
     const [minimizedIds, setMinimizedIds] = React.useState<Set<string>>(new Set());
-
-    // On mobile, start with auxiliary viewers minimized so the screen isn't
-    // swamped on first preset load — but EXCLUDE Cameras, since they are the
-    // primary image output the user came to see.  Without this exclusion the
-    // mobile-camera special-case path below (which suppresses the panel
-    // header) leaves the Camera as a 0-px invisible div when minimized,
-    // which is exactly the OpenSPIM "camera doesn't show up" bug.
-    const initializedForMobile = React.useRef(false);
-    React.useEffect(() => {
-        if (isMobile && !initializedForMobile.current && pinnedIds.size > 0) {
-            initializedForMobile.current = true;
-            const toMinimize = new Set<string>();
-            for (const id of pinnedIds) {
-                const comp = components.find(c => c.id === id);
-                if (comp && !(comp instanceof Camera)) toMinimize.add(id);
-            }
-            setMinimizedIds(toMinimize);
-        }
-    }, [isMobile, pinnedIds, components]);
 
     // Resolve pinned IDs to actual Card / Camera / PMT / Sample instances (filter stale IDs)
     const pinnedComponents = Array.from(pinnedIds)
@@ -71,6 +50,7 @@ export const ViewerPanels: React.FC = () => {
         .filter(c => !(isMobile && c instanceof QPD));
 
     if (pinnedComponents.length === 0) return null;
+    if (isMobile && mobilePanelMode === 'properties') return null;
 
     // Reserve space for the Sidebar on the left so pinned viewers don't slide
     // behind it. On mobile the sidebar is an overlay (transformed off-screen
@@ -83,10 +63,7 @@ export const ViewerPanels: React.FC = () => {
             bottom: isMobile ? '8px' : '20px',
             left: isMobile ? '8px' : `${sidebarWidth + 20}px`,
             right: isMobile ? undefined : '20px',
-            // Mobile gives the pinned viewer roughly the bottom-left eighth of
-            // the screen — wide enough that the camera/PMT image is readable,
-            // bounded so it doesn't swallow the whole bottom half.
-            maxWidth: isMobile ? '50vw' : undefined,
+            maxWidth: isMobile ? '52vw' : undefined,
             display: 'flex',
             flexDirection: 'row',
             flexWrap: 'wrap',
@@ -95,29 +72,29 @@ export const ViewerPanels: React.FC = () => {
             pointerEvents: 'none',
             alignItems: 'flex-end',
         }}>
-            {pinnedComponents.map(comp => (
-                <div
-                    key={comp.id}
-                    style={{
-                        backgroundColor: '#222',
-                        border: '1px solid #444',
-                        borderRadius: '6px',
-                        padding: isMobile && comp instanceof Camera ? '0' : '6px',
-                        fontFamily: 'sans-serif',
-                        pointerEvents: uiLocked ? 'none' : 'auto',
-                        // Don't clip Camera content on mobile — the inner viewer
-                        // is laid out at 256px display width plus its controls;
-                        // the previous 12vh cap chopped the image in half on
-                        // any phone-sized screen. 35vh (≈ a quarter of screen
-                        // height) lets the whole image breathe while still
-                        // capping the panel's growth.
-                        overflow: 'hidden',
-                        maxHeight: isMobile && comp instanceof Camera ? 'calc(var(--app-height, 100dvh) * 0.35)' : undefined,
-                        maxWidth: isMobile && comp instanceof Camera ? '50vw' : undefined,
-                        display: 'flex',
-                        flexDirection: 'column',
-                    }}
-                >
+            {pinnedComponents.map(comp => {
+                const isRasterPanel = comp instanceof Camera || comp instanceof PMT;
+                return (
+                    <div
+                        key={comp.id}
+                        onPointerDown={() => {
+                            if (isMobile) setMobilePanelMode('viewer');
+                        }}
+                        style={{
+                            backgroundColor: '#222',
+                            border: '1px solid #444',
+                            borderRadius: '6px',
+                            padding: isMobile && isRasterPanel ? '0' : '6px',
+                            fontFamily: 'sans-serif',
+                            pointerEvents: uiLocked ? 'none' : 'auto',
+                            overflow: 'hidden',
+                            width: isMobile && isRasterPanel ? MOBILE_RASTER_PANEL_WIDTH : undefined,
+                            maxWidth: isMobile && isRasterPanel ? '26vw' : undefined,
+                            maxHeight: isMobile && isRasterPanel ? MOBILE_RASTER_PANEL_MAX_HEIGHT : undefined,
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
                     {/* Header: name + minimize + close */}
                     {!(isMobile && comp instanceof Camera) && (
                     <div style={{
@@ -136,6 +113,7 @@ export const ViewerPanels: React.FC = () => {
                                 flex: 1,
                             }}
                             onClick={() => {
+                                if (isMobile) setMobilePanelMode('viewer');
                                 const next = new Set(minimizedIds);
                                 if (next.has(comp.id)) next.delete(comp.id);
                                 else next.add(comp.id);
@@ -150,6 +128,7 @@ export const ViewerPanels: React.FC = () => {
                                 const next = new Set(pinnedIds);
                                 next.delete(comp.id);
                                 setPinnedIds(next);
+                                if (isMobile && next.size === 0) setMobilePanelMode('scene');
                             }}
                             style={{
                                 background: 'none',
@@ -173,12 +152,12 @@ export const ViewerPanels: React.FC = () => {
                     )}
                     {minimizedIds.has(comp.id) && comp instanceof Card && (comp as Card).beamProfiles.length > 0 && (
                         <div style={{ fontSize: '9px', color: '#777', fontFamily: 'monospace', marginTop: '2px' }}>
-                            {fmtPowerCompact((comp as Card).beamProfiles.reduce((sum, p) => sum + p.power, 0))}
+                            {formatPower((comp as Card).beamProfiles.reduce((sum, p) => sum + p.power, 0), 1)}
                         </div>
                     )}
                     {minimizedIds.has(comp.id) && comp instanceof QPD && (
                         <div style={{ fontSize: '9px', color: '#777', fontFamily: 'monospace', marginTop: '2px' }}>
-                            {fmtPowerCompact((comp as QPD).signalSum)}
+                            {formatPower((comp as QPD).signalSum, 1)}
                         </div>
                     )}
                     {!minimizedIds.has(comp.id) && comp instanceof Camera && (
@@ -200,12 +179,13 @@ export const ViewerPanels: React.FC = () => {
                             <PMTViewer
                                 pmt={pmt}
                                 isRendering={isRendering}
-                                compact
+                                isMobile={isMobile}
                             />
                         );
                     })()}
-                </div>
-            ))}
+                    </div>
+                );
+            })}
         </div>
     );
 };

@@ -611,16 +611,43 @@ canvas {
   animation: tutorial-menu-arrow-nudge 1.15s ease-in-out infinite;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 520px) {
+  :root {
+    --workspace-font-size: 13px;
+  }
+
   .tutorial-hud-stage1 {
     padding: 0 10px calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
 
+  .tutorial-callout,
   .tutorial-sidebar-callout {
+    width: min(300px, calc(100vw - 24px));
     min-width: 0;
+    padding: 11px 13px;
+  }
+
+  .tutorial-callout-title {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .tutorial-callout-body {
+    font-size: 13px;
+    line-height: 1.4;
   }
 
   .tutorial-callout.mobile {
-    max-width: min(250px, calc(100vw - 36px));
+    max-width: min(300px, calc(100vw - 24px));
   }
+
+  .mz-callout {
+    width: min(240px, calc(100vw - 24px));
+  }
+
+  .tutorial-target-pill {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
 }

@@ -14,6 +14,7 @@ import {
     PackageSearch,
     FileUp,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import { useAtom } from 'jotai';
 import { appRouteAtom, loadPresetAtom, activePresetAtom, PresetName, componentsAtom, loadSceneAtom, selectionAtom, zoomToComponentAtom, measurementAtom, zoomToMeasurementAtom, svgExportRequestAtom, pendingCatalogPlacementAtom, activeZLevelAtom, pushUndoAtom } from '../state/store';
@@ -43,7 +44,7 @@ const DraggableItem = ({
 }: {
     type: string;
     label: string;
-    icon: any;
+    icon: LucideIcon;
     onDragStarted?: () => void;
     catalogMode?: boolean;
     onCatalogClick?: (type: string, label: string) => void;
@@ -115,12 +116,12 @@ const DraggableItem = ({
 interface ComponentDef {
     type: string;
     label: string;
-    icon: any;
+    icon: LucideIcon;
 }
 
 interface ComponentGroup {
     name: string;
-    icon: any;
+    icon: LucideIcon;
     color: string;
     items: ComponentDef[];
 }
@@ -1223,9 +1224,9 @@ export const Sidebar: React.FC = () => {
                     </PresetCategory>
 
                     <PresetCategory
-                        label="Debugs"
-                        isOpen={openPresetCat === 'Debugs'}
-                        onToggle={() => setOpenPresetCat(prev => prev === 'Debugs' ? null : 'Debugs')}
+                        label="Examples"
+                        isOpen={openPresetCat === 'Examples'}
+                        onToggle={() => setOpenPresetCat(prev => prev === 'Examples' ? null : 'Examples')}
                     >
                         <PresetButton
                             label="Blank"
@@ -1253,9 +1254,9 @@ export const Sidebar: React.FC = () => {
                             onClick={() => handlePresetClick(PresetName.PolarizationZoo)}
                         />
                         <PresetButton
-                            label="Prism Debug"
-                            active={activePreset === PresetName.PrismDebug}
-                            onClick={() => handlePresetClick(PresetName.PrismDebug)}
+                            label="Prism Demo"
+                            active={activePreset === PresetName.PrismDemo}
+                            onClick={() => handlePresetClick(PresetName.PrismDemo)}
                         />
 
                     </PresetCategory>

@@ -23,7 +23,7 @@ export class Card extends OpticalComponent {
     hits: { localPoint: Vector3, ray: Ray }[] = [];
     packetHits: TerminalPacketHit[] = [];
     beamProfiles: BeamProfile[] = [];
-    /** Field data from rod-based card field synthesis (null in ray system). */
+    /** Field data from card field synthesis. */
     fieldData: { resX: number; resY: number; extentWidth: number; extentHeight: number } | null = null;
     /** Manual pixel pitch overrides (0 = auto). */
     fieldPixelPitchOverrideX: number = 0;
@@ -45,24 +45,21 @@ export class Card extends OpticalComponent {
     }
 
     intersect(localRay: Ray): HitRecord | null {
-        // Plane intersection at w=0 (optical axis along z → w)
-        // Transverse plane: u=x, v=y
         const dw = localRay.direction.z;
-        if (Math.abs(dw) < 1e-6) return null; // Parallel
+        if (Math.abs(dw) < 1e-6) return null;
 
         const t = -localRay.origin.z / dw;
         if (t < 0.001) return null;
 
         const point = localRay.origin.clone().add(localRay.direction.clone().multiplyScalar(t));
 
-        // Check bounds in uv transverse plane
         const hu = point.x;
         const hv = point.y;
         if (Math.abs(hu) <= this.width / 2 && Math.abs(hv) <= this.height / 2) {
             return {
                 t,
                 point: point.clone(),
-                normal: new Vector3(0, 0, 1),  // +w normal
+                normal: new Vector3(0, 0, 1),
                 localPoint: point
             };
         }

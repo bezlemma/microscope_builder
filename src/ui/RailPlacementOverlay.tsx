@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useThree } from '@react-three/fiber';
 import { useAtom } from 'jotai';
 import { componentsAtom, pushUndoAtom, railPlacementAtom } from '../state/store';
-import { Vector3, Plane, Raycaster, DoubleSide } from 'three';
+import { Vector2, Vector3, Plane, Raycaster, DoubleSide } from 'three';
 import { Rail } from '../physics/components/Rail';
 import { Annotation } from '../physics/components/Annotation';
 
@@ -36,7 +36,7 @@ export const RailPlacementOverlay: React.FC = () => {
         const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
         const ny = -((clientY - rect.top) / rect.height) * 2 + 1;
         const raycaster = new Raycaster();
-        raycaster.setFromCamera({ x: nx, y: ny } as any, camera);
+        raycaster.setFromCamera(new Vector2(nx, ny), camera);
         const plane = new Plane(new Vector3(0, 0, 1), -TABLE_Z);
         const target = new Vector3();
         const hit = raycaster.ray.intersectPlane(plane, target);

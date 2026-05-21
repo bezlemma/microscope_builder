@@ -1,11 +1,5 @@
-/**
- * Shared wavelength-to-color utilities.
- * 
- * Replaces duplicate implementations in Inspector.tsx, RayVisualizer.tsx,
- * and ComponentVisualizers.tsx with a single source of truth.
- */
+type SpectralRGB = { r: number; g: number; b: number; isVisible: boolean };
 
-/** Convert wavelength (nm) to linear RGB in [0, 1] range. */
 export function wavelengthToRGB(nm: number): { r: number; g: number; b: number; isVisible: boolean } {
     let r = 0, g = 0, b = 0;
 
@@ -28,7 +22,6 @@ export function wavelengthToRGB(nm: number): { r: number; g: number; b: number; 
         r = 1.0;
     }
 
-    // Apply intensity correction for edge wavelengths
     let factor = 1.0;
     if (nm >= 380 && nm < 420) {
         factor = 0.3 + 0.7 * (nm - 380) / (420 - 380);
@@ -45,14 +38,12 @@ export function wavelengthToRGB(nm: number): { r: number; g: number; b: number; 
     return { r, g, b, isVisible: true };
 }
 
-/** Convert wavelength (nm) to CSS `rgb(...)` string. */
 export function wavelengthToCSS(nm: number): string {
     const { r, g, b, isVisible } = wavelengthToRGB(nm);
     if (!isVisible) return 'rgb(135, 135, 135)';
     return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 }
 
-/** Convert wavelength (nm) to hex `#rrggbb` string. */
 export function wavelengthToHex(nm: number): string {
     const { r, g, b, isVisible } = wavelengthToRGB(nm);
     if (!isVisible) return '#888888';
@@ -60,7 +51,19 @@ export function wavelengthToHex(nm: number): string {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-/** Returns true if the wavelength (nm) falls in the visible spectrum. */
+export function wavelengthMetersToRGB(wavelengthMeters: number): SpectralRGB {
+    return wavelengthToRGB(wavelengthMeters * 1e9);
+}
+
+export function wavelengthMetersToRGB255(wavelengthMeters: number): [number, number, number] {
+    const { r, g, b } = wavelengthMetersToRGB(wavelengthMeters);
+    return [r * 255, g * 255, b * 255];
+}
+
+export function wavelengthMetersToCSS(wavelengthMeters: number): string {
+    return wavelengthToCSS(wavelengthMeters * 1e9);
+}
+
 export function isVisibleSpectrum(nm: number): boolean {
     return nm >= 380 && nm <= 780;
 }

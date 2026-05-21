@@ -5,16 +5,16 @@ type LegacyMediaQueryList = MediaQueryList & {
     removeListener?: (listener: (event: MediaQueryListEvent | MediaQueryList) => void) => void;
 };
 
-/**
- * React hook that returns true when the viewport is at or below the given breakpoint.
- * Uses `matchMedia` so it responds to orientation changes and live resizing.
- */
+export function mobileMediaQuery(breakpoint: number): string {
+    return `(max-width: ${breakpoint}px), (max-height: 520px), (orientation: landscape) and (max-width: 1024px) and (max-height: 600px), (pointer: coarse) and (hover: none)`;
+}
+
 export function useIsMobile(breakpoint = 768): boolean {
     const [isMobile, setIsMobile] = useState(() =>
-        typeof window !== 'undefined' && window.innerWidth <= breakpoint
+        typeof window !== 'undefined' && window.matchMedia(mobileMediaQuery(breakpoint)).matches
     );
     useEffect(() => {
-        const mql = window.matchMedia(`(max-width: ${breakpoint}px)`) as LegacyMediaQueryList;
+        const mql = window.matchMedia(mobileMediaQuery(breakpoint)) as LegacyMediaQueryList;
         const onChange = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches);
         if (typeof mql.addEventListener === 'function') {
             mql.addEventListener('change', onChange);

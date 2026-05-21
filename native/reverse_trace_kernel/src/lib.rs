@@ -23,7 +23,6 @@ pub const INTERACTION_STATUS_ABSORBED: f64 = 2.0;
 
 pub const STATUS_OK: u32 = 0;
 pub const STATUS_UNSUPPORTED_ABI: u32 = 1;
-pub const STATUS_UNIMPLEMENTED: u32 = 2;
 
 #[repr(C)]
 pub struct ReverseTracePacketHeader {
@@ -91,11 +90,6 @@ pub extern "C" fn reverse_trace_validate_packet_header(header: *const ReverseTra
     }
 
     STATUS_OK
-}
-
-#[no_mangle]
-pub extern "C" fn reverse_trace_render_camera_stub(_header: *const ReverseTracePacketHeader) -> u32 {
-    STATUS_UNIMPLEMENTED
 }
 
 fn rng_next(state: &mut u64) -> f64 {
@@ -651,7 +645,7 @@ fn ray_mirror_disc(
 pub extern "C" fn reverse_trace_analytic_narrow_phase(
     header_ptr: *const ReverseTracePacketHeader,
     world_to_local_ptr: *const f64,
-    local_to_world_ptr: *const f64,
+    _local_to_world_ptr: *const f64,
     surface_kinds_ptr: *const u8,
     surface_params_ptr: *const f64,
     component_count: u32,
@@ -666,7 +660,6 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
         return 0;
     }
     if world_to_local_ptr.is_null()
-        || local_to_world_ptr.is_null()
         || surface_kinds_ptr.is_null()
         || surface_params_ptr.is_null()
         || sample_scalars_ptr.is_null()
@@ -683,9 +676,6 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
 
     let world_to_local = unsafe {
         std::slice::from_raw_parts(world_to_local_ptr, cc * PACKED_COMPONENT_MATRIX_STRIDE as usize)
-    };
-    let _local_to_world = unsafe {
-        std::slice::from_raw_parts(local_to_world_ptr, cc * PACKED_COMPONENT_MATRIX_STRIDE as usize)
     };
     let surface_kinds = unsafe { std::slice::from_raw_parts(surface_kinds_ptr, cc) };
     let surface_params = unsafe { std::slice::from_raw_parts(surface_params_ptr, cc * PACKED_SURFACE_PARAM_STRIDE as usize) };

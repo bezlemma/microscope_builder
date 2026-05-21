@@ -119,7 +119,7 @@ describe('terminal Gaussian Packet synthesis', () => {
         expect(hits[0].ray.opticalPathLength).toBeCloseTo(5, 9);
     });
 
-    test('reconstructs Epi expander relay focal planes that forward rods cross', () => {
+    test('reconstructs Epi expander relay focal planes crossed by forward rays', () => {
         const components = createEpiFluorescenceScene();
         const paths = new ForwardTracer(components).trace(createSourceRays(components, 32, 'full'));
         const lenses = components.filter((component): component is SphericalLens =>

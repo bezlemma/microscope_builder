@@ -1,9 +1,14 @@
-// React is implicitly used by JSX
 import React, { useEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { BackSide, Box3, Vector3, PerspectiveCamera } from 'three'
+
+declare global {
+  interface Window {
+    __r3f?: unknown;
+  }
+}
 
 /**
  * Procedural "starry night" cube map for mirror reflections. Renders a dark
@@ -139,6 +144,10 @@ function presetSlug(name: PresetName): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+const legacyPresetSlugEntries: [string, PresetName][] = [
+  ['prism-debug', PresetName.PrismDemo],
+];
+
 // URL-friendly slug → PresetName mapping
 const presetSlugMap = new Map<string, PresetName>(
   Object.values(PresetName).flatMap(name => {
@@ -148,7 +157,7 @@ const presetSlugMap = new Map<string, PresetName>(
       [slug, preset],
       [name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), preset],
     ] as [string, PresetName][];
-  })
+  }).concat(legacyPresetSlugEntries)
 );
 
 function matchPresetSlug(raw: string | null): PresetName | undefined {
@@ -438,13 +447,17 @@ function App() {
     }
 
     const beamFieldParam = params.get('beamField');
+    let beamFieldTimer: number | undefined;
     if (beamFieldParam === 'on' || beamFieldParam === '1' || beamFieldParam === 'true') {
-      setTimeout(() => {
+      beamFieldTimer = window.setTimeout(() => {
         setBundleDataEnabled(true);
       }, 100);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    return () => {
+      if (beamFieldTimer !== undefined) window.clearTimeout(beamFieldTimer);
+    };
+  }, [loadPreset, loadScene, setAppRoute, setBundleDataEnabled]);
 
     if (appRoute === 'splash') {
       return <Splash />;
@@ -506,7 +519,7 @@ function App() {
             // for scripts/capture-presets.mjs, where toDataURL() needs it.
             gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
             camera={{ position: [0, 0, 600], zoom: 2, up: [0, 1, 0], near: 0.1, far: 10000 }}
-            onCreated={(state) => { (window as unknown as { __r3f?: unknown }).__r3f = state; }}
+            onCreated={(state) => { window.__r3f = state; }}
           >
             <ambientLight intensity={0.65} />
             <hemisphereLight args={['#d7e7ff', '#171717', 0.45]} />

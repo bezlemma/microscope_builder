@@ -16,8 +16,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-008-A-ML": {
         "partId": "thorlabs:AC050-008-A-ML",
         "sku": "AC050-008-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-008-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-008-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-008-a-ml/22558-e0w.step?v=0116101645",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -25,8 +25,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-008-B-ML": {
         "partId": "thorlabs:AC050-008-B-ML",
         "sku": "AC050-008-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-008-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-008-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-008-b-ml/22567-e0w.step?v=0116101654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -34,8 +34,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-008-C-ML": {
         "partId": "thorlabs:AC050-008-C-ML",
         "sku": "AC050-008-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-008-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-008-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-008-c-ml/22576-e0w.step?v=0116101654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -43,8 +43,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-010-A-ML": {
         "partId": "thorlabs:AC050-010-A-ML",
         "sku": "AC050-010-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-010-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-010-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-010-a-ml/22559-e0w.step?v=0116101654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -52,8 +52,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-010-B-ML": {
         "partId": "thorlabs:AC050-010-B-ML",
         "sku": "AC050-010-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-010-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-010-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-010-b-ml/22568-e0w.step?v=0116101654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -61,8 +61,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-010-C-ML": {
         "partId": "thorlabs:AC050-010-C-ML",
         "sku": "AC050-010-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-010-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-010-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-010-c-ml/22577-e0w.step?v=0116101656",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -70,8 +70,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-015-A-ML": {
         "partId": "thorlabs:AC050-015-A-ML",
         "sku": "AC050-015-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-015-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-015-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-015-a-ml/22560-e0w.step?v=0116101701",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -79,8 +79,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-015-B-ML": {
         "partId": "thorlabs:AC050-015-B-ML",
         "sku": "AC050-015-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-015-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-015-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-015-b-ml/22569-e0w.step?v=0116101701",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -88,8 +88,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC050-015-C-ML": {
         "partId": "thorlabs:AC050-015-C-ML",
         "sku": "AC050-015-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac050-015-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac050-015-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac050-015-c-ml/22578-e0w.step?v=0116101701",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -97,8 +97,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC060-010-A-ML": {
         "partId": "thorlabs:AC060-010-A-ML",
         "sku": "AC060-010-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac060-010-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac060-010-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac060-010-a-ml/22561-e0w.step?v=0116101701",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -106,8 +106,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC060-010-B-ML": {
         "partId": "thorlabs:AC060-010-B-ML",
         "sku": "AC060-010-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac060-010-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac060-010-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac060-010-b-ml/22570-e0w.step?v=0116101707",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -115,8 +115,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC060-010-C-ML": {
         "partId": "thorlabs:AC060-010-C-ML",
         "sku": "AC060-010-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac060-010-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac060-010-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac060-010-c-ml/22579-e0w.step?v=0116101705",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -124,8 +124,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-013-A-ML": {
         "partId": "thorlabs:AC064-013-A-ML",
         "sku": "AC064-013-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-013-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-013-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-013-a-ml/22562-e0w.step?v=0116101706",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -133,8 +133,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-013-B-ML": {
         "partId": "thorlabs:AC064-013-B-ML",
         "sku": "AC064-013-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-013-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-013-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-013-b-ml/22571-e0w.step?v=0116101707",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -142,8 +142,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-013-C-ML": {
         "partId": "thorlabs:AC064-013-C-ML",
         "sku": "AC064-013-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-013-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-013-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-013-c-ml/22580-e0w.step?v=0116101713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -151,8 +151,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-015-A-ML": {
         "partId": "thorlabs:AC064-015-A-ML",
         "sku": "AC064-015-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-015-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-015-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-015-a-ml/22563-e0w.step?v=0116101711",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -160,8 +160,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-015-B-ML": {
         "partId": "thorlabs:AC064-015-B-ML",
         "sku": "AC064-015-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-015-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-015-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-015-b-ml/22572-e0w.step?v=0116101713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -169,8 +169,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC064-015-C-ML": {
         "partId": "thorlabs:AC064-015-C-ML",
         "sku": "AC064-015-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac064-015-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac064-015-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac064-015-c-ml/22581-e0w.step?v=0116101713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -178,8 +178,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-010-A-ML": {
         "partId": "thorlabs:AC080-010-A-ML",
         "sku": "AC080-010-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-010-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-010-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-010-a-ml/22564-e0w.step?v=0116101711",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -187,8 +187,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-010-B-ML": {
         "partId": "thorlabs:AC080-010-B-ML",
         "sku": "AC080-010-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-010-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-010-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-010-b-ml/22573-e0w.step?v=0116101719",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -196,8 +196,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-010-C-ML": {
         "partId": "thorlabs:AC080-010-C-ML",
         "sku": "AC080-010-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-010-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-010-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-010-c-ml/22582-e0w.step?v=0116101717",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -205,8 +205,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-016-A-ML": {
         "partId": "thorlabs:AC080-016-A-ML",
         "sku": "AC080-016-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-016-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-016-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-016-a-ml/22565-e0w.step?v=0116101718",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -214,8 +214,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-016-B-ML": {
         "partId": "thorlabs:AC080-016-B-ML",
         "sku": "AC080-016-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-016-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-016-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-016-b-ml/22574-e0w.step?v=0116101719",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -223,8 +223,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-016-C-ML": {
         "partId": "thorlabs:AC080-016-C-ML",
         "sku": "AC080-016-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-016-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-016-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-016-c-ml/22583-e0w.step?v=0116101723",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -232,8 +232,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-020-A-ML": {
         "partId": "thorlabs:AC080-020-A-ML",
         "sku": "AC080-020-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-020-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-020-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-020-a-ml/22566-e0w.step?v=0116101723",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -241,8 +241,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-020-B-ML": {
         "partId": "thorlabs:AC080-020-B-ML",
         "sku": "AC080-020-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-020-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-020-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-020-b-ml/22575-e0w.step?v=0116101724",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -250,8 +250,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-020-C-ML": {
         "partId": "thorlabs:AC080-020-C-ML",
         "sku": "AC080-020-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-020-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-020-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-020-c-ml/22584-e0w.step?v=0116101724",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -259,8 +259,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-030-A-ML": {
         "partId": "thorlabs:AC080-030-A-ML",
         "sku": "AC080-030-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-030-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-030-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-030-a-ml/ttn145751-e0w.step?v=0116101729",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -268,8 +268,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-030-B-ML": {
         "partId": "thorlabs:AC080-030-B-ML",
         "sku": "AC080-030-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-030-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-030-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-030-b-ml/ttn145753-e0w.step?v=0116101727",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -277,8 +277,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC080-030-C-ML": {
         "partId": "thorlabs:AC080-030-C-ML",
         "sku": "AC080-030-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac080-030-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac080-030-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac0/ac080-030-c-ml/ttn145755-e0w.step?v=0116101731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -286,8 +286,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-019-A-ML": {
         "partId": "thorlabs:AC127-019-A-ML",
         "sku": "AC127-019-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-019-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-019-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-019-a-ml/20580-e0w.step?v=0512093704",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -295,8 +295,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-019-AB-ML": {
         "partId": "thorlabs:AC127-019-AB-ML",
         "sku": "AC127-019-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-019-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-019-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-019-ab-ml/ttn161439-e0w.step?v=0116101739",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -304,8 +304,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-019-B-ML": {
         "partId": "thorlabs:AC127-019-B-ML",
         "sku": "AC127-019-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-019-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-019-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-019-b-ml/19106-e0w.step?v=0116101738",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -313,8 +313,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-019-C-ML": {
         "partId": "thorlabs:AC127-019-C-ML",
         "sku": "AC127-019-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-019-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-019-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-019-c-ml/19625-e0w.step?v=0116101738",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -322,8 +322,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-025-A-ML": {
         "partId": "thorlabs:AC127-025-A-ML",
         "sku": "AC127-025-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-025-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-025-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-025-a-ml/20581-e0w.step?v=0512093708",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -331,8 +331,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-025-AB-ML": {
         "partId": "thorlabs:AC127-025-AB-ML",
         "sku": "AC127-025-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-025-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-025-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-025-ab-ml/ttn161440-e0w.step?v=0116101745",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -340,8 +340,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-025-B-ML": {
         "partId": "thorlabs:AC127-025-B-ML",
         "sku": "AC127-025-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-025-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-025-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-025-b-ml/19107-e0w.step?v=0116101744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -349,8 +349,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-025-C-ML": {
         "partId": "thorlabs:AC127-025-C-ML",
         "sku": "AC127-025-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-025-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-025-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-025-c-ml/19626-e0w.step?v=0116101752",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -358,8 +358,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-030-A-ML": {
         "partId": "thorlabs:AC127-030-A-ML",
         "sku": "AC127-030-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-030-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-030-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-030-a-ml/20582-e0w.step?v=0116101752",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -367,8 +367,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-030-AB-ML": {
         "partId": "thorlabs:AC127-030-AB-ML",
         "sku": "AC127-030-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-030-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-030-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-030-ab-ml/ttn161441-e0w.step?v=0116101759",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -376,8 +376,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-030-B-ML": {
         "partId": "thorlabs:AC127-030-B-ML",
         "sku": "AC127-030-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-030-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-030-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-030-b-ml/19108-e0w.step?v=0116101758",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -385,8 +385,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-030-C-ML": {
         "partId": "thorlabs:AC127-030-C-ML",
         "sku": "AC127-030-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-030-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-030-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-030-c-ml/19627-e0w.step?v=0116101758",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -394,8 +394,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-050-A-ML": {
         "partId": "thorlabs:AC127-050-A-ML",
         "sku": "AC127-050-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-050-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-050-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-050-a-ml/20583-e0w.step?v=0116101758",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -403,8 +403,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-050-AB-ML": {
         "partId": "thorlabs:AC127-050-AB-ML",
         "sku": "AC127-050-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-050-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-050-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-050-ab-ml/ttn161442-e0w.step?v=0116101804",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -412,8 +412,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-050-B-ML": {
         "partId": "thorlabs:AC127-050-B-ML",
         "sku": "AC127-050-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-050-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-050-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-050-b-ml/19109-e0w.step?v=0116101803",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -421,8 +421,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-050-C-ML": {
         "partId": "thorlabs:AC127-050-C-ML",
         "sku": "AC127-050-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-050-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-050-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-050-c-ml/19628-e0w.step?v=0116101808",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -430,8 +430,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-075-A-ML": {
         "partId": "thorlabs:AC127-075-A-ML",
         "sku": "AC127-075-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-075-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-075-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-075-a-ml/20584-e0w.step?v=0116101809",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -439,8 +439,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-075-AB-ML": {
         "partId": "thorlabs:AC127-075-AB-ML",
         "sku": "AC127-075-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-075-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-075-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-075-ab-ml/ttn161443-e0w.step?v=0116101809",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -448,8 +448,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-075-B-ML": {
         "partId": "thorlabs:AC127-075-B-ML",
         "sku": "AC127-075-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-075-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-075-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-075-b-ml/19110-e0w.step?v=0116101813",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -457,8 +457,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC127-075-C-ML": {
         "partId": "thorlabs:AC127-075-C-ML",
         "sku": "AC127-075-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac127-075-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac127-075-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac1/ac127-075-c-ml/19629-e0w.step?v=0116101813",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -466,8 +466,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-030-A-ML": {
         "partId": "thorlabs:AC254-030-A-ML",
         "sku": "AC254-030-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-030-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-030-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-030-a-ml/20585-e0w.step?v=0116101813",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -475,8 +475,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-030-AB-ML": {
         "partId": "thorlabs:AC254-030-AB-ML",
         "sku": "AC254-030-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-030-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-030-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-030-ab-ml/ttn161444-e0w.step?v=0116101820",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -484,8 +484,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-030-B-ML": {
         "partId": "thorlabs:AC254-030-B-ML",
         "sku": "AC254-030-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-030-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-030-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-030-b-ml/15888-e0w.step?v=0116101819",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -493,8 +493,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-030-C-ML": {
         "partId": "thorlabs:AC254-030-C-ML",
         "sku": "AC254-030-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-030-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-030-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-030-c-ml/19630-e0w.step?v=0116101819",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -502,8 +502,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-035-A-ML": {
         "partId": "thorlabs:AC254-035-A-ML",
         "sku": "AC254-035-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-035-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-035-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-035-a-ml/20586-e0w.step?v=0116101831",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -511,8 +511,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-035-B-ML": {
         "partId": "thorlabs:AC254-035-B-ML",
         "sku": "AC254-035-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-035-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-035-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-035-b-ml/15889-e0w.step?v=0116101830",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -520,8 +520,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-035-C-ML": {
         "partId": "thorlabs:AC254-035-C-ML",
         "sku": "AC254-035-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-035-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-035-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-035-c-ml/19631-e0w.step?v=0116101835",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -529,8 +529,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-040-A-ML": {
         "partId": "thorlabs:AC254-040-A-ML",
         "sku": "AC254-040-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-040-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-040-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-040-a-ml/20587-e0w.step?v=0116101835",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -538,8 +538,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-040-B-ML": {
         "partId": "thorlabs:AC254-040-B-ML",
         "sku": "AC254-040-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-040-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-040-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-040-b-ml/15890-e0w.step?v=0116101835",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -547,8 +547,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-040-C-ML": {
         "partId": "thorlabs:AC254-040-C-ML",
         "sku": "AC254-040-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-040-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-040-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-040-c-ml/19632-e0w.step?v=0116101841",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -556,8 +556,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-045-A-ML": {
         "partId": "thorlabs:AC254-045-A-ML",
         "sku": "AC254-045-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-045-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-045-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-045-a-ml/20588-e0w.step?v=0116101843",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -565,8 +565,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-045-B-ML": {
         "partId": "thorlabs:AC254-045-B-ML",
         "sku": "AC254-045-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-045-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-045-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-045-b-ml/15891-e0w.step?v=0116101847",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -574,8 +574,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-045-C-ML": {
         "partId": "thorlabs:AC254-045-C-ML",
         "sku": "AC254-045-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-045-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-045-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-045-c-ml/19633-e0w.step?v=0116101846",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -583,8 +583,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-050-A-ML": {
         "partId": "thorlabs:AC254-050-A-ML",
         "sku": "AC254-050-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-050-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-050-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-050-a-ml/20589-e0w.step?v=0116101846",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -592,8 +592,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-050-AB-ML": {
         "partId": "thorlabs:AC254-050-AB-ML",
         "sku": "AC254-050-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-050-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-050-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-050-ab-ml/ttn161445-e0w.step?v=0116101854",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -601,8 +601,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-050-B-ML": {
         "partId": "thorlabs:AC254-050-B-ML",
         "sku": "AC254-050-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-050-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-050-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-050-b-ml/15892-e0w.step?v=0116101851",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -610,8 +610,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-050-C-ML": {
         "partId": "thorlabs:AC254-050-C-ML",
         "sku": "AC254-050-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-050-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-050-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-050-c-ml/19634-e0w.step?v=0116101852",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -619,8 +619,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-060-A-ML": {
         "partId": "thorlabs:AC254-060-A-ML",
         "sku": "AC254-060-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-060-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-060-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-060-a-ml/20590-e0w.step?v=0116101903",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -628,8 +628,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-060-B-ML": {
         "partId": "thorlabs:AC254-060-B-ML",
         "sku": "AC254-060-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-060-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-060-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-060-b-ml/15893-e0w.step?v=0116101908",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -637,8 +637,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-060-C-ML": {
         "partId": "thorlabs:AC254-060-C-ML",
         "sku": "AC254-060-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-060-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-060-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-060-c-ml/19635-e0w.step?v=0116101909",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -646,8 +646,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-075-A-ML": {
         "partId": "thorlabs:AC254-075-A-ML",
         "sku": "AC254-075-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-075-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-075-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-075-a-ml/20591-e0w.step?v=0116101907",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -655,8 +655,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-075-AB-ML": {
         "partId": "thorlabs:AC254-075-AB-ML",
         "sku": "AC254-075-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-075-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-075-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-075-ab-ml/ttn161446-e0w.step?v=0116101914",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -664,8 +664,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-075-B-ML": {
         "partId": "thorlabs:AC254-075-B-ML",
         "sku": "AC254-075-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-075-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-075-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-075-b-ml/15894-e0w.step?v=0116101913",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -673,8 +673,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-075-C-ML": {
         "partId": "thorlabs:AC254-075-C-ML",
         "sku": "AC254-075-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-075-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-075-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-075-c-ml/19636-e0w.step?v=0116101913",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -682,8 +682,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-080-A-ML": {
         "partId": "thorlabs:AC254-080-A-ML",
         "sku": "AC254-080-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-080-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-080-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-080-a-ml/ttn005488-e0w.step?v=0116101920",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -691,8 +691,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-080-B-ML": {
         "partId": "thorlabs:AC254-080-B-ML",
         "sku": "AC254-080-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-080-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-080-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-080-b-ml/ttn005493-e0w.step?v=0116101919",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -700,8 +700,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-100-A-ML": {
         "partId": "thorlabs:AC254-100-A-ML",
         "sku": "AC254-100-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-100-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-100-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-100-a-ml/20592-e0w.step?v=0116101918",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -709,8 +709,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-100-AB-ML": {
         "partId": "thorlabs:AC254-100-AB-ML",
         "sku": "AC254-100-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-100-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-100-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-100-ab-ml/ttn161447-e0w.step?v=0116101925",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -718,8 +718,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-100-B-ML": {
         "partId": "thorlabs:AC254-100-B-ML",
         "sku": "AC254-100-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-100-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-100-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-100-b-ml/15895-e0w.step?v=0116101924",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -727,8 +727,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-100-C-ML": {
         "partId": "thorlabs:AC254-100-C-ML",
         "sku": "AC254-100-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-100-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-100-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-100-c-ml/19637-e0w.step?v=0116101924",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -736,8 +736,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-125-A-ML": {
         "partId": "thorlabs:AC254-125-A-ML",
         "sku": "AC254-125-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-125-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-125-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-125-a-ml/ttn005498-e0w.step?v=0116101930",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -745,8 +745,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-125-B-ML": {
         "partId": "thorlabs:AC254-125-B-ML",
         "sku": "AC254-125-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-125-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-125-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-125-b-ml/ac254-125-b-ml-e0w.step?v=0409060053",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -754,8 +754,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-150-A-ML": {
         "partId": "thorlabs:AC254-150-A-ML",
         "sku": "AC254-150-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-150-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-150-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-150-a-ml/ac254-150-a-ml-e0w.step?v=0514060049",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -763,8 +763,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-150-B-ML": {
         "partId": "thorlabs:AC254-150-B-ML",
         "sku": "AC254-150-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-150-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-150-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-150-b-ml/15896-e0w.step?v=0116101935",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -772,8 +772,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-150-C-ML": {
         "partId": "thorlabs:AC254-150-C-ML",
         "sku": "AC254-150-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-150-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-150-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-150-c-ml/19638-e0w.step?v=0116101934",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -781,8 +781,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-200-A-ML": {
         "partId": "thorlabs:AC254-200-A-ML",
         "sku": "AC254-200-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-200-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-200-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-200-a-ml/20594-e0w.step?v=0116101940",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -790,8 +790,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-200-B-ML": {
         "partId": "thorlabs:AC254-200-B-ML",
         "sku": "AC254-200-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-200-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-200-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-200-b-ml/ac254-200-b-ml-e0w.step?v=0512060050",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -799,8 +799,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-200-C-ML": {
         "partId": "thorlabs:AC254-200-C-ML",
         "sku": "AC254-200-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-200-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-200-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-200-c-ml/19639-e0w.step?v=0116101953",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -808,8 +808,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-250-A-ML": {
         "partId": "thorlabs:AC254-250-A-ML",
         "sku": "AC254-250-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-250-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-250-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-250-a-ml/20595-e0w.step?v=0116101954",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -817,8 +817,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-250-B-ML": {
         "partId": "thorlabs:AC254-250-B-ML",
         "sku": "AC254-250-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-250-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-250-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-250-b-ml/15898-e0w.step?v=0116101958",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -826,8 +826,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-250-C-ML": {
         "partId": "thorlabs:AC254-250-C-ML",
         "sku": "AC254-250-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-250-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-250-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-250-c-ml/19640-e0w.step?v=0116101958",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -835,8 +835,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-300-A-ML": {
         "partId": "thorlabs:AC254-300-A-ML",
         "sku": "AC254-300-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-300-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-300-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-300-a-ml/20596-e0w.step?v=0116102003",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -844,8 +844,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-300-B-ML": {
         "partId": "thorlabs:AC254-300-B-ML",
         "sku": "AC254-300-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-300-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-300-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-300-b-ml/15899-e0w.step?v=0116102003",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -853,8 +853,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-300-C-ML": {
         "partId": "thorlabs:AC254-300-C-ML",
         "sku": "AC254-300-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-300-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-300-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-300-c-ml/ac254-300-c-ml-e0w.step?v=0507060047",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -862,8 +862,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-400-A-ML": {
         "partId": "thorlabs:AC254-400-A-ML",
         "sku": "AC254-400-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-400-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-400-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-400-a-ml/20597-e0w.step?v=0116102007",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -871,8 +871,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-400-B-ML": {
         "partId": "thorlabs:AC254-400-B-ML",
         "sku": "AC254-400-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-400-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-400-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-400-b-ml/15900-e0w.step?v=0116102007",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -880,8 +880,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-400-C-ML": {
         "partId": "thorlabs:AC254-400-C-ML",
         "sku": "AC254-400-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-400-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-400-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-400-c-ml/ac254-400-c-ml-e0w.step?v=0409060056",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -889,8 +889,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-500-A-ML": {
         "partId": "thorlabs:AC254-500-A-ML",
         "sku": "AC254-500-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-500-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-500-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-500-a-ml/20598-e0w.step?v=0116102012",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -898,8 +898,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-500-B-ML": {
         "partId": "thorlabs:AC254-500-B-ML",
         "sku": "AC254-500-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-500-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-500-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-500-b-ml/15901-e0w.step?v=0116102017",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -907,8 +907,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC254-500-C-ML": {
         "partId": "thorlabs:AC254-500-C-ML",
         "sku": "AC254-500-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac254-500-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac254-500-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac2/ac254-500-c-ml/19643-e0w.step?v=0116102018",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -916,8 +916,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-075-A-ML": {
         "partId": "thorlabs:AC508-075-A-ML",
         "sku": "AC508-075-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-075-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-075-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-075-a-ml/20599-e0w.step?v=0116102024",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -925,8 +925,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-075-B-ML": {
         "partId": "thorlabs:AC508-075-B-ML",
         "sku": "AC508-075-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-075-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-075-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-075-b-ml/19111-e0w.step?v=0116102028",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -934,8 +934,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-075-C-ML": {
         "partId": "thorlabs:AC508-075-C-ML",
         "sku": "AC508-075-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-075-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-075-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-075-c-ml/19644-e0w.step?v=0116102029",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -943,8 +943,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-080-A-ML": {
         "partId": "thorlabs:AC508-080-A-ML",
         "sku": "AC508-080-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-080-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-080-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-080-a-ml/20600-e0w.step?v=0116102037",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -952,8 +952,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-080-AB-ML": {
         "partId": "thorlabs:AC508-080-AB-ML",
         "sku": "AC508-080-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-080-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-080-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-080-ab-ml/ttn161450-e0w.step?v=0116102039",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -961,8 +961,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-080-B-ML": {
         "partId": "thorlabs:AC508-080-B-ML",
         "sku": "AC508-080-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-080-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-080-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-080-b-ml/19112-e0w.step?v=0116102037",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -970,8 +970,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-080-C-ML": {
         "partId": "thorlabs:AC508-080-C-ML",
         "sku": "AC508-080-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-080-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-080-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-080-c-ml/19645-e0w.step?v=0116102042",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -979,8 +979,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-100-A-ML": {
         "partId": "thorlabs:AC508-100-A-ML",
         "sku": "AC508-100-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-100-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-100-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-100-a-ml/20601-e0w.step?v=0116102042",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -988,8 +988,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-100-B-ML": {
         "partId": "thorlabs:AC508-100-B-ML",
         "sku": "AC508-100-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-100-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-100-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-100-b-ml/19113-e0w.step?v=0116102047",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -997,8 +997,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-100-C-ML": {
         "partId": "thorlabs:AC508-100-C-ML",
         "sku": "AC508-100-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-100-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-100-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-100-c-ml/19646-e0w.step?v=0116102047",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1006,8 +1006,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-150-A-ML": {
         "partId": "thorlabs:AC508-150-A-ML",
         "sku": "AC508-150-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-150-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-150-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-150-a-ml/20602-e0w.step?v=0116102053",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1015,8 +1015,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-150-B-ML": {
         "partId": "thorlabs:AC508-150-B-ML",
         "sku": "AC508-150-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-150-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-150-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-150-b-ml/19114-e0w.step?v=0116102059",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1024,8 +1024,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-150-C-ML": {
         "partId": "thorlabs:AC508-150-C-ML",
         "sku": "AC508-150-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-150-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-150-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-150-c-ml/ac508-150-c-ml-e0w.step?v=0409060059",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1033,8 +1033,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-180-A-ML": {
         "partId": "thorlabs:AC508-180-A-ML",
         "sku": "AC508-180-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-180-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-180-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-180-a-ml/ac508-180-a-ml-e0w.step?v=0515060046",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1042,8 +1042,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:AC508-180-AB-ML": {
         "partId": "thorlabs:AC508-180-AB-ML",
         "sku": "AC508-180-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ac508-180-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ac508-180-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/ac5/ac508-180-ab-ml/ttn161451-e0w.step?v=0116102108",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1051,8 +1051,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-1000-A-ML": {
         "partId": "thorlabs:ACT508-1000-A-ML",
         "sku": "ACT508-1000-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-1000-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-1000-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-1000-a-ml/ttn163338-e0w.step?v=0116102342",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1060,8 +1060,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-1000-B-ML": {
         "partId": "thorlabs:ACT508-1000-B-ML",
         "sku": "ACT508-1000-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-1000-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-1000-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-1000-b-ml/act508-1000-b-ml-e0w.step?v=0409060102",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1069,8 +1069,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-200-A-ML": {
         "partId": "thorlabs:ACT508-200-A-ML",
         "sku": "ACT508-200-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-200-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-200-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-200-a-ml/ttn163331-e0w.step?v=0116102342",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1078,8 +1078,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-200-B-ML": {
         "partId": "thorlabs:ACT508-200-B-ML",
         "sku": "ACT508-200-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-200-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-200-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-200-b-ml/ttn197112-e0w.step?v=0116102343",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1087,8 +1087,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-200-C-ML": {
         "partId": "thorlabs:ACT508-200-C-ML",
         "sku": "ACT508-200-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-200-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-200-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-200-c-ml/ttn210963-e0w.step?v=0116102354",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1096,8 +1096,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-250-A-ML": {
         "partId": "thorlabs:ACT508-250-A-ML",
         "sku": "ACT508-250-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-250-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-250-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-250-a-ml/ttn163332-e0w.step?v=0116102354",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1105,8 +1105,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-250-B-ML": {
         "partId": "thorlabs:ACT508-250-B-ML",
         "sku": "ACT508-250-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-250-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-250-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-250-b-ml/ttn181255-e0w.step?v=0116102354",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1114,8 +1114,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-250-C-ML": {
         "partId": "thorlabs:ACT508-250-C-ML",
         "sku": "ACT508-250-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-250-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-250-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-250-c-ml/ttn210964-e0w.step?v=0116102354",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1123,8 +1123,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-300-A-ML": {
         "partId": "thorlabs:ACT508-300-A-ML",
         "sku": "ACT508-300-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-300-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-300-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-300-a-ml/ttn163333-e0w.step?v=0116102354",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1132,8 +1132,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-300-B-ML": {
         "partId": "thorlabs:ACT508-300-B-ML",
         "sku": "ACT508-300-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-300-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-300-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-300-b-ml/act508-300-b-ml-e0w.step?v=0417060105",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1141,8 +1141,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-400-A-ML": {
         "partId": "thorlabs:ACT508-400-A-ML",
         "sku": "ACT508-400-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-400-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-400-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-400-a-ml/ttn163335-e0w.step?v=0116102400",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1150,8 +1150,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-400-B-ML": {
         "partId": "thorlabs:ACT508-400-B-ML",
         "sku": "ACT508-400-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-400-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-400-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-400-b-ml/act508-400-b-ml-e0w.step?v=0428060055",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1159,8 +1159,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-500-A-ML": {
         "partId": "thorlabs:ACT508-500-A-ML",
         "sku": "ACT508-500-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-500-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-500-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-500-a-ml/ttn163336-e0w.step?v=0116102407",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1168,8 +1168,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-500-B-ML": {
         "partId": "thorlabs:ACT508-500-B-ML",
         "sku": "ACT508-500-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-500-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-500-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-500-b-ml/act508-500-b-ml-e0w.step?v=0312060129",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1177,8 +1177,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:ACT508-750-A-ML": {
         "partId": "thorlabs:ACT508-750-A-ML",
         "sku": "ACT508-750-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/act508-750-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/act508-750-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/a/ac/act/act508-750-a-ml/act508-750-a-ml-e0w.step?v=0512060054",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -1186,8 +1186,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS013": {
         "partId": "thorlabs:CCM1-BS013",
         "sku": "CCM1-BS013",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs013.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs013.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs013/ttn050868-e0w.step?v=0116105222",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1195,8 +1195,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS014": {
         "partId": "thorlabs:CCM1-BS014",
         "sku": "CCM1-BS014",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs014.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs014.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs014/ttn050871-e0w.step?v=0116105223",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1204,8 +1204,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS015": {
         "partId": "thorlabs:CCM1-BS015",
         "sku": "CCM1-BS015",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs015.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs015.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs015/ttn050874-e0w.step?v=0116105222",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1213,8 +1213,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS019": {
         "partId": "thorlabs:CCM1-BS019",
         "sku": "CCM1-BS019",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs019.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs019.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs019/ccm1-bs019-e0w.step?v=0218063105",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1222,8 +1222,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS020": {
         "partId": "thorlabs:CCM1-BS020",
         "sku": "CCM1-BS020",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs020.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs020.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs020/ccm1-bs020-e0w.step?v=0218063106",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1231,8 +1231,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS021": {
         "partId": "thorlabs:CCM1-BS021",
         "sku": "CCM1-BS021",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs021.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs021.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs021/ccm1-bs021-e0w.step?v=0218063104",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1240,8 +1240,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS022": {
         "partId": "thorlabs:CCM1-BS022",
         "sku": "CCM1-BS022",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs022.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs022.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs022/ccm1-bs022-e0w.step?v=0224060105",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1249,8 +1249,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS023": {
         "partId": "thorlabs:CCM1-BS023",
         "sku": "CCM1-BS023",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs023.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs023.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs023/ccm1-bs023-e0w.step?v=0224060106",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1258,8 +1258,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS024": {
         "partId": "thorlabs:CCM1-BS024",
         "sku": "CCM1-BS024",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs024.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs024.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs024/ccm1-bs024-e0w.step?v=0224060107",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1267,8 +1267,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS025": {
         "partId": "thorlabs:CCM1-BS025",
         "sku": "CCM1-BS025",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs025.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs025.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs025/ccm1-bs025-e0w.step?v=0122060107",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1276,8 +1276,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS026": {
         "partId": "thorlabs:CCM1-BS026",
         "sku": "CCM1-BS026",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs026.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs026.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs026/ccm1-bs026-e0w.step?v=0122060105",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1285,8 +1285,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS027": {
         "partId": "thorlabs:CCM1-BS027",
         "sku": "CCM1-BS027",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs027.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs027.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs027/ccm1-bs027-e0w.step?v=0122060117",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1294,8 +1294,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS028": {
         "partId": "thorlabs:CCM1-BS028",
         "sku": "CCM1-BS028",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs028.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs028.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs028/ccm1-bs028-e0w.step?v=0129060114",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1303,8 +1303,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS029": {
         "partId": "thorlabs:CCM1-BS029",
         "sku": "CCM1-BS029",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs029.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs029.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs029/ccm1-bs029-e0w.step?v=0129060109",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1312,8 +1312,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-BS030": {
         "partId": "thorlabs:CCM1-BS030",
         "sku": "CCM1-BS030",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-bs030.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-bs030.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-bs030/ccm1-bs030-e0w.step?v=0129060114",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1321,8 +1321,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-E02": {
         "partId": "thorlabs:CCM1-E02",
         "sku": "CCM1-E02",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-e02.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-e02.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-e02/ttn050877-e0w.step?v=0116105234",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1330,8 +1330,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-E03": {
         "partId": "thorlabs:CCM1-E03",
         "sku": "CCM1-E03",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-e03.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-e03.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-e03/ttn050880-e0w.step?v=0116105234",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1339,8 +1339,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-F01": {
         "partId": "thorlabs:CCM1-F01",
         "sku": "CCM1-F01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-f01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-f01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-f01/ttn050883-e0w.step?v=0116105236",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1348,8 +1348,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-G01": {
         "partId": "thorlabs:CCM1-G01",
         "sku": "CCM1-G01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-g01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-g01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-g01/ttn050886-e0w.step?v=0116105234",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1357,8 +1357,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-K13": {
         "partId": "thorlabs:CCM1-K13",
         "sku": "CCM1-K13",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-k13.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-k13.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-k13/ttn050889-e0w.step?v=0116105234",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1366,8 +1366,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-M01": {
         "partId": "thorlabs:CCM1-M01",
         "sku": "CCM1-M01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-m01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-m01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-m01/ttn050892-e0w.step?v=0116105239",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1375,8 +1375,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-P01": {
         "partId": "thorlabs:CCM1-P01",
         "sku": "CCM1-P01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-p01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-p01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-p01/ttn050895-e0w.step?v=0116105239",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1384,8 +1384,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-1064": {
         "partId": "thorlabs:CCM1-PBS25-1064",
         "sku": "CCM1-PBS25-1064",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1064.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1064.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-1064/ttn050901-e0w.step?v=0116105240",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1393,8 +1393,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-1064-HP": {
         "partId": "thorlabs:CCM1-PBS25-1064-HP",
         "sku": "CCM1-PBS25-1064-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1064-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1064-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-1064-hp/ttn050904-e0w.step?v=0116105240",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1402,8 +1402,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-1550": {
         "partId": "thorlabs:CCM1-PBS25-1550",
         "sku": "CCM1-PBS25-1550",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1550.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-1550.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-1550/ttn050907-e0w.step?v=0116105239",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1411,8 +1411,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-355-HP": {
         "partId": "thorlabs:CCM1-PBS25-355-HP",
         "sku": "CCM1-PBS25-355-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-355-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-355-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-355-hp/ttn118208-e0w.step?v=0116105245",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1420,8 +1420,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-405-HP": {
         "partId": "thorlabs:CCM1-PBS25-405-HP",
         "sku": "CCM1-PBS25-405-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-405-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-405-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-405-hp/ttn050919-e0w.step?v=0116105244",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1429,8 +1429,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-532": {
         "partId": "thorlabs:CCM1-PBS25-532",
         "sku": "CCM1-PBS25-532",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-532.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-532.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-532/ttn050923-e0w.step?v=0116105245",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1438,8 +1438,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-532-HP": {
         "partId": "thorlabs:CCM1-PBS25-532-HP",
         "sku": "CCM1-PBS25-532-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-532-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-532-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-532-hp/ttn050926-e0w.step?v=0116105244",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1447,8 +1447,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-633": {
         "partId": "thorlabs:CCM1-PBS25-633",
         "sku": "CCM1-PBS25-633",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-633.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-633.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-633/ttn050929-e0w.step?v=0116105244",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1456,8 +1456,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-633-HP": {
         "partId": "thorlabs:CCM1-PBS25-633-HP",
         "sku": "CCM1-PBS25-633-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-633-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-633-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-633-hp/ttn102730-e0w.step?v=0116105249",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1465,8 +1465,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-780": {
         "partId": "thorlabs:CCM1-PBS25-780",
         "sku": "CCM1-PBS25-780",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-780.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-780.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-780/ttn050932-e0w.step?v=0116105249",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1474,8 +1474,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-780-HP": {
         "partId": "thorlabs:CCM1-PBS25-780-HP",
         "sku": "CCM1-PBS25-780-HP",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-780-hp.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-780-hp.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-780-hp/ttn050935-e0w.step?v=0116105248",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1483,8 +1483,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM1-PBS25-980": {
         "partId": "thorlabs:CCM1-PBS25-980",
         "sku": "CCM1-PBS25-980",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-980.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm1-pbs25-980.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm1-pbs25-980/ttn050938-e0w.step?v=0116105250",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1492,8 +1492,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS016": {
         "partId": "thorlabs:CCM5-BS016",
         "sku": "CCM5-BS016",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs016.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs016.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs016/ttn050826-e0w.step?v=0116105304",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1501,8 +1501,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS017": {
         "partId": "thorlabs:CCM5-BS017",
         "sku": "CCM5-BS017",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs017.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs017.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs017/ttn050829-e0w.step?v=0116105312",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1510,8 +1510,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS018": {
         "partId": "thorlabs:CCM5-BS018",
         "sku": "CCM5-BS018",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs018.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs018.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs018/ttn050832-e0w.step?v=0116105312",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1519,8 +1519,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS043": {
         "partId": "thorlabs:CCM5-BS043",
         "sku": "CCM5-BS043",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs043.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs043.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs043/ccm5-bs043-e0w.step?v=0122060105",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1528,8 +1528,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS044": {
         "partId": "thorlabs:CCM5-BS044",
         "sku": "CCM5-BS044",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs044.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs044.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs044/ccm5-bs044-e0w.step?v=0122060104",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1537,8 +1537,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS045": {
         "partId": "thorlabs:CCM5-BS045",
         "sku": "CCM5-BS045",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs045.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs045.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs045/ccm5-bs045-e0w.step?v=0122060141",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1546,8 +1546,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS064": {
         "partId": "thorlabs:CCM5-BS064",
         "sku": "CCM5-BS064",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs064.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs064.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs064/ccm5-bs064-e0w.step?v=0224060106",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1555,8 +1555,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS065": {
         "partId": "thorlabs:CCM5-BS065",
         "sku": "CCM5-BS065",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs065.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs065.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs065/ccm5-bs065-e0w.step?v=0224060108",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1564,8 +1564,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS066": {
         "partId": "thorlabs:CCM5-BS066",
         "sku": "CCM5-BS066",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs066.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs066.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs066/ccm5-bs066-e0w.step?v=0224060136",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1573,8 +1573,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS076": {
         "partId": "thorlabs:CCM5-BS076",
         "sku": "CCM5-BS076",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs076.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs076.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs076/ccm5-bs076-e0w.step?v=0129060109",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1582,8 +1582,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS077": {
         "partId": "thorlabs:CCM5-BS077",
         "sku": "CCM5-BS077",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs077.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs077.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs077/ccm5-bs077-e0w.step?v=0129060109",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1591,8 +1591,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS078": {
         "partId": "thorlabs:CCM5-BS078",
         "sku": "CCM5-BS078",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs078.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs078.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs078/ccm5-bs078-e0w.step?v=0129060128",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1600,8 +1600,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-BS079": {
         "partId": "thorlabs:CCM5-BS079",
         "sku": "CCM5-BS079",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-bs079.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-bs079.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-bs079/ccm5-bs079-e0w.step?v=0218063104",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1609,8 +1609,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-E02": {
         "partId": "thorlabs:CCM5-E02",
         "sku": "CCM5-E02",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-e02.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-e02.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-e02/ttn050835-e0w.step?v=0116105314",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1618,8 +1618,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-E03": {
         "partId": "thorlabs:CCM5-E03",
         "sku": "CCM5-E03",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-e03.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-e03.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-e03/ttn050838-e0w.step?v=0116105314",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1627,8 +1627,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-F01": {
         "partId": "thorlabs:CCM5-F01",
         "sku": "CCM5-F01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-f01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-f01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-f01/ttn050841-e0w.step?v=0116105314",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1636,8 +1636,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-G01": {
         "partId": "thorlabs:CCM5-G01",
         "sku": "CCM5-G01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-g01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-g01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-g01/ttn050844-e0w.step?v=0116105317",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1645,8 +1645,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-K13": {
         "partId": "thorlabs:CCM5-K13",
         "sku": "CCM5-K13",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-k13.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-k13.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-k13/ttn050847-e0w.step?v=0116105317",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1654,8 +1654,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-M01": {
         "partId": "thorlabs:CCM5-M01",
         "sku": "CCM5-M01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-m01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-m01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-m01/ttn050850-e0w.step?v=0116105317",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1663,8 +1663,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:CCM5-P01": {
         "partId": "thorlabs:CCM5-P01",
         "sku": "CCM5-P01",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/ccm5-p01.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/ccm5-p01.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/c/cc/ccm/ccm5-p01/ttn050853-e0w.step?v=0116105316",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -1672,8 +1672,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1027-A-ML": {
         "partId": "thorlabs:LA1027-A-ML",
         "sku": "LA1027-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1027-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1027-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1027-a-ml/ttn039474-e0w.step?v=0116120341",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1681,8 +1681,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1027-AB-ML": {
         "partId": "thorlabs:LA1027-AB-ML",
         "sku": "LA1027-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1027-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1027-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1027-ab-ml/ttn320084-e0w.step?v=0116120340",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1690,8 +1690,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1027-B-ML": {
         "partId": "thorlabs:LA1027-B-ML",
         "sku": "LA1027-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1027-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1027-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1027-b-ml/ttn039477-e0w.step?v=0116120341",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1699,8 +1699,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1027-C-ML": {
         "partId": "thorlabs:LA1027-C-ML",
         "sku": "LA1027-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1027-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1027-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1027-c-ml/ttn039480-e0w.step?v=0116120341",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1708,8 +1708,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1027-ML": {
         "partId": "thorlabs:LA1027-ML",
         "sku": "LA1027-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1027-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1027-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1027-ml/ttn039471-e0w.step?v=0116120341",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1717,8 +1717,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1050-A-ML": {
         "partId": "thorlabs:LA1050-A-ML",
         "sku": "LA1050-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1050-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1050-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1050-a-ml/ttn039490-e0w.step?v=0116120351",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1726,8 +1726,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1050-AB-ML": {
         "partId": "thorlabs:LA1050-AB-ML",
         "sku": "LA1050-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1050-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1050-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1050-ab-ml/ttn320101-e0w.step?v=0116120351",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1735,8 +1735,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1050-B-ML": {
         "partId": "thorlabs:LA1050-B-ML",
         "sku": "LA1050-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1050-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1050-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1050-b-ml/ttn039493-e0w.step?v=0116120351",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1744,8 +1744,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1050-C-ML": {
         "partId": "thorlabs:LA1050-C-ML",
         "sku": "LA1050-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1050-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1050-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1050-c-ml/ttn039500-e0w.step?v=0116120355",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1753,8 +1753,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1050-ML": {
         "partId": "thorlabs:LA1050-ML",
         "sku": "LA1050-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1050-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1050-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1050-ml/ttn039484-e0w.step?v=0116120356",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1762,8 +1762,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1074-A-ML": {
         "partId": "thorlabs:LA1074-A-ML",
         "sku": "LA1074-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1074-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1074-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1074-a-ml/24391-e0w.step?v=0116120357",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1771,8 +1771,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1074-AB-ML": {
         "partId": "thorlabs:LA1074-AB-ML",
         "sku": "LA1074-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1074-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1074-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1074-ab-ml/ttn320061-e0w.step?v=0116120357",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1780,8 +1780,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1074-B-ML": {
         "partId": "thorlabs:LA1074-B-ML",
         "sku": "LA1074-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1074-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1074-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1074-b-ml/24392-e0w.step?v=0116120401",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1789,8 +1789,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1074-C-ML": {
         "partId": "thorlabs:LA1074-C-ML",
         "sku": "LA1074-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1074-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1074-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1074-c-ml/24393-e0w.step?v=0116120402",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1798,8 +1798,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1074-ML": {
         "partId": "thorlabs:LA1074-ML",
         "sku": "LA1074-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1074-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1074-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1074-ml/24390-e0w.step?v=0116120402",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1807,8 +1807,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1131-A-ML": {
         "partId": "thorlabs:LA1131-A-ML",
         "sku": "LA1131-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1131-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1131-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1131-a-ml/24419-e0w.step?v=0116120419",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1816,8 +1816,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1131-AB-ML": {
         "partId": "thorlabs:LA1131-AB-ML",
         "sku": "LA1131-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1131-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1131-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1131-ab-ml/ttn320085-e0w.step?v=0116120420",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1825,8 +1825,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1131-B-ML": {
         "partId": "thorlabs:LA1131-B-ML",
         "sku": "LA1131-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1131-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1131-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1131-b-ml/24420-e0w.step?v=0116120419",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1834,8 +1834,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1131-C-ML": {
         "partId": "thorlabs:LA1131-C-ML",
         "sku": "LA1131-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1131-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1131-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1131-c-ml/24421-e0w.step?v=0116120418",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1843,8 +1843,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1131-ML": {
         "partId": "thorlabs:LA1131-ML",
         "sku": "LA1131-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1131-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1131-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1131-ml/24418-e0w.step?v=0116120420",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1852,8 +1852,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1134-A-ML": {
         "partId": "thorlabs:LA1134-A-ML",
         "sku": "LA1134-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1134-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1134-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1134-a-ml/ttn203742-e0w.step?v=0116120424",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1861,8 +1861,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1134-AB-ML": {
         "partId": "thorlabs:LA1134-AB-ML",
         "sku": "LA1134-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1134-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1134-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1134-ab-ml/ttn320086-e0w.step?v=0116120424",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1870,8 +1870,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1134-B-ML": {
         "partId": "thorlabs:LA1134-B-ML",
         "sku": "LA1134-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1134-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1134-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1134-b-ml/ttn203743-e0w.step?v=0116120424",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1879,8 +1879,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1134-C-ML": {
         "partId": "thorlabs:LA1134-C-ML",
         "sku": "LA1134-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1134-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1134-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1134-c-ml/ttn203745-e0w.step?v=0116120424",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1888,8 +1888,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1134-ML": {
         "partId": "thorlabs:LA1134-ML",
         "sku": "LA1134-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1134-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1134-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1134-ml/ttn203741-e0w.step?v=0116120432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1897,8 +1897,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1145-A-ML": {
         "partId": "thorlabs:LA1145-A-ML",
         "sku": "LA1145-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1145-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1145-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1145-a-ml/ttn039511-e0w.step?v=0116120432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1906,8 +1906,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1145-AB-ML": {
         "partId": "thorlabs:LA1145-AB-ML",
         "sku": "LA1145-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1145-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1145-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1145-ab-ml/ttn320089-e0w.step?v=0116120432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1915,8 +1915,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1145-B-ML": {
         "partId": "thorlabs:LA1145-B-ML",
         "sku": "LA1145-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1145-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1145-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1145-b-ml/ttn039514-e0w.step?v=0116120432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1924,8 +1924,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1145-C-ML": {
         "partId": "thorlabs:LA1145-C-ML",
         "sku": "LA1145-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1145-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1145-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1145-c-ml/ttn039517-e0w.step?v=0116120432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1933,8 +1933,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1145-ML": {
         "partId": "thorlabs:LA1145-ML",
         "sku": "LA1145-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1145-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1145-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1145-ml/ttn039503-e0w.step?v=0116120437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1942,8 +1942,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1172-A-ML": {
         "partId": "thorlabs:LA1172-A-ML",
         "sku": "LA1172-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1172-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1172-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1172-a-ml/24447-e0w.step?v=0116120437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1951,8 +1951,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1172-AB-ML": {
         "partId": "thorlabs:LA1172-AB-ML",
         "sku": "LA1172-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1172-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1172-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1172-ab-ml/ttn320069-e0w.step?v=0116120437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1960,8 +1960,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1172-B-ML": {
         "partId": "thorlabs:LA1172-B-ML",
         "sku": "LA1172-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1172-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1172-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1172-b-ml/24448-e0w.step?v=0116120436",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1969,8 +1969,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1172-C-ML": {
         "partId": "thorlabs:LA1172-C-ML",
         "sku": "LA1172-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1172-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1172-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1172-c-ml/24449-e0w.step?v=0116120437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1978,8 +1978,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1172-ML": {
         "partId": "thorlabs:LA1172-ML",
         "sku": "LA1172-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1172-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1172-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1172-ml/24446-e0w.step?v=0116120441",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1987,8 +1987,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1207-A-ML": {
         "partId": "thorlabs:LA1207-A-ML",
         "sku": "LA1207-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1207-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1207-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1207-a-ml/ttn039523-e0w.step?v=0116120442",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -1996,8 +1996,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1207-AB-ML": {
         "partId": "thorlabs:LA1207-AB-ML",
         "sku": "LA1207-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1207-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1207-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1207-ab-ml/ttn320062-e0w.step?v=0116120442",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2005,8 +2005,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1207-B-ML": {
         "partId": "thorlabs:LA1207-B-ML",
         "sku": "LA1207-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1207-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1207-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1207-b-ml/ttn039526-e0w.step?v=0116120441",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2014,8 +2014,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1207-C-ML": {
         "partId": "thorlabs:LA1207-C-ML",
         "sku": "LA1207-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1207-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1207-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1207-c-ml/ttn039529-e0w.step?v=0116120441",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2023,8 +2023,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1207-ML": {
         "partId": "thorlabs:LA1207-ML",
         "sku": "LA1207-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1207-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1207-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1207-ml/ttn039520-e0w.step?v=0116120456",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2032,8 +2032,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1213-A-ML": {
         "partId": "thorlabs:LA1213-A-ML",
         "sku": "LA1213-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1213-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1213-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1213-a-ml/24399-e0w.step?v=0116120457",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2041,8 +2041,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1213-AB-ML": {
         "partId": "thorlabs:LA1213-AB-ML",
         "sku": "LA1213-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1213-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1213-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1213-ab-ml/ttn320063-e0w.step?v=0116120455",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2050,8 +2050,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1213-B-ML": {
         "partId": "thorlabs:LA1213-B-ML",
         "sku": "LA1213-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1213-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1213-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1213-b-ml/24400-e0w.step?v=0116120458",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2059,8 +2059,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1213-C-ML": {
         "partId": "thorlabs:LA1213-C-ML",
         "sku": "LA1213-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1213-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1213-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1213-c-ml/24401-e0w.step?v=0116120457",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2068,8 +2068,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1213-ML": {
         "partId": "thorlabs:LA1213-ML",
         "sku": "LA1213-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1213-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1213-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1213-ml/24398-e0w.step?v=0116120506",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2077,8 +2077,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1229-AB-ML": {
         "partId": "thorlabs:LA1229-AB-ML",
         "sku": "LA1229-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1229-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1229-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1229-ab-ml/ttn320068-e0w.step?v=0116120506",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2086,8 +2086,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1254-A-ML": {
         "partId": "thorlabs:LA1254-A-ML",
         "sku": "LA1254-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1254-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1254-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1254-a-ml/ttn162135-e0w.step?v=0116120526",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2095,8 +2095,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1254-AB-ML": {
         "partId": "thorlabs:LA1254-AB-ML",
         "sku": "LA1254-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1254-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1254-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1254-ab-ml/ttn320070-e0w.step?v=0116120534",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2104,8 +2104,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1254-B-ML": {
         "partId": "thorlabs:LA1254-B-ML",
         "sku": "LA1254-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1254-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1254-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1254-b-ml/ttn162136-e0w.step?v=0116120535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2113,8 +2113,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1254-C-ML": {
         "partId": "thorlabs:LA1254-C-ML",
         "sku": "LA1254-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1254-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1254-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1254-c-ml/ttn162138-e0w.step?v=0116120535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2122,8 +2122,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1254-ML": {
         "partId": "thorlabs:LA1254-ML",
         "sku": "LA1254-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1254-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1254-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1254-ml/ttn162134-e0w.step?v=0116120535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2131,8 +2131,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1256-A-ML": {
         "partId": "thorlabs:LA1256-A-ML",
         "sku": "LA1256-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1256-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1256-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1256-a-ml/ttn039535-e0w.step?v=0116120542",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2140,8 +2140,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1256-AB-ML": {
         "partId": "thorlabs:LA1256-AB-ML",
         "sku": "LA1256-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1256-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1256-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1256-ab-ml/ttn320090-e0w.step?v=0116120543",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2149,8 +2149,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1256-B-ML": {
         "partId": "thorlabs:LA1256-B-ML",
         "sku": "LA1256-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1256-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1256-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1256-b-ml/ttn039540-e0w.step?v=0116120543",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2158,8 +2158,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1256-C-ML": {
         "partId": "thorlabs:LA1256-C-ML",
         "sku": "LA1256-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1256-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1256-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1256-c-ml/ttn039543-e0w.step?v=0116120547",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2167,8 +2167,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1256-ML": {
         "partId": "thorlabs:LA1256-ML",
         "sku": "LA1256-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1256-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1256-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1256-ml/ttn039532-e0w.step?v=0116120549",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2176,8 +2176,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1258-A-ML": {
         "partId": "thorlabs:LA1258-A-ML",
         "sku": "LA1258-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1258-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1258-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1258-a-ml/ttn162140-e0w.step?v=0116120547",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2185,8 +2185,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1258-AB-ML": {
         "partId": "thorlabs:LA1258-AB-ML",
         "sku": "LA1258-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1258-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1258-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1258-ab-ml/ttn320071-e0w.step?v=0116120553",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2194,8 +2194,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1258-B-ML": {
         "partId": "thorlabs:LA1258-B-ML",
         "sku": "LA1258-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1258-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1258-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1258-b-ml/ttn162141-e0w.step?v=0116120552",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2203,8 +2203,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1258-C-ML": {
         "partId": "thorlabs:LA1258-C-ML",
         "sku": "LA1258-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1258-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1258-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1258-c-ml/ttn162142-e0w.step?v=0116120552",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2212,8 +2212,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1258-ML": {
         "partId": "thorlabs:LA1258-ML",
         "sku": "LA1258-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1258-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1258-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1258-ml/ttn162139-e0w.step?v=0116120553",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2221,8 +2221,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1259-A-ML": {
         "partId": "thorlabs:LA1259-A-ML",
         "sku": "LA1259-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1259-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1259-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1259-a-ml/ttn162144-e0w.step?v=0116120552",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2230,8 +2230,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1259-AB-ML": {
         "partId": "thorlabs:LA1259-AB-ML",
         "sku": "LA1259-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1259-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1259-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1259-ab-ml/ttn320072-e0w.step?v=0116120558",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2239,8 +2239,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1259-B-ML": {
         "partId": "thorlabs:LA1259-B-ML",
         "sku": "LA1259-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1259-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1259-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1259-b-ml/ttn162145-e0w.step?v=0116120558",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2248,8 +2248,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1259-C-ML": {
         "partId": "thorlabs:LA1259-C-ML",
         "sku": "LA1259-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1259-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1259-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1259-c-ml/ttn162146-e0w.step?v=0116120559",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2257,8 +2257,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1259-ML": {
         "partId": "thorlabs:LA1259-ML",
         "sku": "LA1259-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1259-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1259-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1259-ml/ttn162143-e0w.step?v=0116120558",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2266,8 +2266,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1289-A-ML": {
         "partId": "thorlabs:LA1289-A-ML",
         "sku": "LA1289-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1289-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1289-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1289-a-ml/ttn039549-e0w.step?v=0116120604",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2275,8 +2275,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1289-AB-ML": {
         "partId": "thorlabs:LA1289-AB-ML",
         "sku": "LA1289-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1289-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1289-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1289-ab-ml/ttn320064-e0w.step?v=0116120609",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2284,8 +2284,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1289-B-ML": {
         "partId": "thorlabs:LA1289-B-ML",
         "sku": "LA1289-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1289-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1289-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1289-b-ml/ttn039552-e0w.step?v=0116120609",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2293,8 +2293,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1289-C-ML": {
         "partId": "thorlabs:LA1289-C-ML",
         "sku": "LA1289-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1289-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1289-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1289-c-ml/ttn039555-e0w.step?v=0116120608",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2302,8 +2302,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1289-ML": {
         "partId": "thorlabs:LA1289-ML",
         "sku": "LA1289-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1289-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1289-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1289-ml/ttn039546-e0w.step?v=0116120607",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2311,8 +2311,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1301-A-ML": {
         "partId": "thorlabs:LA1301-A-ML",
         "sku": "LA1301-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1301-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1301-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1301-a-ml/ttn203752-e0w.step?v=0116120608",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2320,8 +2320,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1301-AB-ML": {
         "partId": "thorlabs:LA1301-AB-ML",
         "sku": "LA1301-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1301-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1301-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1301-ab-ml/ttn320091-e0w.step?v=0116120614",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2329,8 +2329,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1301-B-ML": {
         "partId": "thorlabs:LA1301-B-ML",
         "sku": "LA1301-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1301-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1301-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1301-b-ml/ttn203753-e0w.step?v=0116120612",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2338,8 +2338,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1301-C-ML": {
         "partId": "thorlabs:LA1301-C-ML",
         "sku": "LA1301-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1301-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1301-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1301-c-ml/ttn203754-e0w.step?v=0116120613",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2347,8 +2347,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1301-ML": {
         "partId": "thorlabs:LA1301-ML",
         "sku": "LA1301-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1301-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1301-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1301-ml/ttn203751-e0w.step?v=0116120613",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2356,8 +2356,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1304-A-ML": {
         "partId": "thorlabs:LA1304-A-ML",
         "sku": "LA1304-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1304-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1304-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1304-a-ml/24407-e0w.step?v=0116120618",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2365,8 +2365,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1304-AB-ML": {
         "partId": "thorlabs:LA1304-AB-ML",
         "sku": "LA1304-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1304-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1304-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1304-ab-ml/ttn320065-e0w.step?v=0116120618",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2374,8 +2374,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1304-B-ML": {
         "partId": "thorlabs:LA1304-B-ML",
         "sku": "LA1304-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1304-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1304-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1304-b-ml/24408-e0w.step?v=0116120619",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2383,8 +2383,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1304-C-ML": {
         "partId": "thorlabs:LA1304-C-ML",
         "sku": "LA1304-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1304-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1304-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1304-c-ml/24409-e0w.step?v=0116120618",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2392,8 +2392,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1304-ML": {
         "partId": "thorlabs:LA1304-ML",
         "sku": "LA1304-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1304-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1304-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1304-ml/24406-e0w.step?v=0116120617",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2401,8 +2401,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1380-A-ML": {
         "partId": "thorlabs:LA1380-A-ML",
         "sku": "LA1380-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1380-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1380-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1380-a-ml/ttn039561-e0w.step?v=0116120623",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2410,8 +2410,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1380-AB-ML": {
         "partId": "thorlabs:LA1380-AB-ML",
         "sku": "LA1380-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1380-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1380-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1380-ab-ml/ttn320093-e0w.step?v=0116120623",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2419,8 +2419,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1380-B-ML": {
         "partId": "thorlabs:LA1380-B-ML",
         "sku": "LA1380-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1380-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1380-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1380-b-ml/ttn039564-e0w.step?v=0116120628",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2428,8 +2428,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1380-C-ML": {
         "partId": "thorlabs:LA1380-C-ML",
         "sku": "LA1380-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1380-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1380-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1380-c-ml/ttn039567-e0w.step?v=0116120629",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2437,8 +2437,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1380-ML": {
         "partId": "thorlabs:LA1380-ML",
         "sku": "LA1380-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1380-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1380-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1380-ml/ttn039558-e0w.step?v=0116120629",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2446,8 +2446,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1384-A-ML": {
         "partId": "thorlabs:LA1384-A-ML",
         "sku": "LA1384-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1384-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1384-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1384-a-ml/ttn039573-e0w.step?v=0116120629",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2455,8 +2455,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1384-AB-ML": {
         "partId": "thorlabs:LA1384-AB-ML",
         "sku": "LA1384-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1384-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1384-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1384-ab-ml/ttn320094-e0w.step?v=0116120629",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2464,8 +2464,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1384-B-ML": {
         "partId": "thorlabs:LA1384-B-ML",
         "sku": "LA1384-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1384-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1384-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1384-b-ml/ttn039576-e0w.step?v=0116120638",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2473,8 +2473,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1384-C-ML": {
         "partId": "thorlabs:LA1384-C-ML",
         "sku": "LA1384-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1384-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1384-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1384-c-ml/ttn039579-e0w.step?v=0116120638",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2482,8 +2482,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1384-ML": {
         "partId": "thorlabs:LA1384-ML",
         "sku": "LA1384-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1384-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1384-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1384-ml/ttn039570-e0w.step?v=0116120638",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2491,8 +2491,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1385-A-ML": {
         "partId": "thorlabs:LA1385-A-ML",
         "sku": "LA1385-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1385-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1385-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1385-a-ml/ttn200716-e0w.step?v=0116120639",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2500,8 +2500,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1385-AB-ML": {
         "partId": "thorlabs:LA1385-AB-ML",
         "sku": "LA1385-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1385-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1385-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1385-ab-ml/ttn324928-e0w.step?v=0116120638",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2509,8 +2509,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1385-B-ML": {
         "partId": "thorlabs:LA1385-B-ML",
         "sku": "LA1385-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1385-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1385-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1385-b-ml/ttn200731-e0w.step?v=0116120644",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2518,8 +2518,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1385-C-ML": {
         "partId": "thorlabs:LA1385-C-ML",
         "sku": "LA1385-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1385-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1385-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1385-c-ml/ttn200744-e0w.step?v=0116120644",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2527,8 +2527,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1385-ML": {
         "partId": "thorlabs:LA1385-ML",
         "sku": "LA1385-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1385-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1385-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1385-ml/ttn200684-e0w.step?v=0116120643",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2536,8 +2536,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1386-A-ML": {
         "partId": "thorlabs:LA1386-A-ML",
         "sku": "LA1386-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1386-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1386-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1386-a-ml/ttn200719-e0w.step?v=0116120643",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2545,8 +2545,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1386-AB-ML": {
         "partId": "thorlabs:LA1386-AB-ML",
         "sku": "LA1386-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1386-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1386-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1386-ab-ml/ttn324931-e0w.step?v=0116120643",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2554,8 +2554,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1386-B-ML": {
         "partId": "thorlabs:LA1386-B-ML",
         "sku": "LA1386-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1386-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1386-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1386-b-ml/ttn200732-e0w.step?v=0116120648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2563,8 +2563,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1386-C-ML": {
         "partId": "thorlabs:LA1386-C-ML",
         "sku": "LA1386-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1386-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1386-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1386-c-ml/ttn200745-e0w.step?v=0116120648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2572,8 +2572,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1386-ML": {
         "partId": "thorlabs:LA1386-ML",
         "sku": "LA1386-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1386-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1386-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1386-ml/ttn200686-e0w.step?v=0116120649",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2581,8 +2581,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1387-A-ML": {
         "partId": "thorlabs:LA1387-A-ML",
         "sku": "LA1387-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1387-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1387-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1387-a-ml/ttn200722-e0w.step?v=0116120648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2590,8 +2590,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1387-AB-ML": {
         "partId": "thorlabs:LA1387-AB-ML",
         "sku": "LA1387-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1387-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1387-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1387-ab-ml/ttn324932-e0w.step?v=0116120648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2599,8 +2599,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1387-B-ML": {
         "partId": "thorlabs:LA1387-B-ML",
         "sku": "LA1387-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1387-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1387-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1387-b-ml/ttn200733-e0w.step?v=0116120654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2608,8 +2608,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1387-C-ML": {
         "partId": "thorlabs:LA1387-C-ML",
         "sku": "LA1387-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1387-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1387-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1387-c-ml/ttn200746-e0w.step?v=0116120653",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2617,8 +2617,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1387-ML": {
         "partId": "thorlabs:LA1387-ML",
         "sku": "LA1387-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1387-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1387-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1387-ml/ttn200689-e0w.step?v=0116120653",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2626,8 +2626,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1388-A-ML": {
         "partId": "thorlabs:LA1388-A-ML",
         "sku": "LA1388-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1388-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1388-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1388-a-ml/ttn200723-e0w.step?v=0116120654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2635,8 +2635,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1388-AB-ML": {
         "partId": "thorlabs:LA1388-AB-ML",
         "sku": "LA1388-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1388-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1388-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1388-ab-ml/ttn324934-e0w.step?v=0116120654",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2644,8 +2644,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1388-B-ML": {
         "partId": "thorlabs:LA1388-B-ML",
         "sku": "LA1388-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1388-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1388-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1388-b-ml/ttn200734-e0w.step?v=0116120658",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2653,8 +2653,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1388-C-ML": {
         "partId": "thorlabs:LA1388-C-ML",
         "sku": "LA1388-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1388-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1388-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1388-c-ml/ttn200747-e0w.step?v=0116120659",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2662,8 +2662,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1388-ML": {
         "partId": "thorlabs:LA1388-ML",
         "sku": "LA1388-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1388-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1388-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1388-ml/ttn200692-e0w.step?v=0116120658",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2671,8 +2671,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1389-A-ML": {
         "partId": "thorlabs:LA1389-A-ML",
         "sku": "LA1389-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1389-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1389-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1389-a-ml/ttn200724-e0w.step?v=0116120700",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2680,8 +2680,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1389-AB-ML": {
         "partId": "thorlabs:LA1389-AB-ML",
         "sku": "LA1389-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1389-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1389-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1389-ab-ml/ttn324936-e0w.step?v=0116120659",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2689,8 +2689,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1389-B-ML": {
         "partId": "thorlabs:LA1389-B-ML",
         "sku": "LA1389-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1389-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1389-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1389-b-ml/ttn200735-e0w.step?v=0116120704",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2698,8 +2698,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1389-C-ML": {
         "partId": "thorlabs:LA1389-C-ML",
         "sku": "LA1389-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1389-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1389-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1389-c-ml/ttn200749-e0w.step?v=0116120704",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2707,8 +2707,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1389-ML": {
         "partId": "thorlabs:LA1389-ML",
         "sku": "LA1389-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1389-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1389-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1389-ml/ttn200694-e0w.step?v=0116120704",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2716,8 +2716,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1399-AB-ML": {
         "partId": "thorlabs:LA1399-AB-ML",
         "sku": "LA1399-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1399-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1399-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1399-ab-ml/ttn320095-e0w.step?v=0116120705",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2725,8 +2725,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1401-A-ML": {
         "partId": "thorlabs:LA1401-A-ML",
         "sku": "LA1401-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1401-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1401-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1401-a-ml/ttn203747-e0w.step?v=0116120709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2734,8 +2734,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1401-AB-ML": {
         "partId": "thorlabs:LA1401-AB-ML",
         "sku": "LA1401-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1401-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1401-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1401-ab-ml/ttn320102-e0w.step?v=0116120709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2743,8 +2743,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1401-B-ML": {
         "partId": "thorlabs:LA1401-B-ML",
         "sku": "LA1401-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1401-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1401-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1401-b-ml/ttn203748-e0w.step?v=0116120709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2752,8 +2752,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1401-C-ML": {
         "partId": "thorlabs:LA1401-C-ML",
         "sku": "LA1401-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1401-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1401-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1401-c-ml/ttn203750-e0w.step?v=0116120709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2761,8 +2761,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1401-ML": {
         "partId": "thorlabs:LA1401-ML",
         "sku": "LA1401-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1401-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1401-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1401-ml/ttn203746-e0w.step?v=0116120714",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2770,8 +2770,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1417-A-ML": {
         "partId": "thorlabs:LA1417-A-ML",
         "sku": "LA1417-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1417-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1417-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1417-a-ml/ttn039585-e0w.step?v=0116120715",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2779,8 +2779,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1417-AB-ML": {
         "partId": "thorlabs:LA1417-AB-ML",
         "sku": "LA1417-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1417-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1417-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1417-ab-ml/ttn320096-e0w.step?v=0116120715",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2788,8 +2788,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1417-B-ML": {
         "partId": "thorlabs:LA1417-B-ML",
         "sku": "LA1417-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1417-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1417-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1417-b-ml/ttn039588-e0w.step?v=0116120714",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2797,8 +2797,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1417-C-ML": {
         "partId": "thorlabs:LA1417-C-ML",
         "sku": "LA1417-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1417-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1417-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1417-c-ml/ttn039591-e0w.step?v=0116120713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2806,8 +2806,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1417-ML": {
         "partId": "thorlabs:LA1417-ML",
         "sku": "LA1417-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1417-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1417-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1417-ml/ttn039582-e0w.step?v=0116120720",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2815,8 +2815,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1422-A-ML": {
         "partId": "thorlabs:LA1422-A-ML",
         "sku": "LA1422-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1422-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1422-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1422-a-ml/ttn203737-e0w.step?v=0116120720",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2824,8 +2824,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1422-AB-ML": {
         "partId": "thorlabs:LA1422-AB-ML",
         "sku": "LA1422-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1422-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1422-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1422-ab-ml/ttn320087-e0w.step?v=0116120725",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2833,8 +2833,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1422-B-ML": {
         "partId": "thorlabs:LA1422-B-ML",
         "sku": "LA1422-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1422-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1422-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1422-b-ml/ttn203739-e0w.step?v=0116120726",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2842,8 +2842,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1422-C-ML": {
         "partId": "thorlabs:LA1422-C-ML",
         "sku": "LA1422-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1422-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1422-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1422-c-ml/ttn203740-e0w.step?v=0116120726",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2851,8 +2851,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1422-ML": {
         "partId": "thorlabs:LA1422-ML",
         "sku": "LA1422-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1422-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1422-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1422-ml/ttn203736-e0w.step?v=0116120725",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2860,8 +2860,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1433-A-ML": {
         "partId": "thorlabs:LA1433-A-ML",
         "sku": "LA1433-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1433-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1433-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1433-a-ml/24431-e0w.step?v=0116120729",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2869,8 +2869,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1433-AB-ML": {
         "partId": "thorlabs:LA1433-AB-ML",
         "sku": "LA1433-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1433-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1433-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1433-ab-ml/ttn320073-e0w.step?v=0116120730",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2878,8 +2878,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1433-B-ML": {
         "partId": "thorlabs:LA1433-B-ML",
         "sku": "LA1433-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1433-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1433-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1433-b-ml/24432-e0w.step?v=0116120730",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2887,8 +2887,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1433-C-ML": {
         "partId": "thorlabs:LA1433-C-ML",
         "sku": "LA1433-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1433-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1433-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1433-c-ml/24433-e0w.step?v=0116120731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2896,8 +2896,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1433-ML": {
         "partId": "thorlabs:LA1433-ML",
         "sku": "LA1433-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1433-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1433-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1433-ml/24430-e0w.step?v=0116120731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2905,8 +2905,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1461-A-ML": {
         "partId": "thorlabs:LA1461-A-ML",
         "sku": "LA1461-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1461-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1461-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1461-a-ml/24435-e0w.step?v=0116120735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2914,8 +2914,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1461-AB-ML": {
         "partId": "thorlabs:LA1461-AB-ML",
         "sku": "LA1461-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1461-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1461-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1461-ab-ml/ttn320076-e0w.step?v=0116120736",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2923,8 +2923,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1461-B-ML": {
         "partId": "thorlabs:LA1461-B-ML",
         "sku": "LA1461-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1461-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1461-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1461-b-ml/24436-e0w.step?v=0116120735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2932,8 +2932,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1461-C-ML": {
         "partId": "thorlabs:LA1461-C-ML",
         "sku": "LA1461-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1461-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1461-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1461-c-ml/24437-e0w.step?v=0116120734",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2941,8 +2941,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1461-ML": {
         "partId": "thorlabs:LA1461-ML",
         "sku": "LA1461-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1461-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1461-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1461-ml/24434-e0w.step?v=0116120734",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2950,8 +2950,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1464-A-ML": {
         "partId": "thorlabs:LA1464-A-ML",
         "sku": "LA1464-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1464-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1464-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1464-a-ml/ttn039597-e0w.step?v=0116120744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2959,8 +2959,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1464-AB-ML": {
         "partId": "thorlabs:LA1464-AB-ML",
         "sku": "LA1464-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1464-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1464-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1464-ab-ml/ttn320077-e0w.step?v=0116120744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2968,8 +2968,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1464-B-ML": {
         "partId": "thorlabs:LA1464-B-ML",
         "sku": "LA1464-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1464-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1464-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1464-b-ml/ttn039600-e0w.step?v=0116120743",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2977,8 +2977,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1464-C-ML": {
         "partId": "thorlabs:LA1464-C-ML",
         "sku": "LA1464-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1464-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1464-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1464-c-ml/ttn039603-e0w.step?v=0116120749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2986,8 +2986,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1464-ML": {
         "partId": "thorlabs:LA1464-ML",
         "sku": "LA1464-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1464-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1464-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1464-ml/ttn039594-e0w.step?v=0116120748",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -2995,8 +2995,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1484-A-ML": {
         "partId": "thorlabs:LA1484-A-ML",
         "sku": "LA1484-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1484-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1484-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1484-a-ml/24423-e0w.step?v=0116120752",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3004,8 +3004,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1484-AB-ML": {
         "partId": "thorlabs:LA1484-AB-ML",
         "sku": "LA1484-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1484-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1484-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1484-ab-ml/ttn320078-e0w.step?v=0116120753",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3013,8 +3013,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1484-B-ML": {
         "partId": "thorlabs:LA1484-B-ML",
         "sku": "LA1484-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1484-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1484-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1484-b-ml/24424-e0w.step?v=0116120752",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3022,8 +3022,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1484-C-ML": {
         "partId": "thorlabs:LA1484-C-ML",
         "sku": "LA1484-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1484-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1484-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1484-c-ml/24425-e0w.step?v=0116120802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3031,8 +3031,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1484-ML": {
         "partId": "thorlabs:LA1484-ML",
         "sku": "LA1484-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1484-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1484-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1484-ml/24422-e0w.step?v=0116120802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3040,8 +3040,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1509-A-ML": {
         "partId": "thorlabs:LA1509-A-ML",
         "sku": "LA1509-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1509-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1509-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1509-a-ml/24411-e0w.step?v=0116120802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3049,8 +3049,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1509-AB-ML": {
         "partId": "thorlabs:LA1509-AB-ML",
         "sku": "LA1509-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1509-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1509-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1509-ab-ml/ttn324938-e0w.step?v=0116120802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3058,8 +3058,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1509-B-ML": {
         "partId": "thorlabs:LA1509-B-ML",
         "sku": "LA1509-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1509-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1509-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1509-b-ml/24412-e0w.step?v=0116120807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3067,8 +3067,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1509-C-ML": {
         "partId": "thorlabs:LA1509-C-ML",
         "sku": "LA1509-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1509-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1509-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1509-c-ml/24413-e0w.step?v=0116120807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3076,8 +3076,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1509-ML": {
         "partId": "thorlabs:LA1509-ML",
         "sku": "LA1509-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1509-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1509-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1509-ml/24410-e0w.step?v=0116120807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3085,8 +3085,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1540-A-ML": {
         "partId": "thorlabs:LA1540-A-ML",
         "sku": "LA1540-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1540-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1540-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1540-a-ml/24403-e0w.step?v=0116120811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3094,8 +3094,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1540-AB-ML": {
         "partId": "thorlabs:LA1540-AB-ML",
         "sku": "LA1540-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1540-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1540-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1540-ab-ml/ttn320066-e0w.step?v=0116120811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3103,8 +3103,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1540-B-ML": {
         "partId": "thorlabs:LA1540-B-ML",
         "sku": "LA1540-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1540-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1540-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1540-b-ml/24404-e0w.step?v=0116120811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3112,8 +3112,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1540-C-ML": {
         "partId": "thorlabs:LA1540-C-ML",
         "sku": "LA1540-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1540-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1540-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1540-c-ml/24405-e0w.step?v=0116120811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3121,8 +3121,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1540-ML": {
         "partId": "thorlabs:LA1540-ML",
         "sku": "LA1540-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1540-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1540-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1540-ml/24402-e0w.step?v=0116120811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3130,8 +3130,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1560-A-ML": {
         "partId": "thorlabs:LA1560-A-ML",
         "sku": "LA1560-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1560-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1560-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1560-a-ml/24395-e0w.step?v=0116120816",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3139,8 +3139,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1560-AB-ML": {
         "partId": "thorlabs:LA1560-AB-ML",
         "sku": "LA1560-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1560-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1560-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1560-ab-ml/ttn320067-e0w.step?v=0116120819",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3148,8 +3148,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1560-B-ML": {
         "partId": "thorlabs:LA1560-B-ML",
         "sku": "LA1560-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1560-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1560-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1560-b-ml/24396-e0w.step?v=0116120820",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3157,8 +3157,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1560-C-ML": {
         "partId": "thorlabs:LA1560-C-ML",
         "sku": "LA1560-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1560-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1560-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1560-c-ml/24397-e0w.step?v=0116120820",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3166,8 +3166,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1560-ML": {
         "partId": "thorlabs:LA1560-ML",
         "sku": "LA1560-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1560-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1560-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1560-ml/24394-e0w.step?v=0116120820",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3175,8 +3175,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1608-A-ML": {
         "partId": "thorlabs:LA1608-A-ML",
         "sku": "LA1608-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1608-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1608-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1608-a-ml/24427-e0w.step?v=0116120823",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3184,8 +3184,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1608-AB-ML": {
         "partId": "thorlabs:LA1608-AB-ML",
         "sku": "LA1608-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1608-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1608-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1608-ab-ml/ttn320079-e0w.step?v=0116120824",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3193,8 +3193,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1608-B-ML": {
         "partId": "thorlabs:LA1608-B-ML",
         "sku": "LA1608-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1608-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1608-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1608-b-ml/24428-e0w.step?v=0116120827",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3202,8 +3202,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1608-C-ML": {
         "partId": "thorlabs:LA1608-C-ML",
         "sku": "LA1608-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1608-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1608-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1608-c-ml/24429-e0w.step?v=0116120827",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3211,8 +3211,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1608-ML": {
         "partId": "thorlabs:LA1608-ML",
         "sku": "LA1608-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1608-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1608-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1608-ml/24426-e0w.step?v=0116120827",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3220,8 +3220,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1610-A-ML": {
         "partId": "thorlabs:LA1610-A-ML",
         "sku": "LA1610-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1610-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1610-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1610-a-ml/la1610-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3229,8 +3229,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1610-B-ML": {
         "partId": "thorlabs:LA1610-B-ML",
         "sku": "LA1610-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1610-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1610-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1610-b-ml/la1610-b-ml-e0w.step?v=0410060119",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3238,8 +3238,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1611-A-ML": {
         "partId": "thorlabs:LA1611-A-ML",
         "sku": "LA1611-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1611-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1611-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1611-a-ml/la1611-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3247,8 +3247,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1611-B-ML": {
         "partId": "thorlabs:LA1611-B-ML",
         "sku": "LA1611-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1611-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1611-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1611-b-ml/la1611-b-ml-e0w.step?v=0410060120",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3256,8 +3256,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1612-A-ML": {
         "partId": "thorlabs:LA1612-A-ML",
         "sku": "LA1612-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1612-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1612-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1612-a-ml/la1612-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3265,8 +3265,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1612-B-ML": {
         "partId": "thorlabs:LA1612-B-ML",
         "sku": "LA1612-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1612-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1612-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1612-b-ml/la1612-b-ml-e0w.step?v=0410060122",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3274,8 +3274,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1613-A-ML": {
         "partId": "thorlabs:LA1613-A-ML",
         "sku": "LA1613-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1613-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1613-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1613-a-ml/la1613-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3283,8 +3283,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1614-A-ML": {
         "partId": "thorlabs:LA1614-A-ML",
         "sku": "LA1614-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1614-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1614-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1614-a-ml/la1614-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3292,8 +3292,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1614-B-ML": {
         "partId": "thorlabs:LA1614-B-ML",
         "sku": "LA1614-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1614-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1614-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1614-b-ml/la1614-b-ml-e0w.step?v=0410060127",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3301,8 +3301,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1615-A-ML": {
         "partId": "thorlabs:LA1615-A-ML",
         "sku": "LA1615-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1615-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1615-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1615-a-ml/la1615-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3310,8 +3310,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1615-B-ML": {
         "partId": "thorlabs:LA1615-B-ML",
         "sku": "LA1615-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1615-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1615-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1615-b-ml/la1615-b-ml-e0w.step?v=0410060128",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3319,8 +3319,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1616-A-ML": {
         "partId": "thorlabs:LA1616-A-ML",
         "sku": "LA1616-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1616-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1616-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1616-a-ml/la1616-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3328,8 +3328,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1616-B-ML": {
         "partId": "thorlabs:LA1616-B-ML",
         "sku": "LA1616-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1616-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1616-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1616-b-ml/la1616-b-ml-e0w.step?v=0410060129",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3337,8 +3337,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1617-A-ML": {
         "partId": "thorlabs:LA1617-A-ML",
         "sku": "LA1617-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1617-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1617-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1617-a-ml/la1617-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3346,8 +3346,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1617-B-ML": {
         "partId": "thorlabs:LA1617-B-ML",
         "sku": "LA1617-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1617-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1617-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1617-b-ml/la1617-b-ml-e0w.step?v=0410060131",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3355,8 +3355,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1618-A-ML": {
         "partId": "thorlabs:LA1618-A-ML",
         "sku": "LA1618-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1618-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1618-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1618-a-ml/la1618-a-ml-e0w.step?v=0213062951",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3364,8 +3364,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1618-B-ML": {
         "partId": "thorlabs:LA1618-B-ML",
         "sku": "LA1618-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1618-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1618-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1618-b-ml/la1618-b-ml-e0w.step?v=0410060132",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3373,8 +3373,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1619-A-ML": {
         "partId": "thorlabs:LA1619-A-ML",
         "sku": "LA1619-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1619-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1619-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1619-a-ml/la1619-a-ml-e0w.step?v=0213063927",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3382,8 +3382,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1619-B-ML": {
         "partId": "thorlabs:LA1619-B-ML",
         "sku": "LA1619-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1619-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1619-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1619-b-ml/la1619-b-ml-e0w.step?v=0410060134",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3391,8 +3391,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1620-A-ML": {
         "partId": "thorlabs:LA1620-A-ML",
         "sku": "LA1620-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1620-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1620-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1620-a-ml/la1620-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3400,8 +3400,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1620-B-ML": {
         "partId": "thorlabs:LA1620-B-ML",
         "sku": "LA1620-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1620-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1620-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1620-b-ml/la1620-b-ml-e0w.step?v=0410060135",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3409,8 +3409,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1621-A-ML": {
         "partId": "thorlabs:LA1621-A-ML",
         "sku": "LA1621-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1621-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1621-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1621-a-ml/la1621-a-ml-e0w.step?v=0214060137",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3418,8 +3418,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1621-B-ML": {
         "partId": "thorlabs:LA1621-B-ML",
         "sku": "LA1621-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1621-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1621-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1621-b-ml/la1621-b-ml-e0w.step?v=0410060137",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3427,8 +3427,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1622-A-ML": {
         "partId": "thorlabs:LA1622-A-ML",
         "sku": "LA1622-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1622-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1622-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1622-a-ml/la1622-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3436,8 +3436,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1622-B-ML": {
         "partId": "thorlabs:LA1622-B-ML",
         "sku": "LA1622-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1622-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1622-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1622-b-ml/la1622-b-ml-e0w.step?v=0413120807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3445,8 +3445,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1623-A-ML": {
         "partId": "thorlabs:LA1623-A-ML",
         "sku": "LA1623-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1623-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1623-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1623-a-ml/la1623-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3454,8 +3454,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1623-B-ML": {
         "partId": "thorlabs:LA1623-B-ML",
         "sku": "LA1623-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1623-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1623-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1623-b-ml/la1623-b-ml-e0w.step?v=0410060139",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3463,8 +3463,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1624-A-ML": {
         "partId": "thorlabs:LA1624-A-ML",
         "sku": "LA1624-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1624-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1624-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1624-a-ml/la1624-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3472,8 +3472,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1624-B-ML": {
         "partId": "thorlabs:LA1624-B-ML",
         "sku": "LA1624-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1624-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1624-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1624-b-ml/la1624-b-ml-e0w.step?v=0410060141",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3481,8 +3481,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1625-A-ML": {
         "partId": "thorlabs:LA1625-A-ML",
         "sku": "LA1625-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1625-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1625-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1625-a-ml/la1625-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3490,8 +3490,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1625-B-ML": {
         "partId": "thorlabs:LA1625-B-ML",
         "sku": "LA1625-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1625-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1625-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1625-b-ml/la1625-b-ml-e0w.step?v=0411060118",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3499,8 +3499,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1626-A-ML": {
         "partId": "thorlabs:LA1626-A-ML",
         "sku": "LA1626-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1626-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1626-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1626-a-ml/la1626-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3508,8 +3508,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1626-B-ML": {
         "partId": "thorlabs:LA1626-B-ML",
         "sku": "LA1626-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1626-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1626-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1626-b-ml/la1626-b-ml-e0w.step?v=0410060142",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3517,8 +3517,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1627-A-ML": {
         "partId": "thorlabs:LA1627-A-ML",
         "sku": "LA1627-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1627-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1627-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1627-a-ml/la1627-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3526,8 +3526,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1627-B-ML": {
         "partId": "thorlabs:LA1627-B-ML",
         "sku": "LA1627-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1627-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1627-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1627-b-ml/la1627-b-ml-e0w.step?v=0410060144",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3535,8 +3535,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1628-A-ML": {
         "partId": "thorlabs:LA1628-A-ML",
         "sku": "LA1628-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1628-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1628-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1628-a-ml/la1628-a-ml-e0w.step?v=0214060136",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3544,8 +3544,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1628-B-ML": {
         "partId": "thorlabs:LA1628-B-ML",
         "sku": "LA1628-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1628-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1628-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1628-b-ml/la1628-b-ml-e0w.step?v=0410060145",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3553,8 +3553,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1629-A-ML": {
         "partId": "thorlabs:LA1629-A-ML",
         "sku": "LA1629-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1629-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1629-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1629-a-ml/la1629-a-ml-e0w.step?v=0214060151",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3562,8 +3562,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1629-B-ML": {
         "partId": "thorlabs:LA1629-B-ML",
         "sku": "LA1629-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1629-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1629-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1629-b-ml/la1629-b-ml-e0w.step?v=0410060149",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3571,8 +3571,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1630-A-ML": {
         "partId": "thorlabs:LA1630-A-ML",
         "sku": "LA1630-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1630-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1630-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1630-a-ml/la1630-a-ml-e0w.step?v=0214060145",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3580,8 +3580,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1630-B-ML": {
         "partId": "thorlabs:LA1630-B-ML",
         "sku": "LA1630-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1630-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1630-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1630-b-ml/la1630-b-ml-e0w.step?v=0410060151",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3589,8 +3589,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1631-A-ML": {
         "partId": "thorlabs:LA1631-A-ML",
         "sku": "LA1631-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1631-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1631-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1631-a-ml/la1631-a-ml-e0w.step?v=0214060151",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3598,8 +3598,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1631-B-ML": {
         "partId": "thorlabs:LA1631-B-ML",
         "sku": "LA1631-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1631-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1631-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1631-b-ml/la1631-b-ml-e0w.step?v=0410060153",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3607,8 +3607,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1632-A-ML": {
         "partId": "thorlabs:LA1632-A-ML",
         "sku": "LA1632-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1632-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1632-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1632-a-ml/la1632-a-ml-e0w.step?v=0214060144",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3616,8 +3616,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1632-B-ML": {
         "partId": "thorlabs:LA1632-B-ML",
         "sku": "LA1632-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1632-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1632-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1632-b-ml/la1632-b-ml-e0w.step?v=0410060154",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3625,8 +3625,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1633-A-ML": {
         "partId": "thorlabs:LA1633-A-ML",
         "sku": "LA1633-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1633-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1633-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1633-a-ml/la1633-a-ml-e0w.step?v=0214060146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3634,8 +3634,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1633-B-ML": {
         "partId": "thorlabs:LA1633-B-ML",
         "sku": "LA1633-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1633-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1633-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1633-b-ml/la1633-b-ml-e0w.step?v=0410060156",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3643,8 +3643,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1634-A-ML": {
         "partId": "thorlabs:LA1634-A-ML",
         "sku": "LA1634-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1634-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1634-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1634-a-ml/la1634-a-ml-e0w.step?v=0214060151",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3652,8 +3652,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1634-B-ML": {
         "partId": "thorlabs:LA1634-B-ML",
         "sku": "LA1634-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1634-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1634-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1634-b-ml/la1634-b-ml-e0w.step?v=0410060158",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3661,8 +3661,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1635-A-ML": {
         "partId": "thorlabs:LA1635-A-ML",
         "sku": "LA1635-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1635-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1635-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1635-a-ml/la1635-a-ml-e0w.step?v=0214060146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3670,8 +3670,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1635-B-ML": {
         "partId": "thorlabs:LA1635-B-ML",
         "sku": "LA1635-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1635-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1635-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1635-b-ml/la1635-b-ml-e0w.step?v=0410060200",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3679,8 +3679,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1636-A-ML": {
         "partId": "thorlabs:LA1636-A-ML",
         "sku": "LA1636-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1636-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1636-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1636-a-ml/la1636-a-ml-e0w.step?v=0214060146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3688,8 +3688,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1636-B-ML": {
         "partId": "thorlabs:LA1636-B-ML",
         "sku": "LA1636-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1636-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1636-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1636-b-ml/la1636-b-ml-e0w.step?v=0410060201",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3697,8 +3697,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1637-A-ML": {
         "partId": "thorlabs:LA1637-A-ML",
         "sku": "LA1637-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1637-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1637-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1637-a-ml/la1637-a-ml-e0w.step?v=0214060147",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3706,8 +3706,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1637-B-ML": {
         "partId": "thorlabs:LA1637-B-ML",
         "sku": "LA1637-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1637-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1637-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1637-b-ml/la1637-b-ml-e0w.step?v=0410060203",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3715,8 +3715,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1708-A-ML": {
         "partId": "thorlabs:LA1708-A-ML",
         "sku": "LA1708-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1708-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1708-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1708-a-ml/24439-e0w.step?v=0116120940",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3724,8 +3724,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1708-AB-ML": {
         "partId": "thorlabs:LA1708-AB-ML",
         "sku": "LA1708-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1708-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1708-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1708-ab-ml/ttn320080-e0w.step?v=0116120941",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3733,8 +3733,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1708-B-ML": {
         "partId": "thorlabs:LA1708-B-ML",
         "sku": "LA1708-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1708-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1708-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1708-b-ml/24440-e0w.step?v=0116120940",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3742,8 +3742,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1708-C-ML": {
         "partId": "thorlabs:LA1708-C-ML",
         "sku": "LA1708-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1708-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1708-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1708-c-ml/24441-e0w.step?v=0116120945",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3751,8 +3751,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1708-ML": {
         "partId": "thorlabs:LA1708-ML",
         "sku": "LA1708-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1708-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1708-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1708-ml/24438-e0w.step?v=0116120945",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3760,8 +3760,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1725-A-ML": {
         "partId": "thorlabs:LA1725-A-ML",
         "sku": "LA1725-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1725-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1725-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1725-a-ml/ttn039609-e0w.step?v=0116120945",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3769,8 +3769,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1725-AB-ML": {
         "partId": "thorlabs:LA1725-AB-ML",
         "sku": "LA1725-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1725-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1725-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1725-ab-ml/ttn320097-e0w.step?v=0116120945",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3778,8 +3778,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1725-B-ML": {
         "partId": "thorlabs:LA1725-B-ML",
         "sku": "LA1725-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1725-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1725-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1725-b-ml/ttn039612-e0w.step?v=0116120949",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3787,8 +3787,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1725-C-ML": {
         "partId": "thorlabs:LA1725-C-ML",
         "sku": "LA1725-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1725-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1725-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1725-c-ml/ttn039615-e0w.step?v=0116120949",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3796,8 +3796,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1725-ML": {
         "partId": "thorlabs:LA1725-ML",
         "sku": "LA1725-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1725-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1725-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1725-ml/ttn039606-e0w.step?v=0116120949",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3805,8 +3805,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1727-A-ML": {
         "partId": "thorlabs:LA1727-A-ML",
         "sku": "LA1727-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1727-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1727-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1727-a-ml/ttn039621-e0w.step?v=0116120950",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3814,8 +3814,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1727-AB-ML": {
         "partId": "thorlabs:LA1727-AB-ML",
         "sku": "LA1727-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1727-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1727-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1727-ab-ml/ttn320098-e0w.step?v=0116120948",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3823,8 +3823,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1727-B-ML": {
         "partId": "thorlabs:LA1727-B-ML",
         "sku": "LA1727-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1727-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1727-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1727-b-ml/ttn039624-e0w.step?v=0116120957",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3832,8 +3832,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1727-C-ML": {
         "partId": "thorlabs:LA1727-C-ML",
         "sku": "LA1727-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1727-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1727-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1727-c-ml/ttn039627-e0w.step?v=0116120957",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3841,8 +3841,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1727-ML": {
         "partId": "thorlabs:LA1727-ML",
         "sku": "LA1727-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1727-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1727-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1727-ml/ttn039618-e0w.step?v=0116120957",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3850,8 +3850,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1779-A-ML": {
         "partId": "thorlabs:LA1779-A-ML",
         "sku": "LA1779-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1779-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1779-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1779-a-ml/ttn039633-e0w.step?v=0116121003",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3859,8 +3859,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1779-AB-ML": {
         "partId": "thorlabs:LA1779-AB-ML",
         "sku": "LA1779-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1779-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1779-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1779-ab-ml/ttn320099-e0w.step?v=0116121002",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3868,8 +3868,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1779-B-ML": {
         "partId": "thorlabs:LA1779-B-ML",
         "sku": "LA1779-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1779-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1779-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1779-b-ml/ttn039636-e0w.step?v=0116121007",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3877,8 +3877,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1779-C-ML": {
         "partId": "thorlabs:LA1779-C-ML",
         "sku": "LA1779-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1779-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1779-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1779-c-ml/ttn039639-e0w.step?v=0116121006",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3886,8 +3886,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1779-ML": {
         "partId": "thorlabs:LA1779-ML",
         "sku": "LA1779-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1779-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1779-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1779-ml/ttn039630-e0w.step?v=0116121006",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3895,8 +3895,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1805-A-ML": {
         "partId": "thorlabs:LA1805-A-ML",
         "sku": "LA1805-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1805-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1805-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1805-a-ml/ttn203733-e0w.step?v=0116121007",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3904,8 +3904,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1805-AB-ML": {
         "partId": "thorlabs:LA1805-AB-ML",
         "sku": "LA1805-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1805-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1805-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1805-ab-ml/ttn320088-e0w.step?v=0116121010",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3913,8 +3913,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1805-B-ML": {
         "partId": "thorlabs:LA1805-B-ML",
         "sku": "LA1805-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1805-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1805-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1805-b-ml/ttn203734-e0w.step?v=0116121010",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3922,8 +3922,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1805-C-ML": {
         "partId": "thorlabs:LA1805-C-ML",
         "sku": "LA1805-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1805-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1805-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1805-c-ml/ttn203735-e0w.step?v=0116121011",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3931,8 +3931,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1805-ML": {
         "partId": "thorlabs:LA1805-ML",
         "sku": "LA1805-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1805-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1805-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1805-ml/ttn203732-e0w.step?v=0116121012",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3940,8 +3940,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1908-A-ML": {
         "partId": "thorlabs:LA1908-A-ML",
         "sku": "LA1908-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1908-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1908-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1908-a-ml/ttn039645-e0w.step?v=0116121021",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3949,8 +3949,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1908-AB-ML": {
         "partId": "thorlabs:LA1908-AB-ML",
         "sku": "LA1908-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1908-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1908-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1908-ab-ml/ttn320081-e0w.step?v=0116121021",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3958,8 +3958,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1908-B-ML": {
         "partId": "thorlabs:LA1908-B-ML",
         "sku": "LA1908-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1908-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1908-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1908-b-ml/ttn039648-e0w.step?v=0116121025",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3967,8 +3967,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1908-C-ML": {
         "partId": "thorlabs:LA1908-C-ML",
         "sku": "LA1908-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1908-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1908-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1908-c-ml/ttn039651-e0w.step?v=0116121026",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3976,8 +3976,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1908-ML": {
         "partId": "thorlabs:LA1908-ML",
         "sku": "LA1908-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1908-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1908-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1908-ml/ttn039642-e0w.step?v=0116121026",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -3985,8 +3985,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1951-A-ML": {
         "partId": "thorlabs:LA1951-A-ML",
         "sku": "LA1951-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1951-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1951-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1951-a-ml/24415-e0w.step?v=0116121030",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -3994,8 +3994,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1951-AB-ML": {
         "partId": "thorlabs:LA1951-AB-ML",
         "sku": "LA1951-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1951-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1951-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1951-ab-ml/ttn320083-e0w.step?v=0116121029",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4003,8 +4003,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1951-B-ML": {
         "partId": "thorlabs:LA1951-B-ML",
         "sku": "LA1951-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1951-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1951-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1951-b-ml/24416-e0w.step?v=0116121030",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4012,8 +4012,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1951-C-ML": {
         "partId": "thorlabs:LA1951-C-ML",
         "sku": "LA1951-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1951-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1951-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1951-c-ml/24417-e0w.step?v=0116121030",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4021,8 +4021,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1951-ML": {
         "partId": "thorlabs:LA1951-ML",
         "sku": "LA1951-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1951-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1951-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1951-ml/24414-e0w.step?v=0116121030",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4030,8 +4030,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1978-A-ML": {
         "partId": "thorlabs:LA1978-A-ML",
         "sku": "LA1978-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1978-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1978-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1978-a-ml/ttn039657-e0w.step?v=0116121040",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4039,8 +4039,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1978-AB-ML": {
         "partId": "thorlabs:LA1978-AB-ML",
         "sku": "LA1978-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1978-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1978-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1978-ab-ml/ttn320082-e0w.step?v=0116121039",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4048,8 +4048,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1978-B-ML": {
         "partId": "thorlabs:LA1978-B-ML",
         "sku": "LA1978-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1978-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1978-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1978-b-ml/ttn039660-e0w.step?v=0116121040",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4057,8 +4057,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1978-C-ML": {
         "partId": "thorlabs:LA1978-C-ML",
         "sku": "LA1978-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1978-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1978-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1978-c-ml/ttn039663-e0w.step?v=0116121044",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4066,8 +4066,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1978-ML": {
         "partId": "thorlabs:LA1978-ML",
         "sku": "LA1978-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1978-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1978-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1978-ml/ttn039654-e0w.step?v=0116121043",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4075,8 +4075,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1979-A-ML": {
         "partId": "thorlabs:LA1979-A-ML",
         "sku": "LA1979-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1979-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1979-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1979-a-ml/ttn039669-e0w.step?v=0116121044",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4084,8 +4084,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1979-AB-ML": {
         "partId": "thorlabs:LA1979-AB-ML",
         "sku": "LA1979-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1979-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1979-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1979-ab-ml/ttn320100-e0w.step?v=0116121044",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4093,8 +4093,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1979-B-ML": {
         "partId": "thorlabs:LA1979-B-ML",
         "sku": "LA1979-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1979-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1979-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1979-b-ml/ttn039672-e0w.step?v=0116121044",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4102,8 +4102,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1979-C-ML": {
         "partId": "thorlabs:LA1979-C-ML",
         "sku": "LA1979-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1979-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1979-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1979-c-ml/ttn039675-e0w.step?v=0116121049",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4111,8 +4111,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1979-ML": {
         "partId": "thorlabs:LA1979-ML",
         "sku": "LA1979-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1979-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1979-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1979-ml/ttn039666-e0w.step?v=0116121048",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4120,8 +4120,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1986-A-ML": {
         "partId": "thorlabs:LA1986-A-ML",
         "sku": "LA1986-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1986-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1986-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1986-a-ml/24443-e0w.step?v=0116121048",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4129,8 +4129,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1986-AB-ML": {
         "partId": "thorlabs:LA1986-AB-ML",
         "sku": "LA1986-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1986-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1986-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1986-ab-ml/ttn324939-e0w.step?v=0116121048",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4138,8 +4138,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1986-B-ML": {
         "partId": "thorlabs:LA1986-B-ML",
         "sku": "LA1986-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1986-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1986-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1986-b-ml/24444-e0w.step?v=0116121048",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4147,8 +4147,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1986-C-ML": {
         "partId": "thorlabs:LA1986-C-ML",
         "sku": "LA1986-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1986-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1986-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1986-c-ml/24445-e0w.step?v=0116121052",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4156,8 +4156,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA1986-ML": {
         "partId": "thorlabs:LA1986-ML",
         "sku": "LA1986-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la1986-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la1986-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la1/la1986-ml/24442-e0w.step?v=0116121053",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4165,8 +4165,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-A-ML": {
         "partId": "thorlabs:LA4052-A-ML",
         "sku": "LA4052-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-a-ml/ttn039123-e0w.step?v=0116121433",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4174,8 +4174,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-AB-ML": {
         "partId": "thorlabs:LA4052-AB-ML",
         "sku": "LA4052-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-ab-ml/la4052-ab-ml-e0w.step?v=0116121432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4183,8 +4183,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-B-ML": {
         "partId": "thorlabs:LA4052-B-ML",
         "sku": "LA4052-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-b-ml/ttn039126-e0w.step?v=0116121432",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4192,8 +4192,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-C-ML": {
         "partId": "thorlabs:LA4052-C-ML",
         "sku": "LA4052-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-c-ml/ttn039129-e0w.step?v=0116121437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4201,8 +4201,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-ML": {
         "partId": "thorlabs:LA4052-ML",
         "sku": "LA4052-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-ml/24450-e0w.step?v=0116121437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4210,8 +4210,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-UV-ML": {
         "partId": "thorlabs:LA4052-UV-ML",
         "sku": "LA4052-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-uv-ml/24451-e0w.step?v=0116121437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4219,8 +4219,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4052-YAG-ML": {
         "partId": "thorlabs:LA4052-YAG-ML",
         "sku": "LA4052-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4052-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4052-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4052-yag-ml/ttn039132-e0w.step?v=0116121437",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4228,8 +4228,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4078-AB-ML": {
         "partId": "thorlabs:LA4078-AB-ML",
         "sku": "LA4078-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4078-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4078-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4078-ab-ml/la4078-ab-ml-e0w.step?v=0116121438",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4237,8 +4237,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4078-ML": {
         "partId": "thorlabs:LA4078-ML",
         "sku": "LA4078-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4078-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4078-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4078-ml/ttn039135-e0w.step?v=0116121443",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4246,8 +4246,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4078-UV-ML": {
         "partId": "thorlabs:LA4078-UV-ML",
         "sku": "LA4078-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4078-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4078-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4078-uv-ml/ttn039138-e0w.step?v=0116121443",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4255,8 +4255,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-A-ML": {
         "partId": "thorlabs:LA4102-A-ML",
         "sku": "LA4102-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-a-ml/ttn039144-e0w.step?v=0116121448",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4264,8 +4264,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-AB-ML": {
         "partId": "thorlabs:LA4102-AB-ML",
         "sku": "LA4102-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-ab-ml/la4102-ab-ml-e0w.step?v=0116121447",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4273,8 +4273,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-B-ML": {
         "partId": "thorlabs:LA4102-B-ML",
         "sku": "LA4102-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-b-ml/ttn039147-e0w.step?v=0116121448",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4282,8 +4282,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-C-ML": {
         "partId": "thorlabs:LA4102-C-ML",
         "sku": "LA4102-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-c-ml/ttn039150-e0w.step?v=0116121448",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4291,8 +4291,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-ML": {
         "partId": "thorlabs:LA4102-ML",
         "sku": "LA4102-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-ml/ttn039141-e0w.step?v=0116121449",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4300,8 +4300,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-UV-ML": {
         "partId": "thorlabs:LA4102-UV-ML",
         "sku": "LA4102-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-uv-ml/ttn039153-e0w.step?v=0116121456",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4309,8 +4309,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4102-YAG-ML": {
         "partId": "thorlabs:LA4102-YAG-ML",
         "sku": "LA4102-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4102-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4102-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4102-yag-ml/ttn039156-e0w.step?v=0116121456",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4318,8 +4318,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4130-AB-ML": {
         "partId": "thorlabs:LA4130-AB-ML",
         "sku": "LA4130-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4130-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4130-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4130-ab-ml/la4130-ab-ml-e0w.step?v=0116121500",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4327,8 +4327,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4130-ML": {
         "partId": "thorlabs:LA4130-ML",
         "sku": "LA4130-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4130-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4130-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4130-ml/ttn039159-e0w.step?v=0116121500",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4336,8 +4336,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4130-UV-ML": {
         "partId": "thorlabs:LA4130-UV-ML",
         "sku": "LA4130-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4130-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4130-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4130-uv-ml/ttn039162-e0w.step?v=0116121501",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4345,8 +4345,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-A-ML": {
         "partId": "thorlabs:LA4148-A-ML",
         "sku": "LA4148-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-a-ml/ttn039165-e0w.step?v=0116121505",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4354,8 +4354,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-AB-ML": {
         "partId": "thorlabs:LA4148-AB-ML",
         "sku": "LA4148-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-ab-ml/la4148-ab-ml-e0w.step?v=0116121505",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4363,8 +4363,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-B-ML": {
         "partId": "thorlabs:LA4148-B-ML",
         "sku": "LA4148-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-b-ml/ttn039168-e0w.step?v=0116121510",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4372,8 +4372,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-C-ML": {
         "partId": "thorlabs:LA4148-C-ML",
         "sku": "LA4148-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-c-ml/ttn039171-e0w.step?v=0116121510",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4381,8 +4381,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-ML": {
         "partId": "thorlabs:LA4148-ML",
         "sku": "LA4148-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-ml/24452-e0w.step?v=0116121510",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4390,8 +4390,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-UV-ML": {
         "partId": "thorlabs:LA4148-UV-ML",
         "sku": "LA4148-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-uv-ml/24453-e0w.step?v=0116121510",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4399,8 +4399,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4148-YAG-ML": {
         "partId": "thorlabs:LA4148-YAG-ML",
         "sku": "LA4148-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4148-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4148-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4148-yag-ml/ttn039174-e0w.step?v=0116121511",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4408,8 +4408,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-A-ML": {
         "partId": "thorlabs:LA4158-A-ML",
         "sku": "LA4158-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-a-ml/ttn039180-e0w.step?v=0116121520",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4417,8 +4417,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-AB-ML": {
         "partId": "thorlabs:LA4158-AB-ML",
         "sku": "LA4158-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-ab-ml/la4158-ab-ml-e0w.step?v=0116121522",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4426,8 +4426,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-B-ML": {
         "partId": "thorlabs:LA4158-B-ML",
         "sku": "LA4158-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-b-ml/ttn039183-e0w.step?v=0116121526",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4435,8 +4435,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-C-ML": {
         "partId": "thorlabs:LA4158-C-ML",
         "sku": "LA4158-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-c-ml/ttn039186-e0w.step?v=0116121527",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4444,8 +4444,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-ML": {
         "partId": "thorlabs:LA4158-ML",
         "sku": "LA4158-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-ml/ttn039177-e0w.step?v=0116121525",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4453,8 +4453,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-UV-ML": {
         "partId": "thorlabs:LA4158-UV-ML",
         "sku": "LA4158-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-uv-ml/ttn039189-e0w.step?v=0116121526",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4462,8 +4462,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4158-YAG-ML": {
         "partId": "thorlabs:LA4158-YAG-ML",
         "sku": "LA4158-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4158-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4158-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4158-yag-ml/ttn039192-e0w.step?v=0116121526",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4471,8 +4471,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-A-ML": {
         "partId": "thorlabs:LA4184-A-ML",
         "sku": "LA4184-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-a-ml/ttn039198-e0w.step?v=0116121530",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4480,8 +4480,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-AB-ML": {
         "partId": "thorlabs:LA4184-AB-ML",
         "sku": "LA4184-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-ab-ml/la4184-ab-ml-e0w.step?v=0116121530",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4489,8 +4489,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-B-ML": {
         "partId": "thorlabs:LA4184-B-ML",
         "sku": "LA4184-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-b-ml/ttn039201-e0w.step?v=0116121534",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4498,8 +4498,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-C-ML": {
         "partId": "thorlabs:LA4184-C-ML",
         "sku": "LA4184-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-c-ml/ttn039204-e0w.step?v=0116121535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4507,8 +4507,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-ML": {
         "partId": "thorlabs:LA4184-ML",
         "sku": "LA4184-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-ml/ttn039195-e0w.step?v=0116121535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4516,8 +4516,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-UV-ML": {
         "partId": "thorlabs:LA4184-UV-ML",
         "sku": "LA4184-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-uv-ml/ttn039207-e0w.step?v=0116121534",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4525,8 +4525,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4184-YAG-ML": {
         "partId": "thorlabs:LA4184-YAG-ML",
         "sku": "LA4184-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4184-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4184-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4184-yag-ml/ttn039210-e0w.step?v=0116121535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4534,8 +4534,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4236-AB-ML": {
         "partId": "thorlabs:LA4236-AB-ML",
         "sku": "LA4236-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4236-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4236-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4236-ab-ml/la4236-ab-ml-e0w.step?v=0116121544",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4543,8 +4543,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4236-ML": {
         "partId": "thorlabs:LA4236-ML",
         "sku": "LA4236-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4236-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4236-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4236-ml/ttn039214-e0w.step?v=0116121544",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4552,8 +4552,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4236-UV-ML": {
         "partId": "thorlabs:LA4236-UV-ML",
         "sku": "LA4236-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4236-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4236-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4236-uv-ml/ttn039218-e0w.step?v=0116121544",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4561,8 +4561,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4246-AB-ML": {
         "partId": "thorlabs:LA4246-AB-ML",
         "sku": "LA4246-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4246-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4246-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4246-ab-ml/la4246-ab-ml-e0w.step?v=0116121551",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4570,8 +4570,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4246-ML": {
         "partId": "thorlabs:LA4246-ML",
         "sku": "LA4246-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4246-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4246-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4246-ml/ttn039222-e0w.step?v=0116121552",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4579,8 +4579,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4246-UV-ML": {
         "partId": "thorlabs:LA4246-UV-ML",
         "sku": "LA4246-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4246-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4246-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4246-uv-ml/ttn039225-e0w.step?v=0116121553",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4588,8 +4588,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-A-ML": {
         "partId": "thorlabs:LA4306-A-ML",
         "sku": "LA4306-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-a-ml/ttn039228-e0w.step?v=0116121601",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4597,8 +4597,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-AB-ML": {
         "partId": "thorlabs:LA4306-AB-ML",
         "sku": "LA4306-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-ab-ml/la4306-ab-ml-e0w.step?v=0116121606",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4606,8 +4606,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-B-ML": {
         "partId": "thorlabs:LA4306-B-ML",
         "sku": "LA4306-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-b-ml/ttn039231-e0w.step?v=0116121606",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4615,8 +4615,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-C-ML": {
         "partId": "thorlabs:LA4306-C-ML",
         "sku": "LA4306-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-c-ml/ttn039234-e0w.step?v=0116121606",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4624,8 +4624,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-ML": {
         "partId": "thorlabs:LA4306-ML",
         "sku": "LA4306-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-ml/24458-e0w.step?v=0116121606",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4633,8 +4633,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-UV-ML": {
         "partId": "thorlabs:LA4306-UV-ML",
         "sku": "LA4306-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-uv-ml/24459-e0w.step?v=0116121607",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4642,8 +4642,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4306-YAG-ML": {
         "partId": "thorlabs:LA4306-YAG-ML",
         "sku": "LA4306-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4306-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4306-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4306-yag-ml/ttn039237-e0w.step?v=0116121606",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4651,8 +4651,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4327-AB-ML": {
         "partId": "thorlabs:LA4327-AB-ML",
         "sku": "LA4327-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4327-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4327-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4327-ab-ml/la4327-ab-ml-e0w.step?v=0116121611",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4660,8 +4660,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4327-ML": {
         "partId": "thorlabs:LA4327-ML",
         "sku": "LA4327-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4327-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4327-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4327-ml/ttn039240-e0w.step?v=0116121616",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4669,8 +4669,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4327-UV-ML": {
         "partId": "thorlabs:LA4327-UV-ML",
         "sku": "LA4327-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4327-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4327-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4327-uv-ml/ttn039243-e0w.step?v=0116121616",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4678,8 +4678,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4337-AB-ML": {
         "partId": "thorlabs:LA4337-AB-ML",
         "sku": "LA4337-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4337-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4337-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4337-ab-ml/la4337-ab-ml-e0w.step?v=0116121616",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4687,8 +4687,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4337-ML": {
         "partId": "thorlabs:LA4337-ML",
         "sku": "LA4337-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4337-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4337-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4337-ml/ttn039248-e0w.step?v=0116121621",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4696,8 +4696,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4337-UV-ML": {
         "partId": "thorlabs:LA4337-UV-ML",
         "sku": "LA4337-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4337-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4337-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4337-uv-ml/ttn039251-e0w.step?v=0116121621",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4705,8 +4705,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4372-AB-ML": {
         "partId": "thorlabs:LA4372-AB-ML",
         "sku": "LA4372-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4372-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4372-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4372-ab-ml/la4372-ab-ml-e0w.step?v=0116121621",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4714,8 +4714,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4372-ML": {
         "partId": "thorlabs:LA4372-ML",
         "sku": "LA4372-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4372-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4372-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4372-ml/ttn039255-e0w.step?v=0116121625",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4723,8 +4723,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4372-UV-ML": {
         "partId": "thorlabs:LA4372-UV-ML",
         "sku": "LA4372-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4372-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4372-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4372-uv-ml/ttn039258-e0w.step?v=0116121626",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4732,8 +4732,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-A-ML": {
         "partId": "thorlabs:LA4380-A-ML",
         "sku": "LA4380-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-a-ml/ttn039261-e0w.step?v=0116121635",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4741,8 +4741,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-AB-ML": {
         "partId": "thorlabs:LA4380-AB-ML",
         "sku": "LA4380-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-ab-ml/la4380-ab-ml-e0w.step?v=0116121637",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4750,8 +4750,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-B-ML": {
         "partId": "thorlabs:LA4380-B-ML",
         "sku": "LA4380-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-b-ml/ttn039266-e0w.step?v=0116121636",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4759,8 +4759,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-C-ML": {
         "partId": "thorlabs:LA4380-C-ML",
         "sku": "LA4380-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-c-ml/ttn039271-e0w.step?v=0116121635",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4768,8 +4768,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-ML": {
         "partId": "thorlabs:LA4380-ML",
         "sku": "LA4380-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-ml/24456-e0w.step?v=0116121636",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4777,8 +4777,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-UV-ML": {
         "partId": "thorlabs:LA4380-UV-ML",
         "sku": "LA4380-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-uv-ml/24457-e0w.step?v=0116121636",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4786,8 +4786,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4380-YAG-ML": {
         "partId": "thorlabs:LA4380-YAG-ML",
         "sku": "LA4380-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4380-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4380-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4380-yag-ml/ttn039274-e0w.step?v=0116121644",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4795,8 +4795,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4384-AB-ML": {
         "partId": "thorlabs:LA4384-AB-ML",
         "sku": "LA4384-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4384-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4384-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4384-ab-ml/la4384-ab-ml-e0w.step?v=0116121644",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4804,8 +4804,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4384-ML": {
         "partId": "thorlabs:LA4384-ML",
         "sku": "LA4384-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4384-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4384-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4384-ml/ttn039277-e0w.step?v=0116121645",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4813,8 +4813,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4384-UV-ML": {
         "partId": "thorlabs:LA4384-UV-ML",
         "sku": "LA4384-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4384-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4384-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4384-uv-ml/ttn039280-e0w.step?v=0116121648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4822,8 +4822,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4464-AB-ML": {
         "partId": "thorlabs:LA4464-AB-ML",
         "sku": "LA4464-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4464-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4464-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4464-ab-ml/la4464-ab-ml-e0w.step?v=0116121649",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4831,8 +4831,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4464-ML": {
         "partId": "thorlabs:LA4464-ML",
         "sku": "LA4464-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4464-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4464-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4464-ml/ttn039283-e0w.step?v=0116121648",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4840,8 +4840,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4464-UV-ML": {
         "partId": "thorlabs:LA4464-UV-ML",
         "sku": "LA4464-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4464-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4464-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4464-uv-ml/ttn039286-e0w.step?v=0116121649",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4849,8 +4849,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4538-AB-ML": {
         "partId": "thorlabs:LA4538-AB-ML",
         "sku": "LA4538-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4538-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4538-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4538-ab-ml/la4538-ab-ml-e0w.step?v=0116121653",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4858,8 +4858,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4538-ML": {
         "partId": "thorlabs:LA4538-ML",
         "sku": "LA4538-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4538-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4538-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4538-ml/ttn039289-e0w.step?v=0116121652",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4867,8 +4867,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4538-UV-ML": {
         "partId": "thorlabs:LA4538-UV-ML",
         "sku": "LA4538-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4538-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4538-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4538-uv-ml/ttn039292-e0w.step?v=0116121653",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4876,8 +4876,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4545-AB-ML": {
         "partId": "thorlabs:LA4545-AB-ML",
         "sku": "LA4545-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4545-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4545-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4545-ab-ml/la4545-ab-ml-e0w.step?v=0116121658",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4885,8 +4885,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4545-ML": {
         "partId": "thorlabs:LA4545-ML",
         "sku": "LA4545-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4545-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4545-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4545-ml/ttn039303-e0w.step?v=0116121658",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4894,8 +4894,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4545-UV-ML": {
         "partId": "thorlabs:LA4545-UV-ML",
         "sku": "LA4545-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4545-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4545-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4545-uv-ml/ttn039306-e0w.step?v=0116121659",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4903,8 +4903,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-A-ML": {
         "partId": "thorlabs:LA4579-A-ML",
         "sku": "LA4579-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-a-ml/ttn039312-e0w.step?v=0116121703",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4912,8 +4912,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-AB-ML": {
         "partId": "thorlabs:LA4579-AB-ML",
         "sku": "LA4579-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-ab-ml/la4579-ab-ml-e0w.step?v=0116121703",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4921,8 +4921,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-B-ML": {
         "partId": "thorlabs:LA4579-B-ML",
         "sku": "LA4579-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-b-ml/ttn039315-e0w.step?v=0116121702",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4930,8 +4930,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-C-ML": {
         "partId": "thorlabs:LA4579-C-ML",
         "sku": "LA4579-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-c-ml/ttn039318-e0w.step?v=0116121707",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4939,8 +4939,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-ML": {
         "partId": "thorlabs:LA4579-ML",
         "sku": "LA4579-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-ml/ttn039309-e0w.step?v=0116121707",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4948,8 +4948,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4579-UV-ML": {
         "partId": "thorlabs:LA4579-UV-ML",
         "sku": "LA4579-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4579-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4579-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4579-uv-ml/ttn039321-e0w.step?v=0116121707",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4957,8 +4957,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4600-AB-ML": {
         "partId": "thorlabs:LA4600-AB-ML",
         "sku": "LA4600-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4600-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4600-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4600-ab-ml/la4600-ab-ml-e0w.step?v=0116121711",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -4966,8 +4966,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4600-ML": {
         "partId": "thorlabs:LA4600-ML",
         "sku": "LA4600-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4600-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4600-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4600-ml/ttn039324-e0w.step?v=0116121712",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4975,8 +4975,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4600-UV-ML": {
         "partId": "thorlabs:LA4600-UV-ML",
         "sku": "LA4600-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4600-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4600-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4600-uv-ml/ttn039327-e0w.step?v=0116121712",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4984,8 +4984,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-A-ML": {
         "partId": "thorlabs:LA4647-A-ML",
         "sku": "LA4647-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-a-ml/ttn039333-e0w.step?v=0116121716",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -4993,8 +4993,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-AB-ML": {
         "partId": "thorlabs:LA4647-AB-ML",
         "sku": "LA4647-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-ab-ml/la4647-ab-ml-e0w.step?v=0116121724",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5002,8 +5002,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-B-ML": {
         "partId": "thorlabs:LA4647-B-ML",
         "sku": "LA4647-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-b-ml/ttn039336-e0w.step?v=0116121725",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5011,8 +5011,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-C-ML": {
         "partId": "thorlabs:LA4647-C-ML",
         "sku": "LA4647-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-c-ml/ttn039339-e0w.step?v=0116121724",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5020,8 +5020,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-ML": {
         "partId": "thorlabs:LA4647-ML",
         "sku": "LA4647-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-ml/ttn039330-e0w.step?v=0116121725",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5029,8 +5029,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-UV-ML": {
         "partId": "thorlabs:LA4647-UV-ML",
         "sku": "LA4647-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-uv-ml/ttn039342-e0w.step?v=0116121725",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5038,8 +5038,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4647-YAG-ML": {
         "partId": "thorlabs:LA4647-YAG-ML",
         "sku": "LA4647-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4647-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4647-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4647-yag-ml/ttn039345-e0w.step?v=0116121724",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5047,8 +5047,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4663-AB-ML": {
         "partId": "thorlabs:LA4663-AB-ML",
         "sku": "LA4663-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4663-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4663-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4663-ab-ml/la4663-ab-ml-e0w.step?v=0116121729",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5056,8 +5056,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4663-ML": {
         "partId": "thorlabs:LA4663-ML",
         "sku": "LA4663-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4663-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4663-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4663-ml/ttn039348-e0w.step?v=0116121734",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5065,8 +5065,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4663-UV-ML": {
         "partId": "thorlabs:LA4663-UV-ML",
         "sku": "LA4663-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4663-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4663-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4663-uv-ml/ttn039351-e0w.step?v=0116121734",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5074,8 +5074,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4716-AB-ML": {
         "partId": "thorlabs:LA4716-AB-ML",
         "sku": "LA4716-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4716-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4716-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4716-ab-ml/la4716-ab-ml-e0w.step?v=0116121738",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5083,8 +5083,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4716-ML": {
         "partId": "thorlabs:LA4716-ML",
         "sku": "LA4716-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4716-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4716-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4716-ml/ttn039354-e0w.step?v=0116121738",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5092,8 +5092,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4716-UV-ML": {
         "partId": "thorlabs:LA4716-UV-ML",
         "sku": "LA4716-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4716-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4716-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4716-uv-ml/ttn039357-e0w.step?v=0116121738",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5101,8 +5101,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-A-ML": {
         "partId": "thorlabs:LA4725-A-ML",
         "sku": "LA4725-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-a-ml/ttn039360-e0w.step?v=0116121743",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5110,8 +5110,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-AB-ML": {
         "partId": "thorlabs:LA4725-AB-ML",
         "sku": "LA4725-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-ab-ml/la4725-ab-ml-e0w.step?v=0116121743",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5119,8 +5119,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-B-ML": {
         "partId": "thorlabs:LA4725-B-ML",
         "sku": "LA4725-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-b-ml/ttn039363-e0w.step?v=0116121749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5128,8 +5128,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-C-ML": {
         "partId": "thorlabs:LA4725-C-ML",
         "sku": "LA4725-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-c-ml/ttn039366-e0w.step?v=0116121749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5137,8 +5137,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-ML": {
         "partId": "thorlabs:LA4725-ML",
         "sku": "LA4725-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-ml/24454-e0w.step?v=0116121749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5146,8 +5146,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-UV-ML": {
         "partId": "thorlabs:LA4725-UV-ML",
         "sku": "LA4725-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-uv-ml/24455-e0w.step?v=0116121749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5155,8 +5155,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4725-YAG-ML": {
         "partId": "thorlabs:LA4725-YAG-ML",
         "sku": "LA4725-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4725-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4725-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4725-yag-ml/ttn039369-e0w.step?v=0116121749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5164,8 +5164,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4745-AB-ML": {
         "partId": "thorlabs:LA4745-AB-ML",
         "sku": "LA4745-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4745-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4745-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4745-ab-ml/la4745-ab-ml-e0w.step?v=0116121753",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5173,8 +5173,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4745-ML": {
         "partId": "thorlabs:LA4745-ML",
         "sku": "LA4745-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4745-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4745-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4745-ml/ttn039373-e0w.step?v=0116121754",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5182,8 +5182,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4745-UV-ML": {
         "partId": "thorlabs:LA4745-UV-ML",
         "sku": "LA4745-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4745-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4745-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4745-uv-ml/ttn039383-e0w.step?v=0116121753",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5191,8 +5191,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4765-AB-ML": {
         "partId": "thorlabs:LA4765-AB-ML",
         "sku": "LA4765-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4765-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4765-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4765-ab-ml/la4765-ab-ml-e0w.step?v=0116121758",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5200,8 +5200,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4765-ML": {
         "partId": "thorlabs:LA4765-ML",
         "sku": "LA4765-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4765-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4765-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4765-ml/ttn039386-e0w.step?v=0116121757",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5209,8 +5209,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4765-UV-ML": {
         "partId": "thorlabs:LA4765-UV-ML",
         "sku": "LA4765-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4765-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4765-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4765-uv-ml/ttn039389-e0w.step?v=0116121802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5218,8 +5218,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4782-AB-ML": {
         "partId": "thorlabs:LA4782-AB-ML",
         "sku": "LA4782-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4782-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4782-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4782-ab-ml/la4782-ab-ml-e0w.step?v=0116121802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5227,8 +5227,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4782-ML": {
         "partId": "thorlabs:LA4782-ML",
         "sku": "LA4782-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4782-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4782-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4782-ml/ttn039392-e0w.step?v=0116121802",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5236,8 +5236,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4782-UV-ML": {
         "partId": "thorlabs:LA4782-UV-ML",
         "sku": "LA4782-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4782-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4782-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4782-uv-ml/ttn039395-e0w.step?v=0116121807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5245,8 +5245,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4795-AB-ML": {
         "partId": "thorlabs:LA4795-AB-ML",
         "sku": "LA4795-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4795-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4795-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4795-ab-ml/la4795-ab-ml-e0w.step?v=0116121807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5254,8 +5254,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4795-ML": {
         "partId": "thorlabs:LA4795-ML",
         "sku": "LA4795-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4795-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4795-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4795-ml/ttn039398-e0w.step?v=0116121807",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5263,8 +5263,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4795-UV-ML": {
         "partId": "thorlabs:LA4795-UV-ML",
         "sku": "LA4795-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4795-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4795-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4795-uv-ml/ttn039401-e0w.step?v=0116121811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5272,8 +5272,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4855-AB-ML": {
         "partId": "thorlabs:LA4855-AB-ML",
         "sku": "LA4855-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4855-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4855-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4855-ab-ml/la4855-ab-ml-e0w.step?v=0116121811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5281,8 +5281,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4855-ML": {
         "partId": "thorlabs:LA4855-ML",
         "sku": "LA4855-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4855-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4855-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4855-ml/ttn039404-e0w.step?v=0116121811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5290,8 +5290,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4855-UV-ML": {
         "partId": "thorlabs:LA4855-UV-ML",
         "sku": "LA4855-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4855-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4855-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4855-uv-ml/ttn039407-e0w.step?v=0116121811",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5299,8 +5299,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-A-ML": {
         "partId": "thorlabs:LA4874-A-ML",
         "sku": "LA4874-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-a-ml/ttn039413-e0w.step?v=0116121816",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5308,8 +5308,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-AB-ML": {
         "partId": "thorlabs:LA4874-AB-ML",
         "sku": "LA4874-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-ab-ml/la4874-ab-ml-e0w.step?v=0116121816",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5317,8 +5317,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-B-ML": {
         "partId": "thorlabs:LA4874-B-ML",
         "sku": "LA4874-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-b-ml/ttn039416-e0w.step?v=0116121823",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5326,8 +5326,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-C-ML": {
         "partId": "thorlabs:LA4874-C-ML",
         "sku": "LA4874-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-c-ml/ttn039419-e0w.step?v=0116121823",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5335,8 +5335,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-ML": {
         "partId": "thorlabs:LA4874-ML",
         "sku": "LA4874-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-ml/ttn039410-e0w.step?v=0116121822",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5344,8 +5344,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-UV-ML": {
         "partId": "thorlabs:LA4874-UV-ML",
         "sku": "LA4874-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-uv-ml/ttn039422-e0w.step?v=0116121823",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5353,8 +5353,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4874-YAG-ML": {
         "partId": "thorlabs:LA4874-YAG-ML",
         "sku": "LA4874-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4874-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4874-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4874-yag-ml/ttn039426-e0w.step?v=0116121822",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5362,8 +5362,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4904-AB-ML": {
         "partId": "thorlabs:LA4904-AB-ML",
         "sku": "LA4904-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4904-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4904-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4904-ab-ml/la4904-ab-ml-e0w.step?v=0116121828",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5371,8 +5371,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4904-ML": {
         "partId": "thorlabs:LA4904-ML",
         "sku": "LA4904-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4904-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4904-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4904-ml/ttn039430-e0w.step?v=0116121827",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5380,8 +5380,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4904-UV-ML": {
         "partId": "thorlabs:LA4904-UV-ML",
         "sku": "LA4904-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4904-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4904-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4904-uv-ml/ttn039434-e0w.step?v=0116121827",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5389,8 +5389,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-A-ML": {
         "partId": "thorlabs:LA4924-A-ML",
         "sku": "LA4924-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-a-ml/ttn039440-e0w.step?v=0116121836",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5398,8 +5398,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-AB-ML": {
         "partId": "thorlabs:LA4924-AB-ML",
         "sku": "LA4924-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-ab-ml/la4924-ab-ml-e0w.step?v=0116121836",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5407,8 +5407,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-B-ML": {
         "partId": "thorlabs:LA4924-B-ML",
         "sku": "LA4924-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-b-ml/ttn039443-e0w.step?v=0116121835",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5416,8 +5416,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-C-ML": {
         "partId": "thorlabs:LA4924-C-ML",
         "sku": "LA4924-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-c-ml/ttn039446-e0w.step?v=0116121836",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5425,8 +5425,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-ML": {
         "partId": "thorlabs:LA4924-ML",
         "sku": "LA4924-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-ml/ttn039437-e0w.step?v=0116121836",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5434,8 +5434,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-UV-ML": {
         "partId": "thorlabs:LA4924-UV-ML",
         "sku": "LA4924-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-uv-ml/ttn039449-e0w.step?v=0116121840",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5443,8 +5443,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4924-YAG-ML": {
         "partId": "thorlabs:LA4924-YAG-ML",
         "sku": "LA4924-YAG-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4924-yag-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4924-yag-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4924-yag-ml/ttn039452-e0w.step?v=0116121841",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5452,8 +5452,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4936-AB-ML": {
         "partId": "thorlabs:LA4936-AB-ML",
         "sku": "LA4936-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4936-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4936-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4936-ab-ml/la4936-ab-ml-e0w.step?v=0116121844",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5461,8 +5461,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4936-ML": {
         "partId": "thorlabs:LA4936-ML",
         "sku": "LA4936-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4936-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4936-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4936-ml/ttn039455-e0w.step?v=0116121844",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5470,8 +5470,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4936-UV-ML": {
         "partId": "thorlabs:LA4936-UV-ML",
         "sku": "LA4936-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4936-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4936-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4936-uv-ml/ttn039458-e0w.step?v=0116121844",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5479,8 +5479,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4984-AB-ML": {
         "partId": "thorlabs:LA4984-AB-ML",
         "sku": "LA4984-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4984-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4984-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4984-ab-ml/la4984-ab-ml-e0w.step?v=0116121849",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5488,8 +5488,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4984-ML": {
         "partId": "thorlabs:LA4984-ML",
         "sku": "LA4984-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4984-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4984-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4984-ml/ttn039461-e0w.step?v=0116121855",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5497,8 +5497,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LA4984-UV-ML": {
         "partId": "thorlabs:LA4984-UV-ML",
         "sku": "LA4984-UV-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/la4984-uv-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/la4984-uv-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/la/la4/la4984-uv-ml/ttn039464-e0w.step?v=0116121855",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5506,8 +5506,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1014-A-ML": {
         "partId": "thorlabs:LB1014-A-ML",
         "sku": "LB1014-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1014-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1014-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1014-a-ml/ttn039678-e0w.step?v=0116122044",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5515,8 +5515,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1014-B-ML": {
         "partId": "thorlabs:LB1014-B-ML",
         "sku": "LB1014-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1014-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1014-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1014-b-ml/ttn039681-e0w.step?v=0116122043",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5524,8 +5524,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1014-C-ML": {
         "partId": "thorlabs:LB1014-C-ML",
         "sku": "LB1014-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1014-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1014-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1014-c-ml/ttn039684-e0w.step?v=0116122052",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5533,8 +5533,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1014-ML": {
         "partId": "thorlabs:LB1014-ML",
         "sku": "LB1014-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1014-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1014-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1014-ml/ttn039687-e0w.step?v=0116122054",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5542,8 +5542,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1056-A-ML": {
         "partId": "thorlabs:LB1056-A-ML",
         "sku": "LB1056-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1056-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1056-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1056-a-ml/ttn039690-e0w.step?v=0116122053",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5551,8 +5551,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1056-B-ML": {
         "partId": "thorlabs:LB1056-B-ML",
         "sku": "LB1056-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1056-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1056-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1056-b-ml/ttn039694-e0w.step?v=0116122058",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5560,8 +5560,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1056-C-ML": {
         "partId": "thorlabs:LB1056-C-ML",
         "sku": "LB1056-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1056-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1056-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1056-c-ml/ttn039697-e0w.step?v=0116122058",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5569,8 +5569,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1056-ML": {
         "partId": "thorlabs:LB1056-ML",
         "sku": "LB1056-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1056-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1056-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1056-ml/ttn039700-e0w.step?v=0116122058",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5578,8 +5578,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1092-A-ML": {
         "partId": "thorlabs:LB1092-A-ML",
         "sku": "LB1092-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1092-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1092-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1092-a-ml/ttn039703-e0w.step?v=0116122058",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5587,8 +5587,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1092-B-ML": {
         "partId": "thorlabs:LB1092-B-ML",
         "sku": "LB1092-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1092-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1092-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1092-b-ml/ttn039706-e0w.step?v=0116122103",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5596,8 +5596,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1092-C-ML": {
         "partId": "thorlabs:LB1092-C-ML",
         "sku": "LB1092-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1092-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1092-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1092-c-ml/ttn039709-e0w.step?v=0116122103",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5605,8 +5605,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1092-ML": {
         "partId": "thorlabs:LB1092-ML",
         "sku": "LB1092-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1092-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1092-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1092-ml/ttn039712-e0w.step?v=0116122102",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5614,8 +5614,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1187-A-ML": {
         "partId": "thorlabs:LB1187-A-ML",
         "sku": "LB1187-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1187-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1187-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1187-a-ml/ttn039715-e0w.step?v=0116122108",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5623,8 +5623,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1187-B-ML": {
         "partId": "thorlabs:LB1187-B-ML",
         "sku": "LB1187-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1187-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1187-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1187-b-ml/ttn039718-e0w.step?v=0116122112",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5632,8 +5632,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1187-C-ML": {
         "partId": "thorlabs:LB1187-C-ML",
         "sku": "LB1187-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1187-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1187-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1187-c-ml/ttn039721-e0w.step?v=0116122112",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5641,8 +5641,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1187-ML": {
         "partId": "thorlabs:LB1187-ML",
         "sku": "LB1187-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1187-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1187-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1187-ml/ttn039725-e0w.step?v=0116122112",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5650,8 +5650,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1258-A-ML": {
         "partId": "thorlabs:LB1258-A-ML",
         "sku": "LB1258-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1258-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1258-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1258-a-ml/ttn039750-e0w.step?v=0116122119",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5659,8 +5659,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1258-B-ML": {
         "partId": "thorlabs:LB1258-B-ML",
         "sku": "LB1258-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1258-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1258-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1258-b-ml/ttn039753-e0w.step?v=0116122120",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5668,8 +5668,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1258-C-ML": {
         "partId": "thorlabs:LB1258-C-ML",
         "sku": "LB1258-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1258-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1258-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1258-c-ml/ttn039756-e0w.step?v=0116122124",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5677,8 +5677,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1258-ML": {
         "partId": "thorlabs:LB1258-ML",
         "sku": "LB1258-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1258-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1258-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1258-ml/ttn039759-e0w.step?v=0116122124",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5686,8 +5686,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1378-A-ML": {
         "partId": "thorlabs:LB1378-A-ML",
         "sku": "LB1378-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1378-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1378-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1378-a-ml/ttn039763-e0w.step?v=0116122130",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5695,8 +5695,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1378-B-ML": {
         "partId": "thorlabs:LB1378-B-ML",
         "sku": "LB1378-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1378-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1378-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1378-b-ml/ttn039766-e0w.step?v=0116122134",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5704,8 +5704,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1378-C-ML": {
         "partId": "thorlabs:LB1378-C-ML",
         "sku": "LB1378-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1378-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1378-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1378-c-ml/ttn039769-e0w.step?v=0116122134",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5713,8 +5713,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1378-ML": {
         "partId": "thorlabs:LB1378-ML",
         "sku": "LB1378-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1378-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1378-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1378-ml/ttn039772-e0w.step?v=0116122134",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5722,8 +5722,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1391-A-ML": {
         "partId": "thorlabs:LB1391-A-ML",
         "sku": "LB1391-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1391-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1391-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1391-a-ml/ttn039776-e0w.step?v=0116122134",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5731,8 +5731,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1391-B-ML": {
         "partId": "thorlabs:LB1391-B-ML",
         "sku": "LB1391-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1391-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1391-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1391-b-ml/ttn039779-e0w.step?v=0116122137",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5740,8 +5740,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1391-C-ML": {
         "partId": "thorlabs:LB1391-C-ML",
         "sku": "LB1391-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1391-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1391-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1391-c-ml/ttn039782-e0w.step?v=0116122139",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5749,8 +5749,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1391-ML": {
         "partId": "thorlabs:LB1391-ML",
         "sku": "LB1391-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1391-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1391-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1391-ml/ttn039785-e0w.step?v=0116122138",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5758,8 +5758,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1409-A-ML": {
         "partId": "thorlabs:LB1409-A-ML",
         "sku": "LB1409-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1409-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1409-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1409-a-ml/lb1409-a-ml-e0w.step?v=0116122146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -5767,8 +5767,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1409-B-ML": {
         "partId": "thorlabs:LB1409-B-ML",
         "sku": "LB1409-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1409-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1409-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1409-b-ml/ttn039792-e0w.step?v=0116122145",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5776,8 +5776,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1409-C-ML": {
         "partId": "thorlabs:LB1409-C-ML",
         "sku": "LB1409-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1409-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1409-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1409-c-ml/ttn039796-e0w.step?v=0116122146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5785,8 +5785,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1409-ML": {
         "partId": "thorlabs:LB1409-ML",
         "sku": "LB1409-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1409-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1409-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1409-ml/ttn039800-e0w.step?v=0116122146",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5794,8 +5794,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1437-A-ML": {
         "partId": "thorlabs:LB1437-A-ML",
         "sku": "LB1437-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1437-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1437-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1437-a-ml/ttn039804-e0w.step?v=0116122156",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5803,8 +5803,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1437-B-ML": {
         "partId": "thorlabs:LB1437-B-ML",
         "sku": "LB1437-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1437-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1437-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1437-b-ml/ttn039807-e0w.step?v=0116122155",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5812,8 +5812,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1437-C-ML": {
         "partId": "thorlabs:LB1437-C-ML",
         "sku": "LB1437-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1437-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1437-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1437-c-ml/ttn039810-e0w.step?v=0116122155",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5821,8 +5821,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1437-ML": {
         "partId": "thorlabs:LB1437-ML",
         "sku": "LB1437-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1437-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1437-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1437-ml/ttn039820-e0w.step?v=0116122155",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5830,8 +5830,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1450-A-ML": {
         "partId": "thorlabs:LB1450-A-ML",
         "sku": "LB1450-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1450-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1450-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1450-a-ml/ttn039823-e0w.step?v=0116122200",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5839,8 +5839,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1450-B-ML": {
         "partId": "thorlabs:LB1450-B-ML",
         "sku": "LB1450-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1450-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1450-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1450-b-ml/ttn039826-e0w.step?v=0116122159",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5848,8 +5848,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1450-ML": {
         "partId": "thorlabs:LB1450-ML",
         "sku": "LB1450-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1450-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1450-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1450-ml/ttn039832-e0w.step?v=0116122159",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5857,8 +5857,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1471-A-ML": {
         "partId": "thorlabs:LB1471-A-ML",
         "sku": "LB1471-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1471-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1471-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1471-a-ml/ttn039835-e0w.step?v=0116122159",
         "units": "mm",
         "generatedAt": "2026-05-19T23:53:53.794Z"
@@ -5866,8 +5866,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1471-B-ML": {
         "partId": "thorlabs:LB1471-B-ML",
         "sku": "LB1471-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1471-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1471-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1471-b-ml/ttn039839-e0w.step?v=0116122203",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5875,8 +5875,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1471-C-ML": {
         "partId": "thorlabs:LB1471-C-ML",
         "sku": "LB1471-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1471-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1471-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1471-c-ml/ttn039843-e0w.step?v=0116122204",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5884,8 +5884,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1471-ML": {
         "partId": "thorlabs:LB1471-ML",
         "sku": "LB1471-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1471-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1471-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1471-ml/ttn039846-e0w.step?v=0116122203",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5893,8 +5893,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1475-A-ML": {
         "partId": "thorlabs:LB1475-A-ML",
         "sku": "LB1475-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1475-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1475-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1475-a-ml/ttn039849-e0w.step?v=0116122204",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5902,8 +5902,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1475-B-ML": {
         "partId": "thorlabs:LB1475-B-ML",
         "sku": "LB1475-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1475-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1475-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1475-b-ml/ttn039852-e0w.step?v=0116122208",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5911,8 +5911,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1475-C-ML": {
         "partId": "thorlabs:LB1475-C-ML",
         "sku": "LB1475-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1475-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1475-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1475-c-ml/ttn039855-e0w.step?v=0116122209",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5920,8 +5920,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1475-ML": {
         "partId": "thorlabs:LB1475-ML",
         "sku": "LB1475-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1475-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1475-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1475-ml/ttn039858-e0w.step?v=0116122207",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5929,8 +5929,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1676-A-ML": {
         "partId": "thorlabs:LB1676-A-ML",
         "sku": "LB1676-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1676-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1676-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1676-a-ml/ttn039862-e0w.step?v=0116122217",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5938,8 +5938,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1676-B-ML": {
         "partId": "thorlabs:LB1676-B-ML",
         "sku": "LB1676-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1676-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1676-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1676-b-ml/ttn039865-e0w.step?v=0116122221",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5947,8 +5947,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1676-C-ML": {
         "partId": "thorlabs:LB1676-C-ML",
         "sku": "LB1676-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1676-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1676-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1676-c-ml/ttn039870-e0w.step?v=0116122222",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5956,8 +5956,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1676-ML": {
         "partId": "thorlabs:LB1676-ML",
         "sku": "LB1676-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1676-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1676-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1676-ml/ttn039874-e0w.step?v=0116122221",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5965,8 +5965,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1761-A-ML": {
         "partId": "thorlabs:LB1761-A-ML",
         "sku": "LB1761-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1761-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1761-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1761-a-ml/ttn039878-e0w.step?v=0116122226",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5974,8 +5974,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1761-B-ML": {
         "partId": "thorlabs:LB1761-B-ML",
         "sku": "LB1761-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1761-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1761-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1761-b-ml/ttn039883-e0w.step?v=0116122226",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5983,8 +5983,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1761-C-ML": {
         "partId": "thorlabs:LB1761-C-ML",
         "sku": "LB1761-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1761-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1761-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1761-c-ml/ttn039886-e0w.step?v=0116122230",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -5992,8 +5992,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1761-ML": {
         "partId": "thorlabs:LB1761-ML",
         "sku": "LB1761-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1761-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1761-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1761-ml/ttn039890-e0w.step?v=0116122230",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6001,8 +6001,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1779-A-ML": {
         "partId": "thorlabs:LB1779-A-ML",
         "sku": "LB1779-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1779-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1779-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1779-a-ml/ttn039894-e0w.step?v=0116122231",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6010,8 +6010,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1779-B-ML": {
         "partId": "thorlabs:LB1779-B-ML",
         "sku": "LB1779-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1779-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1779-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1779-b-ml/ttn039897-e0w.step?v=0116122230",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6019,8 +6019,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1779-C-ML": {
         "partId": "thorlabs:LB1779-C-ML",
         "sku": "LB1779-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1779-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1779-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1779-c-ml/ttn039902-e0w.step?v=0116122233",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6028,8 +6028,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1779-ML": {
         "partId": "thorlabs:LB1779-ML",
         "sku": "LB1779-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1779-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1779-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1779-ml/ttn039907-e0w.step?v=0116122234",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6037,8 +6037,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1811-A-ML": {
         "partId": "thorlabs:LB1811-A-ML",
         "sku": "LB1811-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1811-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1811-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1811-a-ml/ttn039914-e0w.step?v=0116122235",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6046,8 +6046,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1811-B-ML": {
         "partId": "thorlabs:LB1811-B-ML",
         "sku": "LB1811-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1811-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1811-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1811-b-ml/ttn039917-e0w.step?v=0116122234",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6055,8 +6055,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1811-C-ML": {
         "partId": "thorlabs:LB1811-C-ML",
         "sku": "LB1811-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1811-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1811-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1811-c-ml/ttn039920-e0w.step?v=0116122235",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6064,8 +6064,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1811-ML": {
         "partId": "thorlabs:LB1811-ML",
         "sku": "LB1811-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1811-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1811-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1811-ml/ttn039923-e0w.step?v=0116122238",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6073,8 +6073,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1844-A-ML": {
         "partId": "thorlabs:LB1844-A-ML",
         "sku": "LB1844-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1844-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1844-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1844-a-ml/ttn039926-e0w.step?v=0116122239",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6082,8 +6082,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1844-B-ML": {
         "partId": "thorlabs:LB1844-B-ML",
         "sku": "LB1844-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1844-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1844-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1844-b-ml/ttn039929-e0w.step?v=0116122239",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6091,8 +6091,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1844-C-ML": {
         "partId": "thorlabs:LB1844-C-ML",
         "sku": "LB1844-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1844-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1844-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1844-c-ml/ttn039932-e0w.step?v=0116122238",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6100,8 +6100,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1844-ML": {
         "partId": "thorlabs:LB1844-ML",
         "sku": "LB1844-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1844-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1844-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1844-ml/ttn039935-e0w.step?v=0116122238",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6109,8 +6109,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1869-A-ML": {
         "partId": "thorlabs:LB1869-A-ML",
         "sku": "LB1869-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1869-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1869-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1869-a-ml/ttn039938-e0w.step?v=0116122247",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6118,8 +6118,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1869-B-ML": {
         "partId": "thorlabs:LB1869-B-ML",
         "sku": "LB1869-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1869-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1869-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1869-b-ml/ttn039941-e0w.step?v=0116122247",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6127,8 +6127,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1869-C-ML": {
         "partId": "thorlabs:LB1869-C-ML",
         "sku": "LB1869-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1869-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1869-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1869-c-ml/ttn039944-e0w.step?v=0116122246",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6136,8 +6136,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1869-ML": {
         "partId": "thorlabs:LB1869-ML",
         "sku": "LB1869-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1869-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1869-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1869-ml/ttn039952-e0w.step?v=0116122246",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6145,8 +6145,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1901-A-ML": {
         "partId": "thorlabs:LB1901-A-ML",
         "sku": "LB1901-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1901-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1901-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1901-a-ml/ttn039955-e0w.step?v=0116122251",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6154,8 +6154,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1901-B-ML": {
         "partId": "thorlabs:LB1901-B-ML",
         "sku": "LB1901-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1901-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1901-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1901-b-ml/ttn039958-e0w.step?v=0116122250",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6163,8 +6163,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1901-C-ML": {
         "partId": "thorlabs:LB1901-C-ML",
         "sku": "LB1901-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1901-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1901-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1901-c-ml/ttn039961-e0w.step?v=0116122255",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6172,8 +6172,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1901-ML": {
         "partId": "thorlabs:LB1901-ML",
         "sku": "LB1901-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1901-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1901-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1901-ml/ttn039965-e0w.step?v=0116122255",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6181,8 +6181,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1904-A-ML": {
         "partId": "thorlabs:LB1904-A-ML",
         "sku": "LB1904-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1904-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1904-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1904-a-ml/ttn039968-e0w.step?v=0116122254",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6190,8 +6190,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1904-B-ML": {
         "partId": "thorlabs:LB1904-B-ML",
         "sku": "LB1904-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1904-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1904-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1904-b-ml/ttn039971-e0w.step?v=0116122255",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6199,8 +6199,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1904-C-ML": {
         "partId": "thorlabs:LB1904-C-ML",
         "sku": "LB1904-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1904-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1904-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1904-c-ml/ttn039974-e0w.step?v=0116122258",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6208,8 +6208,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1904-ML": {
         "partId": "thorlabs:LB1904-ML",
         "sku": "LB1904-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1904-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1904-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1904-ml/ttn039978-e0w.step?v=0116122259",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6217,8 +6217,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1945-A-ML": {
         "partId": "thorlabs:LB1945-A-ML",
         "sku": "LB1945-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1945-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1945-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1945-a-ml/ttn039982-e0w.step?v=0116122303",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6226,8 +6226,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1945-B-ML": {
         "partId": "thorlabs:LB1945-B-ML",
         "sku": "LB1945-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1945-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1945-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1945-ml/ttn039992-e0w.step?v=0116122308",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6235,8 +6235,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1945-C-ML": {
         "partId": "thorlabs:LB1945-C-ML",
         "sku": "LB1945-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1945-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1945-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1945-c-ml/ttn039989-e0w.step?v=0116122303",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6244,8 +6244,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB1945-ML": {
         "partId": "thorlabs:LB1945-ML",
         "sku": "LB1945-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb1945-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb1945-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb1/lb1945-ml/ttn039992-e0w.step?v=0116122308",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6253,8 +6253,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4003-AB-ML": {
         "partId": "thorlabs:LB4003-AB-ML",
         "sku": "LB4003-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4003-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4003-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4003-ab-ml/lb4003-ab-ml-e0w.step?v=0116122320",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6262,8 +6262,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4030-AB-ML": {
         "partId": "thorlabs:LB4030-AB-ML",
         "sku": "LB4030-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4030-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4030-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4030-ab-ml/lb4030-ab-ml-e0w.step?v=0116122326",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6271,8 +6271,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4096-AB-ML": {
         "partId": "thorlabs:LB4096-AB-ML",
         "sku": "LB4096-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4096-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4096-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4096-ab-ml/lb4096-ab-ml-e0w.step?v=0116122331",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6280,8 +6280,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4140-AB-ML": {
         "partId": "thorlabs:LB4140-AB-ML",
         "sku": "LB4140-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4140-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4140-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4140-ab-ml/lb4140-ab-ml-e0w.step?v=0116122336",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6289,8 +6289,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4223-AB-ML": {
         "partId": "thorlabs:LB4223-AB-ML",
         "sku": "LB4223-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4223-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4223-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4223-ab-ml/lb4223-ab-ml-e0w.step?v=0116122341",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6298,8 +6298,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4265-AB-ML": {
         "partId": "thorlabs:LB4265-AB-ML",
         "sku": "LB4265-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4265-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4265-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4265-ab-ml/lb4265-ab-ml-e0w.step?v=0116122346",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6307,8 +6307,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4282-AB-ML": {
         "partId": "thorlabs:LB4282-AB-ML",
         "sku": "LB4282-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4282-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4282-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4282-ab-ml/lb4282-ab-ml-e0w.step?v=0116122358",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6316,8 +6316,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4293-AB-ML": {
         "partId": "thorlabs:LB4293-AB-ML",
         "sku": "LB4293-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4293-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4293-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4293-ab-ml/lb4293-ab-ml-e0w.step?v=0116122403",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6325,8 +6325,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4330-AB-ML": {
         "partId": "thorlabs:LB4330-AB-ML",
         "sku": "LB4330-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4330-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4330-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4330-ab-ml/lb4330-ab-ml-e0w.step?v=0116122412",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6334,8 +6334,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4374-AB-ML": {
         "partId": "thorlabs:LB4374-AB-ML",
         "sku": "LB4374-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4374-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4374-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4374-ab-ml/lb4374-ab-ml-e0w.step?v=0116122417",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6343,8 +6343,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4453-AB-ML": {
         "partId": "thorlabs:LB4453-AB-ML",
         "sku": "LB4453-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4453-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4453-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4453-ab-ml/lb4453-ab-ml-e0w.step?v=0116122422",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6352,8 +6352,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4545-AB-ML": {
         "partId": "thorlabs:LB4545-AB-ML",
         "sku": "LB4545-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4545-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4545-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4545-ab-ml/lb4545-ab-ml-e0w.step?v=0116122430",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6361,8 +6361,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4553-AB-ML": {
         "partId": "thorlabs:LB4553-AB-ML",
         "sku": "LB4553-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4553-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4553-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4553-ab-ml/lb4553-ab-ml-e0w.step?v=0116122436",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6370,8 +6370,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4592-AB-ML": {
         "partId": "thorlabs:LB4592-AB-ML",
         "sku": "LB4592-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4592-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4592-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4592-ab-ml/lb4592-ab-ml-e0w.step?v=0116122440",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6379,8 +6379,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4700-AB-ML": {
         "partId": "thorlabs:LB4700-AB-ML",
         "sku": "LB4700-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4700-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4700-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4700-ab-ml/lb4700-ab-ml-e0w.step?v=0116122449",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6388,8 +6388,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4710-AB-ML": {
         "partId": "thorlabs:LB4710-AB-ML",
         "sku": "LB4710-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4710-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4710-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4710-ab-ml/lb4710-ab-ml-e0w.step?v=0116122454",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6397,8 +6397,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4821-AB-ML": {
         "partId": "thorlabs:LB4821-AB-ML",
         "sku": "LB4821-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4821-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4821-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4821-ab-ml/lb4821-ab-ml-e0w.step?v=0116122513",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6406,8 +6406,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4837-AB-ML": {
         "partId": "thorlabs:LB4837-AB-ML",
         "sku": "LB4837-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4837-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4837-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4837-ab-ml/lb4837-ab-ml-e0w.step?v=0116122518",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6415,8 +6415,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4842-AB-ML": {
         "partId": "thorlabs:LB4842-AB-ML",
         "sku": "LB4842-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4842-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4842-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4842-ab-ml/lb4842-ab-ml-e0w.step?v=0116122521",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6424,8 +6424,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4854-AB-ML": {
         "partId": "thorlabs:LB4854-AB-ML",
         "sku": "LB4854-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4854-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4854-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4854-ab-ml/lb4854-ab-ml-e0w.step?v=0116122526",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6433,8 +6433,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4879-AB-ML": {
         "partId": "thorlabs:LB4879-AB-ML",
         "sku": "LB4879-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4879-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4879-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4879-ab-ml/lb4879-ab-ml-e0w.step?v=0116122535",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6442,8 +6442,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4910-AB-ML": {
         "partId": "thorlabs:LB4910-AB-ML",
         "sku": "LB4910-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4910-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4910-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4910-ab-ml/lb4910-ab-ml-e0w.step?v=0116122540",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6451,8 +6451,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4913-AB-ML": {
         "partId": "thorlabs:LB4913-AB-ML",
         "sku": "LB4913-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4913-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4913-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4913-ab-ml/lb4913-ab-ml-e0w.step?v=0116122545",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6460,8 +6460,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4915-AB-ML": {
         "partId": "thorlabs:LB4915-AB-ML",
         "sku": "LB4915-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4915-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4915-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4915-ab-ml/lb4915-ab-ml-e0w.step?v=0116122550",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6469,8 +6469,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4941-AB-ML": {
         "partId": "thorlabs:LB4941-AB-ML",
         "sku": "LB4941-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4941-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4941-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4941-ab-ml/lb4941-ab-ml-e0w.step?v=0116122554",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6478,8 +6478,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LB4972-AB-ML": {
         "partId": "thorlabs:LB4972-AB-ML",
         "sku": "LB4972-AB-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lb4972-ab-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lb4972-ab-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lb/lb4/lb4972-ab-ml/lb4972-ab-ml-e0w.step?v=0116122601",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6487,8 +6487,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1054-A-ML": {
         "partId": "thorlabs:LC1054-A-ML",
         "sku": "LC1054-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1054-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1054-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1054-a-ml/ttn045236-e0w.step?v=0116122704",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6496,8 +6496,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1054-B-ML": {
         "partId": "thorlabs:LC1054-B-ML",
         "sku": "LC1054-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1054-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1054-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1054-b-ml/ttn045239-e0w.step?v=0116122703",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6505,8 +6505,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1054-C-ML": {
         "partId": "thorlabs:LC1054-C-ML",
         "sku": "LC1054-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1054-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1054-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1054-c-ml/ttn045242-e0w.step?v=0116122708",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6514,8 +6514,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1054-ML": {
         "partId": "thorlabs:LC1054-ML",
         "sku": "LC1054-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1054-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1054-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1054-ml/ttn045233-e0w.step?v=0116122708",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6523,8 +6523,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1060-A-ML": {
         "partId": "thorlabs:LC1060-A-ML",
         "sku": "LC1060-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1060-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1060-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1060-a-ml/ttn045248-e0w.step?v=0116122708",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6532,8 +6532,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1060-B-ML": {
         "partId": "thorlabs:LC1060-B-ML",
         "sku": "LC1060-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1060-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1060-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1060-b-ml/ttn045251-e0w.step?v=0116122709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6541,8 +6541,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1060-C-ML": {
         "partId": "thorlabs:LC1060-C-ML",
         "sku": "LC1060-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1060-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1060-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1060-c-ml/ttn045254-e0w.step?v=0116122709",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6550,8 +6550,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1060-ML": {
         "partId": "thorlabs:LC1060-ML",
         "sku": "LC1060-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1060-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1060-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1060-ml/ttn045245-e0w.step?v=0116122713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6559,8 +6559,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1093-A-ML": {
         "partId": "thorlabs:LC1093-A-ML",
         "sku": "LC1093-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1093-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1093-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1093-a-ml/ttn045352-e0w.step?v=0116122713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6568,8 +6568,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1093-B-ML": {
         "partId": "thorlabs:LC1093-B-ML",
         "sku": "LC1093-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1093-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1093-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1093-b-ml/ttn045355-e0w.step?v=0116122713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6577,8 +6577,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1093-C-ML": {
         "partId": "thorlabs:LC1093-C-ML",
         "sku": "LC1093-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1093-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1093-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1093-c-ml/ttn045358-e0w.step?v=0116122713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6586,8 +6586,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1093-ML": {
         "partId": "thorlabs:LC1093-ML",
         "sku": "LC1093-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1093-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1093-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1093-ml/ttn045349-e0w.step?v=0116122713",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6595,8 +6595,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1120-A-ML": {
         "partId": "thorlabs:LC1120-A-ML",
         "sku": "LC1120-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1120-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1120-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1120-a-ml/ttn045313-e0w.step?v=0116122717",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6604,8 +6604,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1120-B-ML": {
         "partId": "thorlabs:LC1120-B-ML",
         "sku": "LC1120-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1120-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1120-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1120-b-ml/ttn045316-e0w.step?v=0116122718",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6613,8 +6613,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1120-C-ML": {
         "partId": "thorlabs:LC1120-C-ML",
         "sku": "LC1120-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1120-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1120-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1120-c-ml/ttn045720-e0w.step?v=0116122717",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6622,8 +6622,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1120-ML": {
         "partId": "thorlabs:LC1120-ML",
         "sku": "LC1120-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1120-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1120-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1120-ml/ttn045310-e0w.step?v=0116122717",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6631,8 +6631,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1315-A-ML": {
         "partId": "thorlabs:LC1315-A-ML",
         "sku": "LC1315-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1315-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1315-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1315-a-ml/ttn045323-e0w.step?v=0116122726",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6640,8 +6640,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1315-B-ML": {
         "partId": "thorlabs:LC1315-B-ML",
         "sku": "LC1315-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1315-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1315-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1315-b-ml/ttn045326-e0w.step?v=0116122726",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6649,8 +6649,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1315-C-ML": {
         "partId": "thorlabs:LC1315-C-ML",
         "sku": "LC1315-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1315-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1315-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1315-c-ml/ttn045734-e0w.step?v=0116122726",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6658,8 +6658,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1315-ML": {
         "partId": "thorlabs:LC1315-ML",
         "sku": "LC1315-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1315-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1315-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1315-ml/ttn045319-e0w.step?v=0116122727",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6667,8 +6667,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1439-A-ML": {
         "partId": "thorlabs:LC1439-A-ML",
         "sku": "LC1439-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1439-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1439-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1439-a-ml/ttn045260-e0w.step?v=0116122727",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6676,8 +6676,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1439-B-ML": {
         "partId": "thorlabs:LC1439-B-ML",
         "sku": "LC1439-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1439-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1439-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1439-b-ml/ttn045265-e0w.step?v=0116122731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6685,8 +6685,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1439-C-ML": {
         "partId": "thorlabs:LC1439-C-ML",
         "sku": "LC1439-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1439-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1439-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1439-c-ml/ttn045269-e0w.step?v=0116122731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6694,8 +6694,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1439-ML": {
         "partId": "thorlabs:LC1439-ML",
         "sku": "LC1439-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1439-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1439-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1439-ml/ttn045257-e0w.step?v=0116122731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6703,8 +6703,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1582-A-ML": {
         "partId": "thorlabs:LC1582-A-ML",
         "sku": "LC1582-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1582-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1582-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1582-a-ml/ttn045294-e0w.step?v=0116122731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6712,8 +6712,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1582-B-ML": {
         "partId": "thorlabs:LC1582-B-ML",
         "sku": "LC1582-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1582-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1582-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1582-b-ml/ttn045298-e0w.step?v=0116122731",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6721,8 +6721,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1582-C-ML": {
         "partId": "thorlabs:LC1582-C-ML",
         "sku": "LC1582-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1582-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1582-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1582-c-ml/ttn045307-e0w.step?v=0116122735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6730,8 +6730,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1582-ML": {
         "partId": "thorlabs:LC1582-ML",
         "sku": "LC1582-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1582-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1582-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1582-ml/ttn045289-e0w.step?v=0116122735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6739,8 +6739,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1611-A-ML": {
         "partId": "thorlabs:LC1611-A-ML",
         "sku": "LC1611-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1611-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1611-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1611-a-ml/ttn045366-e0w.step?v=0116122736",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6748,8 +6748,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1611-B-ML": {
         "partId": "thorlabs:LC1611-B-ML",
         "sku": "LC1611-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1611-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1611-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1611-b-ml/ttn045371-e0w.step?v=0116122735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6757,8 +6757,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1611-C-ML": {
         "partId": "thorlabs:LC1611-C-ML",
         "sku": "LC1611-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1611-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1611-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1611-c-ml/ttn045374-e0w.step?v=0116122735",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6766,8 +6766,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1611-ML": {
         "partId": "thorlabs:LC1611-ML",
         "sku": "LC1611-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1611-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1611-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1611-ml/ttn045362-e0w.step?v=0116122739",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6775,8 +6775,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1715-A-ML": {
         "partId": "thorlabs:LC1715-A-ML",
         "sku": "LC1715-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1715-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1715-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1715-a-ml/ttn045277-e0w.step?v=0116122739",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6784,8 +6784,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1715-B-ML": {
         "partId": "thorlabs:LC1715-B-ML",
         "sku": "LC1715-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1715-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1715-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1715-b-ml/ttn045280-e0w.step?v=0116122739",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6793,8 +6793,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1715-C-ML": {
         "partId": "thorlabs:LC1715-C-ML",
         "sku": "LC1715-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1715-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1715-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1715-c-ml/ttn045284-e0w.step?v=0116122739",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6802,8 +6802,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LC1715-ML": {
         "partId": "thorlabs:LC1715-ML",
         "sku": "LC1715-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lc1715-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lc1715-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lc/lc1/lc1715-ml/ttn045273-e0w.step?v=0116122740",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6811,8 +6811,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1170-A-ML": {
         "partId": "thorlabs:LD1170-A-ML",
         "sku": "LD1170-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1170-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1170-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1170-a-ml/ttn045415-e0w.step?v=0116123139",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6820,8 +6820,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1170-B-ML": {
         "partId": "thorlabs:LD1170-B-ML",
         "sku": "LD1170-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1170-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1170-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1170-b-ml/ttn045418-e0w.step?v=0116123140",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6829,8 +6829,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1170-C-ML": {
         "partId": "thorlabs:LD1170-C-ML",
         "sku": "LD1170-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1170-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1170-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1170-c-ml/ttn045421-e0w.step?v=0116123139",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6838,8 +6838,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1170-ML": {
         "partId": "thorlabs:LD1170-ML",
         "sku": "LD1170-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1170-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1170-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1170-ml/ttn045412-e0w.step?v=0116123140",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6847,8 +6847,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1357-A-ML": {
         "partId": "thorlabs:LD1357-A-ML",
         "sku": "LD1357-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1357-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1357-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1357-a-ml/ttn045380-e0w.step?v=0116123144",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6856,8 +6856,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1357-B-ML": {
         "partId": "thorlabs:LD1357-B-ML",
         "sku": "LD1357-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1357-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1357-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1357-b-ml/ttn045383-e0w.step?v=0116123143",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6865,8 +6865,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1357-C-ML": {
         "partId": "thorlabs:LD1357-C-ML",
         "sku": "LD1357-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1357-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1357-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1357-c-ml/ttn045386-e0w.step?v=0116123144",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6874,8 +6874,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1357-ML": {
         "partId": "thorlabs:LD1357-ML",
         "sku": "LD1357-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1357-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1357-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1357-ml/ttn045377-e0w.step?v=0116123144",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6883,8 +6883,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1464-A-ML": {
         "partId": "thorlabs:LD1464-A-ML",
         "sku": "LD1464-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1464-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1464-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1464-a-ml/ttn045397-e0w.step?v=0116123149",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6892,8 +6892,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1464-B-ML": {
         "partId": "thorlabs:LD1464-B-ML",
         "sku": "LD1464-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1464-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1464-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1464-b-ml/ttn045402-e0w.step?v=0116123148",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6901,8 +6901,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1464-C-ML": {
         "partId": "thorlabs:LD1464-C-ML",
         "sku": "LD1464-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1464-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1464-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1464-c-ml/ttn045409-e0w.step?v=0116123148",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6910,8 +6910,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1464-ML": {
         "partId": "thorlabs:LD1464-ML",
         "sku": "LD1464-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1464-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1464-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1464-ml/ttn045390-e0w.step?v=0116123148",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6919,8 +6919,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1613-A-ML": {
         "partId": "thorlabs:LD1613-A-ML",
         "sku": "LD1613-A-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1613-a-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1613-a-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1613-a-ml/ttn045427-e0w.step?v=0116123155",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6928,8 +6928,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1613-B-ML": {
         "partId": "thorlabs:LD1613-B-ML",
         "sku": "LD1613-B-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1613-b-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1613-b-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1613-b-ml/ttn045430-e0w.step?v=0116123155",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6937,8 +6937,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1613-C-ML": {
         "partId": "thorlabs:LD1613-C-ML",
         "sku": "LD1613-C-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1613-c-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1613-c-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1613-c-ml/ttn045433-e0w.step?v=0116123154",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6946,8 +6946,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LD1613-ML": {
         "partId": "thorlabs:LD1613-ML",
         "sku": "LD1613-ML",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/ld1613-ml.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/ld1613-ml.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/ld/ld1/ld1613-ml/ttn045424-e0w.step?v=0116123154",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6955,8 +6955,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5195RM": {
         "partId": "thorlabs:LJ5195RM",
         "sku": "LJ5195RM",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5195rm.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5195rm.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5195rm/ttn013528-e0w.step?v=0116124743",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6964,8 +6964,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5195RM-D": {
         "partId": "thorlabs:LJ5195RM-D",
         "sku": "LJ5195RM-D",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5195rm-d.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5195rm-d.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5195rm-d/ttn013544-e0w.step?v=0116124744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6973,8 +6973,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5195RM-E1": {
         "partId": "thorlabs:LJ5195RM-E1",
         "sku": "LJ5195RM-E1",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5195rm-e1.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5195rm-e1.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5195rm-e1/ttn351704-e0w.step?v=0116124744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -6982,8 +6982,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5386RM": {
         "partId": "thorlabs:LJ5386RM",
         "sku": "LJ5386RM",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5386rm.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5386rm.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5386rm/ttn013538-e0w.step?v=0116124743",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -6991,8 +6991,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5386RM-D": {
         "partId": "thorlabs:LJ5386RM-D",
         "sku": "LJ5386RM-D",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5386rm-d.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5386rm-d.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5386rm-d/ttn013552-e0w.step?v=0116124744",
         "units": "mm",
         "generatedAt": "2026-05-20T00:14:25.145Z"
@@ -7000,8 +7000,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:LJ5386RM-E1": {
         "partId": "thorlabs:LJ5386RM-E1",
         "sku": "LJ5386RM-E1",
-        "format": "wrl",
-        "url": "/catalog/mechanical/lenses/lj5386rm-e1.wrl",
+        "format": "gltf",
+        "url": "/catalog/mechanical/lenses/lj5386rm-e1.gltf",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/l/lj/lj5/lj5386rm-e1/ttn351705-e0w.step?v=0116124749",
         "units": "mm",
         "generatedAt": "2026-05-20T00:34:04.285Z"
@@ -7009,8 +7009,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS201": {
         "partId": "thorlabs:PBS201",
         "sku": "PBS201",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs201.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs201.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs201/19030-e0w.step?v=0116015958",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7018,8 +7018,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS202": {
         "partId": "thorlabs:PBS202",
         "sku": "PBS202",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs202.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs202.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs202/19031-e0w.step?v=0116015958",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7027,8 +7027,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS203": {
         "partId": "thorlabs:PBS203",
         "sku": "PBS203",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs203.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs203.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs203/19032-e0w.step?v=0116015958",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7036,8 +7036,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS204": {
         "partId": "thorlabs:PBS204",
         "sku": "PBS204",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs204.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs204.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs204/19033-e0w.step?v=0116015958",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7045,8 +7045,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS205": {
         "partId": "thorlabs:PBS205",
         "sku": "PBS205",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs205.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs205.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs205/ttn314607-e0w.step?v=0116015959",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7054,8 +7054,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS251": {
         "partId": "thorlabs:PBS251",
         "sku": "PBS251",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs251.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs251.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs251/19034-e0w.step?v=0116020002",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7063,8 +7063,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS252": {
         "partId": "thorlabs:PBS252",
         "sku": "PBS252",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs252.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs252.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs252/19035-e0w.step?v=0116020006",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7072,8 +7072,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS253": {
         "partId": "thorlabs:PBS253",
         "sku": "PBS253",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs253.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs253.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs253/19036-e0w.step?v=0116020006",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7081,8 +7081,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS254": {
         "partId": "thorlabs:PBS254",
         "sku": "PBS254",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs254.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs254.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs254/19037-e0w.step?v=0116020006",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7090,8 +7090,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:PBS255": {
         "partId": "thorlabs:PBS255",
         "sku": "PBS255",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/pbs255.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/pbs255.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/p/pb/pbs/pbs255/ttn190585-e0w.step?v=0116020007",
         "units": "mm",
         "generatedAt": "2026-05-20T01:29:21.405Z"
@@ -7135,8 +7135,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-1064": {
         "partId": "thorlabs:VA5-1064",
         "sku": "VA5-1064",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-1064.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-1064.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-1064/ttn050950-e0w.step?v=0116033503",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7144,8 +7144,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-1550": {
         "partId": "thorlabs:VA5-1550",
         "sku": "VA5-1550",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-1550.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-1550.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-1550/ttn050953-e0w.step?v=0116033503",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7153,8 +7153,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-532": {
         "partId": "thorlabs:VA5-532",
         "sku": "VA5-532",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-532.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-532.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-532/ttn050941-e0w.step?v=0116033503",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7162,8 +7162,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-633": {
         "partId": "thorlabs:VA5-633",
         "sku": "VA5-633",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-633.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-633.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-633/ttn050944-e0w.step?v=0116033508",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7171,8 +7171,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-780": {
         "partId": "thorlabs:VA5-780",
         "sku": "VA5-780",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-780.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-780.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-780/ttn050947-e0w.step?v=0116033508",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7180,8 +7180,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-PBS251": {
         "partId": "thorlabs:VA5-PBS251",
         "sku": "VA5-PBS251",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-pbs251.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-pbs251.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-pbs251/ttn133173-e0w.step?v=0116033508",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7189,8 +7189,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-PBS252": {
         "partId": "thorlabs:VA5-PBS252",
         "sku": "VA5-PBS252",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-pbs252.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-pbs252.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-pbs252/ttn133196-e0w.step?v=0116033509",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7198,8 +7198,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-PBS253": {
         "partId": "thorlabs:VA5-PBS253",
         "sku": "VA5-PBS253",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-pbs253.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-pbs253.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-pbs253/ttn133857-e0w.step?v=0116033509",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"
@@ -7207,8 +7207,8 @@ export const GENERATED_MECHANICAL_VISUAL_ASSETS: Record<string, CatalogMechanica
     "thorlabs:VA5-PBS254": {
         "partId": "thorlabs:VA5-PBS254",
         "sku": "VA5-PBS254",
-        "format": "wrl",
-        "url": "/catalog/mechanical/fold-optics/va5-pbs254.wrl",
+        "format": "glb",
+        "url": "/catalog/mechanical/fold-optics/va5-pbs254.glb",
         "sourceUrl": "https://media.thorlabs.com/globalassets/items/v/va/va5/va5-pbs254/ttn133882-e0w.step?v=0116033514",
         "units": "mm",
         "generatedAt": "2026-05-20T11:22:15.572Z"

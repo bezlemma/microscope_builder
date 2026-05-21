@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
+import type { ThreeEvent } from '@react-three/fiber';
 import { useAtom } from 'jotai';
 import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom, mobileSnapEnabledAtom, uiLockedAtom, contextMenuAtom } from '../state/store';
 import { OpticalComponent } from '../physics/Component';
@@ -16,6 +17,43 @@ interface DraggableProps {
 }
 
 const MIN_INTERACTION_THICKNESS_MM = 10;
+
+type DraggablePointerEvent = ThreeEvent<PointerEvent>;
+type DraggableContextMenuEvent = ThreeEvent<MouseEvent>;
+type PointerCaptureTarget = {
+    setPointerCapture?: (pointerId: number) => void;
+    releasePointerCapture?: (pointerId: number) => void;
+};
+type ToggleableControls = { enabled: boolean };
+
+function eventClientPoint(event: DraggablePointerEvent | DraggableContextMenuEvent): { x: number; y: number } {
+    return {
+        x: event.nativeEvent.clientX ?? event.clientX ?? 0,
+        y: event.nativeEvent.clientY ?? event.clientY ?? 0,
+    };
+}
+
+function capturePointer(event: DraggablePointerEvent): void {
+    try {
+        (event.target as PointerCaptureTarget).setPointerCapture?.(event.pointerId);
+    } catch {
+        // Pointer capture is best-effort on mobile browsers.
+    }
+}
+
+function releasePointer(event: DraggablePointerEvent): void {
+    try {
+        (event.target as PointerCaptureTarget).releasePointerCapture?.(event.pointerId);
+    } catch {
+        // Pointer capture may already be gone after a cancelled touch.
+    }
+}
+
+function setControlsEnabled(controls: unknown, enabled: boolean): void {
+    if (controls && typeof controls === 'object' && 'enabled' in controls) {
+        (controls as ToggleableControls).enabled = enabled;
+    }
+}
 
 export const Draggable: React.FC<DraggableProps> = ({ component, children }) => {
     const [components, setComponents] = useAtom(componentsAtom);
@@ -40,9 +78,8 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     const gridSize = 25;
 
     const isSelected = selection.includes(component.id);
-
     // Intersect ray with Z=0 plane (table surface in Z-up world)
-    const getRayIntersection = (e: any) => {
+    const getRayIntersection = (e: DraggablePointerEvent) => {
         const ray = e.ray;
         // Z-up: table is XY plane at Z=0
         if (Math.abs(ray.direction.z) < 1e-6) return new Vector3(0, 0, 0);
@@ -53,7 +90,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     // Intersect ray with a vertical plane through the component (for Z dragging).
     // Uses camera forward vector projected onto XY to define the plane normal,
     // so vertical mouse movement maps to Z.
-    const getRayIntersectionVertical = (e: any) => {
+    const getRayIntersectionVertical = (e: DraggablePointerEvent) => {
         const ray = e.ray;
         // Build a vertical plane through the component position.
         // Normal = camera forward projected onto XY (horizontal), so the plane
@@ -72,15 +109,14 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
     // OrbitControls also grabs right-button for pan, but if the user releases
     // without moving (= a real click) we still get a contextmenu event and pan
     // is a no-op. Pan-drag is unaffected.
-    const handleContextMenu = (e: any) => {
+    const handleContextMenu = (e: DraggableContextMenuEvent) => {
         if (uiLocked) return;
         e.stopPropagation();
-        e.nativeEvent?.preventDefault?.();
+        e.nativeEvent.preventDefault();
         if (!selection.includes(component.id)) {
             setSelection([component.id]);
         }
-        const x = e.nativeEvent?.clientX ?? e.clientX ?? 0;
-        const y = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+        const { x, y } = eventClientPoint(e);
         setContextMenu({ componentId: component.id, x, y });
     };
 
@@ -94,7 +130,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         }
     };
 
-    const handlePointerDown = (e: any) => {
+    const handlePointerDown = (e: DraggablePointerEvent) => {
         if (uiLocked) return;
         // Right-button pointerdown: let onContextMenu handle it. Don't start a drag.
         if (e.button === 2) return;
@@ -103,10 +139,9 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         // Start the long-press timer for touch input. If the pointer stays
         // within a small radius for ~500 ms, we treat it as a right-click and
         // open the alignment context menu instead of dragging.
-        const pointerType = e.nativeEvent?.pointerType ?? e.pointerType ?? 'mouse';
+        const pointerType = e.nativeEvent.pointerType ?? e.pointerType ?? 'mouse';
         if (pointerType === 'touch' || pointerType === 'pen') {
-            const sx = e.nativeEvent?.clientX ?? e.clientX ?? 0;
-            const sy = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+            const { x: sx, y: sy } = eventClientPoint(e);
             longPressStart.current = { x: sx, y: sy, pointerType };
             cancelLongPress();
             longPressTimer.current = window.setTimeout(() => {
@@ -117,7 +152,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
                 // Stop the drag we started — long-press wins.
                 setIsDragging(false);
                 setGlobalDragging(false);
-                if (controls) (controls as any).enabled = true;
+                setControlsEnabled(controls, true);
                 longPressTimer.current = null;
             }, 500);
         }
@@ -139,7 +174,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             }
         }
 
-        try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari/mobile may not support pointer capture */ }
+        capturePointer(e);
         pushUndo();  // snapshot before drag
         // Brief pulse confirms the tap landed on a real component — without
         // this, mobile users can't tell their pixel-precise stab worked.
@@ -160,27 +195,26 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         );
 
         // Disable Orbit Controls
-        if (controls) (controls as any).enabled = false;
+        setControlsEnabled(controls, false);
     };
 
-    const handlePointerUp = (e: any) => {
+    const handlePointerUp = (e: DraggablePointerEvent) => {
         if (uiLocked) return;
         e.stopPropagation();
         cancelLongPress();
-        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+        releasePointer(e);
         setIsDragging(false);
         setGlobalDragging(false);
 
         // Enable Orbit Controls
-        if (controls) (controls as any).enabled = true;
+        setControlsEnabled(controls, true);
     };
 
-    const handlePointerMove = (e: any) => {
+    const handlePointerMove = (e: DraggablePointerEvent) => {
         if (uiLocked) return;
         // Cancel a pending long-press if the touch moves more than a few pixels.
         if (longPressTimer.current !== null) {
-            const cx = e.nativeEvent?.clientX ?? e.clientX ?? 0;
-            const cy = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+            const { x: cx, y: cy } = eventClientPoint(e);
             const dx = cx - longPressStart.current.x;
             const dy = cy - longPressStart.current.y;
             if (dx * dx + dy * dy > 64 /* 8 px² */) cancelLongPress();

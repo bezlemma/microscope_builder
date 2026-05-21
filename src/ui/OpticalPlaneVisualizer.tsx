@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Camera as ThreeCamera, DoubleSide, Object3D, Vector3 } from 'three';
 import { useThree } from '@react-three/fiber';
+import type { ThreeEvent } from '@react-three/fiber';
 import { Html, Text } from '@react-three/drei';
 import { useAtomValue } from 'jotai';
 import { selectionAtom } from '../state/store';
@@ -30,6 +31,9 @@ import {
     type TerminalFieldMetrics,
     type ZernikePupilFit,
 } from '../physics/cardFieldSynthesis';
+
+type LandmarkPointerEvent = ThreeEvent<PointerEvent>;
+type LandmarkClickEvent = ThreeEvent<MouseEvent>;
 
 type LandmarkConfidence = 'defined' | 'candidate' | 'ambiguous';
 type OpticalPlaneKind = 'image' | 'pupil' | 'focal' | 'stop';
@@ -978,11 +982,11 @@ const LandmarkPlane: React.FC<{
     const fillOpacity = confidenceOpacity(landmark.confidence);
     const hitPadding = Math.max(2, Math.min(8, landmarkSize(landmark) * 0.12));
 
-    const handlePointerDown = (event: any) => {
+    const handlePointerDown = (event: LandmarkPointerEvent) => {
         event.stopPropagation();
         onSelect();
     };
-    const stopClick = (event: any) => {
+    const stopClick = (event: LandmarkClickEvent) => {
         event.stopPropagation();
     };
 
@@ -1137,11 +1141,11 @@ const LandmarkLabel: React.FC<{
     onSelect: () => void;
 }> = ({ label, selected, onSelect }) => {
     const lineOpacity = confidenceLineOpacity(label.confidence);
-    const handlePointerDown = (event: any) => {
+    const handlePointerDown = (event: LandmarkPointerEvent) => {
         event.stopPropagation();
         onSelect();
     };
-    const stopClick = (event: any) => {
+    const stopClick = (event: LandmarkClickEvent) => {
         event.stopPropagation();
     };
 

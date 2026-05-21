@@ -216,6 +216,7 @@ describe('Snouty Light Sheet preset', () => {
         expect(frontHit?.point.z).toBeCloseTo(-1.62, 2);
         const frontResult = objective.interact(frontRay, frontHit!);
         expect(frontResult.rays).toHaveLength(1);
+        expect(frontResult.rays[0].exitSurfaceId).toBe('Objective:zbbez:forward');
         expect(frontResult.rays[0].entryPoint?.distanceTo(frontHit!.point)).toBeLessThan(1e-9);
         expect(frontResult.rays[0].internalPath).toHaveLength(2);
         expect(frontResult.rays[0].internalPath?.[0].z).toBeLessThan(0);
@@ -228,6 +229,7 @@ describe('Snouty Light Sheet preset', () => {
         expect(backHit?.surfaceIndex).toBe(OBJECTIVE_SURFACE_SNOUT_BACK);
         const backResult = objective.interact(backRay, backHit!);
         expect(backResult.rays).toHaveLength(1);
+        expect(backResult.rays[0].exitSurfaceId).toBe('Objective:zbbez:reverse');
         expect(backResult.rays[0].entryPoint?.distanceTo(backHit!.point)).toBeLessThan(1e-9);
         expect(backResult.rays[0].internalPath?.[0].z).toBeCloseTo(0, 6);
         expect(backResult.rays[0].origin.z).toBeLessThan(0);

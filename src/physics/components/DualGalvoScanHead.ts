@@ -193,11 +193,8 @@ export class DualGalvoScanHead extends OpticalComponent {
     }
 
     override updateMatrices(): void {
-        const wasDirty = (this as any)._matrixVersion !== this.version;
         super.updateMatrices();
-        if (wasDirty) {
-            this._syncMirrors();
-        }
+        this._syncMirrors();
     }
 
     getManagedSubcomponents(): OpticalComponent[] {

@@ -18,7 +18,7 @@ function makeRay(y: number): Ray {
 }
 
 describe('Prism transport regression', () => {
-    test('central prism-debug rays are not spuriously trapped at the apex', () => {
+    test('central prism demo rays are not spuriously trapped at the apex', () => {
         const prism = new PrismLens(Math.PI / 3, 25, 25, '60° Prism', 1.5168);
         prism.setPosition(-50, -40, 0);
         const baseQuat = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);

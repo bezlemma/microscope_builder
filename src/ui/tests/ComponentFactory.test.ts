@@ -13,6 +13,20 @@ import { BeamSplitter } from '../../physics/components/BeamSplitter';
 import { PolarizingBeamSplitter } from '../../physics/components/PolarizingBeamSplitter';
 import { DichroicMirror } from '../../physics/components/DichroicMirror';
 import { Filter } from '../../physics/components/Filter';
+import { Camera } from '../../physics/components/Camera';
+import { Sample } from '../../physics/components/Sample';
+import { TrappedBead } from '../../physics/components/TrappedBead';
+import { OpticalComponent } from '../../physics/Component';
+
+function expectCreatedComponent<T extends OpticalComponent>(
+    type: string,
+    ctor: abstract new (...args: never[]) => T,
+): T {
+    const component = createComponentForType(type);
+    expect(component).toBeInstanceOf(ctor);
+    if (!(component instanceof ctor)) throw new Error(`Expected ${type} to create ${ctor.name}`);
+    return component;
+}
 
 function forwardDirection(type: string): Vector3 {
     const component = createComponentForType(type);
@@ -88,14 +102,14 @@ describe('Component factory placement defaults', () => {
     });
 
     test('dragged-out camera starts with brightfield-friendly detector defaults', () => {
-        const camera = createComponentForType('camera') as any;
+        const camera = expectCreatedComponent('camera', Camera);
         expect(camera.sensorResX).toBe(32);
         expect(camera.sensorResY).toBe(32);
         expect(camera.sensorNA).toBe(0.025);
     });
 
     test('sample drawer includes a colloid flow-cell holder variant', () => {
-        const sample = createComponentForType('colloidSampleSlide') as any;
+        const sample = expectCreatedComponent('colloidSampleSlide', Sample);
         expect(sample.specimenKind).toBe('colloids');
         expect(sample.colloidSpheres).toHaveLength(320);
         expect(sample.flowCellWidth).toBeCloseTo(8, 6);
@@ -104,7 +118,7 @@ describe('Component factory placement defaults', () => {
     });
 
     test('dragged-out trapped bead uses micron-scale physical size with a visible halo', () => {
-        const bead = createComponentForType('trappedBead') as any;
+        const bead = expectCreatedComponent('trappedBead', TrappedBead);
         expect(bead.diameter).toBeLessThanOrEqual(0.01);
         expect(bead.visualGlowRadius).toBeGreaterThan(bead.radius);
         expect(bead.visualGlowRadius).toBeLessThanOrEqual(0.015);

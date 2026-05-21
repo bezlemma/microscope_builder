@@ -48,7 +48,8 @@ export const PresetTooltip: React.FC = () => {
                 right: isMobile ? 12 : undefined,
                 zIndex: 12,
                 maxWidth: isMobile ? 'min(360px, calc(100vw - 24px))' : 330,
-                padding: '10px 10px 10px 12px',
+                maxHeight: isMobile ? 'min(34vh, 180px)' : undefined,
+                padding: isMobile ? '12px 12px 12px 14px' : '10px 10px 10px 12px',
                 border: '1px solid rgba(100, 255, 218, 0.28)',
                 borderRadius: 6,
                 background: 'rgba(18, 22, 28, 0.92)',
@@ -56,8 +57,9 @@ export const PresetTooltip: React.FC = () => {
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.28)',
                 backdropFilter: 'blur(8px)',
                 fontFamily: 'var(--ui-font)',
-                fontSize: 'var(--workspace-font-size)',
-                lineHeight: 1.35,
+                fontSize: isMobile ? 13 : 'var(--workspace-font-size)',
+                lineHeight: isMobile ? 1.42 : 1.35,
+                overflowY: 'auto',
             }}
         >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>

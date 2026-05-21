@@ -37,9 +37,10 @@ export async function ensureReverseTracerWasmLoaded(): Promise<ReverseTracerWasm
             const bytes = await response.arrayBuffer();
             const instantiated = await WebAssembly.instantiate(bytes, {});
             const instance = instantiated.instance;
+            const exports = instance.exports as WebAssembly.Exports & ReverseTracerWasmExports;
             const module: ReverseTracerWasmModule = {
-                exports: instance.exports as unknown as ReverseTracerWasmExports,
-                memory: instance.exports.memory as WebAssembly.Memory | undefined,
+                exports,
+                memory: exports.memory as WebAssembly.Memory | undefined,
             };
             const validation = validateReverseTracerWasmModule(module);
             if (!validation.ok) {
@@ -47,8 +48,6 @@ export async function ensureReverseTracerWasmLoaded(): Promise<ReverseTracerWasm
                 return null;
             }
             (globalThis as WasmRegistry).__MICROSCOPE_REVERSE_TRACE_WASM__ = module;
-            const ctx = typeof (globalThis as typeof globalThis & { WorkerGlobalScope?: unknown }).WorkerGlobalScope !== 'undefined' ? 'worker' : 'main';
-            console.log(`[reverseTrace] wasm kernel loaded (${ctx}, abi=${module.exports.reverse_trace_kernel_abi_version()})`);
             return module;
         } catch (err) {
             console.warn('[reverseTrace] failed to load wasm kernel', err);

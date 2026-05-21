@@ -10,6 +10,7 @@ import {
     NormalBlending,
     AdditiveBlending,
     type Blending,
+    type Object3D,
 } from 'three';
 import { Ray, Coherence, polarizationToColor } from '../physics/types';
 import { wavelengthToRGB } from '../physics/spectral';
@@ -353,8 +354,8 @@ const RayPathLine: React.FC<RegularRayDraw> = ({
     segments,
     vertexColors,
 }) => {
-    const disableRaycast = React.useCallback((object: any) => {
-        if (object) object.raycast = () => null;
+    const disableRaycast = React.useCallback((object: Object3D | null) => {
+        if (object) object.raycast = () => undefined;
     }, []);
 
     if (segments && vertexColors) {

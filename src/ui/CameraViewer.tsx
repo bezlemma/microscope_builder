@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom } from 'jotai';
-import { Camera } from '../physics/components/Camera';
 import { animationPlayingAtom, scanAccumProgressAtom, cameraImageTickAtom } from '../state/store';
+import {
+    displayMappingLabel,
+    displayMappingTitle,
+    mapDisplayValue,
+    nextDisplayMapping,
+    type DisplayMapping,
+} from './displayMapping';
 
-// ─── Display Types ──────────────────────────────────────────────────
-
-type DisplayMapping = 'linear' | 'gamma' | 'log';
 type NormalizeMode = 'auto' | 'full';
 type ImageChannel = 'emission' | 'excitation' | 'combined';
-
-// ─── Helper Functions ───────────────────────────────────────────────
 
 function imageChannelLabel(channel: ImageChannel): string {
     if (channel === 'emission') return 'EM';
@@ -29,34 +30,6 @@ interface PaintScratch {
     canvas: HTMLCanvasElement;
     ctx: CanvasRenderingContext2D;
     imageData: ImageData | null;
-}
-
-function nextDisplayMapping(mapping: DisplayMapping): DisplayMapping {
-    if (mapping === 'linear') return 'gamma';
-    if (mapping === 'gamma') return 'log';
-    return 'linear';
-}
-
-function displayMappingLabel(mapping: DisplayMapping): string {
-    if (mapping === 'linear') return 'LIN';
-    if (mapping === 'gamma') return 'GAM';
-    return 'LOG';
-}
-
-function displayMappingTitle(mapping: DisplayMapping): string {
-    if (mapping === 'linear') return 'Switch to gamma display';
-    if (mapping === 'gamma') return 'Switch to log display';
-    return 'Switch to linear display';
-}
-
-/**
- * Apply the selected display mapping to a [0,1]-normalized value.
- */
-function mapDisplayValue(normalized: number, mapping: DisplayMapping): number {
-    const safe = Math.max(0, Math.min(1, normalized));
-    if (mapping === 'linear') return safe;
-    if (mapping === 'log') return Math.log10(1 + safe * 2047) / Math.log10(2048);
-    return Math.pow(safe, 0.45); // gamma
 }
 
 /**
@@ -250,8 +223,21 @@ const LoadingOverlay: React.FC<{ percent: number }> = ({ percent }) => {
 
 // ─── CameraViewer Component ─────────────────────────────────────────
 
+export interface CameraRasterSource {
+    readonly id: string;
+    readonly reverseTraceImage: Float32Array | null;
+    readonly forwardImage: Float32Array | null;
+    readonly sensorResX: number;
+    readonly sensorResY: number;
+    readonly scanFrames: Float32Array[] | null;
+    readonly scanExFrames: Float32Array[] | null;
+    readonly scanFrameTimesMs: number[] | null;
+    readonly scanFrameCount: number;
+    readonly scanCycleMs: number;
+}
+
 interface CameraViewerProps {
-    camera: Camera;
+    camera: CameraRasterSource;
     isRendering: boolean;
     onRefresh?: () => void;
     isMobile?: boolean;
@@ -474,40 +460,41 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
     const maxBound = normalizeMode === 'auto' ? stats.autoMax : stats.max;
 
     return (
-        <div>
-            {/* Header */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '4px'
-            }}>
-                <span style={{ fontSize: '11px', color: '#aaa' }}>
-                    {camera.sensorResX}x{camera.sensorResY}
-                </span>
-                {hasScanFrames && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }}>
-                        <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={projection === 'avg'}
-                                onChange={() => setProjection(projection === 'avg' ? 'none' : 'avg')}
-                                style={{ margin: 0, cursor: 'pointer' }}
-                            />
-                            AVG
-                        </label>
-                        <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={projection === 'max'}
-                                onChange={() => setProjection(projection === 'max' ? 'none' : 'max')}
-                                style={{ margin: 0, cursor: 'pointer' }}
-                            />
-                            MAX
-                        </label>
-                    </div>
-                )}
-            </div>
+        <div style={{ width: '100%' }}>
+            {!isMobile && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '4px'
+                }}>
+                    <span style={{ fontSize: '11px', color: '#aaa' }}>
+                        {camera.sensorResX}x{camera.sensorResY}
+                    </span>
+                    {hasScanFrames && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }}>
+                            <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={projection === 'avg'}
+                                    onChange={() => setProjection(projection === 'avg' ? 'none' : 'avg')}
+                                    style={{ margin: 0, cursor: 'pointer' }}
+                                />
+                                AVG
+                            </label>
+                            <label style={{ fontSize: '9px', color: '#888', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={projection === 'max'}
+                                    onChange={() => setProjection(projection === 'max' ? 'none' : 'max')}
+                                    style={{ margin: 0, cursor: 'pointer' }}
+                                />
+                                MAX
+                            </label>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Canvas with overlay buttons */}
             <div style={{ position: 'relative' }}>
@@ -517,7 +504,7 @@ export const CameraViewer: React.FC<CameraViewerProps> = ({ camera, isRendering,
                     height={displayHeight}
                     style={{
                         width: '100%',
-                        height: isMobile ? '100%' : 'auto',
+                        height: 'auto',
                         maxHeight: '100%',
                         objectFit: 'contain',
                         borderRadius: '4px',

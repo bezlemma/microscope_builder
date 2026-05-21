@@ -14,12 +14,17 @@ import { Lamp } from '../components/Lamp';
 import { Aperture } from '../components/Aperture';
 import { Blocker } from '../components/Blocker';
 import { traceStableTableOverlay } from '../tableTrace';
+import { OpticalComponent } from '../Component';
 import type { Ray } from '../types';
 
-function findComponent<T>(scene: unknown[], ctor: new (...args: any[]) => T): T {
+function findComponent<T extends OpticalComponent>(
+    scene: OpticalComponent[],
+    ctor: abstract new (...args: never[]) => T,
+): T {
     const component = scene.find(c => c instanceof ctor);
     expect(component).toBeDefined();
-    return component as T;
+    if (!(component instanceof ctor)) throw new Error(`Expected ${ctor.name} in scene`);
+    return component;
 }
 
 function localForceFromWorld(bead: TrappedBead, worldForce: Vector3): Vector3 {
@@ -40,12 +45,12 @@ function traceTrap(offset: [number, number, number]) {
     return { scene, bead, paths: result.paths, beamSegments: result.beamSegments };
 }
 
-function componentName(scene: unknown[], id: string | undefined): string | null {
+function componentName(scene: OpticalComponent[], id: string | undefined): string | null {
     if (!id) return null;
-    return (scene.find(c => (c as { id?: string }).id === id) as { name?: string } | undefined)?.name ?? null;
+    return scene.find(c => c.id === id)?.name ?? null;
 }
 
-function visibleInteractionSequence(scene: unknown[], path: Ray[]): string[] {
+function visibleInteractionSequence(scene: OpticalComponent[], path: Ray[]): string[] {
     const names: string[] = [];
     for (const ray of path) {
         if (ray.suppressVisualization) break;
@@ -69,14 +74,14 @@ function visiblePointSignature(path: Ray[]): string {
     return points.join('|');
 }
 
-function visibleNonDumpGeometry(scene: unknown[], paths: Ray[][], dumpName: string): string[] {
+function visibleNonDumpGeometry(scene: OpticalComponent[], paths: Ray[][], dumpName: string): string[] {
     return paths
         .filter(path => !visibleInteractionSequence(scene, path).includes(dumpName))
         .map(path => visiblePointSignature(path))
         .sort();
 }
 
-function visibleHitCount(scene: unknown[], paths: Ray[][], name: string): number {
+function visibleHitCount(scene: OpticalComponent[], paths: Ray[][], name: string): number {
     let count = 0;
     for (const path of paths) {
         for (const ray of path) {

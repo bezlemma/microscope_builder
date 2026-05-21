@@ -5,7 +5,7 @@
  * Uses Vector3(0, 0, 1) as the local forward direction (optical axis),
  * matching the component coordinate convention.
  */
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { OpticalComponent } from './Component';
 import { Laser } from './components/Laser';
 import { Lamp } from './components/Lamp';
@@ -71,6 +71,8 @@ function lampSpectralWavelengths(lamp: Lamp): number[] {
  */
 interface StructuredPattern { size: number; bits: Uint8Array; count: number; }
 const structuredPatternCache = new Map<string, StructuredPattern>();
+type OffscreenCanvasConstructor = new (width: number, height: number) => OffscreenCanvas;
+
 function rasterizeFallbackGlyph(char: string, size: number, bits: Uint8Array): number {
     const glyph = (char || '?').toUpperCase();
     if (glyph !== 'L') return 0;
@@ -107,13 +109,12 @@ function rasterizeStructuredPattern(char: string, size: number): StructuredPatte
     const bits = new Uint8Array(size * size);
     let count = 0;
 
-    const canMakeCanvas = typeof document !== 'undefined'
-        || (typeof globalThis !== 'undefined' && 'OffscreenCanvas' in globalThis);
-    if (canMakeCanvas) {
+    const OffscreenCanvasCtor = (globalThis as { OffscreenCanvas?: OffscreenCanvasConstructor }).OffscreenCanvas;
+    if (typeof document !== 'undefined' || OffscreenCanvasCtor) {
         try {
-            const canvas: any = typeof document !== 'undefined'
+            const canvas: HTMLCanvasElement | OffscreenCanvas = typeof document !== 'undefined'
                 ? document.createElement('canvas')
-                : new (globalThis as any).OffscreenCanvas(size, size);
+                : new OffscreenCanvasCtor!(size, size);
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext('2d');
@@ -319,10 +320,11 @@ export function createSourceRays(
     // ── Point / Cone / Wedge / Structured sources ──
 
     // Orthonormal basis aligned with the component's forward direction (+Z local).
-    const makeBasis = (rotation: { clone(): any }) => {
-        const forward = new Vector3(0, 0, 1).applyQuaternion((rotation as any).clone()).normalize();
-        const right = new Vector3(1, 0, 0).applyQuaternion((rotation as any).clone()).normalize();
-        const up = new Vector3(0, 1, 0).applyQuaternion((rotation as any).clone()).normalize();
+    const makeBasis = (rotation: Quaternion) => {
+        const orientation = rotation.clone();
+        const forward = new Vector3(0, 0, 1).applyQuaternion(orientation).normalize();
+        const right = new Vector3(1, 0, 0).applyQuaternion(orientation).normalize();
+        const up = new Vector3(0, 1, 0).applyQuaternion(orientation).normalize();
         return { forward, right, up };
     };
 

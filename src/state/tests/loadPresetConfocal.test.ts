@@ -25,6 +25,12 @@ import { Sample } from '../../physics/components/Sample';
 import { SampleChamber } from '../../physics/components/SampleChamber';
 import { QPD } from '../../physics/components/QPD';
 
+type HashWindow = {
+    location: Pick<Location, 'pathname' | 'hash' | 'search'>;
+    history: Pick<History, 'replaceState'>;
+};
+type TestGlobal = Omit<typeof globalThis, 'window'> & { window?: HashWindow };
+
 function withConstructorName<T extends Function>(ctor: T, name: string, run: () => void): void {
     const original = Object.getOwnPropertyDescriptor(ctor, 'name');
     Object.defineProperty(ctor, 'name', { value: name, configurable: true });
@@ -38,7 +44,7 @@ function withConstructorName<T extends Function>(ctor: T, name: string, run: () 
 }
 
 describe('Confocal preset loading', () => {
-    test('blank debug preset starts empty', () => {
+    test('blank preset starts empty', () => {
         const store = createStore();
 
         store.set(loadPresetAtom, PresetName.Blank);
@@ -47,9 +53,10 @@ describe('Confocal preset loading', () => {
     });
 
     test('preset loads write hash preset URLs', () => {
-        const previousWindow = (globalThis as any).window;
+        const testGlobal = globalThis as TestGlobal;
+        const previousWindow = testGlobal.window;
         let replacedUrl = '';
-        (globalThis as any).window = {
+        testGlobal.window = {
             location: { pathname: '/builder', hash: '', search: '' },
             history: {
                 replaceState: (_state: unknown, _title: string, url: string) => {
@@ -70,9 +77,9 @@ describe('Confocal preset loading', () => {
             expect(replacedUrl).toBe('/builder#preset=oblique-plane-light-sheet');
         } finally {
             if (previousWindow === undefined) {
-                delete (globalThis as any).window;
+                delete testGlobal.window;
             } else {
-                (globalThis as any).window = previousWindow;
+                testGlobal.window = previousWindow;
             }
         }
     });

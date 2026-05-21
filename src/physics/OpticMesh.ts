@@ -59,17 +59,6 @@ export class OpticMesh {
     private scratchBary: Vector3 = new Vector3();
     private scratchTriangle: Triangle = new Triangle();
 
-    private static _warnedKeys: Set<string> = new Set();
-    /**
-     * Emit a warning once per session for a given key, so noisy fallbacks
-     * don't flood the console on every ray but are still visible.
-     */
-    static warnOnce(key: string, message: string): void {
-        if (OpticMesh._warnedKeys.has(key)) return;
-        OpticMesh._warnedKeys.add(key);
-        console.warn(message);
-    }
-
     get builtGeometry(): BufferGeometry | null {
         return this.geometry;
     }
@@ -104,7 +93,7 @@ export class OpticMesh {
         this.indexAttr = geometry.index;
 
         // Build BVH for accelerated raycasting
-        (geometry as any).boundsTree = new MeshBVH(geometry);
+        Reflect.set(geometry, 'boundsTree', new MeshBVH(geometry));
 
         // Create mesh with DoubleSide so raycaster hits from both directions
         const material = new MeshBasicMaterial({ side: DoubleSide });
@@ -214,7 +203,7 @@ export class OpticMesh {
         const r = n1 / n2;
         const cosI = -normal.dot(incident);
         const sinT2 = r * r * (1 - cosI * cosI);
-        if (sinT2 > 1) return null; // TIR
+        if (sinT2 > 1) return null;
         const cosT = Math.sqrt(1 - sinT2);
         return incident.clone().multiplyScalar(r)
             .add(normal.clone().multiplyScalar(r * cosI - cosT))
@@ -344,12 +333,9 @@ export class OpticMesh {
                 // they emit a "grazing escape" ray to keep the trace alive when the
                 // mesh-raycaster fails (LatheGeometry axis singularities, sub-voxel
                 // edge gaps). Downstream components receive a ray that doesn't
-                // represent the true physical path. We warn once per fallback so
-                // degenerate setups are visible rather than silently producing
-                // bogus ray geometry.
+                // represent the true physical path. Keep this fallback local and
+                // quiet; callers decide how much trace health to surface.
                 if (!allowInternalReflection && bounce > 0 && lastHitNormal) {
-                    OpticMesh.warnOnce('lens-post-bounce-fallback',
-                        '[OpticMesh] Lens TIR/gap fallback: emitting grazing exit ray (non-physical).');
                     const outwardNormal = lastHitNormal.clone();
                     // outwardNormal should point outward (away from glass interior)
                     if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
@@ -382,8 +368,6 @@ export class OpticMesh {
                 // the sharp apex of a triangular prism). Emit a grazing escape ray
                 // instead of silently absorbing the beam.
                 if (allowInternalReflection && bounce > 0 && lastHitNormal) {
-                    OpticMesh.warnOnce('prism-post-bounce-fallback',
-                        '[OpticMesh] Prism TIR/gap fallback: emitting grazing exit ray (non-physical).');
                     const outwardNormal = lastHitNormal.clone();
                     if (outwardNormal.dot(currentDir) < 0) outwardNormal.negate();
 
@@ -445,8 +429,6 @@ export class OpticMesh {
                     }
                     // Nudge didn't help — pass through undeviated as fallback for lenses
                     // (on-axis ray through flat surface should continue straight)
-                    OpticMesh.warnOnce('lens-axis-passthrough-fallback',
-                        '[OpticMesh] On-axis lens fallback: passing ray through undeviated (no exit surface found).');
                     const exitPointWorld = currentOrigin.clone().applyMatrix4(localToWorld);
                     const dirOutWorld = currentDir.clone().transformDirection(localToWorld).normalize();
                     return {
@@ -566,7 +548,6 @@ export class OpticMesh {
         }
 
         // Exceeded max bounces — ray is trapped. Return absorbed ray with full internal path.
-        console.warn('[OpticMesh] BLOCKED: Max bounces exceeded (' + MAX_BOUNCES + ')');
         const lastPtWorld = currentOrigin.clone().applyMatrix4(localToWorld);
         return {
             rays: [childInMedium({

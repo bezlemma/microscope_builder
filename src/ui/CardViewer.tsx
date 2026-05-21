@@ -3,10 +3,9 @@ import { useAtom } from 'jotai';
 import { Card, BeamProfile } from '../physics/components/Card';
 import { cardImageTickAtom } from '../state/store';
 import type { Ray } from '../physics/types';
-
-// ─── Types ─────────────────────────────────────────────────────────
-
-type DisplayMapping = 'linear' | 'gamma' | 'log';
+import { wavelengthMetersToCSS, wavelengthMetersToRGB255 } from '../physics/spectral';
+import { mapDisplayValue, type DisplayMapping } from './displayMapping';
+import { formatPower } from './formatters';
 
 type DirectCardHit = { localPoint: { x: number; y: number }; ray: Ray };
 type DetectorViewport = { extentMm: number; centerU: number; centerV: number };
@@ -21,63 +20,6 @@ type DirectHitBounds = {
     spanV: number;
     avgFootprint: number;
 };
-
-// ─── Wavelength → Color helpers ─────────────────────────────────────
-
-function wavelengthToCSS(wavelengthMeters: number): string {
-    const wl = wavelengthMeters * 1e9;
-    let r = 0, g = 0, b = 0;
-
-    if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60; b = 1.0; }
-    else if (wl >= 440 && wl < 490) { g = (wl - 440) / 50; b = 1.0; }
-    else if (wl >= 490 && wl < 510) { g = 1.0; b = -(wl - 510) / 20; }
-    else if (wl >= 510 && wl < 580) { r = (wl - 510) / 70; g = 1.0; }
-    else if (wl >= 580 && wl < 645) { r = 1.0; g = -(wl - 645) / 65; }
-    else if (wl >= 645 && wl <= 780) { r = 1.0; }
-    else { return 'rgb(128,128,128)'; }
-
-    let factor = 1.0;
-    if (wl >= 380 && wl < 420) factor = 0.3 + 0.7 * (wl - 380) / 40;
-    else if (wl >= 645 && wl <= 780) factor = 0.3 + 0.7 * (780 - wl) / 135;
-
-    const R = Math.round(Math.pow(r * factor, 0.8) * 255);
-    const G = Math.round(Math.pow(g * factor, 0.8) * 255);
-    const B = Math.round(Math.pow(b * factor, 0.8) * 255);
-    return `rgb(${R},${G},${B})`;
-}
-
-function wavelengthRGB(wavelengthMeters: number): [number, number, number] {
-    const wl = wavelengthMeters * 1e9;
-    let cr = 0, cg = 0, cb = 0;
-
-    if (wl >= 380 && wl < 440) { cr = -(wl - 440) / 60; cb = 1.0; }
-    else if (wl >= 440 && wl < 490) { cg = (wl - 440) / 50; cb = 1.0; }
-    else if (wl >= 490 && wl < 510) { cg = 1.0; cb = -(wl - 510) / 20; }
-    else if (wl >= 510 && wl < 580) { cr = (wl - 510) / 70; cg = 1.0; }
-    else if (wl >= 580 && wl < 645) { cr = 1.0; cg = -(wl - 645) / 65; }
-    else if (wl >= 645 && wl <= 780) { cr = 1.0; }
-    else { cr = 0.5; cg = 0.5; cb = 0.5; }
-
-    let factor = 1.0;
-    if (wl >= 380 && wl < 420) factor = 0.3 + 0.7 * (wl - 380) / 40;
-    else if (wl >= 645 && wl <= 780) factor = 0.3 + 0.7 * (780 - wl) / 135;
-
-    return [
-        Math.pow(cr * factor, 0.8) * 255,
-        Math.pow(cg * factor, 0.8) * 255,
-        Math.pow(cb * factor, 0.8) * 255
-    ];
-}
-
-// ─── Display mapping ───────────────────────────────────────────────
-
-function mapDisplayValue(normalized: number, mapping: DisplayMapping): number {
-    const safe = Math.max(0, Math.min(1, normalized));
-    if (mapping === 'linear') return safe;
-    if (mapping === 'gamma') return Math.pow(safe, 0.45);
-    // log: log10(1 + v*2047) / log10(2048)
-    return Math.log10(1 + safe * 2047) / Math.log10(2048);
-}
 
 function directCardHits(card: Card): DirectCardHit[] {
     return card.hits.filter(hit =>
@@ -322,7 +264,7 @@ function depositHitsToBuffer(
         const cy = height / 2 + (localPoint.y - viewport.centerV) / scaleY;
         if (cx < -1 || cx > width || cy < -1 || cy > height) continue;
 
-        const [r, g, b] = wavelengthRGB(ray.wavelength);
+        const [r, g, b] = wavelengthMetersToRGB255(ray.wavelength);
         const power = Math.max(ray.intensity * stride, 0);
         const footprintRadius = Number.isFinite(ray.footprintRadius) ? Math.max(ray.footprintRadius, 0) : 0;
         const beamletRadiusMm = Math.max(footprintRadius, pixelSizeMm * 0.75);
@@ -375,17 +317,6 @@ function drawDirectHits(
     depositHitsToBuffer(rgb, width, height, hits, viewport);
     renderBufferToCanvas(ctx, rgb, width, height, mapping);
     drawDetectorScaleBar(ctx, width, height, viewport.extentMm);
-}
-
-// ─── Power formatting ──────────────────────────────────────────────
-
-function fmtPower(watts: number): string {
-    if (watts >= 1) return `${watts.toFixed(2)} W`;
-    if (watts >= 1e-3) return `${(watts * 1e3).toFixed(2)} mW`;
-    if (watts >= 1e-6) return `${(watts * 1e6).toFixed(2)} uW`;
-    if (watts >= 1e-9) return `${(watts * 1e9).toFixed(2)} nW`;
-    if (watts >= 1e-12) return `${(watts * 1e12).toFixed(2)} pW`;
-    return `${watts.toExponential(2)} W`;
 }
 
 // ─── Beam moment computation from Gaussian profiles ────────────────
@@ -619,7 +550,7 @@ function drawCoherentProfiles(
         const wavelength = group[0].wavelength;
         const wavelengthMm = wavelength * 1e3;
         const k = Math.abs(wavelengthMm) > 1e-12 ? (2 * Math.PI) / wavelengthMm : 0;
-        const [r, g, b] = wavelengthRGB(wavelength);
+        const [r, g, b] = wavelengthMetersToRGB255(wavelength);
 
         for (let py = 0; py < height; py++) {
             const v = viewport.centerV + (py + 0.5 - height / 2) * scaleY;
@@ -686,7 +617,7 @@ function fmtLength(deltaMm: number): string {
 
 // ─── Main CardViewer Component ──────────────────────────────────────
 
-export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?: number }> = ({ card, compact }) => {
+export const CardViewer: React.FC<{ card: Card }> = ({ card }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const phosphorBufferRef = useRef<Float32Array | null>(null);
     const phosphorKeyRef = useRef<string>('');
@@ -704,7 +635,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
     const interference = hasBeams ? computeInterferenceSummary(interferenceProfiles) : null;
     const useCoherentProfileRender = !!interference && interference.visibility >= 0.15 && interferenceProfiles.length >= 2;
 
-    const canvasSize = compact ? 96 : 260;
+    const canvasSize = 260;
     // Phosphor-trail cards keep the viewport pinned to the full card extent so
     // the persistent accumulator doesn't smear when auto-fit zooms in/out.
     const viewport = useMemo(
@@ -834,28 +765,24 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                     }}
                 />
 
-                {!compact && (
-                    <div style={{
-                        color: '#777',
-                        fontSize: '10px',
-                        fontFamily: 'monospace',
-                        marginTop: '6px',
-                        textAlign: 'right',
-                    }}>
-                        {formatScaleLength(viewport.extentMm)} view
-                    </div>
-                )}
+                <div style={{
+                    color: '#777',
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    marginTop: '6px',
+                    textAlign: 'right',
+                }}>
+                    {formatScaleLength(viewport.extentMm)} view
+                </div>
             </div>
 
-            {/* Beam moment summary and readout panel -- hidden in compact mode */}
-            {!compact && (
-                <div style={{
-                    marginTop: '8px',
-                    padding: '6px 8px',
-                    backgroundColor: '#111',
-                    borderRadius: '4px',
-                    border: '1px solid #282828'
-                }}>
+            <div style={{
+                marginTop: '8px',
+                padding: '6px 8px',
+                backgroundColor: '#111',
+                borderRadius: '4px',
+                border: '1px solid #282828'
+            }}>
                     {/* Per-wavelength power breakdown */}
                     <div style={labelStyle}>Power at card</div>
                     {hasBeams ? (
@@ -872,12 +799,12 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                                     }}>
                                         <span style={{
                                             ...valueStyle,
-                                            color: wavelengthToCSS(wlM),
+                                            color: wavelengthMetersToCSS(wlM),
                                             fontSize: '11px'
                                         }}>
                                             {'\u25CF'} {wlNm} nm
                                         </span>
-                                        <span style={valueStyle}>{fmtPower(power)}</span>
+                                        <span style={valueStyle}>{formatPower(power)}</span>
                                     </div>
                                 );
                             })}
@@ -890,7 +817,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                                     paddingTop: '2px'
                                 }}>
                                     <span style={{ ...labelStyle }}>Total</span>
-                                    <span style={valueStyle}>{fmtPower(totalPower)}</span>
+                                    <span style={valueStyle}>{formatPower(totalPower)}</span>
                                 </div>
                             )}
                         </div>
@@ -944,7 +871,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                                 </div>
                                 <div>
                                     <div style={labelStyle}>Coherent I</div>
-                                    <div style={valueStyle}>{fmtPower(interference.coherentPower)}</div>
+                                    <div style={valueStyle}>{formatPower(interference.coherentPower)}</div>
                                 </div>
                             </div>
                         </div>
@@ -966,7 +893,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                             }}>
                                 <div>
                                     <div style={labelStyle}>Total Power</div>
-                                    <div style={valueStyle}>{fmtPower(beamMoments.totalPower)}</div>
+                                    <div style={valueStyle}>{formatPower(beamMoments.totalPower)}</div>
                                 </div>
                                 <div>
                                     <div style={labelStyle}>Beam Groups</div>
@@ -1008,8 +935,7 @@ export const CardViewer: React.FC<{ card: Card; compact?: boolean; autoFitNonce?
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 };

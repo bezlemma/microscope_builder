@@ -287,7 +287,7 @@ export interface InteractionResult {
     passthrough?: boolean; // If true, the component is transparent — don't break the ray path
 }
 
-export function cloneJonesVector(jones: JonesVector): JonesVector {
+function cloneJonesVector(jones: JonesVector): JonesVector {
     return {
         x: { re: jones.x.re, im: jones.x.im },
         y: { re: jones.y.re, im: jones.y.im },

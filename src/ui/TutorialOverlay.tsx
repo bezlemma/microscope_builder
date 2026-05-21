@@ -8,6 +8,7 @@ import {
     cameraImageTickAtom,
     componentsAtom,
     forwardRaysAtom,
+    mobilePanelModeAtom,
     pinnedViewersAtom,
     PresetName,
     pushUndoAtom,
@@ -24,6 +25,7 @@ import {
     isCameraOnTutorialTarget,
     isTutorialStageOneComplete,
 } from './tutorialLogic';
+import { useIsMobile } from './useIsMobile';
 
 const PULSE_Z_OFFSET = 12;
 const EMPTY_ARROW_POINTS: [number, number, number][] = [[0, 0, 0], [0, 0, 0]];
@@ -168,10 +170,12 @@ const FineNudgePanel: React.FC<{
 };
 
 const TutorialOverlayContent: React.FC = () => {
+    const isMobile = useIsMobile();
     const [components] = useAtom(componentsAtom);
     const [, setComponents] = useAtom(componentsAtom);
     const [activePreset] = useAtom(activePresetAtom);
     const [tutorialStage] = useAtom(tutorialStageAtom);
+    const [mobilePanelMode] = useAtom(mobilePanelModeAtom);
     const [forwardRays] = useAtom(forwardRaysAtom);
     const [, startTutorialStage2] = useAtom(startTutorialStage2Atom);
     const [, pushUndo] = useAtom(pushUndoAtom);
@@ -181,6 +185,7 @@ const TutorialOverlayContent: React.FC = () => {
     const snappedCameraIds = useRef<Set<string>>(new Set());
     const isTutorialPreset = activePreset === PresetName.Tutorial || activePreset === PresetName.Tutorial2;
     const isMZPreset = activePreset === PresetName.MZInterferometer;
+    const mobilePropertiesOpen = isMobile && mobilePanelMode === 'properties';
 
     const mirrorStatus = useMemo(
         () => getTutorialMirrorStatus(components),
@@ -229,7 +234,6 @@ const TutorialOverlayContent: React.FC = () => {
             return component;
         }));
     }, [pushUndo, setComponents]);
-
     useEffect(() => {
         if (!isTutorialPreset || tutorialStage !== 2 || !cameraTarget || !realTutorialCamera || !cameraReady) {
             return;
@@ -260,7 +264,7 @@ const TutorialOverlayContent: React.FC = () => {
     if (isMZPreset) {
         const calloutPosition = (mzPhaseTrim?.position ?? new Vector3(-50, 80, 0))
             .clone()
-            .add(new Vector3(30, -42, 44));
+            .add(isMobile ? new Vector3(72, -66, 44) : new Vector3(30, -42, 44));
 
         return (
             <group>
@@ -281,7 +285,7 @@ const TutorialOverlayContent: React.FC = () => {
                 </Html>
                 {mzPhaseTrim && (
                     <FineNudgePanel
-                        position={mzPhaseTrim.position.clone().add(new Vector3(0, 24, 34))}
+                        position={mzPhaseTrim.position.clone().add(isMobile ? new Vector3(-24, 28, 34) : new Vector3(0, 24, 34))}
                         label="Phase"
                         minusLabel="-"
                         plusLabel="+"
@@ -297,13 +301,14 @@ const TutorialOverlayContent: React.FC = () => {
 
     if (tutorialStage === 2) {
         const targetPosition = cameraTarget?.position;
+        const showCameraTarget = !!realTutorialCamera && !cameraReady;
 
         return (
             <group>
-                {targetPosition && !cameraReady && (
+                {targetPosition && showCameraTarget && (
                     <PulseRing position={targetPosition} radius={26} />
                 )}
-                {cameraTarget && !cameraReady && (
+                {cameraTarget && showCameraTarget && !mobilePropertiesOpen && (
                     <Html
                         position={[
                             cameraTarget.position.x,
@@ -321,10 +326,10 @@ const TutorialOverlayContent: React.FC = () => {
         );
     }
 
-    const cue = !mirrorStatus.m1Placed
-        ? { mirror: mirrorStatus.realM1, target: mirrorStatus.ghostM1 }
-        : (!mirrorStatus.m2Placed
-            ? { mirror: mirrorStatus.realM2, target: mirrorStatus.ghostM2 }
+    const cue = !mirrorStatus.firstPlaced
+        ? { mirror: mirrorStatus.firstMirror, target: mirrorStatus.firstTarget }
+        : (!mirrorStatus.secondPlaced
+            ? { mirror: mirrorStatus.secondMirror, target: mirrorStatus.secondTarget }
             : null);
 
     return (
@@ -335,7 +340,31 @@ const TutorialOverlayContent: React.FC = () => {
             {cue?.mirror && cue.target && !stageOneComplete && (
                 <TutorialArrow from={cue.mirror.position} to={cue.target.position} />
             )}
-            {stageOneComplete && (
+            {stageOneComplete && (isMobile ? (
+                <Html
+                    fullscreen
+                    zIndexRange={[30, 0]}
+                    style={{ pointerEvents: 'none' }}
+                >
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="tutorial-complete-button"
+                            onClick={() => startTutorialStage2()}
+                        >
+                            Go to tutorial 2!
+                        </button>
+                    </div>
+                </Html>
+            ) : !mobilePropertiesOpen && (
                 <Html
                     position={[completionButtonPosition.x, completionButtonPosition.y, completionButtonPosition.z]}
                     center
@@ -350,7 +379,7 @@ const TutorialOverlayContent: React.FC = () => {
                         Go to tutorial 2!
                     </button>
                 </Html>
-            )}
+            ))}
         </group>
     );
 };

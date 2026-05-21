@@ -15,7 +15,7 @@ function smoothstep01(value: number): number {
     return t * t * (3 - 2 * t);
 }
 
-export function estimateAbbeNumber(referenceIor: number, family: DispersionFamily = 'glass'): number {
+function estimateAbbeNumber(referenceIor: number, family: DispersionFamily = 'glass'): number {
     if (!Number.isFinite(referenceIor) || referenceIor <= 1.000001) return Number.POSITIVE_INFINITY;
 
     if (family === 'liquid') {
@@ -42,7 +42,7 @@ export function estimateAbbeNumber(referenceIor: number, family: DispersionFamil
     return Math.max(v, 10);
 }
 
-export function cauchyBCoefficientFromReferenceIor(
+function cauchyBCoefficientFromReferenceIor(
     referenceIor: number,
     abbeNumber: number,
 ): number {

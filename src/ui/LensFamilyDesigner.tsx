@@ -9,28 +9,18 @@ import { PrismLens } from '../physics/components/PrismLens';
 import { LensProfileEditorCore, type ProfileEditorMutate } from './LensProfileEditor';
 import { SphericalLensDesigner } from './SphericalLensDesigner';
 import { ScrubInput } from './ScrubInput';
+import {
+    clampRadiusOfCurvature,
+    designerCompactGridStyle as compactGridStyle,
+    designerGridStyle as gridStyle,
+    designerOptionStyle as optionStyle,
+    designerSelectStyle as selectStyle,
+    formatLensNumber,
+    parseLensNumber,
+} from './lensDesignerShared';
 
 export type LensFamilyComponent = SphericalLens | AsphericLens | CylindricalLens | AchromatDoublet | Objective | PrismLens;
 export type LensFamilyMutate = (mutate: (component: LensFamilyComponent) => void) => void;
-
-function parseLensNumber(value: string): number {
-    const trimmed = value.trim().toLowerCase();
-    if (trimmed === 'infinity') return 1e9;
-    if (trimmed === '-infinity') return -1e9;
-    return parseFloat(value);
-}
-
-function formatLensNumber(value: number, digits = 2): string {
-    if (Math.abs(value) >= 1e6) return value >= 0 ? 'Infinity' : '-Infinity';
-    return String(Math.round(value * 10 ** digits) / 10 ** digits);
-}
-
-function clampRadiusOfCurvature(value: number, apertureRadius: number): number {
-    if (Math.abs(value) >= 1e8) return value;
-    const minR = apertureRadius * 1.05;
-    if (Math.abs(value) >= minR) return value;
-    return Math.sign(value || 1) * minR;
-}
 
 function updateCylindricalBounds(lens: CylindricalLens): void {
     lens.bounds.set(
@@ -85,20 +75,6 @@ function setCylindricalParaxialFocalLength(lens: CylindricalLens, focalLength: n
     lens.r1 = clampRadiusOfCurvature(denom / (invF + a * invR2), lens.apertureRadius);
 }
 
-const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: 6,
-    marginBottom: 10,
-};
-
-const compactGridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-    gap: 6,
-    marginBottom: 10,
-};
-
 const detailsStyle: React.CSSProperties = {
     borderTop: '1px solid rgba(255,255,255,0.1)',
     paddingTop: 7,
@@ -112,25 +88,6 @@ const coeffGridStyle: React.CSSProperties = {
 };
 
 const ASPHERE_LABELS = ['A4', 'A6', 'A8', 'A10', 'A12', 'A14'];
-
-const selectStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    border: '1px solid #37404a',
-    color: '#eaf2fb',
-    fontWeight: 500,
-    outline: 'none',
-    padding: '4px 6px',
-    borderRadius: 5,
-    width: '100%',
-    minWidth: 0,
-    boxSizing: 'border-box',
-    cursor: 'pointer',
-};
-
-const optionStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    color: '#eaf2fb',
-};
 
 function normalizeAsphereTerms(values: number[]): number[] {
     return Array.from({ length: ASPHERE_MAX_TERMS }, (_, index) => values[index] ?? 0);

@@ -44,22 +44,19 @@ export class SlitAperture extends OpticalComponent {
             rayLocal.direction.clone().multiplyScalar(t)
         );
 
-        // Check if ray passes through the rectangular opening
-        const hu = hitPoint.x;  // horizontal (width)
-        const hv = hitPoint.y;  // vertical (height)
+        const hu = hitPoint.x;
+        const hv = hitPoint.y;
         const halfW = this.slitWidth / 2;
         const halfH = this.slitHeight / 2;
 
-        // Check if within housing bounds (circular housing)
         const rSq = hu * hu + hv * hv;
         const outerR = this.housingDiameter / 2;
         if (rSq > outerR * outerR) {
-            return null;  // Misses entirely
+            return null;
         }
 
         const isBlocked = !(Math.abs(hu) < halfW && Math.abs(hv) < halfH);
 
-        // Hit the frame body — will be absorbed
         const normal = new Vector3(0, 0, dw < 0 ? 1 : -1);
         return {
             t,

@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { createBrightfieldScene } from '../../presets/brightfield';
 import { createTutorialMicroscopeScene, createTutorialScene } from '../../presets/tutorial';
+import {
+    TUTORIAL_FIRST_MIRROR_NAME,
+    TUTORIAL_FIRST_TARGET_NAME,
+    TUTORIAL_SECOND_MIRROR_NAME,
+    TUTORIAL_SECOND_TARGET_NAME,
+} from '../../presets/tutorialNames';
 import { createSourceRays } from '../SourceRayFactory';
 import { ForwardTracer } from '../ForwardTracer';
 import { ReverseTracer } from '../ReverseTracer';
@@ -27,6 +34,11 @@ function placeMirrorOnGhost(scene: unknown[], mirrorName: string, targetName: st
     mirror!.recomputeRotation();
 }
 
+function xSpan(scene: { position: { x: number } }[]): number {
+    const xs = scene.map(c => c.position.x);
+    return Math.max(...xs) - Math.min(...xs);
+}
+
 describe('Tutorial preset flow', () => {
     test('does not mark the beam-expander tutorial complete before mirror alignment', () => {
         const { scene } = createTutorialScene();
@@ -36,10 +48,26 @@ describe('Tutorial preset flow', () => {
         expect(isTutorialStageOneComplete(scene, paths)).toBe(false);
     });
 
+    test('tutorial 1 uses physically thicker mirrors instead of renderer-only inflation', () => {
+        const { scene } = createTutorialScene();
+        const mirrorNames = [
+            TUTORIAL_FIRST_MIRROR_NAME,
+            TUTORIAL_SECOND_MIRROR_NAME,
+            TUTORIAL_FIRST_TARGET_NAME,
+            TUTORIAL_SECOND_TARGET_NAME,
+        ];
+
+        for (const name of mirrorNames) {
+            const mirror = scene.find((c): c is CurvedMirror => c instanceof CurvedMirror && c.name === name);
+            expect(mirror).toBeDefined();
+            expect(mirror!.thickness).toBe(3);
+        }
+    });
+
     test('marks tutorial 1 complete only when the aligned mirrors produce a prism rainbow on the screen', () => {
         const { scene } = createTutorialScene();
-        placeMirrorOnGhost(scene, 'M1', 'M1 Target');
-        placeMirrorOnGhost(scene, 'M2', 'M2 Target');
+        placeMirrorOnGhost(scene, TUTORIAL_FIRST_MIRROR_NAME, TUTORIAL_FIRST_TARGET_NAME);
+        placeMirrorOnGhost(scene, TUTORIAL_SECOND_MIRROR_NAME, TUTORIAL_SECOND_TARGET_NAME);
 
         const solver = new ForwardTracer(scene);
         const paths = solver.trace(createSourceRays(scene, 32, 'full'));
@@ -64,6 +92,13 @@ describe('Tutorial preset flow', () => {
         expect(scene.some(c => c instanceof Objective)).toBe(true);
         expect(scene.filter(c => c instanceof Camera && !c.isGhost)).toHaveLength(0);
         expect(scene.filter(c => c instanceof Camera && Boolean(c.isGhost) && c.name === 'Camera Target')).toHaveLength(1);
+    });
+
+    test('tutorial 2 keeps the brightfield microscope compact for mobile screens', () => {
+        const { scene } = createTutorialMicroscopeScene();
+        const brightfieldScene = createBrightfieldScene();
+
+        expect(xSpan(scene) / xSpan(brightfieldScene)).toBeCloseTo(0.75, 2);
     });
 
     test('a camera placed at tutorial 2 target can form an image', () => {

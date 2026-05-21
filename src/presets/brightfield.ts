@@ -7,13 +7,18 @@ import { Sample } from '../physics/components/Sample';
 import { Aperture } from '../physics/components/Aperture';
 import { AchromatDoublet } from '../physics/components/AchromatDoublet';
 
+export interface BrightfieldSceneOptions {
+    /** Scales the X-axis layout and image-side focal geometry; 1 keeps the full-size preset. */
+    lengthScale?: number;
+}
+
 /**
  * Brightfield Microscope — absorption/shadow imaging with white light.
  *
  * Light path (Köhler-style illumination):
  *   LED (550 nm) → Condenser → Sample → Objective → [ Infinity Space ] → Tube Lens → Camera
  *
- * Nikon standard: tube lens focal length = 200 mm.
+ * Default geometry uses the Nikon standard: tube lens focal length = 200 mm.
  * Objective: 10×/0.25 → f_obj = 200/10 = 20 mm.
  *
  * The condenser focuses the collimated beam to illuminate the sample.
@@ -24,8 +29,9 @@ import { AchromatDoublet } from '../physics/components/AchromatDoublet';
  * Unlike fluorescence, there is no wavelength shift — the image contrast
  * comes from absorption and scattering by the sample.
  */
-export function createBrightfieldScene(): OpticalComponent[] {
+export function createBrightfieldScene({ lengthScale = 1 }: BrightfieldSceneOptions = {}): OpticalComponent[] {
     const scene: OpticalComponent[] = [];
+    const scaleLength = (value: number) => value * lengthScale;
 
     // --- Geometry ---
     //
@@ -40,7 +46,7 @@ export function createBrightfieldScene(): OpticalComponent[] {
     // correct appearance and give a noticeable speedup over the default.
     const lamp = new Lamp("White Light Source");
     lamp.spectralCount = 3;
-    lamp.setPosition(-100, 0, 0);
+    lamp.setPosition(scaleLength(-100), 0, 0);
     lamp.pointAlong(1, 0, 0);  // emit along +X
     lamp.beamRadius = 3;
     lamp.power = 1.0;
@@ -48,7 +54,7 @@ export function createBrightfieldScene(): OpticalComponent[] {
 
     // 2. Focusing Lens — a plano-convex lens (f=25mm) to create a point source for Köhler illumination
     const focusingLens = new SphericalLens(1/25, 25.4, 5.3, "Focusing Lens (LA1560-A eq)", 12.9, 1e9, 1.517);
-    focusingLens.setPosition(-53.32, 0, 0);
+    focusingLens.setPosition(scaleLength(-53.32), 0, 0);
     focusingLens.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(focusingLens);
 
@@ -56,19 +62,19 @@ export function createBrightfieldScene(): OpticalComponent[] {
     //   A. Aperture Diaphragm - Placed exactly at the condenser's front focal plane (x = -29.17)
     //      This acts as the aperture diaphragm in Köhler illumination, creating perfectly collimated widefield light.
     const aperture = new Aperture(5, 25, "Condenser Iris");
-    aperture.setPosition(-29.17, 0, 0);
+    aperture.setPosition(scaleLength(-29.17), 0, 0);
     aperture.pointAlong(1, 0, 0);  // faces along beam
     scene.push(aperture);
 
     //   B. Condenser Lens 1 (Rear) - flat surface faces lamp, curved surface faces sample
     const condenser1 = new SphericalLens(1/30, 25.4, 5.0, "Condenser Element 1", 1e9, -15, 1.5);
-    condenser1.setPosition(-25, 0, 0);
+    condenser1.setPosition(scaleLength(-25), 0, 0);
     condenser1.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(condenser1);
 
     //   C. Condenser Lens 2 (Front) - curved surface faces lamp, flat surface faces sample
     const condenser2 = new SphericalLens(1/15, 25.4, 5.0, "Condenser Element 2", 7.5, 1e9, 1.5);
-    condenser2.setPosition(-15, 0, 0);
+    condenser2.setPosition(scaleLength(-15), 0, 0);
     condenser2.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(condenser2);
 
@@ -89,16 +95,26 @@ export function createBrightfieldScene(): OpticalComponent[] {
         magnification: 10,
         NA: 0.25,
         workingDistance: 10.6,
-        tubeLensFocal: 200,
+        tubeLensFocal: scaleLength(200),
         name: '10×/0.25 Objective'
     });
-    objective.setPosition(20, 0, 0);
+    objective.setPosition(scaleLength(20), 0, 0);
     objective.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(objective);
 
     // 6. Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
-    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
-    tubeLens.setPosition(221.25, 0, 0);
+    const tubeLens = new AchromatDoublet(
+        scaleLength(77.4),
+        scaleLength(-87.6),
+        scaleLength(291.1),
+        scaleLength(4.0),
+        scaleLength(2.5),
+        25.4,
+        1.658,
+        1.750,
+        'Tube Lens',
+    );
+    tubeLens.setPosition(scaleLength(221.25), 0, 0);
     tubeLens.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(tubeLens);
 
@@ -111,7 +127,7 @@ export function createBrightfieldScene(): OpticalComponent[] {
     // Back focal length (BFL) of this doublet is 196.4 mm from the back vertex.
     // Back vertex is at x = 223.26 + 1.25 = 224.51 mm.
     // Focal plane = 224.51 + 196.4 = 420.91 mm.
-    camera.setPosition(420.91, 0, 0);
+    camera.setPosition(scaleLength(420.91), 0, 0);
     camera.pointAlong(-1, 0, 0);  // faces -X (towards incoming beam)
     // sensorNA = objective NA / magnification. Reverse tracer pupil-aware sampling
     // aims backward rays at the tube lens aperture, but a small extra cone

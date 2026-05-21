@@ -3,46 +3,16 @@ import { Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
 import { LensProfileEditorCore, type ProfileEditorMutate } from './LensProfileEditor';
 import { ScrubInput } from './ScrubInput';
+import {
+    clampRadiusOfCurvature,
+    designerGridStyle as gridStyle,
+    designerOptionStyle as optionStyle,
+    designerSelectStyle as selectStyle,
+    formatLensNumber,
+    parseLensNumber,
+} from './lensDesignerShared';
 
 export type SphericalLensMutate = (mutate: (lens: SphericalLens) => void) => void;
-
-function parseLensNumber(value: string): number {
-    const trimmed = value.trim().toLowerCase();
-    if (trimmed === 'infinity') return 1e9;
-    if (trimmed === '-infinity') return -1e9;
-    return parseFloat(value);
-}
-
-function formatLensNumber(value: number, digits = 2): string {
-    if (Math.abs(value) >= 1e6) return value >= 0 ? 'Infinity' : '-Infinity';
-    return String(Math.round(value * 10 ** digits) / 10 ** digits);
-}
-
-function clampRadiusOfCurvature(value: number, apertureRadius: number): number {
-    if (Math.abs(value) >= 1e8) return value;
-    const minR = apertureRadius * 1.05;
-    if (Math.abs(value) >= minR) return value;
-    return Math.sign(value || 1) * minR;
-}
-
-const selectStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    border: '1px solid #37404a',
-    color: '#eaf2fb',
-    fontWeight: 500,
-    outline: 'none',
-    padding: '4px 6px',
-    borderRadius: 5,
-    width: '100%',
-    minWidth: 0,
-    boxSizing: 'border-box',
-    cursor: 'pointer',
-};
-
-const optionStyle: React.CSSProperties = {
-    backgroundColor: '#1d2229',
-    color: '#eaf2fb',
-};
 
 export const SphericalLensDesigner: React.FC<{
     lens: SphericalLens;
@@ -141,7 +111,7 @@ export const SphericalLensDesigner: React.FC<{
                 </select>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, marginBottom: 10 }}>
+            <div style={gridStyle}>
                 <ScrubInput label="Focal Len" suffix="mm" value={localFocal} onChange={setLocalFocal} onCommit={(v) => commit('focal', v)} speed={1.0} />
                 <ScrubInput label="Aperture" suffix="mm" value={localRadius} onChange={setLocalRadius} onCommit={(v) => commit('radius', v)} speed={0.5} min={1} max={200} />
                 <ScrubInput label="Thickness" suffix="mm" value={localThickness} onChange={setLocalThickness} onCommit={(v) => commit('thickness', v)} speed={0.2} min={0.1} max={100} />

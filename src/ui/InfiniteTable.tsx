@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import type { ThreeEvent } from '@react-three/fiber';
 import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three';
 import { useAtom } from 'jotai';
 import {
@@ -6,7 +7,6 @@ import {
   measurementAtom,
   pendingCatalogPlacementAtom,
   railPlacementAtom,
-  selectedRodAtom,
   selectionAtom,
   uiLockedAtom,
 } from '../state/store';
@@ -28,6 +28,30 @@ interface MarqueeDrag {
 }
 
 const MARQUEE_THRESHOLD_PX = 4;
+const FALLBACK_POINTER_ID = 1;
+
+type TablePointerEvent = ThreeEvent<PointerEvent>;
+
+function pointerIdFromEvent(event: TablePointerEvent): number {
+  return event.pointerId ?? event.nativeEvent.pointerId ?? FALLBACK_POINTER_ID;
+}
+
+function screenPointFromEvent(event: TablePointerEvent): MarqueePoint {
+  return {
+    x: event.nativeEvent.clientX ?? event.clientX ?? 0,
+    y: event.nativeEvent.clientY ?? event.clientY ?? 0,
+  };
+}
+
+function capturePointer(event: TablePointerEvent, pointerId: number): void {
+  const target = event.target as Element & { setPointerCapture?: (id: number) => void };
+  target.setPointerCapture?.(pointerId);
+}
+
+function releasePointer(event: TablePointerEvent, pointerId: number): void {
+  const target = event.target as Element & { releasePointerCapture?: (id: number) => void };
+  target.releasePointerCapture?.(pointerId);
+}
 
 function marqueePlaneGeometry(rect: TableSelectionRect): BufferGeometry {
   const width = Math.max(0.001, rect.maxX - rect.minX);
@@ -63,7 +87,6 @@ function marqueeOutlineGeometry(rect: TableSelectionRect): BufferGeometry {
 export const InfiniteTable: React.FC = () => {
   const [components] = useAtom(componentsAtom);
   const [, setSelection] = useAtom(selectionAtom);
-  const [, setSelectedRod] = useAtom(selectedRodAtom);
   const [measurement] = useAtom(measurementAtom);
   const [railPlacement] = useAtom(railPlacementAtom);
   const [pendingCatalogPlacement] = useAtom(pendingCatalogPlacementAtom);
@@ -84,40 +107,36 @@ export const InfiniteTable: React.FC = () => {
   const selectInsideMarquee = (start: MarqueePoint, current: MarqueePoint) => {
     const rect = tableSelectionRectFromPoints(start, current);
     setSelection(selectedComponentIdsInTableRect(components, rect));
-    setSelectedRod(null);
   };
 
-  const handlePointerDown = (event: any) => {
+  const handlePointerDown = (event: TablePointerEvent) => {
     if (!marqueeEnabled) return;
-    const pointerType = event.nativeEvent?.pointerType ?? event.pointerType ?? 'mouse';
-    const button = event.nativeEvent?.button ?? event.button ?? 0;
-    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+    const pointerType = event.nativeEvent.pointerType ?? event.pointerType ?? 'mouse';
+    const button = event.nativeEvent.button ?? event.button ?? 0;
+    const pointerId = pointerIdFromEvent(event);
     if (pointerType !== 'mouse' || button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
 
     event.stopPropagation();
     const start = { x: event.point.x, y: event.point.y };
+    const screenStart = screenPointFromEvent(event);
     setMarquee({
       pointerId,
       start,
       current: start,
-      screenStart: {
-        x: event.nativeEvent?.clientX ?? event.clientX ?? 0,
-        y: event.nativeEvent?.clientY ?? event.clientY ?? 0,
-      },
+      screenStart,
       active: false,
     });
-    try { event.target.setPointerCapture(pointerId); } catch { /* pointer capture is best-effort */ }
+    capturePointer(event, pointerId);
   };
 
-  const handlePointerMove = (event: any) => {
-    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+  const handlePointerMove = (event: TablePointerEvent) => {
+    const pointerId = pointerIdFromEvent(event);
     if (!marquee || pointerId !== marquee.pointerId) return;
     event.stopPropagation();
 
-    const screenX = event.nativeEvent?.clientX ?? event.clientX ?? marquee.screenStart.x;
-    const screenY = event.nativeEvent?.clientY ?? event.clientY ?? marquee.screenStart.y;
-    const dx = screenX - marquee.screenStart.x;
-    const dy = screenY - marquee.screenStart.y;
+    const screenPoint = screenPointFromEvent(event);
+    const dx = screenPoint.x - marquee.screenStart.x;
+    const dy = screenPoint.y - marquee.screenStart.y;
     const active = marquee.active || dx * dx + dy * dy >= MARQUEE_THRESHOLD_PX * MARQUEE_THRESHOLD_PX;
     const current = { x: event.point.x, y: event.point.y };
 
@@ -125,11 +144,11 @@ export const InfiniteTable: React.FC = () => {
     if (active) selectInsideMarquee(marquee.start, current);
   };
 
-  const handlePointerUp = (event: any) => {
-    const pointerId = event.pointerId ?? event.nativeEvent?.pointerId ?? 1;
+  const handlePointerUp = (event: TablePointerEvent) => {
+    const pointerId = pointerIdFromEvent(event);
     if (!marquee || pointerId !== marquee.pointerId) return;
     event.stopPropagation();
-    try { event.target.releasePointerCapture(pointerId); } catch { /* noop */ }
+    releasePointer(event, pointerId);
 
     if (marquee.active) {
       selectInsideMarquee(marquee.start, { x: event.point.x, y: event.point.y });
@@ -138,8 +157,7 @@ export const InfiniteTable: React.FC = () => {
     setMarquee(null);
   };
 
-  // Click handler: clear both component and rod selection on empty-space click.
-  const handleClick = (event: any) => {
+  const handleClick = (event: TablePointerEvent) => {
     if (ignoreNextClick.current) {
       ignoreNextClick.current = false;
       event.stopPropagation();
@@ -147,7 +165,6 @@ export const InfiniteTable: React.FC = () => {
     }
     if (uiLocked) return;
     setSelection([]);
-    setSelectedRod(null);
   };
 
   const marqueeRect = marquee?.active
@@ -178,25 +195,7 @@ export const InfiniteTable: React.FC = () => {
       >
         {/* Table in XY plane per PhysicsPlan.md (Z = height above table) */}
         <planeGeometry args={[size, size]} />
-        <meshStandardMaterial
-          color="#333"
-          roughness={0.8}
-          metalness={0.2}
-        >
-          {/* We use a texture or just relying on mapping?
-              Writing a full custom shader material is cleaner for the holes.
-              Let's switch to shaderMaterial or use an alphaMap.
-              Actually, for simplicity and standard material lighting,
-              let's just make a CanvasTexture or DataTexture and repeat it.
-          */}
-        </meshStandardMaterial>
-
-        {/*
-           Better approach for "Holes":
-           A GridHelper is lines.
-           Texture is best.
-        */}
-        <TableHoleMaterial size={size} />
+        <TableHoleMaterial size={size} mobile={isMobile} />
       </mesh>
 
       {marqueeRect && marqueeCenter && marqueeFillGeometry && marqueeBorderGeometry && (
@@ -226,13 +225,7 @@ export const InfiniteTable: React.FC = () => {
   );
 };
 
-// Shader Material component for the holes pattern
-function TableHoleMaterial({ size }: { size: number }) {
-
-  // Vertex Shader: Pass world pos or UV
-  // Fragment Shader: dist = length(fract(vUv * repeat) - 0.5)
-  // If dist < radius_fraction, color = black.
-
+function TableHoleMaterial({ size, mobile }: { size: number; mobile: boolean }) {
   const vertexShader = `
     varying vec2 vUv;
     void main() {
@@ -248,6 +241,7 @@ function TableHoleMaterial({ size }: { size: number }) {
     float spacing = 25.0;
     float holeRadius = 3.5;
     float totalSize = ${size.toFixed(1)};
+    float mobileTable = ${mobile ? '1.0' : '0.0'};
 
     // Procedural noise for brushed-metal grain
     float hash(vec2 p) {
@@ -282,29 +276,34 @@ function TableHoleMaterial({ size }: { size: number }) {
       float edge = 1.0; // Softness
       float circle = smoothstep(holeRadius, holeRadius - edge, dist);
       
-      // Distance from origin
-      float distFromCenter = length((vUv - 0.5) * totalSize);
+      float alpha = 1.0;
+      vec3 bgColor;
+      if (mobileTable > 0.5) {
+        float dither = (hash(floor(pos * 0.9)) - 0.5) * 0.018
+                     + (hash(floor(pos * 3.1)) - 0.5) * 0.006;
+        bgColor = clamp(vec3(100.0 / 255.0 + dither), vec3(0.35), vec3(0.43));
+      } else {
+        // Brushed dark metal table surface. Bright enough to read without the
+        // old Bloom pass, with subtle anisotropic grain like the previous look.
+        float grain = brushedNoise(pos);
+        float fineBrush = sin(pos.y * 1.9 + grain * 5.0) * 0.018
+                        + sin(pos.y * 7.5) * 0.006;
+        float broadBrush = sin(pos.y * 0.18) * 0.025;
+        vec3 metalBase = vec3(0.24, 0.28, 0.30);
+        float distFromCenter = length((vUv - 0.5) * totalSize);
+        bgColor = metalBase + vec3((grain - 0.5) * 0.075 + fineBrush + broadBrush);
+        bgColor *= 1.0 - smoothstep(900.0, 2600.0, distFromCenter) * 0.14;
+        bgColor = clamp(bgColor, vec3(0.10), vec3(0.42));
+        // Slight radial fade, but never all the way to invisible: this table is
+        // a working reference grid, not a decorative background.
+        float fade = smoothstep(2600.0, 800.0, distFromCenter);
+        alpha = mix(0.36, 0.88, fade);
+      }
       
-      // Brushed dark metal table surface. Bright enough to read without the
-      // old Bloom pass, with subtle anisotropic grain like the previous look.
-      float grain = brushedNoise(pos);
-      float fineBrush = sin(pos.y * 1.9 + grain * 5.0) * 0.018
-                      + sin(pos.y * 7.5) * 0.006;
-      float broadBrush = sin(pos.y * 0.18) * 0.025;
-      vec3 metalBase = vec3(0.24, 0.28, 0.30);
-      vec3 bgColor = metalBase + vec3((grain - 0.5) * 0.075 + fineBrush + broadBrush);
-      bgColor *= 1.0 - smoothstep(900.0, 2600.0, distFromCenter) * 0.14;
-      bgColor = clamp(bgColor, vec3(0.10), vec3(0.42));
-      
-      // Glowing or deep holes
+      // Deep black bolt holes.
       vec3 holeColor = vec3(0.0, 0.0, 0.0);
       
       vec3 finalColor = mix(bgColor, holeColor, circle);
-      
-      // Slight radial fade, but never all the way to invisible: this table is
-      // a working reference grid, not a decorative background.
-      float fade = smoothstep(2600.0, 800.0, distFromCenter);
-      float alpha = mix(0.36, 0.88, fade);
       
       gl_FragColor = vec4(finalColor, alpha);
     }

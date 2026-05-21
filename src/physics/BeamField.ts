@@ -125,7 +125,7 @@ interface BeamFieldQueryPlan {
 
 const beamFieldPlanCache = new WeakMap<GaussianBeamSegment[][], BeamFieldQueryPlan>();
 
-function createPreparedBranch(branch: GaussianBeamSegment[], _fallbackIndex: number): PreparedBranch | null {
+function createPreparedBranch(branch: GaussianBeamSegment[]): PreparedBranch | null {
     if (branch.length === 0) return null;
     let minX = Infinity, minY = Infinity, minZ = Infinity;
     let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -154,11 +154,9 @@ function getBeamFieldQueryPlan(allSegments: GaussianBeamSegment[][]): BeamFieldQ
     let plan = beamFieldPlanCache.get(allSegments);
     if (plan) return plan;
 
-    const branches: PreparedBranch[] = [];
-    for (let i = 0; i < allSegments.length; i++) {
-        const prepared = createPreparedBranch(allSegments[i], i);
-        if (prepared) branches.push(prepared);
-    }
+    const branches = allSegments
+        .map(createPreparedBranch)
+        .filter((branch): branch is PreparedBranch => branch !== null);
 
     plan = { branches, wavelengthCache: new Map() };
     beamFieldPlanCache.set(allSegments, plan);
@@ -538,27 +536,4 @@ export class BeamField {
         }
         return totalIntegral;
     }
-}
-
-// ─── Utility Exports ──────────────────────────────────────────────────
-
-/**
- * Sample the beam width along a segment at evenly spaced points.
- * Returns array of { z, wx, wy } where z is distance from segment start.
- */
-export function sampleBeamProfile(
-    segment: GaussianBeamSegment,
-    numSamples: number = 20
-): { z: number; wx: number; wy: number }[] {
-    const segLength = getSegmentLength(segment);
-    const samples: { z: number; wx: number; wy: number }[] = [];
-
-    for (let i = 0; i <= numSamples; i++) {
-        const t = i / numSamples;
-        const z = t * segLength;
-        const { wx, wy } = segmentBeamRadii(segment, z);
-        samples.push({ z, wx, wy });
-    }
-
-    return samples;
 }

@@ -32,7 +32,9 @@
     "catalog:optical-geometries": "bun scripts/catalog/build-optical-geometry-assets.mjs",
     "catalog:objective-edrawings": "bun scripts/catalog/extract-edrawings-objective-asset.mjs",
     "catalog:objectives-edrawings": "bun scripts/catalog/import-objective-edrawings-assets.mjs",
-    "catalog:inspect-edrawings": "bun scripts/catalog/inspect-edrawings-model.mjs"
+    "catalog:inspect-edrawings": "bun scripts/catalog/inspect-edrawings-model.mjs",
+    "catalog:mechanical-glb": "bun scripts/catalog/convert-mechanical-wrl-to-glb.mjs --apply",
+    "catalog:lens-housing-dedupe": "bun scripts/catalog/dedupe-mounted-lens-housings.mjs --apply"
   },
   "module": "index.ts",
   "type": "module",

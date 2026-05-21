@@ -247,6 +247,7 @@ export function createSnoutyLightSheetScene(): PresetResult {
 
     return {
         scene,
+        description: 'Appendix-style high-NA single-objective light-sheet with AMS-AGY snout objective',
         channels: [],
         animationPlaying: false,
         animationSpeed: 1.0,

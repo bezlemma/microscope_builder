@@ -35,6 +35,7 @@ import {
     prepareProgressiveActiveMask,
     updateProgressiveSamplingState,
 } from './reverseTraceAdaptiveSampling';
+import { serializePath, type SerializedPath } from './raySerialization';
 
 // Kick off WASM kernel load as soon as the worker module is evaluated so the
 // first render can pick it up via readRegisteredReverseTracerWasmModule().
@@ -156,94 +157,16 @@ const CONVERGENCE_ABSOLUTE_EPSILON = 1e-10;
 const MAX_CAMERA_PROGRESSIVE_ROUNDS = 32;
 const MAX_PREVIEW_PROGRESSIVE_ROUNDS = 1;
 
-/**
- * Rays are structured-cloneable once we strip Three.js Vector3 prototypes.
- * Each serialized ray keeps only the raw numeric fields the UI visualisers
- * need: origin/direction (as {x,y,z} tuples), wavelength, intensity,
- * polarization, source id, and interaction bookkeeping.
- */
-export interface SerializedRay {
-    origin: { x: number; y: number; z: number };
-    direction: { x: number; y: number; z: number };
-    wavelength: number;
-    bandwidth?: number;
-    intensity: number;
-    powerWeight?: number;
-    currentMediumIndex?: number;
-    opticalPathLength: number;
-    phase?: number;
-    footprintRadius: number;
-    coherenceMode: number;
-    sourceId?: string;
-    sourceKind?: Ray['sourceKind'];
-    packetLaunchRigor?: Ray['packetLaunchRigor'];
-    sourcePosition?: { x: number; y: number; z: number };
-    isMainRay?: boolean;
-    isBackward?: boolean;
-    polarization?: Ray['polarization'];
-    // Visualisation metadata that the RayVisualizer needs:
-    //   interactionDistance tells how far to draw the last (extension) ray,
-    //   terminationPoint marks that a ray ends at an explicit point (and the
-    //   extension logic should NOT run for that ray).
-    interactionDistance?: number;
-    interactionComponentId?: string;
-    entryPoint?: { x: number; y: number; z: number };
-    internalPath?: { x: number; y: number; z: number }[];
-    terminationPoint?: { x: number; y: number; z: number };
-    exitSurfaceId?: string;
-    suppressVisualization?: boolean;
-    suppressOpenTail?: boolean;
-}
-export type SerializedPath = SerializedRay[];
-
-function serializeRay(ray: Ray): SerializedRay {
-    return {
-        origin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
-        direction: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
-        wavelength: ray.wavelength,
-        bandwidth: ray.bandwidth,
-        intensity: ray.intensity,
-        powerWeight: ray.powerWeight,
-        currentMediumIndex: ray.currentMediumIndex,
-        opticalPathLength: ray.opticalPathLength,
-        phase: ray.phase,
-        footprintRadius: ray.footprintRadius,
-        coherenceMode: ray.coherenceMode,
-        sourceId: ray.sourceId,
-        sourceKind: ray.sourceKind,
-        packetLaunchRigor: ray.packetLaunchRigor,
-        sourcePosition: ray.sourcePosition
-            ? { x: ray.sourcePosition.x, y: ray.sourcePosition.y, z: ray.sourcePosition.z }
-            : undefined,
-        isMainRay: ray.isMainRay,
-        isBackward: ray.isBackward,
-        polarization: ray.polarization,
-        interactionDistance: ray.interactionDistance,
-        interactionComponentId: ray.interactionComponentId,
-        entryPoint: ray.entryPoint
-            ? { x: ray.entryPoint.x, y: ray.entryPoint.y, z: ray.entryPoint.z }
-            : undefined,
-        internalPath: ray.internalPath?.map(p => ({ x: p.x, y: p.y, z: p.z })),
-        terminationPoint: ray.terminationPoint
-            ? { x: ray.terminationPoint.x, y: ray.terminationPoint.y, z: ray.terminationPoint.z }
-            : undefined,
-        exitSurfaceId: ray.exitSurfaceId,
-        suppressVisualization: ray.suppressVisualization,
-        suppressOpenTail: ray.suppressOpenTail,
-    };
-}
-
-function serializePath(path: Ray[]): SerializedPath {
-    return path.map(serializeRay);
-}
-
 // ─── Job state ─────────────────────────────────────────────────────────
 
 let activeJobId: number | null = null;
 const cancelledJobs = new Set<number>();
+const workerScope = self as typeof self & {
+    postMessage(message: WorkerToMain, transfer: Transferable[]): void;
+};
 
 function post(msg: WorkerToMain, transfer: Transferable[] = []) {
-    (self as unknown as Worker).postMessage(msg, transfer);
+    workerScope.postMessage(msg, transfer);
 }
 
 function makeFloat32Buffer(length: number): Float32Array {

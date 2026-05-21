@@ -10,10 +10,11 @@ import { WedgeSource2D } from '../components/WedgeSource2D';
 import { ForwardTracer } from '../ForwardTracer';
 import { segmentBeamEnvelopeRadii } from '../BeamField';
 import { createSourceRays } from '../SourceRayFactory';
+import { OpticalComponent } from '../Component';
 import { Coherence, Ray } from '../types';
 
-function totalIntensityFor(component: { id: string }, rayCount: number): number {
-    return createSourceRays([component as any], rayCount, 'full')
+function totalIntensityFor(component: OpticalComponent, rayCount: number): number {
+    return createSourceRays([component], rayCount, 'full')
         .reduce((sum, ray) => sum + ray.intensity, 0);
 }
 

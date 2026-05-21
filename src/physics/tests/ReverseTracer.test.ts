@@ -109,7 +109,6 @@ describe("Reverse tracer: Backward Ray Direction", () => {
             if (result.emissionImage[i] > 0) nonZeroCount++;
         }
 
-        console.log(`Non-zero pixels: ${nonZeroCount}/${result.emissionImage.length}`);
         // With a 4mm sensor at 50mm distance aiming at a 0.5mm-radius sample,
         // some center pixels should hit
         expect(nonZeroCount).toBeGreaterThan(0);
@@ -177,7 +176,7 @@ describe("Reverse tracer: Backward Ray Direction", () => {
             opticalPathLength: 0,
             footprintRadius: 0.1,
             coherenceMode: Coherence.Coherent,
-            sourceId: "debug_center",
+            sourceId: "center_probe",
         };
 
         const reverseTrace = new ReverseTracer([camera, sample], [[beamSeg]]);

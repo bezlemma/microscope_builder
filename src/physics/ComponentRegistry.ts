@@ -52,10 +52,8 @@ import { StructuredSource } from './components/StructuredSource';
 import { Annotation } from './components/Annotation';
 import { TrappedBead } from './components/TrappedBead';
 
-/** Registry entry for a component type. */
-export interface ComponentEntry {
-    /** Constructor for creating instances. */
-    ctor: new (...args: any[]) => OpticalComponent;
+interface ComponentEntry {
+    ctor: abstract new (...args: never[]) => OpticalComponent;
 }
 
 /**
@@ -108,9 +106,6 @@ const REGISTRY: [string, ComponentEntry][] = [
     ['Annotation',       { ctor: Annotation }],
     ['TrappedBead',      { ctor: TrappedBead }],
 ];
-
-/** Map from type name → entry. */
-export const componentsByName = new Map<string, ComponentEntry>(REGISTRY);
 
 /**
  * Get the serialization type name for a component instance.

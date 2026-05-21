@@ -7,7 +7,7 @@ import {
     Float32BufferAttribute,
     Vector3,
 } from 'three';
-import { wavelengthToRGB as wavelengthToRGBnm } from '../physics/spectral';
+import { wavelengthMetersToRGB } from '../physics/spectral';
 import { GaussianBeamSegment } from '../physics/BeamField';
 import { Coherence, Ray } from '../physics/types';
 import {
@@ -19,21 +19,16 @@ import {
 } from './bundleView';
 import { buildWavePathRenderData, fieldVectorForSample } from './bundleWaveRender';
 
-function wavelengthToRGB(wavelengthMeters: number): { r: number; g: number; b: number } {
-    const { r, g, b } = wavelengthToRGBnm(wavelengthMeters * 1e9);
-    return { r, g, b };
-}
-
 function envelopeDisplayColor(wavelengthMeters: number, coherenceMode: Coherence): Color {
     if (coherenceMode === Coherence.Incoherent) {
         return new Color(0.94, 0.95, 0.9);
     }
-    const rgb = wavelengthToRGB(wavelengthMeters);
+    const rgb = wavelengthMetersToRGB(wavelengthMeters);
     return new Color(rgb.r, rgb.g, rgb.b);
 }
 
 function waveDisplayColor(wavelengthMeters: number): Color {
-    const rgb = wavelengthToRGB(wavelengthMeters);
+    const rgb = wavelengthMetersToRGB(wavelengthMeters);
     return new Color(rgb.r, rgb.g, rgb.b);
 }
 

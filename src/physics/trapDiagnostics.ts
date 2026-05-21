@@ -22,7 +22,7 @@ export interface TrapFieldDiagnostics {
     branchCount: number;
 }
 
-export function incidentTrapBranchesForBead(
+function incidentTrapBranchesForBead(
     beamSegments: GaussianBeamSegment[][],
     beadId: string,
 ): GaussianBeamSegment[][] {

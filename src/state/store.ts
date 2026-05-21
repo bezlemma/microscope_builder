@@ -15,7 +15,7 @@ import { createTransFluorescenceScene } from '../presets/TransmissionFluorescenc
 import { createBrightfieldScene } from '../presets/brightfield';
 import { createBeamExpanderScene } from '../presets/beamExpander';
 import { createLensZooScene } from '../presets/lensZoo';
-import { createPrismDebugScene } from '../presets/prismDebug';
+import { createPrismDemoScene } from '../presets/prismDemo';
 import { createPrismRecombinationScene } from '../presets/prismRecombination';
 import { createPolarizationZooScene, POLARIZATION_ZOO_DESCRIPTION } from '../presets/polarizationZoo';
 import { createMZInterferometerScene } from '../presets/mzInterferometer';
@@ -32,10 +32,10 @@ import { createCheHangYu2026Scene } from '../presets/CheHangYu2026';
 // --- State Types ---
 export interface RayConfig {
     rayCount: number; // Number of intermediate rays
-    reversePathCount: number; // Backward paths retained for rod/wave visualization
+    reversePathCount: number; // Backward paths retained for ray/wave visualization
     showFootprint: boolean;
     beamFieldEnabled: boolean; // Beamlet/bundle data toggle
-    viewerMode: 'rods' | 'wave' | 'planes';
+    viewerMode: 'rays' | 'wave' | 'planes';
     minRayOpacity: number; // Minimum opacity for the dimmest visible rays (0..1)
     maxRayOpacity: number; // Maximum opacity for the brightest rays (0..1)
     /** Color every ray segment by the polarization state of its E-field (a
@@ -59,7 +59,7 @@ export const DEFAULT_RAY_CONFIG: RayConfig = {
     reversePathCount: 1,
     showFootprint: false,
     beamFieldEnabled: false,
-    viewerMode: 'rods',
+    viewerMode: 'rays',
     minRayOpacity: 0.33,
     maxRayOpacity: 1.0,
     colorByPolarization: false,
@@ -74,7 +74,7 @@ export enum PresetName {
     TransFluorescence = "Trans. Fluorescence",
     Brightfield = "Brightfield",
     LensZoo = "Lens Zoo",
-    PrismDebug = "Prism Debug",
+    PrismDemo = "Prism Demo",
     PrismRecombination = "Prism Recombination",
     PolarizationZoo = "Polarization Zoo",
     MZInterferometer = "MZ Interferometer",
@@ -88,9 +88,6 @@ export enum PresetName {
     Tutorial2 = "Tutorial 2",
     CheHangYu2026 = "Papers: Yu 2026 (Nisam 2x)",
 }
-
-export type ViewMode = 'schematic' | 'realistic';
-export const viewModeAtom = atom<ViewMode>('schematic');
 
 /** Top-level app navigation: the splash welcome screen, or the editor itself. */
 export type AppRoute = 'splash' | 'editor';
@@ -139,7 +136,7 @@ export interface PresetResult {
     scanSteps?: number;
     /** Optional full ray-display override for presets with special visibility needs. */
     rayConfig?: Partial<RayConfig>;
-    /** Override the forward (rod-tracer) ray-per-source count when this preset
+    /** Override the forward ray-per-source count when this preset
      *  loads.  Falls back to DEFAULT_RAY_CONFIG.rayCount when omitted. */
     rayCount?: number;
 }
@@ -151,7 +148,7 @@ const presetFactories = new Map<PresetName, () => PresetResult>([
     [PresetName.TransFluorescence, () => ({ scene: createTransFluorescenceScene() })],
     [PresetName.Brightfield, () => ({ scene: createBrightfieldScene() })],
     [PresetName.LensZoo, () => ({ scene: createLensZooScene() })],
-    [PresetName.PrismDebug, () => ({ scene: createPrismDebugScene() })],
+    [PresetName.PrismDemo, () => ({ scene: createPrismDemoScene() })],
     [PresetName.PrismRecombination, () => createPrismRecombinationScene()],
     [PresetName.PolarizationZoo, () => ({
         scene: createPolarizationZooScene(),
@@ -205,6 +202,7 @@ export const loadPresetAtom = atom(
         set(undoStackAtom, []); // Clear undo history on preset load
         set(activeZLevelAtom, 0); // Reset Z-level
         set(measurementAtom, { active: false, selectedId: null, measurements: [] });
+        set(mobilePanelModeAtom, 'scene');
         // Clear ray caches from the previous preset before the new scene is
         // installed. Without this, the visualizer keeps drawing the old beam
         // bundle in the new scene until the first trace of the new components
@@ -305,20 +303,12 @@ export const loadPresetAtom = atom(
 
 // 2. Selection State (supports multi-select via Ctrl+Click)
 export const selectionAtom = atom<string[]>([]);
-export const opticalPlaneInspectorClearSignalAtom = atom<number>(0);
 
 // 3. Ray Configuration
 export const rayConfigAtom = atom<RayConfig>({
     ...DEFAULT_RAY_CONFIG,
     rayCount: INITIAL_TUTORIAL.rayCount ?? DEFAULT_RAY_CONFIG.rayCount,
 });
-
-export const resetRayConfigAtom = atom(
-    null,
-    (_get, set) => {
-        set(rayConfigAtom, { ...DEFAULT_RAY_CONFIG });
-    }
-);
 
 export const setBundleDataEnabledAtom = atom(
     null,
@@ -327,7 +317,7 @@ export const setBundleDataEnabledAtom = atom(
         set(rayConfigAtom, {
             ...current,
             beamFieldEnabled: enabled,
-            viewerMode: enabled ? current.viewerMode : 'rods',
+            viewerMode: enabled ? current.viewerMode : 'rays',
         });
     }
 );
@@ -349,6 +339,8 @@ export const setVisualizationModeAtom = atom(
 // 4. Interaction State
 export const isDraggingAtom = atom<boolean>(false);
 export const mobileSnapEnabledAtom = atom<boolean>(false);
+export type MobilePanelMode = 'scene' | 'viewer' | 'properties';
+export const mobilePanelModeAtom = atom<MobilePanelMode>('scene');
 
 // 5. Handle Dragging State — prevents Draggable from stealing pointer events
 export const handleDraggingAtom = atom<boolean>(false);
@@ -442,6 +434,7 @@ export const startTutorialStage2Atom = atom(
         set(reverseTraceRenderingAtom, false);
         set(scanAccumProgressAtom, 0);
         set(cameraImageTickAtom, tick => tick + 1);
+        set(mobilePanelModeAtom, 'scene');
     }
 );
 
@@ -469,6 +462,7 @@ export const loadSceneAtom = atom(
         set(scanAccumProgressAtom, 0);
         set(activeZLevelAtom, 0);
         set(measurementAtom, { active: false, selectedId: null, measurements: [] });
+        set(mobilePanelModeAtom, 'scene');
         set(resetViewSignalAtom, signal => signal + 1);
         // The scene is now whatever the user just loaded — no preset matches it,
         // and any pasted Share-link hash that brought us here is now consumed.
@@ -645,14 +639,3 @@ export interface SolverDiagnostics {
     totalSteps: number;
 }
 export const solverDiagnosticsAtom = atom<SolverDiagnostics | null>(null);
-
-// ════════════════════════════════════════════════════════════
-//  18. ROD PATH STUBS — compatibility with legacy UI components
-//  `rodPathsAtom` and `selectedRodAtom` are still consumed by
-//  Inspector's rod-properties panel; `rodConfigAtom` was a dead
-//  alias that's no longer imported.
-// ════════════════════════════════════════════════════════════
-/** Rod paths stub — empty in ray system. */
-export const rodPathsAtom = atom<{ forward: any[][]; imageFormation: any[][]; generation: number }>({ forward: [], imageFormation: [], generation: 0 });
-/** Selected rod stub — null in ray system. */
-export const selectedRodAtom = atom<{ source: string; pathIndex: number; segmentIndex: number } | null>(null);

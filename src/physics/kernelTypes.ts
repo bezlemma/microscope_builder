@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { GaussianBeamSegment } from './BeamField';
 import { HitRecord, InteractionResult, Ray } from './types';
 
@@ -23,6 +23,7 @@ export interface KernelTraceComponent {
     absorptionCoeff: number;
     /** World-space centre of the component (read from the underlying instance). */
     position: Vector3;
+    localToWorld: Matrix4;
     /** World-space AABB used by the Reverse tracer scene accelerator. */
     worldBounds: {
         minX: number;

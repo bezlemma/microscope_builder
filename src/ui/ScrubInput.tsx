@@ -18,6 +18,19 @@ interface ScrubInputProps {
  *  without hammering expensive downstream work (solver, spectrum, etc.). */
 const COMMIT_THROTTLE_MS = 60;
 
+type UserSelectStyle = CSSStyleDeclaration & {
+    webkitUserSelect?: string;
+    MozUserSelect?: string;
+};
+
+function setBodyDragStyle(enabled: boolean): void {
+    const style = document.body.style as UserSelectStyle;
+    style.userSelect = enabled ? 'none' : '';
+    style.webkitUserSelect = enabled ? 'none' : '';
+    style.MozUserSelect = enabled ? 'none' : '';
+    style.cursor = enabled ? 'ew-resize' : '';
+}
+
 /**
  * ScrubInput — A Blender/Figma-style scrubbable number input.
  *
@@ -158,23 +171,8 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
 
     // Prevent body selection while scrubbing
     useEffect(() => {
-        if (isScrubbing) {
-            document.body.style.userSelect = 'none';
-            (document.body.style as any).webkitUserSelect = 'none';  // Safari
-            (document.body.style as any).MozUserSelect = 'none';     // Firefox
-            document.body.style.cursor = 'ew-resize';
-        } else {
-            document.body.style.userSelect = '';
-            (document.body.style as any).webkitUserSelect = '';
-            (document.body.style as any).MozUserSelect = '';
-            document.body.style.cursor = '';
-        }
-        return () => {
-            document.body.style.userSelect = '';
-            (document.body.style as any).webkitUserSelect = '';
-            (document.body.style as any).MozUserSelect = '';
-            document.body.style.cursor = '';
-        };
+        setBodyDragStyle(isScrubbing);
+        return () => setBodyDragStyle(false);
     }, [isScrubbing]);
 
     return (

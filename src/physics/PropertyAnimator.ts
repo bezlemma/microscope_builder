@@ -31,10 +31,38 @@ export interface AnimationChannel {
 }
 
 let _nextId = 1;
+type Axis = 'x' | 'y' | 'z';
+type DynamicOpticalComponent = OpticalComponent & Record<string, unknown> & {
+    recalculate?: unknown;
+    invalidateMesh?: unknown;
+};
 
 /** Generate a unique channel ID. */
 export function generateChannelId(): string {
     return `anim_${_nextId++}`;
+}
+
+function pathAxis(property: string): Axis {
+    return property.split('.')[1] as Axis;
+}
+
+function dynamicComponent(component: OpticalComponent): DynamicOpticalComponent {
+    return component as DynamicOpticalComponent;
+}
+
+function readDynamicNumber(component: OpticalComponent, property: string): number {
+    const value = dynamicComponent(component)[property];
+    return typeof value === 'number' ? value : 0;
+}
+
+function setDynamicNumber(component: OpticalComponent, property: string, value: number): void {
+    dynamicComponent(component)[property] = value;
+}
+
+function refreshDerivedState(component: OpticalComponent): void {
+    const target = dynamicComponent(component);
+    if (typeof target.recalculate === 'function') target.recalculate();
+    if (typeof target.invalidateMesh === 'function') target.invalidateMesh();
 }
 
 /**
@@ -93,45 +121,53 @@ export function setProperty(
     if (property === 'panAngle') {
         component.panAngle = value;
         component.recomputeRotation();
-    } else if (property === 'tiltAngle') {
+        component.version++;
+        return;
+    }
+    if (property === 'tiltAngle') {
         component.tiltAngle = value;
         component.recomputeRotation();
-    } else if (property === 'rollAngle') {
+        component.version++;
+        return;
+    }
+    if (property === 'rollAngle') {
         component.rollAngle = value;
         component.recomputeRotation();
-    } else if (property.startsWith('position.')) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        component.position[axis] = value;
+        component.version++;
+        return;
+    }
+    if (property.startsWith('position.')) {
+        component.position[pathAxis(property)] = value;
         component.updateMatrices();
-    } else if (property.startsWith('rotation.')) {
-        // Legacy Euler-based rotation (kept for backward compatibility)
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        component.version++;
+        return;
+    }
+    if (property.startsWith('rotation.')) {
         const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
-        euler[axis] = value;
+        euler[pathAxis(property)] = value;
         component.rotation.setFromEuler(euler);
         component.updateMatrices();
-    } else if (property.startsWith('specimenOffset.') && component instanceof Sample) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        component.specimenOffset[axis] = value;
-    } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        component.specimenRotation[axis] = value;
-    } else if (property === 'scanX' || property === 'scanY') {
-        (component as any)[property] = value;
-        // Dual galvos don't use panAngle/tiltAngle for scanning, so we just set the raw value
-    } else {
-        // Direct scalar property (e.g. aperture, focalLength)
-        (component as any)[property] = value;
-        // Call recalculate if available (updates bounds, geometry, etc.)
-        if (typeof (component as any).recalculate === 'function') {
-            (component as any).recalculate();
-        }
-        // Invalidate physics mesh if it's a mesh-based component
-        if (typeof (component as any).invalidateMesh === 'function') {
-            (component as any).invalidateMesh();
-        }
+        component.version++;
+        return;
     }
-    // Bump version so fingerprint detects the change
+    if (property.startsWith('specimenOffset.') && component instanceof Sample) {
+        component.specimenOffset[pathAxis(property)] = value;
+        component.version++;
+        return;
+    }
+    if (property.startsWith('specimenRotation.') && component instanceof Sample) {
+        component.specimenRotation[pathAxis(property)] = value;
+        component.version++;
+        return;
+    }
+    if (property === 'scanX' || property === 'scanY') {
+        setDynamicNumber(component, property, value);
+        component.version++;
+        return;
+    }
+
+    setDynamicNumber(component, property, value);
+    refreshDerivedState(component);
     component.version++;
 }
 
@@ -141,28 +177,27 @@ export function setProperty(
 export function getProperty(component: OpticalComponent, property: string): number {
     if (property === 'panAngle') {
         return component.panAngle;
-    } else if (property === 'tiltAngle') {
-        return component.tiltAngle;
-    } else if (property === 'rollAngle') {
-        return component.rollAngle;
-    } else if (property.startsWith('position.')) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        return component.position[axis];
-    } else if (property.startsWith('rotation.')) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
-        return euler[axis];
-    } else if (property.startsWith('specimenOffset.') && component instanceof Sample) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        return component.specimenOffset[axis];
-    } else if (property.startsWith('specimenRotation.') && component instanceof Sample) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        return component.specimenRotation[axis];
-    } else if (property === 'scanX' || property === 'scanY') {
-        return (component as any)[property] ?? 0;
-    } else {
-        return (component as any)[property] ?? 0;
     }
+    if (property === 'tiltAngle') {
+        return component.tiltAngle;
+    }
+    if (property === 'rollAngle') {
+        return component.rollAngle;
+    }
+    if (property.startsWith('position.')) {
+        return component.position[pathAxis(property)];
+    }
+    if (property.startsWith('rotation.')) {
+        const euler = new Euler().setFromQuaternion(component.rotation, 'ZYX');
+        return euler[pathAxis(property)];
+    }
+    if (property.startsWith('specimenOffset.') && component instanceof Sample) {
+        return component.specimenOffset[pathAxis(property)];
+    }
+    if (property.startsWith('specimenRotation.') && component instanceof Sample) {
+        return component.specimenRotation[pathAxis(property)];
+    }
+    return readDynamicNumber(component, property);
 }
 
 export class PropertyAnimator {

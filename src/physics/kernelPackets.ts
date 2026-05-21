@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { OpticalComponent } from './Component';
 import { Aperture } from './components/Aperture';
 import { Camera } from './components/Camera';
@@ -36,7 +36,6 @@ export const PACKED_INTERACTION_APERTURE = 1;
 export const PACKED_INTERACTION_MIRROR = 2;
 export const REVERSE_TRACE_KERNEL_STATUS_OK = 0;
 export const REVERSE_TRACE_KERNEL_STATUS_UNSUPPORTED_ABI = 1;
-export const REVERSE_TRACE_KERNEL_STATUS_UNIMPLEMENTED = 2;
 
 export const DETECTOR_KIND_CAMERA = 1;
 export const DETECTOR_KIND_PMT = 2;
@@ -82,8 +81,8 @@ function writeDetectorBasis(target: Float64Array, position: { x: number; y: numb
     target[11] = vAxis.z;
 }
 
-function matrixDirection(component: { localToWorld: { elements: readonly number[] } }, x: number, y: number, z: number): Vector3 {
-    return new Vector3(x, y, z).transformDirection(component.localToWorld as any).normalize();
+function matrixDirection(component: { localToWorld: Matrix4 }, x: number, y: number, z: number): Vector3 {
+    return new Vector3(x, y, z).transformDirection(component.localToWorld).normalize();
 }
 
 export interface PackedTraceScene {

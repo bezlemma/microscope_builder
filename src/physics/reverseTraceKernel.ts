@@ -1,4 +1,4 @@
-import { Matrix4, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { BeamFieldSnapshot, CameraKernelSnapshot, KernelSampleComponent, PMTKernelSnapshot, TraceSceneSnapshot } from './kernelTypes';
 import { HitRecord, Ray, Coherence, childRay } from './types';
 import { BeamField } from './BeamField';
@@ -429,7 +429,7 @@ export class ReverseTracerKernel {
                         analyticHit.localNormal[1],
                         analyticHit.localNormal[2],
                     );
-                    const localToWorld = (comp as unknown as { localToWorld: Matrix4 }).localToWorld;
+                    const { localToWorld } = comp;
                     const worldPoint = localPoint.clone().applyMatrix4(localToWorld);
                     const worldNormal = localNormal.clone().transformDirection(localToWorld).normalize();
                     nearestT = analyticHit.t;

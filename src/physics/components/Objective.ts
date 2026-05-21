@@ -3,6 +3,12 @@ import { OpticalComponent } from '../Component';
 import { Ray, HitRecord, InteractionResult, childRay } from '../types';
 import { evaluateZernikeAberrationWaves, type PupilFunction } from '../PupilFunction';
 import { OpticMesh } from '../OpticMesh';
+import {
+    getBuiltinZbbEzPackage,
+    zbbEzDirectionForLocalRay,
+    type ZbbEzDirectionModel,
+    type ZbbEzPackage,
+} from '../../catalog/zbbEzCatalog';
 
 export type ImmersionMediumKind = 'air' | 'oil' | 'water' | 'silicone' | 'custom';
 export type ObjectiveMechanicalStyle = 'standard' | 'snout';
@@ -76,26 +82,12 @@ const AMS_AGY_ZEMAX_ENVELOPE: SnoutZemaxEnvelopeRuntime = {
  *   - apertureRadius = focalLength × NA (back-pupil radius in this air-space model)
  *   - frontRadius    = workingDistance × tan(asin(NA / immersionIndex))
  *
- * TODO: Beam field still uses the paraxial q-parameter transfer [[1,0],[-1/f,1]].
- *       That remains separate from the surface-by-surface ray interaction here.
- *
- * TODO: Reverse tracer (Imaging) — The immersion medium creates a region of
- *       index `n` between the sample and the objective. Backward tracing
- *       from the image plane through the tube lens + objective should
- *       correctly map image points to sample points. The aplanatic
- *       condition guarantees this mapping is free of coma.
- *
- * TODO: Solver 4 (Coherent) — Apply phase shift Δφ = (2π/λ) × ΔOPL
- *       for interference calculations. The OPL contribution below is
- *       the same quadratic form as IdealLens.
- *
- * TODO: Immersion Medium — When immersionIndex > 1, the region between
- *       this objective and the sample should propagate rays at n = immersionIndex.
- *       This affects OPL accumulation and is critical for lightsheet microscopy
- *       where rays travel through containers with different indices.
- *       Current implementation: immersionIndex affects the max acceptance angle
- *       and deflection math, but does NOT yet modify the medium for other rays
- *       in the scene. That requires a "Medium" or "Immersion Volume" system.
+ * Current model boundaries:
+ *   - Beam fields still use the paraxial q-parameter transfer [[1,0],[-1/f,1]].
+ *   - Reverse imaging treats immersion as an objective parameter, not a real
+ *     medium volume between the sample and objective.
+ *   - Coherent phase uses the same OPL contribution as IdealLens; a full
+ *     solver would apply Δφ = (2π/λ) × ΔOPL during interference evaluation.
  */
 export class Objective extends OpticalComponent {
     NA: number;
@@ -273,9 +265,32 @@ export class Objective extends OpticalComponent {
     }
 
     getSnoutZemaxEnvelope(): SnoutZemaxEnvelopeRuntime | null {
+        const zbbEz = this.getZbbEzPackage();
+        if (zbbEz?.snoutEnvelope && this.mechanicalStyle === 'snout') {
+            return zbbEz.snoutEnvelope;
+        }
         if (this.catalog?.partId !== 'asi:54-10-5') return null;
         if (this.mechanicalStyle !== 'snout') return null;
         return AMS_AGY_ZEMAX_ENVELOPE;
+    }
+
+    private getZbbEzPackage(): ZbbEzPackage | null {
+        return getBuiltinZbbEzPackage(this.catalog?.partId);
+    }
+
+    private getZbbEzDirection(dirInLocal: Vector3): ZbbEzDirectionModel | null {
+        const zbbEz = this.getZbbEzPackage();
+        return zbbEz ? zbbEzDirectionForLocalRay(zbbEz, dirInLocal.z) : null;
+    }
+
+    private zbbEzFocalLength(direction: ZbbEzDirectionModel | null): number {
+        return direction?.transfer.kind === 'aplanaticObjectiveSurrogate'
+            ? direction.transfer.focalLengthMm
+            : this.focalLength;
+    }
+
+    private zbbEzExitSurfaceId(direction: ZbbEzDirectionModel | null): string | undefined {
+        return direction ? `${this.name}:zbbez:${direction.orientation}` : undefined;
     }
 
     getSnoutZemaxEnvelopePlanes(metrics = this.getMechanicalMetrics()): {
@@ -366,6 +381,7 @@ export class Objective extends OpticalComponent {
         originLocal: Vector3,
         dirInLocal: Vector3,
         hitLocal: Vector3,
+        focalLength = this.focalLength,
     ): { direction: Vector3; pupilOplOffset: number } | null {
         const pupilWaves = evaluateZernikeAberrationWaves(
             this.pupil?.aberrations ?? null,
@@ -374,7 +390,7 @@ export class Objective extends OpticalComponent {
         );
         const referenceWavelengthMm = (this.pupil?.aberrations?.referenceWavelengthNm ?? ray.wavelength * 1e9) * 1e-6;
         const pupilOplOffset = pupilWaves * referenceWavelengthMm;
-        const f = this.focalLength;
+        const f = focalLength;
 
         const hitRadSq = hitLocal.x * hitLocal.x + hitLocal.y * hitLocal.y;
         const dirRadSq = dirInLocal.x * dirInLocal.x + dirInLocal.y * dirInLocal.y;
@@ -421,6 +437,9 @@ export class Objective extends OpticalComponent {
         const dirInLocal = (hit.localDirection?.clone()
             ?? ray.direction.clone().transformDirection(this.worldToLocal))
             .normalize();
+        const zbbEzDirection = this.getZbbEzDirection(dirInLocal);
+        const focalLength = this.zbbEzFocalLength(zbbEzDirection);
+        const exitSurfaceId = this.zbbEzExitSurfaceId(zbbEzDirection);
         const entryLocal = hit.localPoint.clone();
         const entryWorld = hit.point.clone();
 
@@ -439,7 +458,7 @@ export class Objective extends OpticalComponent {
             if (!coreHit || !apertureOk(coreHit.point, envelope.stopRadius)) return { rays: [] };
 
             const originLocal = ray.origin.clone().applyMatrix4(this.worldToLocal);
-            const transformed = this.computeAplanaticDirection(ray, originLocal, dirInLocal, coreHit.point);
+            const transformed = this.computeAplanaticDirection(ray, originLocal, dirInLocal, coreHit.point, focalLength);
             if (!transformed) return { rays: [] };
 
             const blackBoxExit = this.projectLocalRayToZ(coreHit.point, transformed.direction, planes.blackBoxExitZ, 0);
@@ -469,6 +488,7 @@ export class Objective extends OpticalComponent {
                     opticalPathLength: opl,
                     entryPoint: entryWorld,
                     internalPath: [coreWorld, imageStopWorld],
+                    exitSurfaceId,
                 })],
             };
         }
@@ -477,7 +497,7 @@ export class Objective extends OpticalComponent {
             const coreHit = this.intersectAbbeCore(entryLocal, dirInLocal);
             if (!coreHit || !apertureOk(coreHit.point, envelope.stopRadius)) return { rays: [] };
 
-            const transformed = this.computeAplanaticDirection(ray, entryLocal, dirInLocal, coreHit.point);
+            const transformed = this.computeAplanaticDirection(ray, entryLocal, dirInLocal, coreHit.point, focalLength);
             if (!transformed) return { rays: [] };
 
             const reverseAirDirection = transformed.direction.clone().negate();
@@ -505,6 +525,7 @@ export class Objective extends OpticalComponent {
                     opticalPathLength: opl,
                     entryPoint: entryWorld,
                     internalPath: [coreWorld],
+                    exitSurfaceId,
                 })],
             };
         }
@@ -676,7 +697,7 @@ export class Objective extends OpticalComponent {
             if (r2 <= bodyR * bodyR) candidates.push({t: tBack, type: 'back', r: Math.sqrt(r2)});
         }
 
-        if (candidates.length === 0) return null; // Missed entire physical bounds entirely
+        if (candidates.length === 0) return null;
 
         candidates.sort((c1, c2) => c1.t - c2.t);
         const bboxHit = candidates[0];
@@ -684,7 +705,7 @@ export class Objective extends OpticalComponent {
         let isBlocked = true;
 
         if (bboxHit.type === 'wall' || bboxHit.type === 'taper') {
-            isBlocked = true; // Side walls and taper are solid metal
+            isBlocked = true;
         } else if (bboxHit.type === 'bevel') {
             isBlocked = false; // Entered through the 45-degree ground snout face
         } else if (bboxHit.type === 'front') {
@@ -850,6 +871,8 @@ export class Objective extends OpticalComponent {
         }
 
         const dirInLocal = ray.direction.clone().transformDirection(this.worldToLocal).normalize();
+        const zbbEzDirection = this.getZbbEzDirection(dirInLocal);
+        const exitSurfaceId = this.zbbEzExitSurfaceId(zbbEzDirection);
         const hitLocal = hit.localPoint!;
         const pupilWaves = evaluateZernikeAberrationWaves(
             this.pupil?.aberrations ?? null,
@@ -859,7 +882,7 @@ export class Objective extends OpticalComponent {
         const referenceWavelengthMm = (this.pupil?.aberrations?.referenceWavelengthNm ?? ray.wavelength * 1e9) * 1e-6;
         const pupilOplOffset = pupilWaves * referenceWavelengthMm;
         const opl = ray.opticalPathLength + hit.t + pupilOplOffset;
-        const f = this.focalLength;
+        const f = this.zbbEzFocalLength(zbbEzDirection);
 
         // Short-circuit when the hit point is essentially on the optical axis
         // AND the ray is on-axis (no bend needed, avoids division-by-zero).
@@ -871,6 +894,7 @@ export class Objective extends OpticalComponent {
                     origin: hit.point,
                     direction: ray.direction.clone(),
                     opticalPathLength: opl,
+                    exitSurfaceId,
                 })],
             };
         }
@@ -926,6 +950,7 @@ export class Objective extends OpticalComponent {
                 origin: hit.point,
                 direction: dirOutWorld,
                 opticalPathLength: opl,
+                exitSurfaceId,
             })],
         };
     }

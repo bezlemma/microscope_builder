@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Lock, Ruler, Trash2 } from 'lucide-react';
 import { useIsMobile } from './useIsMobile';
 import { useHaptic } from './useHaptic';
@@ -18,8 +18,6 @@ import {
     scanAccumTriggerAtom,
     scanAccumProgressAtom,
     solverDiagnosticsAtom,
-    selectedRodAtom,
-    rodPathsAtom,
     MAX_FORWARD_RAY_COUNT,
     MAX_REVERSE_PATH_COUNT,
     MIN_FORWARD_RAY_COUNT,
@@ -28,9 +26,9 @@ import {
     drawnRayCountsAtom,
     uiLockedAtom,
     measurementAtom,
+    mobilePanelModeAtom,
 } from '../state/store';
 import type { RayConfig, Measurement, MeasurementDrawMode, MeasurementPlaneMode, MeasurementPoint } from '../state/store';
-import { RodPropertiesPanel } from './RodPropertiesPanel';
 import { generateChannelId, AnimationChannel, PropertyAnimator } from '../physics/PropertyAnimator';
 import { Vector3 } from 'three';
 import { SphericalLens } from '../physics/components/SphericalLens';
@@ -86,7 +84,6 @@ import { SphericalLensDesigner } from './SphericalLensDesigner';
 import { getComponentCapabilities } from './componentPresentation';
 
 import { wavelengthToCSS as wavelengthToColor, isVisibleSpectrum } from '../physics/spectral';
-import { findMaxUnclippedScanHalfAngleDeg, measureChiefRayForScan } from '../physics/confocalScanDiagnostics';
 
 function clampValue(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -426,28 +423,11 @@ const CardViewerWithPin: React.FC<{
     setPinnedIds: (s: Set<string>) => void;
 }> = ({ card, pinnedIds, setPinnedIds }) => {
     const isPinned = pinnedIds.has(card.id);
-    const [autoFitNonce, setAutoFitNonce] = useState(0);
     return (
         <div style={{ marginTop: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#aaa' }}>Beam Profile</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <button
-                        onClick={() => setAutoFitNonce(n => n + 1)}
-                        title="Auto-fit card view to current beam/field footprint"
-                        style={{
-                            background: 'none',
-                            border: '1px solid #444',
-                            borderRadius: '3px',
-                            color: '#888',
-                            cursor: 'pointer',
-                            fontSize: '10px',
-                            padding: '1px 5px',
-                            lineHeight: 1.2,
-                        }}
-                    >
-                        Fit
-                    </button>
                     <button
                         onClick={() => {
                             const next = new Set(pinnedIds);
@@ -471,21 +451,20 @@ const CardViewerWithPin: React.FC<{
                     </button>
                 </div>
             </div>
-            <CardViewer card={card} autoFitNonce={autoFitNonce} />
+            <CardViewer card={card} />
         </div>
     );
 };
 
 const SolverPanel: React.FC<{
-    rayConfig: any;
-    setrayConfig: (v: any) => void;
+    rayConfig: RayConfig;
+    setRayConfig: React.Dispatch<React.SetStateAction<RayConfig>>;
     setVisualizationMode: (mode: RayConfig['viewerMode']) => void;
     isRendering: boolean;
-    setImageFormationTrigger: (fn: (prev: number) => number) => void;
     animator: PropertyAnimator;
     animPlaying: boolean;
     setAnimPlaying: (v: boolean) => void;
-}> = ({ rayConfig, setrayConfig, setVisualizationMode, isRendering, setImageFormationTrigger: _setImageFormationTrigger, animator, animPlaying, setAnimPlaying }) => {
+}> = ({ rayConfig, setRayConfig, setVisualizationMode, isRendering, animator, animPlaying, setAnimPlaying }) => {
     const isMobile = useIsMobile();
     const [mobileOpen, setMobileOpen] = React.useState(false);
     const isVisible = !isMobile || mobileOpen;
@@ -516,7 +495,6 @@ const SolverPanel: React.FC<{
     const displayedForwardRayCount = clampValue(rayConfig.rayCount, forwardRayMin, MAX_FORWARD_RAY_COUNT);
     const [rayCountText, setRayCountText] = React.useState(String(displayedForwardRayCount));
     const [rayCountEditing, setRayCountEditing] = React.useState(false);
-    // newVisualStyleAtom removed — new style is always on
 
     React.useEffect(() => {
         setTimelineSteps(String(scanConfig.steps));
@@ -533,13 +511,13 @@ const SolverPanel: React.FC<{
         const next = Number.isFinite(parsed)
             ? clampValue(parsed, forwardRayMin, MAX_FORWARD_RAY_COUNT)
             : displayedForwardRayCount;
-        setrayConfig({
+        setRayConfig({
             ...rayConfig,
             rayCount: next,
         });
         setRayCountText(String(next));
         setRayCountEditing(false);
-    }, [displayedForwardRayCount, forwardRayMin, rayConfig, setrayConfig]);
+    }, [displayedForwardRayCount, forwardRayMin, rayConfig, setRayConfig]);
 
     React.useEffect(() => {
         if (!activeOpacityHandle) return;
@@ -553,14 +531,14 @@ const SolverPanel: React.FC<{
             const opacity = percentToOpacity(percent);
 
             if (activeOpacityHandle === 'min') {
-                setrayConfig({
+                setRayConfig({
                     ...rayConfig,
                     minRayOpacity: Math.min(opacity, rayConfig.maxRayOpacity),
                 });
                 return;
             }
 
-            setrayConfig({
+            setRayConfig({
                 ...rayConfig,
                 maxRayOpacity: Math.max(opacity, rayConfig.minRayOpacity),
             });
@@ -581,7 +559,7 @@ const SolverPanel: React.FC<{
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
-    }, [activeOpacityHandle, rayConfig, setrayConfig]);
+    }, [activeOpacityHandle, rayConfig, setRayConfig]);
 
     return (
         <>
@@ -823,7 +801,7 @@ const SolverPanel: React.FC<{
                                     forwardRayMin,
                                     MAX_FORWARD_RAY_COUNT,
                                 )}
-                                onChange={(e) => setrayConfig({
+                                onChange={(e) => setRayConfig({
                                     ...rayConfig,
                                     rayCount: sliderPositionToCount(parseInt(e.target.value), forwardRayMin, MAX_FORWARD_RAY_COUNT),
                                 })}
@@ -863,21 +841,15 @@ const SolverPanel: React.FC<{
                             />
                         </div>
                     </div>
-                    {/* Reverse/Px slider intentionally removed: each progressive
-                        round contributes one sample/pixel and the accumulator
-                        builds the running average across rounds, so the knob
-                        was redundant.  reversePathCount is locked to 1 in
-                        DEFAULT_RAY_CONFIG. */}
-
                     <div style={{ display: 'flex', gap: '6px', marginTop: 8, flexWrap: 'wrap' }}>
-                        {(['rods', 'wave', 'planes'] as const).map(mode => {
+                        {(['rays', 'wave', 'planes'] as const).map(mode => {
                             const active = rayConfig.viewerMode === mode;
-                            const label = mode === 'rods' ? 'Ray View' : mode === 'wave' ? 'Wave View' : 'Optical Plane View';
+                            const label = mode === 'rays' ? 'Ray View' : mode === 'wave' ? 'Wave View' : 'Optical Plane View';
                             return (
                                 <button
                                     key={mode}
                                     onClick={() => setVisualizationMode(mode)}
-                                    title={mode === 'rods'
+                                    title={mode === 'rays'
                                         ? 'Draw individual traced rays'
                                         : mode === 'wave'
                                             ? 'Draw grouped bundles with a representative wave'
@@ -901,7 +873,7 @@ const SolverPanel: React.FC<{
                             not a view mode — toggle it independently of the
                             Ray/Wave/Plane buttons above. */}
                         <button
-                            onClick={() => setrayConfig({ ...rayConfig, colorByPolarization: !rayConfig.colorByPolarization })}
+                            onClick={() => setRayConfig({ ...rayConfig, colorByPolarization: !rayConfig.colorByPolarization })}
                             title="Color each ray segment by its polarization state — entry/exit beams that differ only by polarization become visibly distinct."
                             style={{
                                 padding: '2px 8px',
@@ -1286,43 +1258,23 @@ const DualGalvoControls: React.FC<{
     );
 };
 
-// Inject a one-time CSS rule that flows the mobile inspector's property
-// blocks into a row-major grid (left → right, then next row).  Each block
-// is a grid cell; auto-fit + minmax(140px, 1fr) means the column count
-// scales naturally with the screen — 2 cols on a 360 px phone, 3 cols
-// around 480 px, 4 cols at landscape / tablet widths.  We use Grid (not
-// CSS multi-column) because multicol needs an explicit container height
-// to wrap into additional columns; without it, all content piles into
-// column 1 and the rest stay empty.
-const INSPECTOR_MOBILE_STYLE_ID = 'inspector-mobile-multicol';
-function ensureInspectorMobileStyle() {
-    if (typeof document === 'undefined') return;
-    if (document.getElementById(INSPECTOR_MOBILE_STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = INSPECTOR_MOBILE_STYLE_ID;
-    style.textContent = `
-        .inspector-multicol-mobile {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 10px 14px;
-            align-items: start;
-        }
-        .inspector-multicol-mobile > * {
-            min-width: 0;
-        }
-    `;
-    document.head.appendChild(style);
+function setComponentDimension(component: object, param: 'width' | 'height', value: number): void {
+    if (param === 'width' && 'width' in component) {
+        (component as { width: number }).width = value;
+    } else if (param === 'height' && 'height' in component) {
+        (component as { height: number }).height = value;
+    }
 }
 
 export const Inspector: React.FC = () => {
     const isMobile = useIsMobile();
-    useEffect(() => { if (isMobile) ensureInspectorMobileStyle(); }, [isMobile]);
     const haptic = useHaptic();
     const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection, setSelection] = useAtom(selectionAtom);
     const [pinnedIds, setPinnedIds] = useAtom(pinnedViewersAtom);
-    const [rayConfig, setrayConfig] = useAtom(rayConfigAtom);
+    const [, setMobilePanelMode] = useAtom(mobilePanelModeAtom);
+    const [rayConfig, setRayConfig] = useAtom(rayConfigAtom);
     const [, setVisualizationMode] = useAtom(setVisualizationModeAtom);
     const [, setImageFormationTrigger] = useAtom(reverseTraceRenderTriggerAtom);
     const [isRendering] = useAtom(reverseTraceRenderingAtom);
@@ -1331,8 +1283,6 @@ export const Inspector: React.FC = () => {
     const [, setAnimPlaying] = useAtom(animationPlayingAtom);
     const [animPlaying] = useAtom(animationPlayingAtom);
     const [animSpeed, setAnimSpeed] = useAtom(animationSpeedAtom);
-    const [selectedRodRef, setSelectedRodRef] = useAtom(selectedRodAtom);
-    const [rodPaths] = useAtom(rodPathsAtom);
     // Bumped on channel add/remove to force re-render of galvo scan UI
     const [_channelVersion, setChannelVersion] = useState(0);
     // Remembers the last-used galvo settings per component, persists across stop/start
@@ -1340,25 +1290,21 @@ export const Inspector: React.FC = () => {
     // Remembers the last-used piezo settings per sample component
     const [piezoSettings, setPiezoSettings] = useState<Map<string, { halfMm: number; periodMs: number; axis: string }>>(new Map());
 
-    // Resolve the selected rod pointer → (path, rod). Rebuilds whenever the
-    // atom or the published rod paths (via generation bump) change.
-    const resolvedRodSelection = useMemo(() => {
-        if (!selectedRodRef) return null;
-        const arr = selectedRodRef.source === 'forward' ? rodPaths.forward : rodPaths.imageFormation;
-        const path = arr[selectedRodRef.pathIndex];
-        if (!path) return null;
-        const rod = path[selectedRodRef.segmentIndex];
-        if (!rod) return null;
-        return { path, rod, segmentIndex: selectedRodRef.segmentIndex };
-    }, [selectedRodRef, rodPaths]);
-
-    // A cone selection takes precedence over a component selection.
-    const selectedComponent = !resolvedRodSelection && selection.length === 1
+    const selectedComponent = selection.length === 1
         ? components.find(c => c.id === selection[0])
         : undefined;
 
+    const closeMobileProperties = useCallback(() => {
+        setMobilePropsOpen(false);
+        setMobilePanelMode(pinnedIds.size > 0 ? 'viewer' : 'scene');
+    }, [pinnedIds, setMobilePanelMode]);
+
     // Close mobile properties panel when selection changes
-    useEffect(() => { setMobilePropsOpen(false); }, [selection[0]]);
+    useEffect(() => {
+        if (!isMobile) return;
+        setMobilePropsOpen(false);
+        setMobilePanelMode(pinnedIds.size > 0 ? 'viewer' : 'scene');
+    }, [isMobile, pinnedIds, selection[0], setMobilePanelMode]);
 
     const [localX, setLocalX] = useState<string>('0');
     const [localY, setLocalY] = useState<string>('0');
@@ -1475,9 +1421,6 @@ export const Inspector: React.FC = () => {
     const [localCurvedMirrorDiameter, setLocalCurvedMirrorDiameter] = useState<string>('25');
     const [localCurvedMirrorRoC, setLocalCurvedMirrorRoC] = useState<string>('100');
     const [localCurvedMirrorThickness, setLocalCurvedMirrorThickness] = useState<string>('3');
-
-
-    // Old prism local state removed — unified under localPoly* above
 
 
     const [localApertureDiameter, setLocalApertureDiameter] = useState<string>('10');
@@ -1719,7 +1662,6 @@ export const Inspector: React.FC = () => {
                     setLocalCurvedMirrorRoC(Math.abs(selectedComponent.radiusOfCurvature) >= 1e6 ? 'Infinity' : String(Math.round(selectedComponent.radiusOfCurvature * 100) / 100));
                     setLocalCurvedMirrorThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
                 }
-                // PrismLens sync removed — unified under AbstractPolygonOptic above
                 if (selectedComponent instanceof Aperture) {
                     setLocalApertureDiameter(String(Math.round(selectedComponent.openingDiameter * 100) / 100));
                     setLocalApertureThickness(String(Math.round(selectedComponent.thickness * 100) / 100));
@@ -1854,10 +1796,8 @@ export const Inspector: React.FC = () => {
 
         const newComponents = components.map(c => {
             if (c.id === selection[0]) {
-
-                if (param === 'width' && 'width' in c) (c as any).width = val;
-                if (param === 'height' && 'height' in c) (c as any).height = val;
-                return c; // Mutable update inside map, but we trigger re-render via setComponents
+                setComponentDimension(c, param, val);
+                return c;
             }
             return c;
         });
@@ -1888,89 +1828,10 @@ export const Inspector: React.FC = () => {
     const [localName, setLocalName] = useState(selectedComponent?.name ?? '');
     useEffect(() => { setLocalName(selectedComponent?.name ?? ''); }, [selectedComponent?.id]);
 
-    const objectiveScanReadout = useMemo(() => {
-        if (!(selectedComponent instanceof Objective)) return null;
-
-        const scanHead = components.find(component => component instanceof DualGalvoScanHead) as DualGalvoScanHead | undefined;
-        const sample = components.find(component => component instanceof Sample || component instanceof SampleChamber) as (Sample | SampleChamber | undefined);
-        const laser = components.find(component => component instanceof Laser) as Laser | undefined;
-        if (!scanHead || !sample || !laser) return null;
-
-        try {
-            const measurement = measureChiefRayForScan(components, scanHead.scanX, scanHead.scanY);
-            if (!measurement.pupilCoordinates) return null;
-
-            const maxHalfAngleDeg = findMaxUnclippedScanHalfAngleDeg(components, 5, 18);
-            const currentBeamRadiusMm = measurement.pupilCoordinates.radius;
-            const objectiveOpeningRadiusMm = selectedComponent.pupilRadius;
-            const usedPercent = objectiveOpeningRadiusMm > 1e-9
-                ? (currentBeamRadiusMm / objectiveOpeningRadiusMm) * 100
-                : 0;
-            const edgeMarginPercent = Math.max(0, 100 - usedPercent);
-
-            const targetHalfFieldMm = 0.5;
-            const sampleAngle = Math.atan2(targetHalfFieldMm, selectedComponent.focalLength);
-            const requiredPupilShiftMm = selectedComponent.immersionIndex * selectedComponent.focalLength * Math.sin(sampleAngle);
-
-            const sampleOffset = measurement.sampleWorldHit
-                ? measurement.sampleWorldHit.clone().sub(sample.position)
-                : null;
-
-            return {
-                currentBeamRadiusMm,
-                objectiveOpeningRadiusMm,
-                usedPercent,
-                edgeMarginPercent,
-                maxHalfAngleDeg,
-                requiredPupilShiftMm,
-                sampleOffsetXmm: sampleOffset?.x ?? null,
-                sampleOffsetZmm: sampleOffset?.z ?? null,
-            };
-        } catch {
-            return null;
-        }
-    }, [components, selectedComponent]);
-
-    // If a cone is selected, render the rod properties panel instead of
-    // the component properties panel. The solver panel stays visible so the
-    // user can still switch viewer modes and adjust rod count.
-    if (resolvedRodSelection && selectedRodRef) {
-        const { path, rod, segmentIndex } = resolvedRodSelection;
-        // Resolve source component from the path's first segment
-        const sourceRod = path[0];
-        const sourceComponent = sourceRod?.sourceId
-            ? components.find(c => c.id === sourceRod.sourceId || c.name === sourceRod.sourceId)
-            : undefined;
-        // Per-segment interaction component names (what each segment hit)
-        const interactionNames = path.map(seg => {
-            if (!seg.interactionComponentId) return undefined;
-            const c = components.find(cc => cc.id === seg.interactionComponentId);
-            return c?.name;
-        });
-        return (
-            <>
-                {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
-                <RodPropertiesPanel
-                    rod={rod}
-                    path={path}
-                    segmentIndex={segmentIndex}
-                    sourceComponentName={sourceComponent?.name}
-                    interactionComponentNames={interactionNames}
-                    onClose={() => setSelectedRodRef(null)}
-                    onSelectSegment={(i: number) => setSelectedRodRef({
-                        pathIndex: selectedRodRef.pathIndex,
-                        segmentIndex: i,
-                        source: selectedRodRef.source,
-                    })}
-                />
-            </>
-        );
-    }
-
     if (!selectedComponent) {
         return (
             <>
-                <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />
+                <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />
             </>
         );
     }
@@ -2220,10 +2081,13 @@ export const Inspector: React.FC = () => {
 
     return (
         <>
-        {isMobile && <SolverPanel rayConfig={rayConfig} setrayConfig={setrayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} setImageFormationTrigger={setImageFormationTrigger} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
+        {isMobile && <SolverPanel rayConfig={rayConfig} setRayConfig={setRayConfig} setVisualizationMode={setVisualizationMode} isRendering={isRendering} animator={animator} animPlaying={animPlaying} setAnimPlaying={setAnimPlaying} />}
         {isMobile && (
             <button
-                onClick={() => setMobilePropsOpen(!mobilePropsOpen)}
+                onClick={() => {
+                    setMobilePanelMode('properties');
+                    setMobilePropsOpen(true);
+                }}
                 style={{
                     position: 'fixed',
                     top: 60,
@@ -2251,39 +2115,16 @@ export const Inspector: React.FC = () => {
             </button>
         )}
 
-        {/* Mobile backdrop */}
-        {isMobile && mobilePropsOpen && (
-            <div
-                onClick={() => setMobilePropsOpen(false)}
-                style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: 'var(--app-height, 100dvh)',
-                    backgroundColor: 'rgba(0,0,0,0.4)',
-                    zIndex: 14,
-                    transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-            />
-        )}
         <div style={{
             position: 'fixed',
-            top: isMobile ? undefined : 20,
-            bottom: isMobile ? 0 : undefined,
-            left: isMobile ? 0 : undefined,
-            right: isMobile ? 0 : 20,
-            width: isMobile ? '100vw' : 'min(280px, calc(100% - 40px))',
-            maxWidth: isMobile ? '100vw' : 'calc(100% - 40px)',
-            // Mobile inspector spans the full screen width and ~2/3 of the
-            // height; combined with the multi-column inner layout (see below),
-            // this gives the property fields enough room that the user
-            // doesn't run off the bottom of the panel.
-            maxHeight: isMobile ? 'calc(var(--app-height, 100dvh) * 0.7)' : 'calc(100% - 40px)',
-            borderBottomLeftRadius: isMobile ? 0 : 16,
-            borderBottomRightRadius: isMobile ? 0 : 16,
-            borderTopLeftRadius: isMobile ? 24 : 16,
-            borderTopRightRadius: isMobile ? 24 : 16,
+            top: isMobile ? 8 : 20,
+            bottom: isMobile ? 8 : undefined,
+            left: undefined,
+            right: isMobile ? 8 : 20,
+            width: isMobile ? 'min(280px, calc(100vw - 24px))' : 'min(280px, calc(100% - 40px))',
+            maxWidth: isMobile ? 'calc(100vw - 24px)' : 'calc(100% - 40px)',
+            maxHeight: isMobile ? 'calc(var(--app-height, 100dvh) - 16px)' : 'calc(100% - 40px)',
+            borderRadius: 16,
             backgroundColor: 'rgba(10, 12, 16, 0.65)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
@@ -2298,24 +2139,34 @@ export const Inspector: React.FC = () => {
             boxShadow: '0 12px 60px rgba(0,0,0,0.8)',
             overflowY: 'auto',
             zIndex: isMobile ? 15 : undefined,
-            transform: isMobile ? (mobilePropsOpen ? 'translateY(0)' : 'translateY(110%)') : undefined,
+            transform: isMobile
+                ? (mobilePropsOpen ? 'translateX(0)' : 'translateX(calc(100% + 24px))')
+                : undefined,
             transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             pointerEvents: isMobile && !mobilePropsOpen ? 'none' : 'auto'
         }}>
-            {/* iOS Style Notch for Mobile */}
             {isMobile && (
-                <div 
-                    onClick={() => setMobilePropsOpen(false)}
+                <button
+                    type="button"
+                    onClick={closeMobileProperties}
                     style={{
-                        width: '100%', 
-                        display: 'flex', 
-                        justifyContent: 'center', 
-                        paddingBottom: '12px',
-                        cursor: 'pointer'
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        width: 28,
+                        height: 28,
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 7,
+                        background: 'rgba(255,255,255,0.04)',
+                        color: '#a8b0bb',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        lineHeight: 1,
                     }}
+                    aria-label="Close properties"
                 >
-                    <div style={{ width: '40px', height: '4px', backgroundColor: '#555', borderRadius: '2px' }} />
-                </div>
+                    ×
+                </button>
             )}
 
             {/* Editable name + delete trash icon */}
@@ -2372,16 +2223,8 @@ export const Inspector: React.FC = () => {
             </div>
 
             <div
-                className={isMobile ? 'inspector-multicol-mobile' : undefined}
-                style={isMobile
-                    // Mobile: row-major CSS Grid (defined in
-                    // ensureInspectorMobileStyle).  Property blocks become
-                    // grid cells flowing left → right, then to the next row,
-                    // so the panel actually uses the screen width instead of
-                    // stacking everything into one tall column.
-                    ? {}
-                    : { display: 'flex', flexDirection: 'column', gap: 10 }
-                }>
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+            >
                 {/* Position — X / Y / Z */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                     {(['x', 'y', 'z'] as const).map((axis, i) => {
@@ -3554,8 +3397,6 @@ export const Inspector: React.FC = () => {
                     </div>
                 )}
 
-                {/* Old PrismLens panel removed — unified under isPolygonOptic above */}
-
                 {isAsphericLens && selectedComponent instanceof AsphericLens && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
                         <LensFamilyDesigner
@@ -4007,34 +3848,6 @@ export const Inspector: React.FC = () => {
                                 ? (selectedComponent.fieldNumber > 0 ? Math.round(selectedComponent.fieldNumber * 100) / 100 : 'unlimited')
                                 : '—'}
                         </div>
-                        {objectiveScanReadout && (
-                            <div style={{
-                                marginTop: 10,
-                                borderTop: '1px solid #333',
-                                paddingTop: 8,
-                                display: 'grid',
-                                gap: 4,
-                            }}>
-                                <div style={{ fontSize: '10px', color: '#666' }}>Scan In Objective Opening</div>
-                                <div style={{ fontSize: '11px', color: '#bbb' }}>
-                                    Beam is {objectiveScanReadout.currentBeamRadiusMm.toFixed(3)} mm from the center of the objective opening.
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#888' }}>
-                                    That uses {objectiveScanReadout.usedPercent.toFixed(1)}% of the opening and leaves {objectiveScanReadout.edgeMarginPercent.toFixed(1)}% margin before clipping.
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#888' }}>
-                                    For a 1.0 mm total scan field at 10×, this relay would need to move the beam about {objectiveScanReadout.requiredPupilShiftMm.toFixed(3)} mm from center.
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#888' }}>
-                                    Largest unclipped scan with the current relay: +/-{objectiveScanReadout.maxHalfAngleDeg.toFixed(3)} deg mechanical per axis.
-                                </div>
-                                {objectiveScanReadout.sampleOffsetXmm !== null && objectiveScanReadout.sampleOffsetZmm !== null && (
-                                    <div style={{ fontSize: '11px', color: '#888' }}>
-                                        Current scan spot at sample: x {objectiveScanReadout.sampleOffsetXmm >= 0 ? '+' : ''}{objectiveScanReadout.sampleOffsetXmm.toFixed(3)} mm, z {objectiveScanReadout.sampleOffsetZmm >= 0 ? '+' : ''}{objectiveScanReadout.sampleOffsetZmm.toFixed(3)} mm from sample center.
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -5996,7 +5809,6 @@ export const Inspector: React.FC = () => {
 
                 {isCamera && (
                     <div style={{ marginTop: 10, borderTop: '1px solid #444', paddingTop: 10 }}>
-                        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: 8 }}>Detector Sampling</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <ScrubInput
                                 label="Res X"
@@ -6065,11 +5877,6 @@ export const Inspector: React.FC = () => {
                                 max={1}
                             />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', fontSize: '10px', color: '#777' }}>
-                                Uses global Reverse/Px
-                            </div>
-                        </div>
                     </div>
                 )}
 
@@ -6084,6 +5891,10 @@ export const Inspector: React.FC = () => {
                                     if (pinnedIds.has(selectedComponent.id)) next.delete(selectedComponent.id);
                                     else next.add(selectedComponent.id);
                                     setPinnedIds(next);
+                                    if (isMobile) {
+                                        setMobilePanelMode(next.has(selectedComponent.id) ? 'viewer' : 'properties');
+                                        if (next.has(selectedComponent.id)) setMobilePropsOpen(false);
+                                    }
                                 }}
                                 title={pinnedIds.has(selectedComponent.id) ? 'Unpin viewer' : 'Pin viewer'}
                                 style={{

@@ -38,7 +38,7 @@ export function isFocusingOptic(c: OpticalComponent): boolean {
     return getFocalLength(c) !== null;
 }
 
-export function isSourceOrSample(c: OpticalComponent): boolean {
+function isSourceOrSample(c: OpticalComponent): boolean {
     return c instanceof Sample
         || c instanceof Lamp
         || c instanceof Laser
@@ -112,7 +112,7 @@ export function moveToImagePlaneOf(
         const f = getFocalLength(comp)!;
         // Signed object distance from this lens back to the current image.
         const u = comp.position.clone().sub(imagePos).dot(axis);
-        if (u <= 0.01) continue; // degenerate — image already past this lens
+        if (u <= 0.01) continue;
         const denom = u - f;
         if (Math.abs(denom) < 1e-6) return false; // image at infinity
         const v = (u * f) / denom; // signed image distance, along +axis

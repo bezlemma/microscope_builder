@@ -534,7 +534,7 @@ export class Sample extends OpticalComponent {
         return merged;
     }
 
-    /** Legacy helper for absorption (sum of segments) */
+    /** Total ray length inside the sample, plus the segment-weighted midpoint. */
     computeChordLength(worldRay: Ray): { chordLength: number; midT: number } {
         const segs = this.computeChordSegments(worldRay);
         let total = 0;

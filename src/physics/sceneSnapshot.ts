@@ -81,13 +81,15 @@ function computeWorldBounds(component: OpticalComponent): KernelTraceComponent['
 }
 
 function baseComponentSnapshot(component: OpticalComponent): KernelTraceComponent {
+    const worldBounds = computeWorldBounds(component);
     return {
         id: component.id,
         name: component.name,
         kind: resolveKernelKind(component),
         absorptionCoeff: component.absorptionCoeff,
         position: component.position,
-        worldBounds: computeWorldBounds(component),
+        localToWorld: component.localToWorld,
+        worldBounds,
         openingRadius: resolveOpeningRadius(component),
         chkIntersection: (ray, maxDistance) => component.chkIntersection(ray, maxDistance),
         interact: (ray, hit) => component.interact(ray, hit),

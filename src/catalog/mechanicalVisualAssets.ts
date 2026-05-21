@@ -1,7 +1,7 @@
 import type { CatalogFile, CatalogPart } from './types';
 import { GENERATED_MECHANICAL_VISUAL_ASSETS } from './generatedMechanicalVisualAssets';
 
-export type MechanicalVisualFormat = 'wrl' | 'stl' | 'edrawings-json';
+export type MechanicalVisualFormat = 'wrl' | 'stl' | 'glb' | 'gltf' | 'edrawings-json';
 
 export interface CatalogMechanicalVisualAsset {
     partId: string;

@@ -10,7 +10,7 @@
  * The hook silently no-ops on:
  *   - servers (no `window`)
  *   - browsers without the Vibration API (most desktops, all iOS Safari today)
- *   - users who've disabled haptics via the LS_KEY preference
+ *   - users who've disabled haptics in localStorage
  *
  * No React state is touched, so the returned object is stable across renders.
  */
@@ -72,24 +72,6 @@ const haptic: Haptic = {
     custom: (pattern) => fire(pattern),
 };
 
-/**
- * Returns the shared haptic singleton.  Hook form (vs. bare export) so that
- * future per-component preferences (e.g. per-route disable) can plug in
- * without touching call sites.
- */
 export function useHaptic(): Haptic {
     return haptic;
-}
-
-/**
- * User preference toggle, useful for a Settings panel switch.  No-op on
- * servers; persists via localStorage so the choice survives reloads.
- */
-export function setHapticsEnabled(enabled: boolean): void {
-    if (typeof window === 'undefined') return;
-    try { window.localStorage.setItem(LS_KEY, String(enabled)); } catch { /* noop */ }
-}
-
-export function getHapticsEnabled(): boolean {
-    return hapticsEnabled();
 }

@@ -4,6 +4,7 @@ import type {
     CatalogVendor,
     NormalizedCatalogParams,
 } from './types';
+import { publicAssetUrlCandidates } from './publicAssetUrls';
 
 export interface CatalogOpticalGeometryAsset {
     partId: string;
@@ -48,13 +49,15 @@ async function loadGeometryPack(url: string, fetcher: GeometryFetch): Promise<Ca
     if (existing) return existing;
 
     const promise = (async () => {
+        let lastFailure = '';
         try {
-            const response = await fetcher(url);
-            if (!response.ok) {
-                console.warn(`Catalog geometry pack unavailable: ${url} (${response.status} ${response.statusText})`);
-                return null;
+            for (const candidateUrl of publicAssetUrlCandidates(url)) {
+                const response = await fetcher(candidateUrl);
+                if (response.ok) return await response.json() as CatalogOpticalGeometryPack;
+                lastFailure = `${candidateUrl} (${response.status} ${response.statusText})`;
             }
-            return await response.json() as CatalogOpticalGeometryPack;
+            console.warn(`Catalog geometry pack unavailable: ${url}${lastFailure ? `; last attempt ${lastFailure}` : ''}`);
+            return null;
         } catch (error) {
             console.warn(`Catalog geometry pack failed to load: ${url}`, error);
             return null;

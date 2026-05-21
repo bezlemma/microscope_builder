@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { createObliquePlaneMicroscopeScene } from '../../presets/obliquePlaneMicroscope';
 import { AchromatDoublet } from '../components/AchromatDoublet';
 import { Blocker } from '../components/Blocker';
@@ -19,7 +19,7 @@ import { BeamField } from '../BeamField';
 import { ReverseTracer } from '../ReverseTracer';
 import { Ray } from '../types';
 
-function centralRayFrom(component: { id: string; position: Vector3; rotation: any }, wavelengthNm: number): Ray {
+function centralRayFrom(component: { id: string; position: Vector3; rotation: Quaternion }, wavelengthNm: number): Ray {
     const direction = new Vector3(0, 0, 1).applyQuaternion(component.rotation).normalize();
     return {
         origin: component.position.clone().add(direction.clone().multiplyScalar(3)),

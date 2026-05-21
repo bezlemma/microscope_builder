@@ -24,6 +24,12 @@ function isEmitter(c: OpticalComponent): boolean {
         || c instanceof StructuredSource;
 }
 
+function componentIor(component: OpticalComponent | null): number {
+    if (!component || !('ior' in component)) return 1.5;
+    const value = (component as { ior: unknown }).ior;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 1.5;
+}
+
 interface BeamletDraft extends GaussianBeamSegment {
     bundleKey: string;
     fallbackRadius: number;
@@ -431,9 +437,7 @@ export class ForwardTracer {
 
                 const glassComponent = this.findComponentAt(ray.entryPoint);
                 const glassId = glassComponent?.id ?? 'glass';
-                const glassIOR = (glassComponent && 'ior' in glassComponent)
-                    ? (glassComponent as any).ior as number
-                    : 1.5;
+                const glassIOR = componentIor(glassComponent);
                 const glassAbsorption = glassComponent?.absorptionCoeff ?? 0;
 
                 let totalInternalLength = 0;
