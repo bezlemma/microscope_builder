@@ -18,7 +18,7 @@ import { Mirror } from './components/Mirror';
 import { GaussianBeamSegment } from './BeamField';
 import { Coherence } from './types';
 
-export const REVERSE_TRACE_KERNEL_ABI_VERSION = 1;
+export const REVERSE_TRACE_KERNEL_ABI_VERSION = 3;
 export const PACKED_COMPONENT_MATRIX_STRIDE = 16;
 export const PACKED_COMPONENT_BOUNDS_STRIDE = 6;
 export const PACKED_DETECTOR_BASIS_STRIDE = 12;

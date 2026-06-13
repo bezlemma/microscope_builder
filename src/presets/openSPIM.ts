@@ -214,7 +214,7 @@ export function createOpenSPIMScene(): OpticalComponent[] {
     //     Placed ~150mm from objective back aperture for infinity-corrected imaging
 
     // Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
-    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 12.7, 1.658, 1.750, 'Tube Lens');
     tubeLens.setPosition(hole(C.F, 9).x + 1.63, hole(C.F, 9).y, 0);
     tubeLens.pointAlong(-1, 0, 0);  // optical axis along -X (detection path)
     components.push(tubeLens);

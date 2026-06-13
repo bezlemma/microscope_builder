@@ -15,9 +15,34 @@ import { Sample } from '../../physics/components/Sample';
 import { StructuredSource } from '../../physics/components/StructuredSource';
 import { TrappedBead } from '../../physics/components/TrappedBead';
 import { WedgeSource2D } from '../../physics/components/WedgeSource2D';
+import { DualGalvoScanHead } from '../../physics/components/DualGalvoScanHead';
 import { deserializeScene, serializeScene } from '../ubzSerializer';
 
 describe('UBZ registered components', () => {
+    test('round-trips DualGalvoScanHead child mirror IDs', () => {
+        const head = new DualGalvoScanHead(15, 12, 'Galvo head');
+        const scene = [head, head.mirror1, head.mirror2];
+
+        const restored = deserializeScene(serializeScene(scene));
+        const restoredHead = restored.find((c): c is DualGalvoScanHead => c instanceof DualGalvoScanHead);
+        expect(restoredHead).toBeDefined();
+        expect(restoredHead!.mirror1.id).toBe(head.mirror1.id);
+        expect(restoredHead!.mirror2.id).toBe(head.mirror2.id);
+        // The children are re-added to the scene exactly once.
+        expect(restored.filter(c => c.id === head.mirror1.id)).toHaveLength(1);
+    });
+
+    test('ghost components round-trip only when the undo snapshot opts in', () => {
+        const laser = new Laser('Ghost target');
+        laser.isGhost = true;
+
+        expect(deserializeScene(serializeScene([laser]))).toHaveLength(0);
+
+        const restored = deserializeScene(serializeScene([laser], { includeGhosts: true }));
+        expect(restored).toHaveLength(1);
+        expect(restored[0].isGhost).toBe(true);
+    });
+
     test('round-trips laser emission toggle without losing configured power', () => {
         const laser = new Laser('Switchable laser');
         laser.wavelength = 780;

@@ -109,7 +109,7 @@ export function createBrightfieldScene({ lengthScale = 1 }: BrightfieldSceneOpti
         scaleLength(291.1),
         scaleLength(4.0),
         scaleLength(2.5),
-        25.4,
+        12.7, // AC254 is a 25.4 mm *diameter* part — aperture radius 12.7
         1.658,
         1.750,
         'Tube Lens',

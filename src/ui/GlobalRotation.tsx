@@ -1,14 +1,18 @@
-import React, { useEffect } from 'react';
-import { useAtom } from 'jotai';
+import React, { useEffect, useRef } from 'react';
+import { useAtom, useSetAtom } from 'jotai';
 import { useThree } from '@react-three/fiber';
 import { Vector3, Euler, Quaternion } from 'three';
-import { componentsAtom, selectionAtom, isDraggingAtom } from '../state/store';
+import { componentsAtom, selectionAtom, isDraggingAtom, pushUndoAtom } from '../state/store';
 
 export const GlobalRotation: React.FC = () => {
     const [components, setComponents] = useAtom(componentsAtom);
     const [selection] = useAtom(selectionAtom);
     const [isDragging] = useAtom(isDraggingAtom);
+    const pushUndo = useSetAtom(pushUndoAtom);
     const { gl } = useThree();
+    // Wheel ticks closer together than this are one rotate gesture (one undo).
+    const ROTATE_GESTURE_GAP_MS = 600;
+    const lastWheelTimeRef = useRef(0);
 
     useEffect(() => {
         const handleWheel = (e: WheelEvent) => {
@@ -21,8 +25,15 @@ export const GlobalRotation: React.FC = () => {
             e.preventDefault();
             e.stopPropagation();
 
-            const delta = Math.sign(e.deltaY);
+            // Same direction convention as the left-hold + scroll rotation in
+            // EditorControls (scroll down = clockwise looking down the Z axis),
+            // and the same undo behavior.
+            const delta = e.deltaY > 0 ? -1 : 1;
             const rotationStep = 5 * (Math.PI / 180);
+            // One undo snapshot per gesture, not per wheel tick.
+            const now = performance.now();
+            if (now - lastWheelTimeRef.current > ROTATE_GESTURE_GAP_MS) pushUndo();
+            lastWheelTimeRef.current = now;
 
             // Update the selected component
             const newComponents = components.map(c => {
@@ -49,7 +60,7 @@ export const GlobalRotation: React.FC = () => {
         return () => {
             domElement.removeEventListener('wheel', handleWheel);
         };
-    }, [selection, components, setComponents, gl.domElement, isDragging]);
+    }, [selection, components, setComponents, gl.domElement, isDragging, pushUndo]);
 
     return null;
 };

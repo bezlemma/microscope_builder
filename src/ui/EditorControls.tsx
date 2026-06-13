@@ -265,6 +265,9 @@ export const EditorControls: React.FC = () => {
 
     // Track left mouse button held (for scroll-to-rotate-part)
     const leftMouseHeld = useRef(false);
+    // Wheel ticks closer together than this are one rotate gesture (one undo).
+    const ROTATE_GESTURE_GAP_MS = 600;
+    const lastRotateWheelTimeRef = useRef(0);
 
     const setSelection = useSetAtom(selectionAtom);
     const [components, setComponents] = useAtom(componentsAtom);
@@ -571,7 +574,11 @@ export const EditorControls: React.FC = () => {
 
             const rotStep = 5 * (Math.PI / 180); // 5 degrees per scroll tick
             const direction = e.deltaY > 0 ? -1 : 1;
-            pushUndo();
+            // One undo snapshot per gesture, not per wheel tick — a single
+            // scroll burst would otherwise flood the 20-deep undo stack.
+            const now = performance.now();
+            if (now - lastRotateWheelTimeRef.current > ROTATE_GESTURE_GAP_MS) pushUndo();
+            lastRotateWheelTimeRef.current = now;
 
             const newComponents = components.map(c => {
                 if (selection.includes(c.id)) {
@@ -611,7 +618,10 @@ export const EditorControls: React.FC = () => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.ctrlKey || e.metaKey) setCtrlHeld(true);
             if (e.shiftKey) setShiftHeld(true);
-            if (e.key === 'Escape') setSelection([]);
+            // Escape inside a text field should just leave the field, not
+            // clear the table selection (which unmounts the Inspector panel
+            // the user is editing). It's also a no-op while the UI is locked.
+            if (e.key === 'Escape' && !isInputFocused() && !uiLocked) setSelection([]);
             if (uiLocked && !navigationKeys.includes(e.key)) return;
 
             // Ctrl+Z: Undo

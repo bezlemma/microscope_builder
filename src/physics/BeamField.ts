@@ -56,6 +56,18 @@ export function coherenceLengthMm(wavelengthM: number, bandwidthM: number | unde
     return (wavelengthM * wavelengthM / bandwidthM) * 1e3;
 }
 
+/**
+ * Peak intensity of an elliptical Gaussian beam carrying `power`, with 1/e²
+ * intensity radii wx/wy and profile exp(-2(x²/wx² + y²/wy²)): the peak is
+ * 2P/(π·wx·wy) so the profile integrates to the carried power.
+ *
+ * Single source of truth shared by BeamField queries and cardFieldSynthesis —
+ * these once disagreed by exactly this factor of 2.
+ */
+export function gaussianPeakIntensity(power: number, wx: number, wy: number): number {
+    return (2 * power) / (Math.PI * wx * wy);
+}
+
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
@@ -319,7 +331,7 @@ export class BeamField {
 
         const gaussArg = 2 * (x * x / (wx * wx) + y * y / (wy * wy));
         const gaussFactor = Math.exp(-gaussArg);
-        const intensity = (seg.power / (Math.PI * wx * wy)) * gaussFactor;
+        const intensity = gaussianPeakIntensity(seg.power, wx, wy) * gaussFactor;
 
         const wavelengthMm = seg.wavelength * 1e3;
         const n = seg.refractiveIndex || 1.0;
@@ -516,7 +528,7 @@ export class BeamField {
                 const B = 4 * ( (x0*ux)/w2x + (y0*uy)/w2y );
                 const C = 2 * ( (x0*x0)/w2x + (y0*y0)/w2y );
 
-                const peakI = seg.power / (Math.PI * wx * wy);
+                const peakI = gaussianPeakIntensity(seg.power, wx, wy);
 
                 if (A < 1e-12) {
                     // Ray runs parallel to the beam. Intensity is constant transversely.

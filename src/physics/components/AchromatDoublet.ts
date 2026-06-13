@@ -52,7 +52,9 @@ export class AchromatDoublet extends OpticalComponent {
         r3 = 291.1,
         t1 = 4.0,
         t2 = 2.5,
-        apertureRadius = 25.4,
+        // AC254 is a 25.4 mm *diameter* part: radius 12.7 (with the stock
+        // R1/t1 a 25.4 radius would make element 1's surfaces cross at r≈18).
+        apertureRadius = 12.7,
         ior1 = 1.658,
         ior2 = 1.750,
         name = 'Achromatic Doublet',
@@ -95,6 +97,43 @@ export class AchromatDoublet extends OpticalComponent {
         this.version++;
     }
 
+    /**
+     * Largest radius at which the front and back surfaces of one element
+     * still bound positive thickness (mirrors SphericalLens.effectiveApertureRadius,
+     * but for an arbitrary surface pair).
+     */
+    private static effectiveSubApertureRadius(
+        R_front: number,
+        R_back: number,
+        apertureRadius: number,
+        thickness: number,
+    ): number {
+        const frontApex = -thickness / 2;
+        const backApex = thickness / 2;
+        const frontZ = (r: number): number => {
+            if (Math.abs(R_front) > 1e8) return frontApex;
+            const val = R_front * R_front - r * r;
+            if (val < 0) return frontApex;
+            return (frontApex + R_front) - (R_front > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+        const backZ = (r: number): number => {
+            if (Math.abs(R_back) > 1e8) return backApex;
+            const val = R_back * R_back - r * r;
+            if (val < 0) return backApex;
+            return (backApex + R_back) - (R_back > 0 ? 1 : -1) * Math.sqrt(val);
+        };
+
+        if (frontZ(apertureRadius) < backZ(apertureRadius)) return apertureRadius;
+
+        let lo = 0;
+        let hi = apertureRadius;
+        for (let i = 0; i < 30; i++) {
+            const mid = (lo + hi) / 2;
+            if (frontZ(mid) < backZ(mid)) lo = mid; else hi = mid;
+        }
+        return lo;
+    }
+
     private buildSubMesh(
         R_front: number,
         R_back: number,
@@ -119,9 +158,17 @@ export class AchromatDoublet extends OpticalComponent {
         const frontCenter = new Vector3(0, 0, frontApex + R_front);
         const backCenter = new Vector3(0, 0, backApex + R_back);
 
+        // generateProfile clamps the glass body to the radius where the two
+        // surfaces cross, so the rim test must use that effective radius (same
+        // fix as SphericalLens.effectiveApertureRadius) — otherwise clipped
+        // rim vertices get sphere-surface normals instead of radial ones.
+        const effectiveRadius = AchromatDoublet.effectiveSubApertureRadius(
+            R_front, R_back, this.apertureRadius, thickness,
+        );
+
         const normalFn: NormalFn = (v: Vector3) => {
             const r = Math.sqrt(v.x * v.x + v.y * v.y);
-            const maxR = this.apertureRadius;
+            const maxR = effectiveRadius;
 
             if (r > maxR - 0.01) {
                 return new Vector3(v.x, v.y, 0).normalize();

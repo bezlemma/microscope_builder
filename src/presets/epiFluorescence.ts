@@ -100,7 +100,7 @@ export function createEpiFluorescenceScene(): OpticalComponent[] {
     scene.push(emissionFilter);
 
 
-    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 12.7, 1.658, 1.750, 'Tube Lens');
     tubeLens.setPosition(0, 31.25, 0);
     tubeLens.pointAlong(0, 1, 0);  // optical axis along +Y
     scene.push(tubeLens);

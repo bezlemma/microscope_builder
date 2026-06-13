@@ -220,8 +220,10 @@ function coefficientToMmUnits(value: number, radialPower: number, unitScaleMm: n
 function zemaxParamPower(surfaceType: string | undefined, parmIndex: number): number | null {
     const type = surfaceType?.toUpperCase() ?? '';
     if (!type.includes('EVEN') || !type.includes('ASPH')) return null;
-    if (parmIndex < 1 || parmIndex > 6) return null;
-    return 2 * parmIndex + 2;
+    // Zemax Even Asphere PARM p is the coefficient on r^(2p): PARM 1 is the r^2
+    // term (no simulator slot), PARM 2-7 are A4-A14, PARM 8 (r^16) is unsupported.
+    if (parmIndex < 2 || parmIndex > 7) return null;
+    return 2 * parmIndex;
 }
 
 function cleanZemaxComment(tokens: string[]): string | undefined {
@@ -245,7 +247,7 @@ function zemaxScratchToSurface(surface: ZemaxSurfaceScratch, unitScaleMm: number
         ior: surface.ior,
         semiDiameterMm: surface.semiDiameterMm,
         conic: surface.conic,
-        evenAsphereTerms: surface.evenAsphereTerms.length > 0 ? [...surface.evenAsphereTerms] : undefined,
+        evenAsphereTerms: surface.evenAsphereTerms.length > 0 ? Array.from(surface.evenAsphereTerms, value => value ?? 0) : undefined,
     };
 }
 
@@ -344,9 +346,9 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
             if (parmIndex > 0 && value !== undefined) {
                 const power = zemaxParamPower(current.type, parmIndex);
                 if (power !== null) {
-                    current.evenAsphereTerms[parmIndex - 1] = coefficientToMmUnits(value, power, unitScaleMm);
+                    current.evenAsphereTerms[(power - 4) / 2] = coefficientToMmUnits(value, power, unitScaleMm);
                     mappedZemaxParams = true;
-                } else {
+                } else if (value !== 0) {
                     current.unsupportedParams.set(parmIndex, value);
                 }
             }
@@ -363,7 +365,7 @@ function parseZemaxSequentialText(text: string, fileName: string): OpticalPrescr
     commit();
 
     if (mappedZemaxParams) {
-        warnings.push('Mapped Zemax EVENASPH PARM 1-6 to A4-A14. Other surface parameterizations are retained as warnings until a specific parser is added.');
+        warnings.push('Mapped Zemax EVENASPH PARM 2-7 to A4-A14. Other surface parameterizations are retained as warnings until a specific parser is added.');
     }
 
     for (const surface of surfaces) {
@@ -430,7 +432,7 @@ function parseJsonOpticalPrescription(text: string, fileName: string): OpticalPr
         surfaces: payload.surfaces.map((surface, index) => ({
             index: Number(surface.index ?? index + 1),
             type: surface.type,
-            radiusMm: Number(surface.radiusMm),
+            radiusMm: Number.isFinite(Number(surface.radiusMm)) ? Number(surface.radiusMm) : FLAT_RADIUS,
             thicknessToNextMm: surface.thicknessToNextMm,
             glass: surface.glass,
             ior: surface.ior,
@@ -486,9 +488,11 @@ function normalizedHeader(value: string): string {
 
 function headerUnitScale(value: string): number {
     const lower = value.toLowerCase();
+    // Check mm first so phrases like "Radius in mm" don't match "in" as inches.
+    if (/\bmm\b/.test(lower)) return 1;
     if (/\bin(?:ch|ches)?\b|["]/.test(lower)) return 25.4;
     if (/\bcm\b/.test(lower)) return 10;
-    if (/\bm\b/.test(lower) && !/\bmm\b/.test(lower)) return 1000;
+    if (/\bm\b/.test(lower)) return 1000;
     return 1;
 }
 
@@ -525,6 +529,41 @@ function firstExistingIndex(headers: string[], groups: string[][]): number {
     return -1;
 }
 
+/**
+ * Resolve table columns by claiming: each column belongs to at most one group.
+ * Exact header matches win over substring matches, and within each pass groups
+ * are tried in priority order — so a "Surface Index" column is claimed as the
+ * surface-number column (via "surface") before the refractive-index group can
+ * substring-match its "index", while a bare "Index" column still resolves to
+ * refractive index by exact match.
+ */
+function resolveHeaderColumns(
+    headers: string[],
+    groups: Array<{ key: string; names: string[] }>,
+): Map<string, number> {
+    const normalized = headers.map(normalizedHeader);
+    const claimed = new Set<number>();
+    const resolved = new Map<string, number>();
+
+    const claimPass = (matches: (header: string, name: string) => boolean) => {
+        for (const group of groups) {
+            if (resolved.has(group.key)) continue;
+            for (let i = 0; i < normalized.length; i++) {
+                if (claimed.has(i)) continue;
+                if (group.names.some(name => matches(normalized[i], name))) {
+                    resolved.set(group.key, i);
+                    claimed.add(i);
+                    break;
+                }
+            }
+        }
+    };
+
+    claimPass((header, name) => header === name);
+    claimPass((header, name) => name.length > 2 && header.includes(name));
+    return resolved;
+}
+
 function parseSurfaceTableText(text: string, fileName: string, format: PrescriptionFormat): OpticalPrescription {
     const lines = text.split(/\r?\n/)
         .map(stripInlineComment)
@@ -542,16 +581,28 @@ function parseSurfaceTableText(text: string, fileName: string, format: Prescript
     }
     if (!headerCells) throw new Error('Could not find a surface table header with radius/thickness columns.');
 
-    const radiusIndex = firstExistingIndex(headerCells, [['radius', 'roc', 'rd', 'rdy', 'r']]);
-    const curvatureIndex = firstExistingIndex(headerCells, [['curv', 'curvature', 'cv']]);
-    const thicknessIndex = firstExistingIndex(headerCells, [['thickness', 'thick', 'disz', 'distance', 'separation', 'thi', 'ct']]);
-    const glassIndex = firstExistingIndex(headerCells, [['glass', 'material', 'substrate']]);
-    const iorIndex = firstExistingIndex(headerCells, [['ior', 'index', 'nd', 'refractiveindex']]);
-    const semiDiameterIndex = firstExistingIndex(headerCells, [['semidiameter', 'semidiam', 'sdiam', 'sd', 'clearsemiaperture']]);
-    const diameterIndex = firstExistingIndex(headerCells, [['diameter', 'diam', 'clearaperture', 'aperturediameter']]);
-    const conicIndex = firstExistingIndex(headerCells, [['conic', 'coni', 'k']]);
-    const typeIndex = firstExistingIndex(headerCells, [['type', 'surfacetype']]);
-    const indexIndex = firstExistingIndex(headerCells, [['surface', 'surf', 'srf', 'number', 'no', 'index']]);
+    const columns = resolveHeaderColumns(headerCells, [
+        { key: 'radius', names: ['radius', 'roc', 'rd', 'rdy', 'r'] },
+        { key: 'curvature', names: ['curv', 'curvature', 'cv'] },
+        { key: 'thickness', names: ['thickness', 'thick', 'disz', 'distance', 'separation', 'thi', 'ct'] },
+        { key: 'glass', names: ['glass', 'material', 'substrate'] },
+        { key: 'type', names: ['type', 'surfacetype'] },
+        { key: 'surfaceNumber', names: ['surface', 'surf', 'srf', 'number', 'no'] },
+        { key: 'ior', names: ['ior', 'index', 'nd', 'refractiveindex', 'refractive'] },
+        { key: 'semiDiameter', names: ['semidiameter', 'semidiam', 'sdiam', 'sd', 'clearsemiaperture'] },
+        { key: 'diameter', names: ['diameter', 'diam', 'clearaperture', 'aperturediameter'] },
+        { key: 'conic', names: ['conic', 'coni', 'k'] },
+    ]);
+    const radiusIndex = columns.get('radius') ?? -1;
+    const curvatureIndex = columns.get('curvature') ?? -1;
+    const thicknessIndex = columns.get('thickness') ?? -1;
+    const glassIndex = columns.get('glass') ?? -1;
+    const iorIndex = columns.get('ior') ?? -1;
+    const semiDiameterIndex = columns.get('semiDiameter') ?? -1;
+    const diameterIndex = columns.get('diameter') ?? -1;
+    const conicIndex = columns.get('conic') ?? -1;
+    const typeIndex = columns.get('type') ?? -1;
+    const indexIndex = columns.get('surfaceNumber') ?? -1;
 
     const aTermIndices = [4, 6, 8, 10, 12, 14].map(power => ({
         power,
@@ -644,6 +695,19 @@ function parseCodeVSequenceText(text: string, fileName: string): OpticalPrescrip
             continue;
         }
 
+        const aMatch = command.match(/^A(4|6|8|10|12|14)$/);
+        const isSurfaceCommand = aMatch !== null || [
+            'RD', 'RDY', 'RDX', 'RADIUS', 'RAD',
+            'CU', 'CUY', 'CUX', 'CURV', 'CURVATURE',
+            'TH', 'THI', 'THICK', 'THICKNESS',
+            'GLA', 'GLASS', 'MAT', 'MATERIAL',
+            'SD', 'SDY', 'SDX', 'SEMI', 'SEMIDIAMETER',
+            'DIA', 'DIAM', 'DIAMETER', 'CA',
+            'CON', 'CONI', 'CC', 'CCY', 'K',
+        ].includes(command);
+        // Preamble/global commands (LEN, EPD, DIM, WL, ...) must not fabricate surfaces.
+        if (!isSurfaceCommand) continue;
+
         const surface = ensure();
         if (['RD', 'RDY', 'RDX', 'RADIUS', 'RAD'].includes(command)) {
             surface.radiusMm = parseRadiusCell(args[0], 1) ?? surface.radiusMm;
@@ -661,26 +725,20 @@ function parseCodeVSequenceText(text: string, fileName: string): OpticalPrescrip
             if (diameter !== undefined) surface.semiDiameterMm = diameter / 2;
         } else if (['CON', 'CONI', 'CC', 'CCY', 'K'].includes(command)) {
             surface.conic = parseFiniteNumber(args[0]);
-        } else {
-            const aMatch = command.match(/^A(4|6|8|10|12|14)$/);
-            if (aMatch) {
-                const power = Number(aMatch[1]);
-                const index = (power - 4) / 2;
-                const terms = surface.evenAsphereTerms ? [...surface.evenAsphereTerms] : [];
-                terms[index] = parseFiniteNumber(args[0]) ?? 0;
-                surface.evenAsphereTerms = terms;
-                surface.type = surface.type ?? 'EVENASPH';
-            }
+        } else if (aMatch) {
+            const power = Number(aMatch[1]);
+            const index = (power - 4) / 2;
+            const terms = surface.evenAsphereTerms ? [...surface.evenAsphereTerms] : [];
+            terms[index] = parseFiniteNumber(args[0]) ?? 0;
+            surface.evenAsphereTerms = Array.from(terms, value => value ?? 0);
+            surface.type = surface.type ?? 'EVENASPH';
         }
     }
     commit();
 
-    const usable = surfaces.filter(surface => (
-        surface.radiusMm !== undefined ||
-        surface.thicknessToNextMm !== undefined ||
-        surface.glass !== undefined ||
-        surface.evenAsphereTerms?.length
-    ));
+    // Drop the S0 object surface; explicitly declared surfaces (even bare air
+    // gaps) are kept.
+    const usable = surfaces.filter(surface => surface.index > 0);
     if (usable.length < 2) throw new Error('Could not find at least two usable Code V-style surfaces.');
     warnings.push('Imported as Code V-style text using common surface commands; verify any unsupported commands manually.');
     return { format: 'codeVSequence', name: title, surfaces: usable, warnings };

@@ -79,6 +79,7 @@ export function createPackedAnalyticHitsFromWasm(
     const sampleScalarsBytes = cameraSamples.sampleScalars.length * Float64Array.BYTES_PER_ELEMENT;
     const candidateCountsBytes = hints.sampleCount * Uint8Array.BYTES_PER_ELEMENT;
     const candidateIndicesBytes = hints.sampleCount * hints.maxCandidates * Int32Array.BYTES_PER_ELEMENT;
+    const candidateTNearBytes = hints.sampleCount * hints.maxCandidates * Float64Array.BYTES_PER_ELEMENT;
     const outputBytes = cameraSamples.sampleCount * 8 * Float64Array.BYTES_PER_ELEMENT;
 
     const headerPtr = 0;
@@ -89,7 +90,8 @@ export function createPackedAnalyticHitsFromWasm(
     const sampleScalarsPtr = alignOffset(surfaceParamsPtr + surfaceParamsBytes, Float64Array.BYTES_PER_ELEMENT);
     const candidateCountsPtr = alignOffset(sampleScalarsPtr + sampleScalarsBytes, Uint8Array.BYTES_PER_ELEMENT);
     const candidateIndicesPtr = alignOffset(candidateCountsPtr + candidateCountsBytes, Int32Array.BYTES_PER_ELEMENT);
-    const outputPtr = alignOffset(candidateIndicesPtr + candidateIndicesBytes, Float64Array.BYTES_PER_ELEMENT);
+    const candidateTNearPtr = alignOffset(candidateIndicesPtr + candidateIndicesBytes, Float64Array.BYTES_PER_ELEMENT);
+    const outputPtr = alignOffset(candidateTNearPtr + candidateTNearBytes, Float64Array.BYTES_PER_ELEMENT);
     const totalBytes = outputPtr + outputBytes;
 
     const pagesNeeded = Math.ceil(totalBytes / 65536);
@@ -112,6 +114,7 @@ export function createPackedAnalyticHitsFromWasm(
     new Float64Array(module.memory.buffer, sampleScalarsPtr, cameraSamples.sampleScalars.length).set(cameraSamples.sampleScalars);
     new Uint8Array(module.memory.buffer, candidateCountsPtr, candidateCountsBytes).set(hints.candidateCounts);
     new Int32Array(module.memory.buffer, candidateIndicesPtr, hints.sampleCount * hints.maxCandidates).set(hints.candidateIndices);
+    new Float64Array(module.memory.buffer, candidateTNearPtr, hints.sampleCount * hints.maxCandidates).set(hints.candidateTNear);
 
     module.exports.reverse_trace_analytic_narrow_phase(
         headerPtr,
@@ -124,6 +127,7 @@ export function createPackedAnalyticHitsFromWasm(
         cameraSamples.sampleCount,
         candidateCountsPtr,
         candidateIndicesPtr,
+        candidateTNearPtr,
         hints.maxCandidates,
         outputPtr,
     );
@@ -352,6 +356,20 @@ export function createPackedAnalyticHitsJs(
                 bestT = hit.t;
                 best = hit;
                 bestIndex = componentIndex;
+            }
+        }
+
+        // When the hint list is full it may be truncated: candidates beyond
+        // the kept ones have tNear >= the farthest kept tNear, so the best
+        // analytic hit is only provably nearest when it lies at or before
+        // that bound. (A "no hit" result is fine either way — the kernel
+        // falls back to the full search for componentIndex < 0.)
+        if (best && candidateCount >= hints.maxCandidates) {
+            const kept = Math.min(candidateCount, hints.maxCandidates);
+            const bound = hints.candidateTNear[candidateBase + kept - 1];
+            if (bestT > bound) {
+                best = null;
+                bestIndex = -2;
             }
         }
 

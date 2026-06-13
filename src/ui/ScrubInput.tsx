@@ -117,6 +117,9 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         startXRef.current = e.clientX;
         startValueRef.current = currentVal;
         lastCommitTimeRef.current = 0;  // Reset throttle so first move commits immediately
+        // Clear the previous scrub's value: a click with zero pointer movement
+        // must not re-commit a stale value from an earlier scrub.
+        latestScrubValueRef.current = '';
         setIsScrubbing(true);
 
         // Capture pointer for reliable drag tracking

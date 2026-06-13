@@ -309,21 +309,25 @@ export class ReverseTracerKernel {
         let targetApertureCenter: Vector3 | null = null;
         let targetApertureRadius = 0;
 
+        // Target the nearest aperture along the PMT's optical axis (scene
+        // order is arbitrary, so track min-t instead of taking the first
+        // array entry — with a field stop ahead of a confocal pinhole the
+        // wrong one would bias every backward ray for the pixel).
         const searchRay = { origin: pmt.position, direction: pmt.forward } as Ray;
+        let targetApertureT = Infinity;
         for (const component of this.traceScene.components) {
             if (component.id === pmt.id) continue;
+            if (component.kind !== 'aperture' && component.kind !== 'slitAperture') continue;
             const hit = component.chkIntersection(searchRay);
-            if (!hit || hit.t >= 100) continue;
-            if (component.kind === 'aperture' || component.kind === 'slitAperture') {
-                targetApertureCenter = hit.point;
-                // Use the actual clear-aperture radius from the snapshot.
-                // The previous hardcoded 1.0 mm dwarfed real confocal pinholes
-                // (~0.025 mm) and meant ~99.9% of "targeted" backward rays were
-                // immediately absorbed by the aperture ring, leaving the PMT
-                // image essentially black.
-                targetApertureRadius = component.openingRadius ?? 1.0;
-                break;
-            }
+            if (!hit || hit.t >= 100 || hit.t >= targetApertureT) continue;
+            targetApertureT = hit.t;
+            targetApertureCenter = hit.point;
+            // Use the actual clear-aperture radius from the snapshot.
+            // The previous hardcoded 1.0 mm dwarfed real confocal pinholes
+            // (~0.025 mm) and meant ~99.9% of "targeted" backward rays were
+            // immediately absorbed by the aperture ring, leaving the PMT
+            // image essentially black.
+            targetApertureRadius = component.openingRadius ?? 1.0;
         }
 
         let radianceSum = 0;
@@ -713,8 +717,12 @@ export class ReverseTracerKernel {
                 nearestComponentIndex = candidate.componentIndex;
             }
 
+            // Sound bound: another component's exact hit can never be closer
+            // than its AABB entry, so a proven hit at or before the next
+            // candidate's tNear cannot be beaten. (No epsilon — adding one
+            // would make the proof more permissive than the geometry allows.)
             const nextTNear = sorted[i + 1]?.tNear ?? Infinity;
-            if (nearestHit && nearestT <= nextTNear + 1e-6) {
+            if (nearestHit && nearestT <= nextTNear) {
                 return {
                     nearestT,
                     nearestHit,

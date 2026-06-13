@@ -161,8 +161,14 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         // (Can't use Ctrl/Cmd -- OrbitControls intercepts those for panning)
         if (e.shiftKey) {
             if (selection.includes(component.id)) {
-                // Remove from selection
+                // Remove from selection. Don't fall through to drag setup:
+                // the next pointer-move would otherwise drag the component the
+                // user just deselected (the `[component.id]` fallback in
+                // handlePointerMove), and we'd push a junk undo snapshot for a
+                // pure selection toggle.
                 setSelection(selection.filter(id => id !== component.id));
+                cancelLongPress();
+                return;
             } else {
                 // Add to selection
                 setSelection([...selection, component.id]);
@@ -207,6 +213,18 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
         setGlobalDragging(false);
 
         // Enable Orbit Controls
+        setControlsEnabled(controls, true);
+    };
+
+    // Touch input can end with pointercancel instead of pointerup (incoming
+    // notification, browser gesture takeover, palm rejection). Without this
+    // teardown the camera controls stay disabled, the global dragging flag
+    // stays set, and the long-press timer pops a phantom context menu.
+    const handlePointerCancel = (e: DraggablePointerEvent) => {
+        cancelLongPress();
+        releasePointer(e);
+        setIsDragging(false);
+        setGlobalDragging(false);
         setControlsEnabled(controls, true);
     };
 
@@ -532,6 +550,7 @@ export const Draggable: React.FC<DraggableProps> = ({ component, children }) => 
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerMove={handlePointerMove}
+            onPointerCancel={handlePointerCancel}
             onContextMenu={handleContextMenu}
         >
             {children}

@@ -114,7 +114,8 @@ export class JsReverseTracerBackend implements ReverseTracerKernelBackend {
             request.rowWorkerCount,
             request.activePixelMask,
         );
-        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples);
+        const originatorIndex = this.context.tracePacket.componentIds.indexOf(request.snapshot.id);
+        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples, undefined, originatorIndex);
         const analytic = createPackedAnalyticHitsJs(this.context.tracePacket, samples, hints);
         return this.kernel.renderPackedCameraSamples(request.snapshot, samples, request.maxVisPaths, hints, analytic);
     }
@@ -132,7 +133,8 @@ export class JsReverseTracerBackend implements ReverseTracerKernelBackend {
             request.rowWorkerCount,
             request.activePixelMask,
         );
-        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples);
+        const originatorIndex = this.context.tracePacket.componentIds.indexOf(request.snapshot.id);
+        const hints = createPackedFirstHitHintsJs(this.context.tracePacket, samples, undefined, originatorIndex);
         const analytic = createPackedAnalyticHitsJs(this.context.tracePacket, samples, hints);
         return yield* this.kernel.renderPackedCameraSamplesGenerator(request.snapshot, samples, request.maxVisPaths, hints, analytic);
     }

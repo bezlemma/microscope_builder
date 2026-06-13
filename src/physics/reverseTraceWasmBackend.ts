@@ -53,6 +53,7 @@ export interface ReverseTracerWasmExports {
         candidateCountsPtr: number,
         candidateIndicesPtr: number,
         candidateTNearPtr: number,
+        excludeComponentIndex: number,
     ): number;
     reverse_trace_surface_param_stride?(): number;
     reverse_trace_interaction_input_stride?(): number;
@@ -77,6 +78,7 @@ export interface ReverseTracerWasmExports {
         sampleCount: number,
         candidateCountsPtr: number,
         candidateIndicesPtr: number,
+        candidateTNearPtr: number,
         maxCandidates: number,
         outputPtr: number,
     ): number;
@@ -172,7 +174,8 @@ export class WasmReverseTracerBackend implements ReverseTracerKernelBackend {
                 request.rowWorkerCount,
                 request.activePixelMask,
             );
-            const hints = createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket);
+            const originatorIndex = this.context.tracePacket.componentIds.indexOf(request.snapshot.id);
+            const hints = createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, undefined, originatorIndex);
             const analytic = hints ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, hints) : null;
             return this.fallback.renderCameraSamples(request, resolvedPacket, hints ?? undefined, analytic ?? undefined);
         }
@@ -209,7 +212,14 @@ export class WasmReverseTracerBackend implements ReverseTracerKernelBackend {
             request.activePixelMask,
         );
         const hints = (headerPtr !== null && valid === REVERSE_TRACE_KERNEL_STATUS_OK)
-            ? createPackedFirstHitHintsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket)
+            ? createPackedFirstHitHintsFromWasm(
+                this.module,
+                header,
+                this.context.tracePacket,
+                resolvedPacket,
+                undefined,
+                this.context.tracePacket.componentIds.indexOf(request.snapshot.id),
+            )
             : null;
         const analytic = hints
             ? createPackedAnalyticHitsFromWasm(this.module, header, this.context.tracePacket, resolvedPacket, hints)

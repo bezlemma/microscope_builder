@@ -78,7 +78,7 @@ export function createTransFluorescenceScene(): OpticalComponent[] {
     scene.push(objective);
 
     // 5. Tube Lens — Achromatic Doublet (Thorlabs AC254-200-A eq)
-    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 25.4, 1.658, 1.750, 'Tube Lens');
+    const tubeLens = new AchromatDoublet(77.4, -87.6, 291.1, 4.0, 2.5, 12.7, 1.658, 1.750, 'Tube Lens');
     tubeLens.setPosition(221.25, 0, 0);
     tubeLens.pointAlong(1, 0, 0);  // optical axis along +X
     scene.push(tubeLens);

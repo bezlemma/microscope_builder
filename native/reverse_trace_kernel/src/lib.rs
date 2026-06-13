@@ -1,4 +1,4 @@
-pub const REVERSE_TRACE_KERNEL_ABI_VERSION: u32 = 1;
+pub const REVERSE_TRACE_KERNEL_ABI_VERSION: u32 = 3;
 pub const PACKED_COMPONENT_MATRIX_STRIDE: u32 = 16;
 pub const PACKED_COMPONENT_BOUNDS_STRIDE: u32 = 6;
 pub const PACKED_DETECTOR_BASIS_STRIDE: u32 = 12;
@@ -313,6 +313,7 @@ pub extern "C" fn reverse_trace_generate_first_hit_hints(
     candidate_counts_ptr: *mut u8,
     candidate_indices_ptr: *mut i32,
     candidate_t_near_ptr: *mut f64,
+    exclude_component_index: i32,
 ) -> u32 {
     if reverse_trace_validate_packet_header(header_ptr) != STATUS_OK {
         return 0;
@@ -387,6 +388,12 @@ pub extern "C" fn reverse_trace_generate_first_hit_hints(
 
         let mut count = 0usize;
         for component_index in 0..component_count_usize {
+            // The originating detector always contains the sample-ray origin
+            // (tNear = 0); it would waste a hint slot and poison the analytic
+            // narrow phase as an unsupported candidate.
+            if component_index as i32 == exclude_component_index {
+                continue;
+            }
             let matrix_base = component_index * PACKED_COMPONENT_MATRIX_STRIDE as usize;
             let bounds_base = component_index * PACKED_COMPONENT_BOUNDS_STRIDE as usize;
             let local_origin = transform_point(
@@ -653,6 +660,7 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
     sample_count: u32,
     candidate_counts_ptr: *const u8,
     candidate_indices_ptr: *const i32,
+    candidate_t_near_ptr: *const f64,
     max_candidates: u32,
     output_ptr: *mut f64,
 ) -> u32 {
@@ -665,6 +673,7 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
         || sample_scalars_ptr.is_null()
         || candidate_counts_ptr.is_null()
         || candidate_indices_ptr.is_null()
+        || candidate_t_near_ptr.is_null()
         || output_ptr.is_null()
     {
         return 0;
@@ -682,6 +691,7 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
     let samples = unsafe { std::slice::from_raw_parts(sample_scalars_ptr, sc * PACKED_CAMERA_SAMPLE_STRIDE as usize) };
     let cand_counts = unsafe { std::slice::from_raw_parts(candidate_counts_ptr, sc) };
     let cand_indices = unsafe { std::slice::from_raw_parts(candidate_indices_ptr, sc * mc) };
+    let cand_t_near = unsafe { std::slice::from_raw_parts(candidate_t_near_ptr, sc * mc) };
     let output = unsafe { std::slice::from_raw_parts_mut(output_ptr, sc * 8) };
 
     let mut found = 0u32;
@@ -750,6 +760,20 @@ pub extern "C" fn reverse_trace_analytic_narrow_phase(
                     best = Some(h);
                     best_idx = comp_idx;
                 }
+            }
+        }
+
+        // When the hint list is full it may be truncated: candidates beyond
+        // the kept ones have t_near >= the farthest kept t_near, so the best
+        // analytic hit is only provably nearest when it lies at or before that
+        // bound. (A returned "no hit" is fine either way — the kernel falls
+        // back to the full search for componentIndex < 0.)
+        if cand_count >= mc && best.is_some() {
+            let kept = cand_count.min(mc);
+            let bound = cand_t_near[cand_base + kept - 1];
+            if best_t > bound {
+                best = None;
+                best_idx = -2;
             }
         }
 
@@ -934,7 +958,7 @@ mod tests {
 
     #[test]
     fn abi_constants_match_expected_packet_layout() {
-        assert_eq!(reverse_trace_kernel_abi_version(), 1);
+        assert_eq!(reverse_trace_kernel_abi_version(), 3);
         assert_eq!(reverse_trace_trace_component_matrix_stride(), 16);
         assert_eq!(reverse_trace_trace_component_bounds_stride(), 6);
         assert_eq!(reverse_trace_detector_basis_stride(), 12);
@@ -1045,6 +1069,7 @@ mod tests {
             counts.as_mut_ptr(),
             indices.as_mut_ptr(),
             t_nears.as_mut_ptr(),
+            -1,
         );
 
         assert_eq!(generated, 1);

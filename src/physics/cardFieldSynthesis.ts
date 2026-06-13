@@ -1,6 +1,7 @@
 import { Matrix4, Vector3 } from 'three';
 import { childRay, Coherence, type Ray } from './types';
 import { evaluateZernikeNoll, zernikeNollLabel } from './PupilFunction';
+import { gaussianPeakIntensity } from './BeamField';
 
 export interface TerminalPacketHit {
     localPoint: { x: number; y: number };
@@ -330,7 +331,7 @@ export function synthesizeTerminalPoint(hits: TerminalPacketHit[], u: number, v:
         const envelope = Math.exp(-((du * du) / (wx * wx) + (dv * dv) / (wy * wy)));
         if (envelope < 1e-8) continue;
 
-        const density = (2 * power) / (Math.PI * wx * wy);
+        const density = gaussianPeakIntensity(power, wx, wy);
         const localIntensity = density * envelope * envelope;
         if (ray.coherenceMode !== Coherence.Coherent) {
             incoherent += localIntensity;

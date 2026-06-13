@@ -246,6 +246,10 @@ export class OpticMesh {
     ): import('./types').InteractionResult {
         const nAirEntry = exteriorIorCallback ? exteriorIorCallback(entryPoint) : 1.0;
         const nGlass = ior;
+        // Path from the parent ray's origin to the entry surface. Every other
+        // component advances OPL by hit.t in interact(); dropping it here would
+        // desync interferometric phase between lens arms and mirror arms.
+        const entryOpl = worldEntryPoint.distanceTo(ray.origin) * nAirEntry;
         const childInMedium = (overrides: Parameters<typeof childRay>[1], mediumIndex: number) =>
             applyPacketMediumIndex(childRay(ray, overrides), mediumIndex);
 
@@ -285,6 +289,7 @@ export class OpticMesh {
                     direction: dirReflWorld,
                     entryPoint: worldEntryPoint,
                     polarization: reflJones,
+                    opticalPathLength: ray.opticalPathLength + entryOpl,
                 }, nAirEntry)]
             };
         }
@@ -356,7 +361,7 @@ export class OpticMesh {
                         rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
-                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
                         }, nAirExit)]
@@ -387,7 +392,7 @@ export class OpticMesh {
                         rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
-                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined
                         }, nAirExit)]
@@ -419,7 +424,7 @@ export class OpticMesh {
                                 rays: [childInMedium({
                                     origin: exitPointWorld,
                                     direction: dirOutWorld,
-                                    opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                                    opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                                     entryPoint: worldEntryPoint,
                                     internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                                     polarization: exitJones,
@@ -435,7 +440,7 @@ export class OpticMesh {
                         rays: [childInMedium({
                             origin: exitPointWorld,
                             direction: dirOutWorld,
-                            opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                            opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                             entryPoint: worldEntryPoint,
                             internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                             polarization: currentJones,
@@ -450,7 +455,7 @@ export class OpticMesh {
                         origin: terminationWorld,
                         direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                         intensity: 0,
-                        opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                        opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         terminationPoint: terminationWorld
@@ -483,7 +488,7 @@ export class OpticMesh {
                     rays: [childInMedium({
                         origin: exitPointWorld,
                         direction: dirOutWorld,
-                        opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                        opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                         entryPoint: worldEntryPoint,
                         internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                         exitSurfaceId: (exitSurfaceLabel && hit.faceIndex !== undefined)
@@ -519,7 +524,7 @@ export class OpticMesh {
                     rays: [childInMedium({
                         origin: exitPointWorld,
                         direction: dirOutWorld,
-                        opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                        opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                         entryPoint: worldEntryPoint,
                         polarization: grazingJones,
                     }, nAirExit)]
@@ -554,7 +559,7 @@ export class OpticMesh {
                 origin: lastPtWorld,
                 direction: currentDir.clone().transformDirection(localToWorld).normalize(),
                 intensity: 0,
-                opticalPathLength: ray.opticalPathLength + (totalPath * nGlass),
+                opticalPathLength: ray.opticalPathLength + entryOpl + (totalPath * nGlass),
                 entryPoint: worldEntryPoint,
                 internalPath: internalBouncePoints.length > 0 ? internalBouncePoints : undefined,
                 terminationPoint: lastPtWorld

@@ -203,6 +203,14 @@ export const loadPresetAtom = atom(
         set(activeZLevelAtom, 0); // Reset Z-level
         set(measurementAtom, { active: false, selectedId: null, measurements: [] });
         set(mobilePanelModeAtom, 'scene');
+        // The previous scene's selection IDs won't exist in the new scene;
+        // loadSceneAtom and startTutorialStage2Atom clear this too.
+        set(selectionAtom, []);
+        // Don't carry an in-flight render/scan indicator or a stale play state
+        // into the new preset (presets that want animation set it explicitly).
+        set(reverseTraceRenderingAtom, false);
+        set(scanAccumProgressAtom, 0);
+        set(animationPlayingAtom, false);
         // Clear ray caches from the previous preset before the new scene is
         // installed. Without this, the visualizer keeps drawing the old beam
         // bundle in the new scene until the first trace of the new components
@@ -456,6 +464,10 @@ export const loadSceneAtom = atom(
         set(publishForwardRaysAtom, []);
         set(publishReverseRaysAtom, []);
         set(publishTrapBeamSegmentsAtom, []);
+        // Drop viewers pinned for the previous scene's components — .ubz files
+        // preserve component IDs, so stale pins could even re-attach to the
+        // wrong component in a sibling save of the same session.
+        set(pinnedViewersAtom, new Set());
         set(animationPlayingAtom, false);
         set(animationSpeedAtom, 1.0);
         set(reverseTraceRenderingAtom, false);
@@ -496,7 +508,9 @@ export const pushUndoAtom = atom(
         const components = get(componentsAtom);
         const animator = get(animatorAtom);
         const snapshot: UndoSnapshot = {
-            sceneText: serializeScene(components),
+            // Include ghosts: undo must restore the exact scene, including
+            // tutorial drop-targets the file serializer intentionally drops.
+            sceneText: serializeScene(components, { includeGhosts: true }),
             channels: cloneChannels(animator.channels),
             animationPlaying: get(animationPlayingAtom),
             animationSpeed: get(animationSpeedAtom),

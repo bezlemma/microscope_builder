@@ -100,7 +100,11 @@ export function createTraceSceneSnapshot(scene: OpticalComponent[]): TraceSceneS
     const components: KernelTraceComponent[] = [];
     const samples: KernelSampleComponent[] = [];
 
-    for (const component of scene) {
+    // Ghosts are ignored by the solvers, and the packed trace scene
+    // (createPackedTraceScene) filters them too — the two structures must stay
+    // index-aligned because hint/analytic component indices are computed
+    // against the packed arrays and resolved against this snapshot.
+    for (const component of scene.filter(c => !c.isGhost)) {
         const base = baseComponentSnapshot(component);
         components.push(base);
 

@@ -172,10 +172,12 @@ export class SphericalLens extends OpticalComponent {
                 break;
             }
             case 'meniscus-pos': {
-                // Positive Meniscus: R1, R2 > 0. R1 < R2 (more curved front)
+                // Positive Meniscus: R1, R2 > 0. R1 < R2 (more curved front).
+                // With R2 = 3*R1: 1/f = (n-1)(1/R1 - 1/(3R1)) = 2(n-1)/(3R1).
                 const f = fMag;
-                this.r1 = f;
-                this.r2 = f * 3; 
+                const R = 2 * (n - 1) * f / 3;
+                this.r1 = R;
+                this.r2 = R * 3;
                 break;
             }
             case 'plano-concave': {
@@ -203,9 +205,12 @@ export class SphericalLens extends OpticalComponent {
                 break;
             }
             case 'meniscus-neg': {
-                 // Negative Meniscus. R1, R2 > 0 (bent right). R1 > R2 (weaker front).
-                this.r1 = fMag * 3;
-                this.r2 = fMag;
+                // Negative Meniscus: R1, R2 < 0 (matches LENS_TYPES and
+                // getLensType). With R2 = 3*R1: 1/f = 2(n-1)/(3R1), f < 0.
+                const f = -fMag;
+                const R = 2 * (n - 1) * f / 3;
+                this.r1 = R;
+                this.r2 = R * 3;
                 break;
             }
         }

@@ -63,19 +63,24 @@ export class FaradayIsolator extends OpticalComponent {
         // This is the key physical signature that makes an isolator an isolator —
         // reflected light gets rotated ANOTHER 45° (not un-rotated), landing on
         // the orthogonal polarization axis so it's blocked by the input polarizer.
+        //
+        // The Jones vector is a full 3D world-frame E-field, so rotate it about
+        // the magnet axis (component local +Z in world) with Rodrigues' formula
+        // — rotating raw world x/y components would mangle any beam that isn't
+        // propagating along world Z.
         const cos45 = Math.SQRT1_2;
         const sin45 = Math.SQRT1_2;
-        const jx = ray.polarization.x;
-        const jy = ray.polarization.y;
-        const outX: Complex = {
-            re: cos45 * jx.re - sin45 * jy.re,
-            im: cos45 * jx.im - sin45 * jy.im,
+        const axis = new Vector3(0, 0, 1).transformDirection(this.localToWorld).normalize();
+        const rotateAboutAxis = (v: Vector3): Vector3 => v.clone().multiplyScalar(cos45)
+            .add(axis.clone().cross(v).multiplyScalar(sin45))
+            .add(axis.clone().multiplyScalar(axis.dot(v) * (1 - cos45)));
+        const reVec = rotateAboutAxis(new Vector3(ray.polarization.x.re, ray.polarization.y.re, ray.polarization.z.re));
+        const imVec = rotateAboutAxis(new Vector3(ray.polarization.x.im, ray.polarization.y.im, ray.polarization.z.im));
+        polarization = {
+            x: { re: reVec.x, im: imVec.x } as Complex,
+            y: { re: reVec.y, im: imVec.y } as Complex,
+            z: { re: reVec.z, im: imVec.z } as Complex,
         };
-        const outY: Complex = {
-            re: sin45 * jx.re + cos45 * jy.re,
-            im: sin45 * jx.im + cos45 * jy.im,
-        };
-        polarization = { x: outX, y: outY, z: { re: 0, im: 0 } };
 
         if (isForward) {
             throughput = this.insertionLoss;

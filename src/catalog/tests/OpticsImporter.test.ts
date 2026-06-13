@@ -84,8 +84,11 @@ SURF 1
   GLAS N-BK7
   DIAM 3
   CONI -1
-  PARM 1 1.25E-5
-  PARM 2 -2.5E-8
+  PARM 1 0
+  PARM 2 1.25E-5
+  PARM 3 -2.5E-8
+  PARM 7 4.0E-15
+  PARM 8 0
 SURF 2
   TYPE STANDARD
   CURV 0
@@ -99,8 +102,10 @@ SURF 2
         expect(lens.r1).toBeCloseTo(5, 6);
         expect(lens.r2).toBeGreaterThan(1e8);
         expect(lens.k1).toBeCloseTo(-1, 6);
+        // Zemax Even Asphere PARM p is the r^(2p) coefficient: PARM 2 -> A4, PARM 7 -> A14.
         expect(lens.A1[0]).toBeCloseTo(1.25e-5, 12);
         expect(lens.A1[1]).toBeCloseTo(-2.5e-8, 14);
+        expect(lens.A1[5]).toBeCloseTo(4.0e-15, 20);
         expect(imported.normalized.kind).toBe('asphericLens');
         if (imported.normalized.kind === 'asphericLens') {
             expect(imported.normalized.surfaceSource).toBe('exactPrescription');
@@ -234,6 +239,21 @@ SURF 5
         expect(lens.r2).toBeGreaterThan(1e8);
         expect(lens.apertureRadius).toBeCloseTo(12.7, 6);
         expect(imported.prescription.format).toBe('csvSurfaceTable');
+    });
+
+    test('does not read a "Surface Index" column as refractive index', () => {
+        const csv = `Surface Index,Radius (mm),Thickness (mm),Index,Diameter (mm)
+1,51.5,3.6,1.5168,25.4
+2,Infinity,50,,25.4
+`;
+        const prescription = parseOpticalPrescription(csv, 'indexed-table.csv');
+
+        // Surface numbers come from the "Surface Index" column...
+        expect(prescription.surfaces[0].index).toBe(1);
+        expect(prescription.surfaces[1].index).toBe(2);
+        // ...and the bare "Index" column is the refractive index, not 1/2/3.
+        expect(prescription.surfaces[0].ior).toBeCloseTo(1.5168, 6);
+        expect(prescription.surfaces[0].radiusMm).toBeCloseTo(51.5, 6);
     });
 
     test('imports a Code V-style sequence as a spherical lens', () => {

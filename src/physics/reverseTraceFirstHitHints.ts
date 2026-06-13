@@ -37,6 +37,13 @@ export function unpackFirstHitHintCandidates(
             tNear: packet.candidateTNear[base + i],
         });
     }
+    // A full list may have dropped farther candidates; any dropped AABB entry
+    // is at least as far as the farthest kept one. Append a sentinel so the
+    // kernel's "no remaining candidate is closer" certainty proof stays sound
+    // instead of treating the truncated tail as empty space.
+    if (count >= packet.maxCandidates && out.length > 0) {
+        out.push({ componentIndex: -1, tNear: out[out.length - 1].tNear });
+    }
     return out;
 }
 
@@ -119,6 +126,7 @@ export function createPackedFirstHitHintsJs(
     tracePacket: PackedTraceScene,
     cameraSamples: PackedCameraSamples,
     maxCandidates: number = PACKED_FIRST_HIT_HINTS_DEFAULT_MAX_CANDIDATES,
+    excludeComponentIndex = -1,
 ): PackedFirstHitHints {
     const sampleCount = cameraSamples.sampleCount;
     const componentCount = tracePacket.componentKinds.length;
@@ -140,6 +148,10 @@ export function createPackedFirstHitHintsJs(
         let count = 0;
 
         for (let componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+            // The originating detector always contains the sample-ray origin
+            // (tNear = 0); it would waste a hint slot and poison the analytic
+            // narrow phase as an unsupported candidate.
+            if (componentIndex === excludeComponentIndex) continue;
             const matrixBase = componentIndex * PACKED_COMPONENT_MATRIX_STRIDE;
             const boundsBase = componentIndex * PACKED_COMPONENT_BOUNDS_STRIDE;
             const localOrigin = transformPoint(tracePacket.worldToLocalMatrices, matrixBase, ox, oy, oz);
@@ -172,6 +184,7 @@ export function createPackedFirstHitHintsFromWasm(
     tracePacket: PackedTraceScene,
     cameraSamples: PackedCameraSamples,
     maxCandidates: number = PACKED_FIRST_HIT_HINTS_DEFAULT_MAX_CANDIDATES,
+    excludeComponentIndex = -1,
 ): PackedFirstHitHints | null {
     if (!module.memory) return null;
     if (typeof module.exports.reverse_trace_generate_first_hit_hints !== 'function') return null;
@@ -221,6 +234,7 @@ export function createPackedFirstHitHintsFromWasm(
         candidateCountsPtr,
         candidateIndicesPtr,
         candidateTNearPtr,
+        excludeComponentIndex,
     );
     if (generated !== cameraSamples.sampleCount) return null;
 

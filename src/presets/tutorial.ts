@@ -26,17 +26,17 @@ const TUTORIAL_MIRROR_THICKNESS = 3;
  *   Prism  at (162.5, 12.5 + D)          — disperses the expanded white beam.
  *   Card    at (337.5, 12.5 + D + 30)    — screen, catches the rainbow spectrum.
  *
- * CurvedMirror convention: radiusOfCurvature < 0 = concave (focusing).  Each
+ * CurvedMirror convention: radiusOfCurvature > 0 = concave (focusing).  Each
  * mirror sits at a 45° fold; the effective tangential focal length is
- *   f_t = |R| · cos 45° / 2,
- * so the Keplerian expander collimates when D = (|R1| + |R2|) · cos 45° / 2.
- * |R1| = 100 mm and |R2| = 300 mm give 3× magnification and D ≈ 141.42 mm.
+ *   f_t = R · cos 45° / 2,
+ * so the Keplerian expander collimates when D = (R1 + R2) · cos 45° / 2.
+ * R1 = 100 mm and R2 = 300 mm give 3× magnification and D ≈ 141.42 mm.
  */
 export function createTutorialScene(): PresetResult {
     const scene: OpticalComponent[] = [];
 
-    const R1 = -100;
-    const R2 = -300;
+    const R1 = 100;
+    const R2 = 300;
     const D = (Math.abs(R1) + Math.abs(R2)) * Math.SQRT1_2 / 2; // 141.42 mm
 
     const FIRST_MIRROR_POS = { x: 12.5, y: 12.5 };

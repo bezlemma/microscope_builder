@@ -966,19 +966,21 @@ function CurvedMirrorPanel({
     const scaleRef = useRef(scale);
     if (!activeHandle) scaleRef.current = scale;
 
+    // CurvedMirror sag convention: concave (R > 0) bows toward the light
+    // (-z), i.e. mirror sag = -sagFromZero(R, r).
     const frontPts: number[] = [];
     const segs = 40;
     for (let i = 0; i <= segs; i++) {
         const r = (i / segs) * radius;
-        frontPts.push(CENTER_X + (-halfT + sagFromZero(component.radiusOfCurvature, r)) * scaleRef.current, CENTER_Y - r * scaleRef.current);
+        frontPts.push(CENTER_X + (-halfT - sagFromZero(component.radiusOfCurvature, r)) * scaleRef.current, CENTER_Y - r * scaleRef.current);
     }
     for (let i = segs; i >= 0; i--) {
         const r = (i / segs) * radius;
-        frontPts.push(CENTER_X + (-halfT + sagFromZero(component.radiusOfCurvature, r)) * scaleRef.current, CENTER_Y + r * scaleRef.current);
+        frontPts.push(CENTER_X + (-halfT - sagFromZero(component.radiusOfCurvature, r)) * scaleRef.current, CENTER_Y + r * scaleRef.current);
     }
 
     const backX = CENTER_X + halfT * scaleRef.current;
-    const frontEdgeX = CENTER_X + (-halfT + sagFromZero(component.radiusOfCurvature, radius)) * scaleRef.current;
+    const frontEdgeX = CENTER_X + (-halfT - sagFromZero(component.radiusOfCurvature, radius)) * scaleRef.current;
     const topY = CENTER_Y - radius * scaleRef.current;
     const bottomY = CENTER_Y + radius * scaleRef.current;
 
@@ -1574,9 +1576,11 @@ export const LensProfileEditorCore: React.FC<{
                     const sagMm = (x - frontVertex) / s;
                     commitChange((entry) => {
                         if (!(entry instanceof CurvedMirror)) return;
+                        // Mirror sag is -r^2/(2R): dragging the surface toward
+                        // the light (negative sag) means concave (R > 0).
                         entry.radiusOfCurvature = Math.abs(sagMm) < 0.5
                             ? 1e9
-                            : (radius * radius + sagMm * sagMm) / (2 * sagMm);
+                            : -(radius * radius + sagMm * sagMm) / (2 * sagMm);
                         entry.invalidateMesh();
                     });
                 }

@@ -11,7 +11,7 @@ import { reflectVector } from '../math_solvers';
  * |radiusOfCurvature| >= 1e8 → flat (behaves like a flat mirror)
  *
  * The reflective surface is a spherical cap at the front (w = -thickness/2).
- * The back face is flat at w = +thickness/2.
+ * The back face is the same cap offset by the thickness (uniform shell).
  * Aperture is circular with the given diameter.
  */
 export class CurvedMirror extends OpticalComponent {
@@ -31,20 +31,31 @@ export class CurvedMirror extends OpticalComponent {
         this.diameter = diameter;
         this.radiusOfCurvature = radiusOfCurvature;
         this.thickness = thickness;
-        const r = diameter / 2;
+        this.updateLocalBounds();
+    }
+
+    private updateLocalBounds(): void {
+        const r = this.diameter / 2;
+        // The curved faces overhang the vertex planes by up to |sag(r)|.
+        const sagPad = Math.abs(this.sag(r));
         this.bounds.set(
-            new Vector3(-r, -r, -thickness / 2),
-            new Vector3(r, r, thickness / 2),
+            new Vector3(-r, -r, -this.thickness / 2 - sagPad),
+            new Vector3(r, r, this.thickness / 2 + sagPad),
         );
     }
 
-    /** Sag depth of the spherical surface at distance r from axis */
+    /**
+     * Sag of the spherical surface at distance r from axis, measured along
+     * local +z from the vertex. Concave (R > 0) has its curvature center on
+     * the light side (-z), so the surface bows toward -z away from the
+     * vertex: sag < 0. Convex (R < 0) bows toward +z: sag > 0.
+     */
     private sag(r: number): number {
         const R = this.radiusOfCurvature;
         if (Math.abs(R) >= 1e8) return 0;
         const val = R * R - r * r;
         if (val < 0) return 0;
-        return R - Math.sign(R) * Math.sqrt(val);
+        return Math.sign(R) * Math.sqrt(val) - R;
     }
 
     /** Get the focal length (f = R/2) */
@@ -80,7 +91,9 @@ export class CurvedMirror extends OpticalComponent {
                 }
             }
         } else {
-            const cz = -halfT + R;
+            // Concave (R > 0): curvature center sits in front of the
+            // reflective face, on the incoming-light side (-z).
+            const cz = -halfT - R;
             const oc = rayLocal.origin.clone().sub(new Vector3(0, 0, cz));
             const d = rayLocal.direction;
             const a = d.dot(d);
@@ -130,7 +143,7 @@ export class CurvedMirror extends OpticalComponent {
                 }
             }
         } else {
-            const czBack = halfT + R;
+            const czBack = halfT - R;
             const ocBack = rayLocal.origin.clone().sub(new Vector3(0, 0, czBack));
             const d = rayLocal.direction;
             const a = d.dot(d);
@@ -303,6 +316,7 @@ export class CurvedMirror extends OpticalComponent {
 
     invalidateMesh(): void {
         this._geometry = null;
+        this.updateLocalBounds();
         this.version++;
     }
 

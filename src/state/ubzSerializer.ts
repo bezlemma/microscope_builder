@@ -61,7 +61,10 @@ import type { CatalogAttachment, CatalogVendor } from '../catalog/types';
 //  SERIALIZE
 // ════════════════════════════════════════════════════════════
 
-export function serializeScene(components: OpticalComponent[]): string {
+export function serializeScene(
+    components: OpticalComponent[],
+    options: { includeGhosts?: boolean } = {},
+): string {
     const lines: string[] = [];
     lines.push('# Microscope Builder Scene (.ubz)');
     lines.push(`# Saved: ${new Date().toISOString()}`);
@@ -71,20 +74,24 @@ export function serializeScene(components: OpticalComponent[]): string {
         // Skip non-persistent components:
         //   - Ghost components are tutorial / preview scaffolding, not part of
         //     the user's scene. Persisting them would turn drag-target hints
-        //     into permanent real components on the next load.
+        //     into permanent real components on the next load. (Undo snapshots
+        //     opt in via includeGhosts so Ctrl+Z inside a tutorial doesn't
+        //     permanently delete the drop targets.)
         //   - Subcomponents (e.g. DualGalvoScanHead's child mirrors) are
         //     auto-recreated by their parent's deserializer; persisting them
         //     would produce duplicate orphan mirrors. Managed trapped beads
         //     are the exception because their dynamic specimen state belongs
         //     to the flow-cell sample and needs to survive save/load.
-        if (comp.isGhost || (comp.isSubComponent && !(comp instanceof TrappedBead && comp.parentSampleId))) continue;
+        if (comp.isGhost && !options.includeGhosts) continue;
+        if (comp.isSubComponent && !(comp instanceof TrappedBead && comp.parentSampleId)) continue;
 
         const typeName = getTypeName(comp);
         if (!typeName) continue;
 
         lines.push(`[${typeName}]`);
         lines.push(`id = ${comp.id}`);
-        lines.push(`name = ${comp.name}`);
+        lines.push(`name = ${escapeTextValue(comp.name)}`);
+        if (comp.isGhost) lines.push('isGhost = true');
 
         // Position
         const p = comp.position;
@@ -370,6 +377,10 @@ function writeComponentProps(comp: OpticalComponent, lines: string[]) {
         lines.push(`mirrorDiameter = ${fmt(comp.mirrorDiameter)}`);
         lines.push(`scanX = ${fmt(comp.scanX)}`);
         lines.push(`scanY = ${fmt(comp.scanY)}`);
+        // Child mirrors are regenerated on load; persist their IDs so anything
+        // referencing them (selection, viewers) survives save/load and undo.
+        lines.push(`mirror1Id = ${comp.mirror1.id}`);
+        lines.push(`mirror2Id = ${comp.mirror2.id}`);
     } else if (comp instanceof PMT) {
         lines.push(`width = ${fmt(comp.width)}`);
         lines.push(`height = ${fmt(comp.height)}`);
@@ -466,7 +477,8 @@ export function deserializeScene(text: string): OpticalComponent[] {
 
         // Set common properties
         if (block.props['id']) comp.id = block.props['id'];
-        if (block.props['name']) comp.name = block.props['name'];
+        if (block.props['name']) comp.name = unescapeTextValue(block.props['name']);
+        if (block.props['isGhost'] === 'true') comp.isGhost = true;
 
         if (block.props['position']) {
             const [x, y, z] = block.props['position'].split(',').map(s => parseFloat(s.trim()));
@@ -884,6 +896,8 @@ function createComponent(type: string, props: PropMap): OpticalComponent | null 
             );
             c.scanX = num(props, 'scanX', 0);
             c.scanY = num(props, 'scanY', 0);
+            if (props['mirror1Id']) c.mirror1.id = props['mirror1Id'];
+            if (props['mirror2Id']) c.mirror2.id = props['mirror2Id'];
             return c;
         }
         case 'Blocker': {
